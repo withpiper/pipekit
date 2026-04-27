@@ -101,10 +101,30 @@ After the Linear gate-check passes and tier is resolved, read VBW's phase state 
 
 ```bash
 # Read VBW state (read-only, never writes).
-# phase-detect.sh lives in the project's VBW install (typically
-# .vbw-planning/scripts/phase-detect.sh or on $PATH via VBW's bin).
-phase-detect.sh > /tmp/pipekit-vbw-state.txt 2>/dev/null
-PHASE_DETECT_RC=$?
+# Resolve phase-detect.sh in this order:
+#   1. PATH (consumer override or VBW bin)
+#   2. .vbw-planning/scripts/phase-detect.sh (project-local override or wrapper)
+#   3. VBW plugin cache: ~/.claude/plugins/cache/vbw-marketplace/vbw/*/scripts/phase-detect.sh
+#      (canonical install path; latest version wins via alphabetic glob expansion)
+PHASE_DETECT=""
+if command -v phase-detect.sh >/dev/null 2>&1; then
+  PHASE_DETECT="phase-detect.sh"
+elif [ -x ".vbw-planning/scripts/phase-detect.sh" ]; then
+  PHASE_DETECT=".vbw-planning/scripts/phase-detect.sh"
+else
+  for c in "$HOME"/.claude/plugins/cache/vbw-marketplace/vbw/*/scripts/phase-detect.sh; do
+    [ -x "$c" ] && PHASE_DETECT="$c"
+    # Don't break — alphabetic glob expansion means later iterations
+    # overwrite with higher-versioned VBW installs (e.g., 1.36.0 wins over 1.35.1).
+  done
+fi
+
+if [ -n "$PHASE_DETECT" ]; then
+  "$PHASE_DETECT" > /tmp/pipekit-vbw-state.txt 2>/dev/null
+  PHASE_DETECT_RC=$?
+else
+  PHASE_DETECT_RC=127  # treat as unavailable; downstream non-blocking warning fires
+fi
 ```
 
 Parse the output for any of these warning conditions:

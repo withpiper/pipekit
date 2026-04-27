@@ -2,7 +2,21 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.4.0`.
+Pin to a specific version: `./scripts/sync-method.sh v1.4.1`.
+
+---
+
+## v1.4.1 — 2026-04-27
+
+### Fix
+
+**`/launch` Step 1.6 resolves `phase-detect.sh` from VBW plugin cache (closes #8).** Hit immediately on first v1.4.0 consumer sync. Step 1.6's lookup checked PATH and `.vbw-planning/scripts/` but didn't know VBW installs `phase-detect.sh` at `~/.claude/plugins/cache/vbw-marketplace/vbw/<VERSION>/scripts/`. Consumers had to write a wrapper script to make Step 1.6 work. Now /launch resolves the canonical install path automatically; if multiple VBW versions are installed, the highest version wins via alphabetic glob expansion.
+
+PATH and project-local lookups still take precedence (preserves override capability). Behavior on no-phase-detect-anywhere is unchanged from v1.4.0 — graceful degradation with non-blocking warning.
+
+### Migration
+
+Patch release. `./scripts/sync-method.sh v1.4.1` — single skill file updated (`launch/skill.md`). No config changes. Consumer wrapper scripts at `.vbw-planning/scripts/phase-detect.sh` continue to work (they take precedence over the plugin-cache fallback).
 
 ---
 
