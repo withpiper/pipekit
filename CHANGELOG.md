@@ -2,7 +2,53 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.4.1`.
+Pin to a specific version: `./scripts/sync-method.sh v1.5.0`.
+
+---
+
+## v1.5.0 — 2026-04-28
+
+### What's New
+
+**Productivity skills release.** Two new portable skills closing recurring friction observed across the v1.4.x release cycle (rs-vault Phase 1 closeout, four Pipekit releases shipped 2026-04-27). Both are read-only by design and slot cleanly into existing pipeline positions — no behavioral changes to `/launch`, `/light-spec`, or any prior skill. Clean sync from v1.4.1 (no breaking changes, no config migration).
+
+#### `/spec-preflight` automates empirical pre-flight checks on specs (closes #9)
+
+New skill that verifies a Linear issue's spec against reality before `/launch`. Parses file paths, line citations, phase-detect baselines, Linear status, and dependency claims from the spec body and confirms each against the actual project state. Slots between Spec Review Agent (which reviews narrative coherence) and `/launch` (which validates gates).
+
+```
+/light-spec → Spec Review Agent → human approval → /spec-preflight → /launch
+```
+
+Catches the empirical-drift class of defect agent review structurally cannot see — stale baselines (the recurring failure mode where a spec passed agent review with `phase_count=0` while reality was `1`), renamed files cited in §Technical Context, blockers that re-opened post-approval, etc.
+
+Read-only: never modifies the spec, never transitions Linear status, never writes any project file. Output goes to stdout. Graceful degradation when `phase-detect.sh` or Linear MCP is unavailable — infrastructure flake produces `⚠ unverified` markers, not failures, so a single dropped tool doesn't block the rest of the report. For Quick-tier issues that skip agent review entirely, this is the only automated check before `/launch`.
+
+#### `/release-changelog` generates draft CHANGELOG entry from commits (closes #10)
+
+New skill that parses git commits between two refs, buckets by conventional commit type (`feat` → What's New, `fix` → Fix, `docs` → Documentation, others → Other Changes), and renders a draft CHANGELOG entry mirroring this file's existing format. Output to stdout — human edits the narrative lead and migration sections, then commits. Auto-detects new skill directories in the range to seed the migration bullet.
+
+```
+/release-changelog --version v1.6.0
+/release-changelog --version v1.6.0 --from v1.5.0
+/release-changelog --version v1.6.0 --from v1.5.0 --to HEAD
+```
+
+`--version` is required (validated against `vX.Y.Z[-suffix]`); `--from` defaults to the latest tag; `--to` defaults to `HEAD`. Edge cases: no prior tag → error requesting explicit `--from`, empty range → exit 0 with `"no changes since <prev>"`, misformatted commits → bucket gracefully into Other Changes with the full original subject. Read-only on git state and on `CHANGELOG.md`; the human's editing pass is load-bearing and explicitly preserved.
+
+This release dogfooded the skill: the entry above was drafted by hand-running the algorithm on the four commits in the v1.4.1..HEAD range, then expanded with narrative.
+
+### Migration
+
+For consuming projects on v1.4.1:
+
+1. `./scripts/sync-method.sh v1.5.0` — pulls two new skill directories: `skills/spec-preflight/` and `skills/release-changelog/`. Also pulls updated `sop/Skills_SOP.md` and `method.md` skill tables.
+2. No config changes required. No template changes. No new state IDs.
+3. No breaking changes. Existing pipelines run unchanged. The new skills are additive — projects can adopt `/spec-preflight` selectively (or always) before `/launch`; `/release-changelog` is Pipekit-internal release tooling and consumers may or may not have a use for it depending on their own changelog conventions.
+
+### Open items deferred to v1.6.0
+
+- **Orchestrator-side denial detection** — carried forward from v1.4.0. The "lighter-fix" path landed in v1.4.0 (subagent-side stop instruction); the orchestrator-side detection that surfaces denials proactively without depending on agent compliance remains open.
 
 ---
 
