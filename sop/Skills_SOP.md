@@ -38,6 +38,7 @@ These skills work across any project that follows the method. They read `method.
 | `/brainstorm-review` | Triage untriaged Linear issues | Stage 1: Definition |
 | `/light-spec` | Structured spec generation with agent review | Stage 1: Definition |
 | `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops | Stage 1: Definition |
+| `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. | Stage 1 / pre-Launch gate |
 | `/launch` | Formalized trigger: gates → routing → execution | Stage 2: Launch & Planning |
 | `/linear-todo-runner` | Batch execution of specced issues | Stage 3: Execution |
 | `/linear` | Linear issue workflow | Anytime |
@@ -54,6 +55,7 @@ These skills work across any project that follows the method. They read `method.
 | `/task-processor` | Process Linear tasks systematically | Stage 3: Execution |
 | `/startup` | Full project bootstrap orchestrator | Stage 0 (all steps) |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
+| `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
 
 ### Project-Specific Skills (stay in each project)
 
