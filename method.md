@@ -392,6 +392,7 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `/roadmap-review` | Stage 0 gate + health check: completeness, dependencies, spec coverage |
 | `/brainstorm` | Feature-level feasibility exploration (within an existing project) |
 | `/light-spec` | Structured spec generation with agent review |
+| `/spec-preflight {ISSUE}` | Empirical pre-flight on a specced issue — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. Run between Spec Review Agent and `/launch`. |
 | `/launch {ISSUE}` | Open: validate Linear gates, route by complexity, transition to Building, hand off to VBW |
 | `/launch {ISSUE} --close` | Close: transition Linear to UAT after VBW pipeline complete + verify passed |
 | `/launch --milestone {WP}` | Launch all ready issues in a milestone |
@@ -403,6 +404,7 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `/start-session` | Review past progress, capture session intentions |
 | `/end-session` | Session wrap-up: changelog, Linear updates |
 | `/strategy-sync` | Post-pipeline: update Strategy docs to reflect shipped features |
+| `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human edit. Pipekit-internal release tooling. |
 
 Project-specific promotion and deploy skills are defined per project (not in this repo).
 
