@@ -185,11 +185,13 @@ When any background agent completes:
 1. Move issue to "UAT" via `mcp__linear-server__save_issue` with `stateId: {UAT state ID from method.config.md}`
 2. Post a Linear comment with: branch name, commit summary, pre-deploy gate results
 3. Log the branch for PR creation
+4. **Write pipeline state file (v1.6.0+):** `.pipekit/pipeline-state/<issue-id>.json` per `sop/Skills_SOP.md` § Pipeline state file with `stage: "linear-todo-runner"`, `verdict: "Pass"`, `next_command: "/g-test-vercel"` (or whatever the project's post-UAT pointer is), `cwd`, `timestamp`. Hook-blocked writes are best-effort — skip silently.
 
 **On failure (agent reports errors or AC not met):**
 1. Move issue back to "Approved" via `mcp__linear-server__save_issue` with `stateId: {Approved state ID from method.config.md}`
 2. Post a Linear comment with the failure reason and any partial progress
 3. Log as failed
+4. **Write pipeline state file (v1.6.0+):** `.pipekit/pipeline-state/<issue-id>.json` with `stage: "linear-todo-runner"`, `verdict: "Fail"`, `next_command: "/01-light-spec-revise <issue-id>"` (or `/light-spec-revise` depending on diagnosis), `cwd`, `timestamp`.
 
 **Then refill:**
 1. Re-evaluate the queue — check if any previously-blocked issues are now unblocked (their blockers may have just completed)
