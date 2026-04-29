@@ -221,7 +221,7 @@ pipekit/
       pipekit-discipline.md        #     Red Flags, Ad-hoc Plan Gate, scope hygiene
       pipekit-tooling.md           #     Verify Library API, package manager, pre-deploy gate
       pipekit-security.md          #     Secrets, boundary validation, OWASP, explicit auth
-  skills/                          # Portable Claude Code skills (26 total)
+  skills/                          # Portable Claude Code skills
   scripts/
     sync-method.sh                 # Pull method into a consuming project
     drift-check.sh                 # Detect stale references in documentation

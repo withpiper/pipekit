@@ -1053,6 +1053,8 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Roadmap Review | `/roadmap-review` | Full health check (Stage 0 gate) |
 | Brainstorm | `/brainstorm` | Feature-level ideation |
 | Light Spec | `/light-spec PROJ-1` | Create spec for an issue |
+| Light Spec Revise | `/light-spec-revise PROJ-1` | Apply Spec Review Agent feedback surgically |
+| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before /launch (file paths, baselines, Linear status). Read-only. |
 | Launch | `/launch PROJ-1` | Validate gates → route → execute |
 | Launch Batch | `/launch --milestone WP-1` | Launch all ready issues in a WP |
 | Launch Dry Run | `/launch --dry-run PROJ-1` | Check gates without executing |
@@ -1069,6 +1071,8 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Start Session | `/start-session` | Review progress, capture intentions |
 | End Session | `/end-session` | Changelog, Linear updates |
 | Strategy Sync | `/strategy-sync` | Update docs to match shipped code |
+| Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
+| Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
 | Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project |
 | Update + Push | `/pipekit-update --push` | Push improvements back to method repo |
 

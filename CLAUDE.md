@@ -87,8 +87,10 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 | `/launch` | Validates gates, resolves tier (Quick/Standard/Heavy), routes by complexity, triggers execution |
 | `/light-spec` | Generates structured specs as AI-to-AI contracts |
 | `/light-spec-revise` | Applies Spec Review Agent feedback surgically; detects stalemate loops |
+| `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status, dependencies against reality. Read-only. |
 | `/pipekit-help` | Reads project state, recommends the next pipeline step (push-based replacement for "what skill do I run now?") |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what was actually built |
+| `/release-changelog` | Generates draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project (supports `--push`) |
 
 Full skill list in `sop/Skills_SOP.md`.
