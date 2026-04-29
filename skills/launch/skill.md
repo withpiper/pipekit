@@ -34,6 +34,7 @@ Read `method.config.md` for project context.
 | `--dry-run` | Validate gates and show routing plan without executing |
 | `--force` | Skip milestone readiness gate (use with caution) |
 | `--tier {quick\|standard\|heavy}` | Override tier inference. Always confirmed with the user before proceeding. |
+| `--auto` | Auto-chain non-decision pipeline transitions. Spawns vbw:vbw-lead → plan-reviewer → vbw:vbw-dev → vbw:vbw-qa via the Task tool, pausing only at /review-plan and /vbw:vibe --verify verdicts. Standard tier only — Quick delegates to /linear-todo-runner; Heavy is rejected. See "Auto-chain mode" below. |
 | `--deep` | (Deprecated — no-op; use `/vbw:vibe --execute --effort=max` instead) |
 
 ---
@@ -428,6 +429,102 @@ If any check fails, refuse to close with a list of missing artifacts and stop. D
    schema. If your /g-promote-dev does not run `supabase db push`, the
    migration only takes effect at /g-promote-main — plan UAT accordingly.
    ```
+
+---
+
+## Auto-chain mode (`--auto`)
+
+`/launch PROJ-XXX --auto` orchestrates the Standard-tier pipeline end-to-end with exactly **three human inputs**:
+
+1. Tier confirmation (the existing Step 1.5 prompt)
+2. `/review-plan` verdict gate (proceed on Pass / Revise; abort on Block)
+3. QA verdict gate (proceed on Pass; abort on Fail / Partial)
+
+Everything else — VBW Lead writing PLAN.md, plan-reviewer reviewing it, VBW Dev executing, VBW QA verifying, the final `--close` — runs without prompting. Each pipeline stage runs as a **fresh subagent** spawned via the Task tool, so the fresh-chat discipline (`method.md` § Fresh-Chat Discipline) is preserved: the orchestrator's conversation context never bleeds into Lead, plan-reviewer, Dev, or QA reasoning.
+
+### Tier handling
+
+| Tier | `--auto` behavior |
+|------|-------------------|
+| **Quick** | Delegate to `/linear-todo-runner` — Quick tier is already auto-chained via the batch runner. Print `"Quick tier: --auto handled by /linear-todo-runner. Queueing PROJ-XXX."` and exit. |
+| **Standard** | Run the full auto-chain orchestration described below. |
+| **Heavy** | Reject with: `"--auto is disallowed on Heavy tier. Heavy adds security review + mandatory /strategy-sync before close, both of which require human pacing. Run /launch PROJ-XXX without --auto."` Exit non-zero. |
+
+The tier check happens after the existing Step 1.5 confirmation. If the user confirmed Heavy and also passed `--auto`, the rejection fires here — do not run any subagents.
+
+### Orchestration shape (Standard tier only)
+
+After Steps 1–6 complete unchanged (gate validation, tier confirm, dependency check, milestone gate, complexity routing, Linear → Building):
+
+1. **Spawn vbw:vbw-lead via Task tool** with `subagent_type: "vbw:vbw-lead"`. Task description: write `PLAN.md` for the resolved phase slug, with the standard VBW Lead inputs (Linear spec, project state, prior phase summaries). On completion, the agent returns the path to the written PLAN.md.
+
+2. **Spawn plan-reviewer via Task tool** with `subagent_type: "plan-reviewer"`, `model: opus`. Task description follows the prompt structure in `skills/review-plan/skill.md` Step 4 verbatim. On completion, parse the structured output for the Verdict line.
+
+3. **PAUSE — AskUserQuestion** with the verdict surfaced:
+
+   ```
+   Plan-reviewer verdict: {Pass | Revise | Block} — {Readiness Score}/10
+
+   {Block: surface the Blocking Issues list verbatim}
+   {Revise: surface the Non-Blocking Improvements list verbatim}
+
+   Proceed to execution?
+   ```
+
+   Options:
+   - **Pass / Revise** → `proceed` (default), `pause-here`, `abort`
+   - **Block** → `abort` (default), `route-to-light-spec-revise`, `route-to-vbw-plan` (Lead-revise)
+
+   On `proceed`, continue to step 4. On `pause-here`, exit cleanly with the user back in control (NEXT.md points at `/vbw:vibe --execute {phase-slug}`). On `abort` or any routing choice, exit with the corresponding pointer in NEXT.md and do not spawn Dev.
+
+4. **Spawn vbw:vbw-dev via Task tool** with `subagent_type: "vbw:vbw-dev"`. Task description: execute the plan at the given phase slug, atomic commits per the project's CLAUDE.md conventions. The standard VBW execution prompt applies. **Include the permission-denial protocol from Step 7b.1 in the task description** — Dev must stop on `EditPermissionDenied` / `HookFeedbackBlocked` and surface the denial rather than burning turns.
+
+5. **Spawn vbw:vbw-qa via Task tool** with `subagent_type: "vbw:vbw-qa"`. Task description: verify the executed plan against the spec's AC. Returns a structured verdict (Pass / Fail / Partial) and a verification report path.
+
+6. **PAUSE — AskUserQuestion** with the QA verdict surfaced:
+
+   ```
+   QA verdict: {Pass | Fail | Partial}
+
+   {Fail / Partial: surface the failing AC items verbatim from the verification report}
+
+   Run /launch --close to transition Linear to UAT?
+   ```
+
+   Options:
+   - **Pass** → `close` (default), `pause-here`, `abort`
+   - **Fail / Partial** → `pause-here` (default), `re-execute-with-scope`, `abort`
+
+   On `close`, continue to step 7. On `pause-here`, exit cleanly (Linear stays in Building; user runs `/launch --close` later). On `re-execute-with-scope`, prompt for fix scope and re-spawn `vbw:vbw-dev` (loop back to step 4 with the new scope; do NOT re-run plan-review). On `abort`, exit.
+
+7. **Run `/launch PROJ-XXX --close` inline.** Use the existing Step 9 logic — same Linear transition, same close-summary comment. Does not spawn another subagent; runs in the orchestrator's own context (it is gate-and-status work, not build work).
+
+### Pipeline state file at each transition
+
+`/launch --auto` is the primary consumer of the pipeline state file (`.pipekit/pipeline-state/<issue-id>.json`, schema in `sop/Skills_SOP.md` § Pipeline state file). After each spawn returns, the orchestrator updates the state file with `stage`, `verdict`, `next_command`, `cwd`, and timestamp. This supports:
+
+- **Auto-chain progress tracking** — the orchestrator knows where it is even after a long Dev run.
+- **Resumption-after-crash** — if the orchestrator is interrupted, the next `/launch --auto PROJ-XXX` can read the state file and prompt: `"Last transition: {stage} at {timestamp}. Resume from {next stage}?"` (resumption skill `/pipekit-resume` deferred to v1.7.0; the state file is written now so the data exists when the consumer ships).
+
+State-file writes that hit a hook block during VBW-scoped stages are best-effort — skip silently rather than failing the chain. The orchestrator can reconstruct missed transitions from VBW's own state.
+
+### Fresh-chat discipline preservation
+
+Each agent (Lead, plan-reviewer, Dev, QA) runs as a **Task-spawned subagent** — by definition fresh subagent context. Agents see prior stage output as documents (PLAN.md, REVIEW.md, VERIFICATION.md), not as recalled conversation. The orchestrator (`/launch --auto` itself) runs in one continuous conversation but does NOT share that context with the subagents it spawns. Discipline preserved per `method.md` § Fresh-Chat Discipline.
+
+### What auto-chain does NOT skip
+
+- Plan review (step 2). Auto-chain *includes* it; it does not bypass it. The pause at the verdict (step 3) is intentional and load-bearing.
+- QA verification (step 5). Same.
+- Linear gate at Step 1, milestone gate at Step 3, dependency check at Step 2 — all run unchanged.
+
+If you find yourself adding logic to skip any of these "in auto mode," step back: auto-chain's value is reducing transition friction between non-decision steps, not lowering the gate bar.
+
+### Out of scope for v1.6.0
+
+- Resumption-after-walk-away when chain runs longer than the Claude Code session length — the state file lays groundwork; the consumer skill (`/pipekit-resume`) ships in v1.7.0.
+- Cross-issue parallel auto-chain (one orchestrator running multiple issues in parallel) — out of scope.
+- Auto-skip plan-review on "trivial" Standard plans — explicitly anti-pattern; do not ship.
 
 ---
 
