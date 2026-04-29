@@ -33,18 +33,20 @@
 set -euo pipefail
 
 METHOD_REPO="${METHOD_REPO:-https://github.com/ethan-piper/pipekit.git}"
-REF="${1:-main}"
 DRY_RUN=false
+REF="main"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHANGELOG="$PROJECT_ROOT/method/.sync-changelog.md"
 
-# Parse flags
+# Parse flags without mutating $@ — the self-update guard below re-execs with
+# "$@", and a shift here would silently drop --dry-run across the re-exec.
 for arg in "$@"; do
   case "$arg" in
-    --dry-run) DRY_RUN=true; shift ;;
+    --dry-run) DRY_RUN=true ;;
+    -*) echo "WARN: unknown flag: $arg" >&2 ;;
+    *) REF="$arg" ;;
   esac
 done
-REF="${1:-main}"
 
 echo "=== Method Sync ==="
 echo "Source: $METHOD_REPO @ $REF"
