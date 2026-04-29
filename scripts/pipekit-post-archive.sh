@@ -28,7 +28,18 @@ if [ -z "$MILESTONE_SLUG" ] || [ -z "$ARCHIVE_PATH" ]; then
 fi
 
 PROJECT_ROOT="${VBW_CONFIG_ROOT:-$(pwd -P 2>/dev/null || pwd)}"
-MARKER_DIR="$PROJECT_ROOT/.pipekit"
+
+# v1.7.0+: marker lives outside the repo (XDG cache) so VBW's file-guard
+# never blocks the write. See scripts/pipekit-state-dir.sh and #13.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$SCRIPT_DIR/pipekit-state-dir.sh" ]; then
+  MARKER_DIR=$(cd "$PROJECT_ROOT" && bash "$SCRIPT_DIR/pipekit-state-dir.sh")
+else
+  # Fallback: inline the resolution logic so the hook doesn't hard-fail
+  # on consumers mid-upgrade.
+  REPO_BASE=$(cd "$PROJECT_ROOT" && git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || echo "_default")
+  MARKER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/$REPO_BASE"
+fi
 MARKER_FILE="$MARKER_DIR/pending-strategy-sync"
 
 mkdir -p "$MARKER_DIR" 2>/dev/null || {

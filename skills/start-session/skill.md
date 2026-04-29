@@ -45,7 +45,7 @@ If `NEXT.md` doesn't exist (fresh project or before the first pipeline step comp
 
 ### 2b. Check Pending Strategy Sync Marker
 
-Check if `.pipekit/pending-strategy-sync` exists. It is written by `scripts/pipekit-post-archive.sh` after VBW archives a milestone. When present, surface it before session planning:
+Resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)` and check if `$STATE_DIR/pending-strategy-sync` exists. It is written by `scripts/pipekit-post-archive.sh` after VBW archives a milestone. (v1.7.0+: location moved out-of-repo to evade VBW's file-guard.) When present, surface it before session planning:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

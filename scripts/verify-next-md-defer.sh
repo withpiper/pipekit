@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
 # verify-next-md-defer.sh
 #
-# Reproducible end-to-end check for the v1.6.0 NEXT.md defer + apply
-# round-trip introduced by #12. Exercises the deferral detection logic
-# from skills/review-plan/skill.md (Step 7) and the apply logic from
-# skills/end-session/skill.md (Step 7b.0).
+# Reproducible end-to-end check for the NEXT.md defer + apply round-trip
+# (v1.6.0 #12, relocated v1.7.0 #13). Exercises the deferral detection
+# logic from skills/review-plan/skill.md (Step 7) and the apply logic
+# from skills/end-session/skill.md (Step 7b.0).
+#
+# v1.7.0 update: queue file lives at $STATE_DIR/pending-next-md.json
+# where $STATE_DIR is resolved by scripts/pipekit-state-dir.sh and points
+# OUTSIDE the repo (under $XDG_CACHE_HOME). This dodges VBW's file-guard
+# hook which silently blocked the in-repo .pipekit/ path in v1.6.0.
 #
 # Usage:
 #   bash scripts/verify-next-md-defer.sh
 #
 # Behavior:
-#   1. Builds an ephemeral fake project tree under a temp dir.
-#   2. Creates a fake VBW PLAN.md with a files_modified field that
+#   1. Builds an ephemeral fake project tree under a temp dir, plus an
+#      isolated XDG_CACHE_HOME so we don't pollute the real cache.
+#   2. Symlinks pipekit-state-dir.sh into the fake repo so the helper
+#      resolves correctly inside the temp tree.
+#   3. Creates a fake VBW PLAN.md with a files_modified field that
 #      does NOT include NEXT.md (the conflict that #12 fixes).
-#   3. Runs the deferral check inline; expects DEFER_NEXT_MD=1.
-#   4. Writes a queue file at .pipekit/pending-next-md.json.
-#   5. Runs the apply step (/end-session Step 7b.0); expects NEXT.md
+#   4. Runs the deferral check inline; expects DEFER_NEXT_MD=1.
+#   5. Resolves $STATE_DIR via the helper and writes the queue file there.
+#   6. Confirms the queue file is OUTSIDE the repo (the v1.7.0 fix).
+#   7. Runs the apply step (/end-session Step 7b.0); expects NEXT.md
 #      to receive the queued content and the queue file to be deleted.
 #
 # Exit status: 0 on success, non-zero on failure with a diagnostic line.
@@ -25,11 +34,22 @@
 
 set -euo pipefail
 
+REAL_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pipekit-state-dir.sh"
+if [ ! -x "$REAL_HELPER" ]; then
+  echo "FAIL: helper not found at $REAL_HELPER" >&2
+  exit 1
+fi
+
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+TMP_CACHE=$(mktemp -d)
+trap 'rm -rf "$TMP" "$TMP_CACHE"' EXIT
+
+export XDG_CACHE_HOME="$TMP_CACHE"
 
 cd "$TMP"
-mkdir -p .vbw-planning/phases/test-phase .pipekit/pipeline-state
+git init -q
+mkdir -p .vbw-planning/phases/test-phase scripts
+ln -s "$REAL_HELPER" scripts/pipekit-state-dir.sh
 
 cat > .vbw-planning/phases/test-phase/01-01-PLAN.md <<'PLAN'
 # Test Phase Plan
@@ -59,8 +79,21 @@ if [ "$DEFER_NEXT_MD" != "1" ]; then
   exit 1
 fi
 
+# --- Resolve out-of-repo state dir (v1.7.0 fix) ---
+STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
+mkdir -p "$STATE_DIR"
+
+# Confirm the fix: STATE_DIR must be outside the repo.
+case "$STATE_DIR" in
+  "$TMP"/*)
+    echo "FAIL: STATE_DIR ($STATE_DIR) resolved inside the repo — v1.7.0 fix not applied" >&2
+    exit 1
+    ;;
+esac
+
 # --- Queue write (review-plan would do this) ---
-cat > .pipekit/pending-next-md.json <<JSON
+QUEUE="$STATE_DIR/pending-next-md.json"
+cat > "$QUEUE" <<JSON
 {
   "queued_at": "2026-04-29T14:32:00-04:00",
   "writer": "/review-plan",
@@ -69,13 +102,12 @@ cat > .pipekit/pending-next-md.json <<JSON
 }
 JSON
 
-if [ ! -f .pipekit/pending-next-md.json ]; then
-  echo "FAIL: queue file not written" >&2
+if [ ! -f "$QUEUE" ]; then
+  echo "FAIL: queue file not written at $QUEUE" >&2
   exit 1
 fi
 
 # --- Apply (end-session Step 7b.0) ---
-QUEUE=".pipekit/pending-next-md.json"
 python3 -c "import json,sys; open('NEXT.md','w').write(json.load(open('$QUEUE'))['content'])"
 rm -f "$QUEUE"
 
@@ -84,7 +116,7 @@ if [ ! -f NEXT.md ]; then
   exit 1
 fi
 
-if [ -f .pipekit/pending-next-md.json ]; then
+if [ -f "$QUEUE" ]; then
   echo "FAIL: queue file not cleaned up" >&2
   exit 1
 fi
@@ -94,4 +126,5 @@ if ! grep -q "/vbw:vibe --execute test-phase" NEXT.md; then
   exit 1
 fi
 
-echo "OK: defer detection, queue write, and apply round-trip all passed."
+echo "OK: defer detection, out-of-repo queue write, and apply round-trip all passed."
+echo "    STATE_DIR resolved to: $STATE_DIR"

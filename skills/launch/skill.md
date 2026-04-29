@@ -345,7 +345,7 @@ Invoked when the user returns with verify confirmed (either via `/vbw:vibe --ver
 - QA report exists and is passing
 - Security review report exists at the path defined in `method.config.md`
 - `/strategy-sync` last-run timestamp is after this issue's last build commit
-- No `.pipekit/pending-strategy-sync` marker exists
+- No `$STATE_DIR/pending-strategy-sync` marker exists (resolve `STATE_DIR` via `bash scripts/pipekit-state-dir.sh`)
 
 If any check fails, refuse to close with a list of missing artifacts and stop. Do not transition Linear status.]
 
@@ -501,7 +501,7 @@ After Steps 1–6 complete unchanged (gate validation, tier confirm, dependency 
 
 ### Pipeline state file at each transition
 
-`/launch --auto` is the primary consumer of the pipeline state file (`.pipekit/pipeline-state/<issue-id>.json`, schema in `sop/Skills_SOP.md` § Pipeline state file). After each spawn returns, the orchestrator updates the state file with `stage`, `verdict`, `next_command`, `cwd`, and timestamp. This supports:
+`/launch --auto` is the primary consumer of the pipeline state file (`$STATE_DIR/pipeline-state/<issue-id>.json`, where `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`; schema in `sop/Skills_SOP.md` § Pipeline state file). After each spawn returns, the orchestrator updates the state file with `stage`, `verdict`, `next_command`, `cwd`, and timestamp. This supports:
 
 - **Auto-chain progress tracking** — the orchestrator knows where it is even after a long Dev run.
 - **Resumption-after-crash** — if the orchestrator is interrupted, the next `/launch --auto PROJ-XXX` can read the state file and prompt: `"Last transition: {stage} at {timestamp}. Resume from {next stage}?"` (resumption skill `/pipekit-resume` deferred to v1.7.0; the state file is written now so the data exists when the consumer ships).
@@ -624,7 +624,7 @@ Tier 1 / Option 3 has two `/launch` invocations per issue: open and `--close`. E
 **Close-time NEXT.md logic** (priority order):
 
 1. Next Specced issue in current phase → `/launch {next issue}`
-2. If `.pipekit/pending-strategy-sync` marker exists → `/strategy-sync`
+2. If `$STATE_DIR/pending-strategy-sync` marker exists (resolved via `bash scripts/pipekit-state-dir.sh`) → `/strategy-sync`
 3. If phase complete and synced → `/phase-plan`
 4. Otherwise → `/g-test-vercel` for the just-shipped issue
 
@@ -632,9 +632,9 @@ Inline `➜ Next:` and `NEXT.md` contents must match. See SOP schema in `sop/Ski
 
 **Note:** Pipekit no longer writes NEXT.md between phases (between `--plan`, `--execute`, `--verify`). Those are VBW's pause points; if the user wants context recovery there, they consult `.vbw-planning/STATE.md` directly. Pipekit's NEXT.md tracks the **issue lifecycle**, not the build lifecycle.
 
-**VBW active-plan scope deferral (v1.6.0+):** before writing `NEXT.md` (open *or* `--close` path), run the active-plan scope detection from `sop/Skills_SOP.md` § Deferral mechanism. If `DEFER_NEXT_MD=1`, write the intended content to `.pipekit/pending-next-md.json` instead of NEXT.md directly. The most common case for `/launch --close` to hit deferral is when the user invokes `--close` while still inside the same chat that ran `/vbw:vibe --plan` (the active plan is still the most recent VBW write). Inline `➜ Next:` is still emitted to the terminal; only the file write defers. `/end-session` applies the queue.
+**VBW active-plan scope deferral (v1.6.0+, relocated v1.7.0):** before writing `NEXT.md` (open *or* `--close` path), run the active-plan scope detection from `sop/Skills_SOP.md` § Deferral mechanism. If `DEFER_NEXT_MD=1`, resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)` and write the intended content to `$STATE_DIR/pending-next-md.json` instead of NEXT.md directly. The most common case for `/launch --close` to hit deferral is when the user invokes `--close` while still inside the same chat that ran `/vbw:vibe --plan` (the active plan is still the most recent VBW write). Inline `➜ Next:` is still emitted to the terminal; only the file write defers. `/end-session` applies the queue.
 
-**Pipeline state file (v1.6.0+):** at the end of both open and `--close` paths, write `.pipekit/pipeline-state/<issue-id>.json` per the SOP schema. For open, `stage: "launch"` and `verdict: null` (gate-pass is not a verdict in the review sense); for close, `stage: "launch-close"` and `verdict: null`. Hook-blocked writes are best-effort — skip silently.
+**Pipeline state file (v1.6.0+, relocated v1.7.0):** at the end of both open and `--close` paths, write `$STATE_DIR/pipeline-state/<issue-id>.json` per the SOP schema. For open, `stage: "launch"` and `verdict: null` (gate-pass is not a verdict in the review sense); for close, `stage: "launch-close"` and `verdict: null`. The path is out-of-repo so no hook block; write should always succeed.
 
 ---
 

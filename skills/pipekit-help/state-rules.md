@@ -38,7 +38,7 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 ## 2. Pending strategy sync
 
-**Match:** `.pipekit/pending-strategy-sync` file exists.
+**Match:** `$STATE_DIR/pending-strategy-sync` file exists (`STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`).
 
 **Recommend:** `/strategy-sync`
 **Why:** Post-archive hook flagged a milestone close; strategy docs are out of date with shipped reality.

@@ -332,8 +332,8 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
    **Pipekit's VBW-steering surface (Tier 1 / Option 3 architecture, 2026-04-25):**
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Not a VBW agent; Pipekit-shipped.
    2. **Read-only state observation** — `.vbw-planning/{ROADMAP,STATE,PHASES,linear-map}.md` reads from `/sync-linear`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/10-strategy-sync`, `/end-session`.
-   3. **One lifecycle hook** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive`, writes `.pipekit/pending-strategy-sync` marker.
-   4. **Pipekit-side ephemeral state** (v1.6.0+) — `.pipekit/` directory holds Pipekit-only state never read by VBW: `pending-strategy-sync` marker (above), `pending-next-md.json` queue (NEXT.md writes deferred under VBW active-plan scope, per `sop/Skills_SOP.md` § Deferral mechanism), and `pipeline-state/<issue-id>.json` records (per-skill transition state, consumed by `/launch --auto`). The directory is gitignored. Writes from inside VBW active-plan scope are best-effort; the consumer's gitignore + the Option B allowlist (upstream VBW coordination) supersede the queue mechanism when present.
+   3. **One lifecycle hook** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive`, writes a `pending-strategy-sync` marker into Pipekit's machine-local state directory.
+   4. **Pipekit-side ephemeral state** (v1.6.0+, relocated v1.7.0) — Pipekit's machine-local state lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds: `pending-strategy-sync` marker, `pending-next-md.json` queue (deferred NEXT.md writes), and `pipeline-state/<issue-id>.json` records (per-skill transition state, consumed by `/launch --auto`). v1.6.0 placed these inside the repo at `.pipekit/`, but VBW's file-guard hook silently blocked the writes during active-plan scope (#13) — the relocation makes them invisible to VBW's hook, so writes succeed unconditionally.
 
    No direct VBW-agent spawns. No execution-flow wrapping. VBW upgrades touch zero Pipekit code.
 6. **When drift is suspected, stop and reconcile.** Symptoms: Linear status doesn't match VBW execution state; a PLAN.md references a Linear issue that doesn't exist; a Linear issue has no corresponding plan. Resolve the mismatch before continuing — drift compounds.
@@ -351,7 +351,7 @@ If drift becomes a recurring pattern in practice, add a `/drift-check` skill for
 
 ### Event Hook: Post-Archive → Strategy Sync
 
-VBW v1.35.0 added a post-archive lifecycle hook (PR #481) that fires after `/vbw:vibe --archive` completes. Pipekit ships `scripts/pipekit-post-archive.sh` to wire this into the strategy-sync loop — when a milestone is archived, the hook writes a `.pipekit/pending-strategy-sync` marker that `/start-session` surfaces on the next session, nudging the user to run `/strategy-sync`.
+VBW v1.35.0 added a post-archive lifecycle hook (PR #481) that fires after `/vbw:vibe --archive` completes. Pipekit ships `scripts/pipekit-post-archive.sh` to wire this into the strategy-sync loop — when a milestone is archived, the hook writes a `pending-strategy-sync` marker into Pipekit's machine-local state directory (out-of-repo, v1.7.0+) that `/start-session` surfaces on the next session, nudging the user to run `/strategy-sync`.
 
 This is the first concrete instance of the event-based wrapping discussed in Rule 5 above. It replaces the previous convention ("remember to run /strategy-sync after shipping") with a hook that fires deterministically without Pipekit re-implementing VBW's archive flow.
 

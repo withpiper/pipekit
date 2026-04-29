@@ -135,11 +135,36 @@ Always include both date and time in the `Last updated` line. A bare date hides 
 
 **`/start-session` reads and displays it** automatically at session start, so users don't need to navigate to the file.
 
-#### Deferral mechanism for VBW active-plan scope (v1.6.0+)
+#### Pipekit machine-local state directory (v1.7.0+)
+
+Pipekit's ephemeral, per-machine state (NEXT.md defer queue, pipeline-state records, strategy-sync marker) lives **outside** the repo at:
+
+```
+${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/
+├── pending-next-md.json           # NEXT.md defer queue (see below)
+├── pending-strategy-sync          # post-archive marker (see /strategy-sync)
+└── pipeline-state/
+    └── <issue-id>.json            # per-skill transition state
+```
+
+**Why out-of-repo (#13):** v1.6.0 placed these files at `<repo>/.pipekit/`, which sits inside the repo and gets blocked by VBW's file-guard hook the same way `NEXT.md` does. The defer mechanism only worked for non-VBW-scoped writers — exactly the case it was *not* meant to fix. v1.7.0 moves the directory outside the repo entirely. VBW's file-guard never inspects paths outside the project, so writes succeed unconditionally.
+
+**Resolving the path:** every skill that reads/writes Pipekit state uses the helper:
+
+```bash
+STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
+mkdir -p "$STATE_DIR"
+```
+
+`scripts/pipekit-state-dir.sh` resolves `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>` (basename derived from `git rev-parse --show-toplevel`). All file paths below are *relative to* `$STATE_DIR`.
+
+**Migration from v1.6.0:** consuming projects with a populated `<repo>/.pipekit/` should one-shot move it: `mkdir -p "$(bash scripts/pipekit-state-dir.sh)" && mv .pipekit/* "$(bash scripts/pipekit-state-dir.sh)/" && rmdir .pipekit`. The files are ephemeral so a clean wipe is also fine — the queue and state files self-recreate on next write.
+
+#### NEXT.md deferral mechanism for VBW active-plan scope (v1.6.0+, relocated v1.7.0)
 
 A Pipekit skill that wants to write `NEXT.md` while the user is inside a VBW active-plan scope will be blocked by VBW's file-guard hook (NEXT.md is Pipekit-owned but not in the active plan's `files_modified` field). Per `method.md` § VBW / Pipekit Ownership Model, NEXT.md is unambiguously Pipekit's — but VBW's hook can't tell that, so the write fails and the audit trail is lost.
 
-**The fix (Pipekit-side, ships in v1.6.0):** any Pipekit skill that updates `NEXT.md` from a context that may run under VBW's active-plan scope (`/review-plan`, `/launch --close`, others) must run a deferral check before writing.
+**The fix:** any Pipekit skill that updates `NEXT.md` from a context that may run under VBW's active-plan scope (`/review-plan`, `/launch --close`, others) must run a deferral check before writing.
 
 ```bash
 # Detect active VBW plan scope. Look for files_modified field in any
@@ -162,7 +187,7 @@ if [ -n "$ACTIVE_PLAN" ] && ! grep -q "NEXT\.md" "$ACTIVE_PLAN"; then
 fi
 ```
 
-**If `DEFER_NEXT_MD=1`**, queue the intended NEXT.md content to `.pipekit/pending-next-md.json` instead of writing the file. Schema:
+**If `DEFER_NEXT_MD=1`**, queue the intended NEXT.md content to `$STATE_DIR/pending-next-md.json` (resolved via `scripts/pipekit-state-dir.sh`) instead of writing the file. Schema:
 
 ```json
 {
@@ -173,17 +198,17 @@ fi
 }
 ```
 
-The `.pipekit/` directory must be gitignored (the queue is ephemeral and per-machine). `.pipekit/pending-next-md.json` holds the most recent deferred write; later deferrals overwrite earlier ones (NEXT.md tracks the *current* recommended next action — there is no value in queueing history).
+`pending-next-md.json` holds the most recent deferred write; later deferrals overwrite earlier ones (NEXT.md tracks the *current* recommended next action — there is no value in queueing history).
 
 **Inline `➜ Next:` is NOT deferred** — only the file write. The user still sees the next-command line in the terminal output of the current skill. The deferred file write is purely the persistence/audit layer.
 
-**Apply on session-end:** `/end-session` (and any non-VBW-scoped Pipekit skill that touches NEXT.md) checks for `.pipekit/pending-next-md.json` and applies the queued content atomically before its own NEXT.md logic runs. If `/end-session`'s own recompute supersedes the queued recommendation (the session shipped past the queued point), the queue is cleared without writing. The queue file is deleted post-apply — no persistent cruft.
+**Apply on session-end:** `/end-session` (and any non-VBW-scoped Pipekit skill that touches NEXT.md) checks for `$STATE_DIR/pending-next-md.json` and applies the queued content atomically before its own NEXT.md logic runs. If `/end-session`'s own recompute supersedes the queued recommendation (the session shipped past the queued point), the queue is cleared without writing. The queue file is deleted post-apply — no persistent cruft.
 
 **Graceful degradation:** if VBW lands an upstream `always_allow` allowlist for the file-guard hook (Option B in #12), this Pipekit-side queue mechanism becomes redundant but does not break — `NEXT.md` writes succeed inline, the deferral check finds no active scope (because the allowlist short-circuits the hook), and the queue file is never created. Both paths coexist safely.
 
-#### Pipeline state file (v1.6.0+)
+#### Pipeline state file (v1.6.0+, relocated v1.7.0)
 
-Each pipeline skill that completes a meaningful state transition writes a small JSON file to `.pipekit/pipeline-state/<issue-id>.json` capturing the transition:
+Each pipeline skill that completes a meaningful state transition writes a small JSON file to `$STATE_DIR/pipeline-state/<issue-id>.json` capturing the transition:
 
 ```json
 {
@@ -204,9 +229,9 @@ Fields:
 - `next_command` — the inline `➜ Next:` text (must match what was emitted to terminal and to NEXT.md)
 - `cwd` — absolute path of the project root at the time of write
 
-The state file is consumed by `/launch --auto` to track auto-chain progress and (deferred to v1.7.0) by `/pipekit-resume` to recover cross-session. Skills overwrite their own most-recent record — this is a state file, not an event log. `.pipekit/pipeline-state/` is gitignored along with the rest of `.pipekit/`.
+The state file is consumed by `/launch --auto` to track auto-chain progress and (deferred to a future minor) by `/pipekit-resume` to recover cross-session. Skills overwrite their own most-recent record — this is a state file, not an event log. The whole tree lives under `$STATE_DIR` (out-of-repo), so nothing needs gitignoring.
 
-State-file writes are subject to the same VBW active-plan scope deferral as NEXT.md (path is under `.pipekit/`, which mirrors the `always_allow` glob in #12 Option B). Where consumers have not yet adopted Option B, state-file writes during VBW-scoped stages are best-effort: skip silently on hook block rather than failing the skill. The orchestrator (`/launch --auto`) reconstructs missed transitions from VBW's own state where needed.
+Because the directory sits outside the repo, state-file writes are no longer subject to VBW's file-guard hook. Writes succeed unconditionally during VBW-scoped stages — no deferral, no silent drop. (Pre-v1.7.0 best-effort behavior is removed; if a write now fails, it's a real bug.)
 
 ---
 

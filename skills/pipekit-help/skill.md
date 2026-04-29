@@ -26,7 +26,7 @@ Read each of these without writing. Stop reading as soon as a rule in `state-rul
 |--------|---------|
 | `git rev-parse --abbrev-ref HEAD` | Current branch / worktree |
 | `git log -5 --oneline` | Recent commits (look for Linear prefixes like `PROJ-XXX`) |
-| `.pipekit/pending-strategy-sync` (presence) | Post-archive hook marker — strategy sync owed |
+| `$STATE_DIR/pending-strategy-sync` (presence; `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`) | Post-archive hook marker — strategy sync owed |
 | `.vbw-planning/PHASES.md` (presence) | Stage 0 complete? |
 | `.vbw-planning/phases/<latest>/PLAN.md` (presence + age) | Plan exists for current phase? |
 | `.vbw-planning/phases/<latest>/REVIEW.md` (presence) | Plan-reviewed? |
@@ -74,7 +74,7 @@ Resolve the *latest* phase by mtime of `.vbw-planning/phases/*/PLAN.md`. Don't i
 
 ```
 ➜ Next: /strategy-sync
-  Why: .pipekit/pending-strategy-sync marker present (last archive triggered it)
+  Why: pending-strategy-sync marker present (last archive triggered it)
 ```
 
 ```

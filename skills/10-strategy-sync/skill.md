@@ -143,10 +143,11 @@ After updating primary docs, check consistency across all docs in the manifest:
 
 ### Phase 7b — Clear Post-Archive Marker
 
-If `.pipekit/pending-strategy-sync` exists, it was written by `scripts/pipekit-post-archive.sh` to signal that a milestone archive left strategy docs potentially stale. After Phase 6 applies approved updates, remove the marker:
+If `$STATE_DIR/pending-strategy-sync` exists (resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`), it was written by `scripts/pipekit-post-archive.sh` to signal that a milestone archive left strategy docs potentially stale. (v1.7.0+: location moved out-of-repo to evade VBW's file-guard.) After Phase 6 applies approved updates, remove the marker:
 
 ```bash
-rm -f .pipekit/pending-strategy-sync
+STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
+rm -f "$STATE_DIR/pending-strategy-sync"
 ```
 
 If no approved updates were applied (user skipped all diffs), leave the marker in place so the nudge persists into the next session.
