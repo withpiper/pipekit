@@ -326,7 +326,31 @@ Create file: `Logs/Sessions/YYYY-MM-DD_HHMM.md` with personal reflections and te
 
 ---
 
-### Step 7b — Refresh NEXT.md
+### Step 7b — Apply queued NEXT.md updates, then refresh NEXT.md
+
+#### Step 7b.0 — Apply any queued NEXT.md write (v1.6.0+)
+
+Pipekit skills that ran inside VBW's active-plan scope (typically `/review-plan` and `/launch --close` mid-session) defer their `NEXT.md` writes to `.pipekit/pending-next-md.json` per `sop/Skills_SOP.md` § Deferral mechanism. `/end-session` runs outside any active-plan scope (sessions end after the build is done), so this is the canonical apply point.
+
+```bash
+QUEUE=".pipekit/pending-next-md.json"
+if [ -f "$QUEUE" ]; then
+  WRITER=$(jq -r '.writer' "$QUEUE")
+  QUEUED_AT=$(jq -r '.queued_at' "$QUEUE")
+  echo "Found deferred NEXT.md write from $WRITER at $QUEUED_AT."
+fi
+```
+
+If the queue file exists:
+
+1. Read the queued content. Compare its `next_command` against what the session has actually shipped (commits, Linear status changes, branch state).
+2. **If the queued recommendation is still relevant** (queued `/vbw:vibe --execute X` and the session did not execute X) — apply atomically: write the queued `content` field to `NEXT.md` at the project root. Skip Step 7b.1 — the queued write is the truth.
+3. **If the session has shipped past the queued point** (queued `/vbw:vibe --execute X` but the session ran execute, verify, and `--close`) — the queue is stale. Discard without writing. Step 7b.1 recomputes from current state.
+4. **In either case, delete the queue file** after handling: `rm -f .pipekit/pending-next-md.json`. The queue is ephemeral; no persistent cruft.
+
+If no queue file exists, proceed to Step 7b.1 unchanged.
+
+#### Step 7b.1 — Recompute NEXT.md from current state
 
 Previous `NEXT.md` likely points at the issue that just shipped. Recompute and overwrite per the schema in `sop/Skills_SOP.md` → `The NEXT.md Convention`.
 

@@ -135,6 +135,79 @@ Always include both date and time in the `Last updated` line. A bare date hides 
 
 **`/start-session` reads and displays it** automatically at session start, so users don't need to navigate to the file.
 
+#### Deferral mechanism for VBW active-plan scope (v1.6.0+)
+
+A Pipekit skill that wants to write `NEXT.md` while the user is inside a VBW active-plan scope will be blocked by VBW's file-guard hook (NEXT.md is Pipekit-owned but not in the active plan's `files_modified` field). Per `method.md` § VBW / Pipekit Ownership Model, NEXT.md is unambiguously Pipekit's — but VBW's hook can't tell that, so the write fails and the audit trail is lost.
+
+**The fix (Pipekit-side, ships in v1.6.0):** any Pipekit skill that updates `NEXT.md` from a context that may run under VBW's active-plan scope (`/review-plan`, `/launch --close`, others) must run a deferral check before writing.
+
+```bash
+# Detect active VBW plan scope. Look for files_modified field in any
+# *-PLAN.md inside .vbw-planning/phases/<active>/ — VBW's file-guard
+# hook checks against this field.
+ACTIVE_PLAN=""
+for plan in .vbw-planning/phases/*/[0-9]*-PLAN.md; do
+  [ -f "$plan" ] || continue
+  if grep -qE "^(files_modified:|## files_modified)" "$plan" 2>/dev/null; then
+    ACTIVE_PLAN="$plan"
+    break
+  fi
+done
+
+DEFER_NEXT_MD=0
+if [ -n "$ACTIVE_PLAN" ] && ! grep -q "NEXT\.md" "$ACTIVE_PLAN"; then
+  # Active scope exists AND NEXT.md is not whitelisted in the plan.
+  # Defer the write instead of risking a hook block.
+  DEFER_NEXT_MD=1
+fi
+```
+
+**If `DEFER_NEXT_MD=1`**, queue the intended NEXT.md content to `.pipekit/pending-next-md.json` instead of writing the file. Schema:
+
+```json
+{
+  "queued_at": "2026-04-29T14:32:00-04:00",
+  "writer": "/review-plan",
+  "active_plan": ".vbw-planning/phases/02-search-data-management/02-05-PLAN.md",
+  "content": "# Next Step\n\n**Last updated:** 2026-04-29 14:32 local by /review-plan\n\n## Recommended next command\n`/vbw:vibe --execute 02-search-data-management`\n..."
+}
+```
+
+The `.pipekit/` directory must be gitignored (the queue is ephemeral and per-machine). `.pipekit/pending-next-md.json` holds the most recent deferred write; later deferrals overwrite earlier ones (NEXT.md tracks the *current* recommended next action — there is no value in queueing history).
+
+**Inline `➜ Next:` is NOT deferred** — only the file write. The user still sees the next-command line in the terminal output of the current skill. The deferred file write is purely the persistence/audit layer.
+
+**Apply on session-end:** `/end-session` (and any non-VBW-scoped Pipekit skill that touches NEXT.md) checks for `.pipekit/pending-next-md.json` and applies the queued content atomically before its own NEXT.md logic runs. If `/end-session`'s own recompute supersedes the queued recommendation (the session shipped past the queued point), the queue is cleared without writing. The queue file is deleted post-apply — no persistent cruft.
+
+**Graceful degradation:** if VBW lands an upstream `always_allow` allowlist for the file-guard hook (Option B in #12), this Pipekit-side queue mechanism becomes redundant but does not break — `NEXT.md` writes succeed inline, the deferral check finds no active scope (because the allowlist short-circuits the hook), and the queue file is never created. Both paths coexist safely.
+
+#### Pipeline state file (v1.6.0+)
+
+Each pipeline skill that completes a meaningful state transition writes a small JSON file to `.pipekit/pipeline-state/<issue-id>.json` capturing the transition:
+
+```json
+{
+  "issue_id": "RS-19",
+  "stage": "review-plan",
+  "timestamp": "2026-04-29T14:32:00-04:00",
+  "verdict": "Pass",
+  "next_command": "/vbw:vibe --execute 02-search-data-management",
+  "cwd": "/Users/x/Projects/rs-vault"
+}
+```
+
+Fields:
+- `issue_id` — Linear ID (or phase slug for VBW-only flows)
+- `stage` — skill name minus the leading slash (`launch`, `review-plan`, `linear-todo-runner`, `launch-close`)
+- `timestamp` — ISO-8601 with offset
+- `verdict` — for skills that produce one (`Pass` / `Revise` / `Block` / `Fail`); `null` for transitions without a verdict
+- `next_command` — the inline `➜ Next:` text (must match what was emitted to terminal and to NEXT.md)
+- `cwd` — absolute path of the project root at the time of write
+
+The state file is consumed by `/launch --auto` to track auto-chain progress and (deferred to v1.7.0) by `/pipekit-resume` to recover cross-session. Skills overwrite their own most-recent record — this is a state file, not an event log. `.pipekit/pipeline-state/` is gitignored along with the rest of `.pipekit/`.
+
+State-file writes are subject to the same VBW active-plan scope deferral as NEXT.md (path is under `.pipekit/`, which mirrors the `always_allow` glob in #12 Option B). Where consumers have not yet adopted Option B, state-file writes during VBW-scoped stages are best-effort: skip silently on hook block rather than failing the skill. The orchestrator (`/launch --auto`) reconstructs missed transitions from VBW's own state where needed.
+
 ---
 
 ### Writing Skill Prompts for Opus 4.7

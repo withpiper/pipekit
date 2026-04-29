@@ -535,6 +535,10 @@ Inline `➜ Next:` and `NEXT.md` contents must match. See SOP schema in `sop/Ski
 
 **Note:** Pipekit no longer writes NEXT.md between phases (between `--plan`, `--execute`, `--verify`). Those are VBW's pause points; if the user wants context recovery there, they consult `.vbw-planning/STATE.md` directly. Pipekit's NEXT.md tracks the **issue lifecycle**, not the build lifecycle.
 
+**VBW active-plan scope deferral (v1.6.0+):** before writing `NEXT.md` (open *or* `--close` path), run the active-plan scope detection from `sop/Skills_SOP.md` § Deferral mechanism. If `DEFER_NEXT_MD=1`, write the intended content to `.pipekit/pending-next-md.json` instead of NEXT.md directly. The most common case for `/launch --close` to hit deferral is when the user invokes `--close` while still inside the same chat that ran `/vbw:vibe --plan` (the active plan is still the most recent VBW write). Inline `➜ Next:` is still emitted to the terminal; only the file write defers. `/end-session` applies the queue.
+
+**Pipeline state file (v1.6.0+):** at the end of both open and `--close` paths, write `.pipekit/pipeline-state/<issue-id>.json` per the SOP schema. For open, `stage: "launch"` and `verdict: null` (gate-pass is not a verdict in the review sense); for close, `stage: "launch-close"` and `verdict: null`. Hook-blocked writes are best-effort — skip silently.
+
 ---
 
 ## Relationship to Other Skills

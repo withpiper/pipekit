@@ -145,9 +145,9 @@ Based on the verdict:
 
 Always quote the agent's own Fast Path to Pass section verbatim — those are the concrete moves the user has to make.
 
-### Step 7 — NEXT.md update
+### Step 7 — NEXT.md update (with VBW active-plan deferral)
 
-Per the SOP `NEXT.md` schema in `sop/Skills_SOP.md`. Write the file at the project root with timestamp `{YYYY-MM-DD HH:MM local}` and writer `/review-plan`.
+Per the SOP `NEXT.md` schema in `sop/Skills_SOP.md`. Compose the intended file content with timestamp `{YYYY-MM-DD HH:MM local}` and writer `/review-plan`.
 
 Pointer logic:
 
@@ -155,7 +155,37 @@ Pointer logic:
 - **Revise** → `/vbw:vibe --execute {phase-slug}` (with note about non-blocking improvements)
 - **Block** → either `/vbw:vibe --plan {phase-slug}` (if Lead-revise scope) or `/02-light-spec-revise PROJ-XXX` (if spec/framing scope)
 
-Inline `➜ Next:` and `NEXT.md` contents must match.
+Inline `➜ Next:` is **always emitted** to the terminal. The file write may be deferred — see below.
+
+#### Deferral check (v1.6.0+)
+
+Before writing `NEXT.md`, run the active-plan scope detection from `sop/Skills_SOP.md` § Deferral mechanism. `/review-plan` is the canonical case for deferral: it runs *inside* VBW's active-plan scope (the plan it just reviewed is the active plan), so VBW's file-guard hook will block a direct `NEXT.md` write unless the consuming project has adopted the `always_allow` allowlist (#12 Option B, upstream-coordinated).
+
+```bash
+ACTIVE_PLAN=""
+for plan in .vbw-planning/phases/*/[0-9]*-PLAN.md; do
+  [ -f "$plan" ] || continue
+  if grep -qE "^(files_modified:|## files_modified)" "$plan" 2>/dev/null; then
+    ACTIVE_PLAN="$plan"
+    break
+  fi
+done
+
+DEFER_NEXT_MD=0
+if [ -n "$ACTIVE_PLAN" ] && ! grep -q "NEXT\.md" "$ACTIVE_PLAN"; then
+  DEFER_NEXT_MD=1
+fi
+```
+
+If `DEFER_NEXT_MD=1`: create `.pipekit/` if absent, write the queue file at `.pipekit/pending-next-md.json` with the schema in the SOP. Mention briefly in your output: `"NEXT.md write deferred (VBW scope) — will apply on /end-session."`
+
+If `DEFER_NEXT_MD=0`: write `NEXT.md` directly at the project root.
+
+Inline `➜ Next:` and the eventual NEXT.md contents (whether written directly or via the queue) must match.
+
+#### Pipeline state file (v1.6.0+)
+
+After the verdict is delivered, write `.pipekit/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, next_command, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution; if no Linear ID, use the phase slug. If the write fails on a hook block (consumer not yet on Option B allowlist), skip silently — `/launch --auto` reconstructs from VBW state.
 
 ---
 
