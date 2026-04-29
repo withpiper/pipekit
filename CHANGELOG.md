@@ -2,7 +2,59 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.5.0`.
+Pin to a specific version: `./scripts/sync-method.sh v1.6.0`.
+
+---
+
+## v1.6.0 — 2026-04-29
+
+### What's New
+
+**Workflow-friction release.** Two issues closing observations from rs-vault RS-19 (real-time, 2026-04-29). Together they cut per-issue Standard-tier human input count from 6+ down to 3, while fixing a silent audit-trail loss at the Pipekit/VBW boundary. Order matters: #12 ships first because reliable NEXT.md and state-file writes are the substrate #11 builds on.
+
+#### `/launch --auto` auto-chains non-decision pipeline transitions (closes #11)
+
+New `--auto` flag on `/launch` (Standard tier only) orchestrates the full pipeline — `vbw:vbw-lead` → `plan-reviewer` → `vbw:vbw-dev` → `vbw:vbw-qa` → `--close` — pausing only at the two real decision points: the plan-review verdict and the QA verdict. Total human inputs drop from 6+ command re-types (per stage) to 3 (tier confirm + plan-review verdict + QA verdict). The actual cost reduction isn't keystrokes — it's the 5–120 minute resumption tax when the user walks away mid-pipeline and has to context-load on return.
+
+```
+/launch RS-19 --auto    # Standard tier
+/launch RS-19           # unchanged — manual chaining still supported
+```
+
+Each pipeline stage runs as a **fresh Task-spawned subagent**, so the fresh-chat discipline (`method.md` § Fresh-Chat Discipline) is preserved by construction: the orchestrator's conversation context never bleeds into Lead, plan-reviewer, Dev, or QA reasoning. Agents see prior stage output as documents (PLAN.md, REVIEW.md, VERIFICATION.md), not as recalled conversation. This is the load-bearing constraint — no plan-review skip on "trivial" plans, no QA skip on "low-risk" specs. Auto-chain reduces transition friction; it does not lower the gate bar.
+
+Tier handling: Quick → delegates to `/linear-todo-runner` (already auto-chained); Standard → runs the orchestration; Heavy → rejected with a clear message (security review + mandatory `/strategy-sync` gates intentionally human-paced). Permission-denial protocol from v1.4.0 is carried into the spawned Dev task description so hook-driven blocks surface immediately rather than burning turns.
+
+#### NEXT.md write defers under VBW active-plan scope (closes #12)
+
+Real-time observation during rs-vault RS-19's plan-review: VBW's file-guard hook blocked `/review-plan`'s `NEXT.md` write because NEXT.md was not in the active plan's `files_modified` field. The verdict was delivered correctly above the hook error; the audit-trail write was lost silently. Per `method.md` § VBW / Pipekit Ownership Model, NEXT.md is unambiguously Pipekit's — but VBW's hook can't tell that.
+
+The fix (Option A in #12, Pipekit-side, ships in v1.6.0): Pipekit skills that update NEXT.md inside potential VBW-scoped contexts (`/review-plan`, `/launch --close` mid-session, etc.) now run a deferral check. If active-plan scope is detected and NEXT.md is not whitelisted in the plan's `files_modified`, the write is queued to `.pipekit/pending-next-md.json` instead. `/end-session` applies the queue atomically on next session-end, then deletes the queue file (no persistent cruft, per AC).
+
+The inline `➜ Next:` line is **not** deferred — the user still sees their next-command in terminal output of the current skill. Only the file write defers. If/when VBW lands an upstream `always_allow` allowlist for the file-guard hook (Option B in #12, parallel track), the queue mechanism becomes redundant but does not break — both paths coexist gracefully.
+
+A new helper, `scripts/verify-next-md-defer.sh`, dogfoods the round-trip end-to-end against an ephemeral fake project tree. Re-run after any future edit to the deferral mechanism.
+
+#### Pipeline state file (supports `--auto` and future resumption)
+
+Pipeline skills (`/launch` open + `--close`, `/review-plan`, `/linear-todo-runner`) now write a small JSON record to `.pipekit/pipeline-state/<issue-id>.json` at each meaningful state transition: `stage`, `verdict`, `next_command`, `cwd`, `timestamp`. Schema documented in `sop/Skills_SOP.md` § Pipeline state file. Consumed by `/launch --auto` for chain-progress tracking; the state-file writes lay the substrate for `/pipekit-resume` (deferred to v1.7.0) to recover cross-session.
+
+State-file writes that hit a hook block during VBW active-plan scope are best-effort — skip silently rather than failing the skill. The orchestrator reconstructs from VBW state where needed.
+
+### Migration
+
+For consuming projects on v1.5.0:
+
+1. `./scripts/sync-method.sh v1.6.0` — pulls updated `launch`, `review-plan`, `end-session`, `06-linear-todo-runner` skills, plus `Skills_SOP.md`, `method.md`, and the new `scripts/verify-next-md-defer.sh` helper. The new `.pipekit/pipeline-state/` directory is created lazily on first write — no upfront scaffold needed.
+2. **Add `.pipekit/` to `.gitignore`** if not already present. The directory holds ephemeral, per-machine state (queue file, pipeline-state records, strategy-sync marker) and must not be committed.
+3. No config changes. No template changes. No new state IDs.
+4. No breaking changes. Existing `/launch` invocations without `--auto` behave identically to v1.5.0. NEXT.md writes outside VBW active-plan scope behave identically (the deferral check returns `DEFER_NEXT_MD=0` and the direct write proceeds as before).
+
+### Open items deferred to v1.7.0
+
+- **`/pipekit-resume`** — state-file consumer skill that reads `.pipekit/pipeline-state/<issue-id>.json` to resume an interrupted `/launch --auto` chain across Claude Code session boundaries. The state file is written now so the data exists when the consumer ships.
+- **Orchestrator-side permission-denial detection** — carried forward from v1.4.0 → v1.5.0 → v1.6.0. The agent-side stop instruction is now in v1.6.0's `--auto` Dev spawn; the orchestrator-side proactive surfacing (without depending on agent compliance) remains open.
+- **Option B (VBW-side `always_allow` allowlist)** — upstream coordination required. When it lands, supersedes the v1.6.0 queue mechanism for projects that adopt the VBW config. Both paths coexist safely in the meantime.
 
 ---
 
