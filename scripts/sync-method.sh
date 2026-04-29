@@ -186,6 +186,10 @@ sync_file "$TEMP/scripts/pipekit-post-archive.sh" "$PROJECT_ROOT/scripts/pipekit
 [ -f "$PROJECT_ROOT/scripts/pipekit-post-archive.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-post-archive.sh"
 sync_file "$TEMP/scripts/pipekit-next-step-nudge.sh" "$PROJECT_ROOT/scripts/pipekit-next-step-nudge.sh" "scripts/pipekit-next-step-nudge.sh"
 [ -f "$PROJECT_ROOT/scripts/pipekit-next-step-nudge.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-next-step-nudge.sh"
+sync_file "$TEMP/scripts/pipekit-state-dir.sh" "$PROJECT_ROOT/scripts/pipekit-state-dir.sh" "scripts/pipekit-state-dir.sh"
+[ -f "$PROJECT_ROOT/scripts/pipekit-state-dir.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-state-dir.sh"
+sync_file "$TEMP/scripts/verify-next-md-defer.sh" "$PROJECT_ROOT/scripts/verify-next-md-defer.sh" "scripts/verify-next-md-defer.sh"
+[ -f "$PROJECT_ROOT/scripts/verify-next-md-defer.sh" ] && chmod +x "$PROJECT_ROOT/scripts/verify-next-md-defer.sh"
 
 # --- Sync canonical .claude/rules/ files ---
 # Contract: Pipekit owns three canonical rule files prefixed `pipekit-`

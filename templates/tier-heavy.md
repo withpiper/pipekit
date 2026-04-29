@@ -46,6 +46,6 @@ Heavy tier always routes through full VBW planning, regardless of complexity rat
 1. QA report present and passing
 2. Security review report present
 3. `/strategy-sync` last-run timestamp is after this issue's last build commit
-4. No `.pipekit/pending-strategy-sync` marker
+4. No `pending-strategy-sync` marker in Pipekit's state dir (`bash scripts/pipekit-state-dir.sh`)
 
 If any check fails, `--close` is refused with a list of missing artifacts. Linear status only transitions to UAT once all checks pass.

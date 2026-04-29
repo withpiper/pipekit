@@ -177,7 +177,7 @@ if [ -n "$ACTIVE_PLAN" ] && ! grep -q "NEXT\.md" "$ACTIVE_PLAN"; then
 fi
 ```
 
-If `DEFER_NEXT_MD=1`: create `.pipekit/` if absent, write the queue file at `.pipekit/pending-next-md.json` with the schema in the SOP. Mention briefly in your output: `"NEXT.md write deferred (VBW scope) — will apply on /end-session."`
+If `DEFER_NEXT_MD=1`: resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR"`, write the queue file at `$STATE_DIR/pending-next-md.json` with the schema in the SOP. Mention briefly in your output: `"NEXT.md write deferred (VBW scope) — will apply on /end-session."`
 
 If `DEFER_NEXT_MD=0`: write `NEXT.md` directly at the project root.
 
@@ -185,7 +185,7 @@ Inline `➜ Next:` and the eventual NEXT.md contents (whether written directly o
 
 #### Pipeline state file (v1.6.0+)
 
-After the verdict is delivered, write `.pipekit/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, next_command, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution; if no Linear ID, use the phase slug. If the write fails on a hook block (consumer not yet on Option B allowlist), skip silently — `/launch --auto` reconstructs from VBW state.
+After the verdict is delivered, resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR/pipeline-state"`, and write `$STATE_DIR/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, next_command, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution; if no Linear ID, use the phase slug. The path is out-of-repo (v1.7.0+) so no hook block; write should always succeed.
 
 ---
 

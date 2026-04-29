@@ -330,10 +330,11 @@ Create file: `Logs/Sessions/YYYY-MM-DD_HHMM.md` with personal reflections and te
 
 #### Step 7b.0 — Apply any queued NEXT.md write (v1.6.0+)
 
-Pipekit skills that ran inside VBW's active-plan scope (typically `/review-plan` and `/launch --close` mid-session) defer their `NEXT.md` writes to `.pipekit/pending-next-md.json` per `sop/Skills_SOP.md` § Deferral mechanism. `/end-session` runs outside any active-plan scope (sessions end after the build is done), so this is the canonical apply point.
+Pipekit skills that ran inside VBW's active-plan scope (typically `/review-plan` and `/launch --close` mid-session) defer their `NEXT.md` writes to `$STATE_DIR/pending-next-md.json` (out-of-repo, v1.7.0+) per `sop/Skills_SOP.md` § Deferral mechanism. `/end-session` runs outside any active-plan scope (sessions end after the build is done), so this is the canonical apply point.
 
 ```bash
-QUEUE=".pipekit/pending-next-md.json"
+STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
+QUEUE="$STATE_DIR/pending-next-md.json"
 if [ -f "$QUEUE" ]; then
   WRITER=$(jq -r '.writer' "$QUEUE")
   QUEUED_AT=$(jq -r '.queued_at' "$QUEUE")
@@ -346,7 +347,7 @@ If the queue file exists:
 1. Read the queued content. Compare its `next_command` against what the session has actually shipped (commits, Linear status changes, branch state).
 2. **If the queued recommendation is still relevant** (queued `/vbw:vibe --execute X` and the session did not execute X) — apply atomically: write the queued `content` field to `NEXT.md` at the project root. Skip Step 7b.1 — the queued write is the truth.
 3. **If the session has shipped past the queued point** (queued `/vbw:vibe --execute X` but the session ran execute, verify, and `--close`) — the queue is stale. Discard without writing. Step 7b.1 recomputes from current state.
-4. **In either case, delete the queue file** after handling: `rm -f .pipekit/pending-next-md.json`. The queue is ephemeral; no persistent cruft.
+4. **In either case, delete the queue file** after handling: `rm -f "$QUEUE"`. The queue is ephemeral; no persistent cruft.
 
 If no queue file exists, proceed to Step 7b.1 unchanged.
 
@@ -358,7 +359,7 @@ Source for the next action, in priority order:
 
 1. **Current phase has more Approved issues?** — recommend `/launch {next Approved issue}`. Pick the one whose dependency graph (via Linear `blocked_by` relations) unblocks the most downstream work. Briefly name what it unblocks in the "Why this one" field.
 2. **Current phase fully shipped but has unshipped `Specced` issues?** — recommend moving the top-priority one to Approved (human review gate).
-3. **Current phase fully shipped and specced?** — recommend `/strategy-sync` if there's a pending-strategy-sync marker at `.pipekit/pending-strategy-sync`, otherwise recommend `/phase-plan` to select the next phase.
+3. **Current phase fully shipped and specced?** — recommend `/strategy-sync` if there's a pending-strategy-sync marker at `$STATE_DIR/pending-strategy-sync` (resolved via `scripts/pipekit-state-dir.sh`), otherwise recommend `/phase-plan` to select the next phase.
 4. **No phase active?** — recommend `/phase-plan`.
 
 Write `NEXT.md` at the project root using the exact schema (`# Next Step` / `**Last updated:**` / `## Recommended next command` / `## Why this one` / optional parallelizable and blocked sections). Include this session's `YYYY-MM-DD_HHMM` as the timestamp and `/end-session` as the writer.

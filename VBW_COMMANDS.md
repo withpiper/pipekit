@@ -62,7 +62,7 @@ VBW v1.35.0 added configurable lifecycle hooks via `.vbw-planning/config.json` u
 
 | Hook | When it fires | Pipekit usage |
 |------|---------------|----------------|
-| `post_archive` | After `/vbw:vibe --archive` completes | `scripts/pipekit-post-archive.sh` writes `.pipekit/pending-strategy-sync` marker (surfaced by `/start-session`) |
+| `post_archive` | After `/vbw:vibe --archive` completes | `scripts/pipekit-post-archive.sh` writes a `pending-strategy-sync` marker to Pipekit's out-of-repo state dir (resolved by `scripts/pipekit-state-dir.sh`); surfaced by `/start-session` |
 
 See `method.md` § Event Hook: Post-Archive → Strategy Sync for registration details.
 
