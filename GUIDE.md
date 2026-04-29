@@ -1056,6 +1056,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Light Spec Revise | `/light-spec-revise PROJ-1` | Apply Spec Review Agent feedback surgically |
 | Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before /launch (file paths, baselines, Linear status). Read-only. |
 | Launch | `/launch PROJ-1` | Validate gates → route → execute |
+| Launch Auto | `/launch PROJ-1 --auto` | Standard tier only: auto-chain Lead → plan-review → Dev → QA → close. Pauses only at the two verdict gates (3 human inputs total). |
 | Launch Batch | `/launch --milestone WP-1` | Launch all ready issues in a WP |
 | Launch Dry Run | `/launch --dry-run PROJ-1` | Check gates without executing |
 | Todo Runner | `/linear-todo-runner` | Batch execute Low-complexity issues |

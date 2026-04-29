@@ -333,6 +333,7 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Not a VBW agent; Pipekit-shipped.
    2. **Read-only state observation** — `.vbw-planning/{ROADMAP,STATE,PHASES,linear-map}.md` reads from `/sync-linear`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/10-strategy-sync`, `/end-session`.
    3. **One lifecycle hook** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive`, writes `.pipekit/pending-strategy-sync` marker.
+   4. **Pipekit-side ephemeral state** (v1.6.0+) — `.pipekit/` directory holds Pipekit-only state never read by VBW: `pending-strategy-sync` marker (above), `pending-next-md.json` queue (NEXT.md writes deferred under VBW active-plan scope, per `sop/Skills_SOP.md` § Deferral mechanism), and `pipeline-state/<issue-id>.json` records (per-skill transition state, consumed by `/launch --auto`). The directory is gitignored. Writes from inside VBW active-plan scope are best-effort; the consumer's gitignore + the Option B allowlist (upstream VBW coordination) supersede the queue mechanism when present.
 
    No direct VBW-agent spawns. No execution-flow wrapping. VBW upgrades touch zero Pipekit code.
 6. **When drift is suspected, stop and reconcile.** Symptoms: Linear status doesn't match VBW execution state; a PLAN.md references a Linear issue that doesn't exist; a Linear issue has no corresponding plan. Resolve the mismatch before continuing — drift compounds.
@@ -395,6 +396,7 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `/spec-preflight {ISSUE}` | Empirical pre-flight on a specced issue — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. Run between Spec Review Agent and `/launch`. |
 | `/launch {ISSUE}` | Open: validate Linear gates, route by complexity, transition to Building, hand off to VBW |
 | `/launch {ISSUE} --close` | Close: transition Linear to UAT after VBW pipeline complete + verify passed |
+| `/launch {ISSUE} --auto` | Standard tier only: auto-chain Lead → plan-review → Dev → QA → close. Pauses only at plan-review and QA verdicts (3 human inputs total). |
 | `/launch --milestone {WP}` | Launch all ready issues in a milestone |
 | `/pipekit-help` | Read project state, recommend the next pipeline step. Use when you don't know what to run next. |
 | `/review-plan {phase-slug}` | Run plan-reviewer agent against VBW-generated PLAN.md. Run between `/vbw:vibe --plan` and `/vbw:vibe --execute`. |

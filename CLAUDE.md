@@ -84,7 +84,7 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 
 | Skill | Purpose |
 |-------|---------|
-| `/launch` | Validates gates, resolves tier (Quick/Standard/Heavy), routes by complexity, triggers execution |
+| `/launch` | Validates gates, resolves tier (Quick/Standard/Heavy), routes by complexity, triggers execution. `--auto` flag (Standard tier only) auto-chains Lead → plan-review → Dev → QA → close, pausing at the two verdict gates. |
 | `/light-spec` | Generates structured specs as AI-to-AI contracts |
 | `/light-spec-revise` | Applies Spec Review Agent feedback surgically; detects stalemate loops |
 | `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status, dependencies against reality. Read-only. |
