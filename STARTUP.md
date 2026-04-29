@@ -180,7 +180,7 @@ Configure in `.mcp.json` with `${VAR}` interpolation for secrets.
 ```
 [ ] Fetch sync script:
     mkdir -p scripts
-    curl -fsSL https://raw.githubusercontent.com/ethan-piper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
+    curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
     chmod +x scripts/sync-method.sh
 [ ] Run: ./scripts/sync-method.sh
 [ ] Fill in method.config.md with project-specific values

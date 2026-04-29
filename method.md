@@ -347,7 +347,7 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 | Orphan plans | Plan generated for an issue that's since been deleted | Detected via future `/drift-check` skill |
 | Orphan Linear issues | Issue created in Linear UI, no corresponding roadmap entry | Caught at `/roadmap-review` |
 
-If drift becomes a recurring pattern in practice, add a `/drift-check` skill for on-demand detection. Don't build it speculatively — measure first. Full spec tracked in [pipekit#1](https://github.com/ethan-piper/pipekit/issues/1).
+If drift becomes a recurring pattern in practice, add a `/drift-check` skill for on-demand detection. Don't build it speculatively — measure first. Full spec tracked in [pipekit#1](https://github.com/withpiper/pipekit/issues/1).
 
 ### Event Hook: Post-Archive → Strategy Sync
 

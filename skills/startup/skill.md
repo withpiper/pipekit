@@ -543,7 +543,7 @@ Write `Strategy/DesignDirection.md` with their answers. This doc is read by deve
 # Fetch sync script if it doesn't exist
 if [ ! -f scripts/sync-method.sh ]; then
   mkdir -p scripts
-  curl -fsSL https://raw.githubusercontent.com/ethan-piper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
+  curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
   chmod +x scripts/sync-method.sh
 fi
 ./scripts/sync-method.sh

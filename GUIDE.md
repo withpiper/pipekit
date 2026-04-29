@@ -958,7 +958,7 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 ```bash
 # First time — fetch sync script from GitHub
 mkdir -p scripts
-curl -fsSL https://raw.githubusercontent.com/ethan-piper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
+curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
 chmod +x scripts/sync-method.sh
 ./scripts/sync-method.sh
 

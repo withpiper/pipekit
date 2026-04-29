@@ -102,7 +102,7 @@ cd ~/Projects/my-project
 ```bash
 # Fetch the sync script from GitHub
 mkdir -p scripts
-curl -fsSL https://raw.githubusercontent.com/ethan-piper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
+curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
 chmod +x scripts/sync-method.sh
 
 # Run it — pulls skills, templates, and SOPs into your project

@@ -35,7 +35,7 @@ Check if `scripts/sync-method.sh` exists in the current project.
 
 ```bash
 mkdir -p scripts
-curl -fsSL https://raw.githubusercontent.com/ethan-piper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
+curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
 chmod +x scripts/sync-method.sh
 ```
 
@@ -172,7 +172,7 @@ When invoked with `--push`, this mode captures improvements made to portable ski
 
 _"The `--push` flag requires a local clone of Pipekit to stage changes. Run:"_
 ```bash
-git clone https://github.com/ethan-piper/pipekit.git ~/Projects/pipekit
+git clone https://github.com/withpiper/pipekit.git ~/Projects/pipekit
 ```
 
 If a local clone exists:
@@ -224,4 +224,4 @@ If a local clone exists:
 
 - `/startup` — initial project bootstrap (runs sync as part of setup)
 - `scripts/sync-method.sh` — the underlying sync script
-- Pipekit repo: [github.com/ethan-piper/pipekit](https://github.com/ethan-piper/pipekit)
+- Pipekit repo: [github.com/withpiper/pipekit](https://github.com/withpiper/pipekit)

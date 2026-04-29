@@ -32,7 +32,7 @@
 
 set -euo pipefail
 
-METHOD_REPO="${METHOD_REPO:-https://github.com/ethan-piper/pipekit.git}"
+METHOD_REPO="${METHOD_REPO:-https://github.com/withpiper/pipekit.git}"
 DRY_RUN=false
 REF="main"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
