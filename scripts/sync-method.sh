@@ -127,10 +127,12 @@ sync_dir() {
 
   if $DRY_RUN; then
     local diff_count
-    diff_count=$(diff -rq "$src" "$dst" 2>/dev/null | wc -l | tr -d ' ')
+    # `diff -rq` exits 1 when files differ — that's normal, not an error.
+    # Without `|| true`, pipefail propagates the 1 and set -e kills the script.
+    diff_count=$({ diff -rq "$src" "$dst" 2>/dev/null || true; } | wc -l | tr -d ' ')
     if [ "$diff_count" -gt 0 ]; then
       echo "  WOULD UPDATE $label ($diff_count files differ)"
-      diff -rq "$src" "$dst" 2>/dev/null | head -10 | sed 's/^/    /'
+      { diff -rq "$src" "$dst" 2>/dev/null || true; } | head -10 | sed 's/^/    /'
       CHANGES=$((CHANGES + diff_count))
     else
       echo "  OK $label (no changes)"
@@ -244,7 +246,7 @@ for skill in $PORTABLE_SKILLS; do
 
   if $DRY_RUN; then
     if [ -d "$dst" ]; then
-      diff_count=$(diff -rq "$src" "$dst" 2>/dev/null | wc -l | tr -d ' ')
+      diff_count=$({ diff -rq "$src" "$dst" 2>/dev/null || true; } | wc -l | tr -d ' ')
       if [ "$diff_count" -gt 0 ]; then
         echo "  WOULD UPDATE skill: $skill"
         CHANGES=$((CHANGES + 1))
