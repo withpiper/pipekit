@@ -171,13 +171,15 @@ Pauses only at the two real decision points (steps 5 and 7 below).
 
 `--auto` stops with the plan-reviewer's structured verdict. One of three:
 
-| Verdict | What to do |
-|---|---|
-| **Pass** | Approve in chat → `--auto` resumes Dev |
-| **Revise** | Tell the chat: feed corrections back to vbw:vbw-lead, re-spawn plan-reviewer. Same `--auto` orchestration handles round 2. |
-| **Block** | Abort `--auto`. Either: (a) edit the spec and re-launch, or (b) escalate the issue back to spec review. Don't push through. |
+| Verdict | Default action (v1.8.0.3+) | Notes |
+|---|---|---|
+| **Pass** | `proceed` → Dev runs next | The clean path |
+| **Revise** | **`apply-fixes-and-re-review`** → Lead applies the blocking items, plan-reviewer re-runs as round 2 | Round-2 Pass → Dev. Round-2 Revise → loop to round 3 with stalemate detection. Round-2 Block → abort. Default is **NOT** "proceed" — that was a v1.6.0–v1.8.0.2 bug. |
+| **Block** | `abort` → edit spec or escalate | Don't push through |
 
-Stalemate detection: if round 2 also Blocks on the same items, **stop and edit the spec by hand** rather than spinning further. Plan-reviewer can't reconcile a spec that's genuinely broken.
+**Stalemate detection (round 3+):** if round 3's Revise verdict overlaps with round 2's blocking items, `--auto` pauses and surfaces: "Plan-reviewer is flagging the same items in round 3 that it flagged in round 2. The spec may need hand-editing rather than auto-revision." Default at this prompt is **pause**. The orchestrator does NOT auto-loop a 4th round.
+
+**Override option:** if you genuinely want to skip the round-2 re-review (rare; almost always wrong), `proceed-without-re-review` is available. The override is logged to the pipeline state file (`override: "skip-plan-review-round-2"`) for audit.
 
 ### 6. Watch (don't intervene during) execution
 
