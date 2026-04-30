@@ -506,14 +506,18 @@ After Steps 1–6 complete unchanged (gate validation, tier confirm, dependency 
 
    {Fail / Partial: surface the failing AC items verbatim from the verification report}
 
-   Run /launch --close to transition Linear to UAT?
+   Per v1.8.0+ canonical ordering: run /end-session first (so the session log + NEXT.md ride in the same PR as the code), then /launch --close. How to proceed?
    ```
 
    Options:
-   - **Pass** → `close` (default), `pause-here`, `abort`
+   - **Pass** → `pause-for-end-session` (**default** — exit cleanly so user runs `/end-session` then `/launch --close`), `close-now` (legacy v1.7.0 path; will require cherry-pick of the session log later), `abort`
    - **Fail / Partial** → `pause-here` (default), `re-execute-with-scope`, `abort`
 
-   On `close`, continue to step 7. On `pause-here`, exit cleanly (Linear stays in Building; user runs `/launch --close` later). On `re-execute-with-scope`, prompt for fix scope and re-spawn `vbw:vbw-dev` (loop back to step 4 with the new scope; do NOT re-run plan-review). On `abort`, exit.
+   **Recommend `pause-for-end-session` for QA Pass.** The auto-chain stops here cleanly; the user runs `/end-session` (writes log + NEXT.md to the feature branch), then `/launch --close` (opens the single PR with everything bundled). One PR per issue, no cherry-pick.
+
+   `close-now` is preserved for users who want the old behavior — but warn them it triggers the cherry-pick workaround documented in RUNBOOK.md (cherry-pick the session log onto a chore branch off dev → second PR).
+
+   On `pause-for-end-session`, exit cleanly with NEXT.md pointing at `/end-session` (or, since /end-session is the next step regardless, just exit and let the user invoke it). Linear stays in Building. On `close-now`, continue to step 7 (legacy path). On `pause-here` (Fail/Partial), exit cleanly. On `re-execute-with-scope` (Fail/Partial), prompt for fix scope and re-spawn `vbw:vbw-dev` (loop back to step 4 with the new scope; do NOT re-run plan-review). On `abort`, exit.
 
 7. **Run `/launch PROJ-XXX --close` inline.** Use the existing Step 9 logic — same Linear transition, same close-summary comment. Does not spawn another subagent; runs in the orchestrator's own context (it is gate-and-status work, not build work).
 
