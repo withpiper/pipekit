@@ -60,7 +60,13 @@ If you genuinely need to write a session log without a feature branch (e.g., ses
 Inside the feature worktree, NEXT.md is a snapshot from when `/branch` was run. If a parallel session has shipped to `dev` since, that snapshot is stale. Before recomputing NEXT.md (Step 7b.1), pull dev's current version:
 
 ```bash
-INTEGRATION="$INTEGRATION"  # resolved by Step 0a below
+# Resolve integration branch inline. Pre-flight B runs before Step 0a, so we
+# can't depend on Step 0a having resolved $INTEGRATION yet. Use the same
+# fallback chain Step 0a uses (origin/dev → origin's default HEAD → main).
+INTEGRATION=$(git show-ref --verify --quiet refs/remotes/origin/dev && echo dev || echo "")
+if [ -z "$INTEGRATION" ]; then
+  INTEGRATION=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo main)
+fi
 git fetch origin "$INTEGRATION" --quiet
 if git cat-file -e "origin/$INTEGRATION:NEXT.md" 2>/dev/null; then
   git checkout "origin/$INTEGRATION" -- NEXT.md
@@ -70,7 +76,7 @@ fi
 
 This loads only NEXT.md — no branch switch, no other state change. The recompute logic in Step 7b.1 is from-Linear-truth, so the base just affects "Last updated" and optional sections (parallelizable / blocked). Race window shrinks from "hours of work in worktree" to "minutes between /end-session and PR merge."
 
-**Ordering note:** `$INTEGRATION` is resolved in the next sub-step (the existing Session Shutdown Preflight reads `method.config.md` § Git Architecture). In practice: read config → resolve `$INTEGRATION` → refresh NEXT.md → continue with the rest of the preflight.
+Step 0a re-resolves `$INTEGRATION` from `method.config.md` § Git Architecture (the canonical source). The duplication here is intentional: Pre-flight B runs first and needs a working value; Step 0a refines it from config. Both use the same fallback chain so they agree when config is missing.
 
 ---
 
