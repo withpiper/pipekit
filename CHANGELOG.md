@@ -2,7 +2,28 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0.1`.
+
+---
+
+## v1.8.0.1 — 2026-04-30 (patch)
+
+### What changed
+
+**`/start-session` paired with `/end-session` inside the worktree.** v1.8.0 left an asymmetry: /start-session ran in the parent on dev, /end-session ran in the worktree on the feature branch. They didn't bracket the same scope, and /start-session's NEXT.md view could go stale before the user even got to the worktree.
+
+v1.8.0.1 moves /start-session into the worktree as the kickoff command (after `/branch` and entering the worktree). It now refreshes NEXT.md from `origin/<integration>` tip the same way /end-session does — so both ends of the session see current state.
+
+The parent-on-dev case is preserved: /start-session still works there as a "what should I work on?" view (no refresh, since you're already on integration). The pre-flight only triggers on a feature branch.
+
+### Touched
+
+- `skills/start-session/skill.md` — Pre-flight section added (NEXT.md refresh on feature branch; pass-through on integration)
+- `RUNBOOK.md` — loop reordered to 13 steps. Step 0 is now lightweight issue-picking in parent; step 3 is /start-session in worktree (paired with step 9's /end-session). Quick Index TOC updated. Decision tree updated to show the parent/worktree boundary clearly.
+
+### Migration
+
+`./scripts/sync-method.sh v1.8.0.1` pulls the updated /start-session + RUNBOOK. No breaking changes — old order still works, but the new one pairs cleanly.
 
 ---
 

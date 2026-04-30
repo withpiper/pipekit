@@ -10,19 +10,20 @@ The definitive step-by-step for shipping one Linear issue through the pipeline. 
 
 **Per-issue loop:**
 
-0. [Open the session](#0-open-the-session) — `/start-session`
-1. [Pick the issue](#1-pick-the-issue) — NEXT.md / `/linear-status` / `/spec-preflight`
-2. [Branch + worktree](#2-branch--worktree) — `/branch --linear RS-XX`
-3. [Launch the auto-chain](#3-launch-the-auto-chain) — `/launch RS-XX --auto`
-4. [Decision: plan-review verdict](#4-decision-plan-review-verdict) — Pass / Revise / Block
-5. [Watch (don't intervene during) execution](#5-watch-dont-intervene-during-execution)
-6. [Decision: QA verdict](#6-decision-qa-verdict) — Pass / Partial / Fail
-7. [UAT](#7-uat) — `/vbw:vibe --verify` or local smoke
-8. [Close the session — `/end-session` FIRST (v1.8.0+)](#8-close-the-session--end-session-first-v180)
-9. [Open the PR — `/launch --close`](#9-open-the-pr--launch---close)
-10. [Rebase-merge the PR](#10-rebase-merge-the-pr-github-ui-or-gh-pr-merge---rebase)
-11. [Smoke against dev preview (optional)](#11-smoke-against-dev-preview-optional) — `/g-test-vercel`
-12. [Worktree cleanup](#12-worktree-cleanup) — `/branch finish`
+0. [Pick the issue (parent, lightweight)](#0-pick-the-issue-parent-lightweight) — NEXT.md / `/linear-status` / `/spec-preflight`
+1. [Branch + worktree](#1-branch--worktree) — `/branch --linear RS-XX`
+2. [Enter the worktree](#2-enter-the-worktree) — `cd … && claude --dangerously-skip-permissions`
+3. [`/start-session` (worktree)](#3-start-session-worktree-on-feature-branch--paired-with-end-session) — orient on the issue
+4. [Launch the auto-chain](#4-launch-the-auto-chain) — `/launch RS-XX --auto`
+5. [Decision: plan-review verdict](#5-decision-plan-review-verdict) — Pass / Revise / Block
+6. [Watch (don't intervene during) execution](#6-watch-dont-intervene-during-execution)
+7. [Decision: QA verdict](#7-decision-qa-verdict) — Pass / Partial / Fail
+8. [UAT](#8-uat) — `/vbw:vibe --verify` or local smoke
+9. [Close the session — `/end-session`](#9-close-the-session--end-session-paired-with-step-3s-start-session)
+10. [Open the PR — `/launch --close`](#10-open-the-pr--launch---close)
+11. [Rebase-merge the PR](#11-rebase-merge-the-pr-github-ui-or-gh-pr-merge---rebase)
+12. [Smoke against dev preview (optional)](#12-smoke-against-dev-preview-optional) — `/g-test-vercel`
+13. [Worktree cleanup](#13-worktree-cleanup) — `/branch finish`
 
 **Then periodically (separate flow):**
 
@@ -84,25 +85,18 @@ gh api repos/<org>/<repo> --method PATCH \
 
 ## The loop
 
-Same shape every time. ~10 steps from "I want to ship X" to "X is in production."
+Same shape every time. ~12 steps from "I want to ship X" to "X is in production."
 
-### 0. Open the session
+**Pairing model (v1.8.0.1+):** /start-session and /end-session both run **inside the worktree, on the feature branch**. /start-session orients you on the issue; /end-session writes the log when the issue is done. Both refresh NEXT.md from `origin/<integration>` so you see current state regardless of how long the worktree has lived.
 
-In the project root (parent worktree, on `dev`):
+### 0. Pick the issue (parent, lightweight)
 
-```bash
-/start-session
-```
-
-Surfaces NEXT.md, pending-strategy-sync marker, recent session log. Tells you what's next.
-
-### 1. Pick the issue
-
-Either trust NEXT.md's recommendation, or:
+In the project root (parent on `dev`), pick the issue *without* opening a full session:
 
 ```bash
+cat NEXT.md                         # what was queued at end of last session
 /linear-status                       # quick triage
-/phase-plan --status                 # phase-aware view
+/phase-plan --status                 # phase-aware view (optional)
 ```
 
 Confirm the issue is **Approved** (or higher — Specced isn't ready). For an Approved issue, optionally:
@@ -113,7 +107,9 @@ Confirm the issue is **Approved** (or higher — Specced isn't ready). For an Ap
 
 Verifies file paths, line refs, dependencies still real. Read-only. **Skip if you trust the spec was reviewed recently.**
 
-### 2. Branch + worktree
+(If you genuinely want a full /start-session at the project level — e.g. start of a workday, no specific issue yet in mind — run it now. Otherwise skip; step 4 below opens the real session inside the worktree.)
+
+### 1. Branch + worktree
 
 **Use `/branch`, not raw `git worktree`.** It handles Linear status transition, env symlinks, and worktree naming convention.
 
@@ -131,9 +127,31 @@ What happens (v1.8.0+):
 
 If you'd rather use a TUI for worktree management, claude-squad (`brew install claude-squad`) wraps the same primitives across multiple agents. CWT (archived 2026-04-29) — don't ingest.
 
-### 3. Launch the auto-chain
+### 2. Enter the worktree
 
-In the worktree shell:
+Run the command /branch printed:
+
+```bash
+cd .worktrees/RS-XX-edit-delete && claude --dangerously-skip-permissions
+```
+
+Now you're in the worktree session, on the feature branch. Steps 3–9 all run here.
+
+### 3. `/start-session` (worktree, on feature branch) — paired with /end-session
+
+```bash
+/start-session
+```
+
+What it does (v1.8.0.1+ inside a worktree):
+- Refreshes NEXT.md to `origin/<integration>` tip (parallel-session-safe view).
+- Surfaces NEXT.md, pending-strategy-sync marker, recent session log.
+- Pulls up the issue spec from Linear (you /branch'd with --linear, so we know which one).
+- Notes the start time for duration tracking.
+
+This is the *real* session opener. It pairs with /end-session at step 9 — same scope (this feature branch), same NEXT.md base.
+
+### 4. Launch the auto-chain
 
 ```bash
 /launch RS-XX --auto
@@ -144,12 +162,12 @@ In the worktree shell:
 The orchestration spawns each stage as a fresh Task subagent, preserving fresh-chat discipline:
 
 ```
-vbw:vbw-lead → plan-reviewer → vbw:vbw-dev → vbw:vbw-qa → /launch --close
+vbw:vbw-lead → plan-reviewer → vbw:vbw-dev → vbw:vbw-qa
 ```
 
-Pauses only at the two real decision points (steps 4 and 6 below).
+Pauses only at the two real decision points (steps 5 and 7 below).
 
-### 4. Decision: plan-review verdict
+### 5. Decision: plan-review verdict
 
 `--auto` stops with the plan-reviewer's structured verdict. One of three:
 
@@ -161,21 +179,21 @@ Pauses only at the two real decision points (steps 4 and 6 below).
 
 Stalemate detection: if round 2 also Blocks on the same items, **stop and edit the spec by hand** rather than spinning further. Plan-reviewer can't reconcile a spec that's genuinely broken.
 
-### 5. Watch (don't intervene during) execution
+### 6. Watch (don't intervene during) execution
 
 vbw:vbw-dev runs the plan with atomic commits. Don't review-as-you-go — let it finish. If you see permission denials surface (`EditPermissionDenied` / `HookFeedbackBlocked`), the agent should stop and surface; if it doesn't, kill the run and check the v1.4 permission-denial protocol.
 
-### 6. Decision: QA verdict
+### 7. Decision: QA verdict
 
 vbw:vbw-qa returns Pass / Fail / Partial.
 
 | Verdict | What to do |
 |---|---|
-| **Pass** | Approve → continues to UAT (step 7) |
+| **Pass** | Approve → continues to UAT (step 8) |
 | **Partial** | Read the verdict carefully. Often the right answer is **plan-amendment** (declare the deviation in SUMMARY.md) rather than re-running QA. Hand-driven amendment is one round; full re-execute is multiple agents. |
 | **Fail** | Pause hard. `/vbw:vibe --verify` for inline UAT loop, or escalate. **Do not re-run --auto on Fail** — the gate has spoken. |
 
-### 7. UAT
+### 8. UAT
 
 Either:
 - `/vbw:vibe --verify` for the inline VBW UAT loop, or
@@ -183,7 +201,7 @@ Either:
 
 Both are valid. Use `/vbw:vibe --verify` when you want the agent-mediated checklist; smoke directly when you trust the AC.
 
-### 8. Close the session — `/end-session` FIRST (v1.8.0+)
+### 9. Close the session — `/end-session` (paired with step 3's /start-session)
 
 ```bash
 /end-session
@@ -197,9 +215,9 @@ What it does (v1.8.0+):
 - Recomputes NEXT.md (next Approved issue / `/strategy-sync` / `/phase-plan`) on top of the refreshed base.
 - Commits log + NEXT.md to the **current feature branch**.
 
-The commit lands on the feature branch *before* the PR opens. Step 9 (`/launch --close`) then bundles everything into the single PR. **No cherry-pick; one PR per issue.**
+The commit lands on the feature branch *before* the PR opens. Step 10 (`/launch --close`) then bundles everything into the single PR. **No cherry-pick; one PR per issue.**
 
-### 9. Open the PR — `/launch --close`
+### 10. Open the PR — `/launch --close`
 
 ```bash
 /launch RS-XX --close
@@ -207,19 +225,19 @@ The commit lands on the feature branch *before* the PR opens. Step 9 (`/launch -
 
 Opens feature → dev PR with code + session log + NEXT.md update. Linear → UAT. The PR has everything in one place.
 
-### 10. Rebase-merge the PR (GitHub UI or `gh pr merge --rebase`)
+### 11. Rebase-merge the PR (GitHub UI or `gh pr merge --rebase`)
 
 Atomic commits flow onto dev linearly. Auto-delete handles the remote branch.
 
-### 11. Smoke against dev preview (optional)
+### 12. Smoke against dev preview (optional)
 
 ```bash
 /g-test-vercel RS-XX           # project-side skill — pushes branch + smoke-tests preview URL
 ```
 
-(Mostly relevant if you didn't run it during step 7. Otherwise skip.)
+(Mostly relevant if you didn't run it during step 8. Otherwise skip.)
 
-### 12. Worktree cleanup
+### 13. Worktree cleanup
 
 ```bash
 exit                           # leave the worktree session
@@ -304,42 +322,48 @@ If you see `state-file writes are best-effort during scod stages — skipping si
 ## Decision tree at a glance
 
 ```
-/start-session
+parent (on dev):
+   pick issue (cat NEXT.md or /linear-status)
    │
-   ├─ pick issue (NEXT.md or /linear-status)
+   /branch --linear RS-XX        ← creates worktree + Linear In Progress
    │
-/branch --linear RS-XX        ← creates worktree + Linear In Progress
+   cd .worktrees/<slug> && claude --dangerously-skip-permissions
    │
-   └─ inside worktree:
-      /launch RS-XX --auto    ← Standard tier
-         │
-         ├─ Plan-review verdict?
-         │    Pass → continue
-         │    Revise → feedback loop, re-review
-         │    Block → abort, edit spec, restart
-         │
-         ├─ (Dev runs autonomously)
-         │
-         ├─ QA verdict?
-         │    Pass → /launch --close → Linear UAT
-         │    Partial → plan-amendment usually
-         │    Fail → stop, diagnose, no auto-rerun
-         │
-         ├─ UAT (/vbw:vibe --verify or local smoke)
-         │
-         ├─ /end-session              ← v1.8.0+: BEFORE --close
-         │    (refuses on dev/main; refreshes NEXT.md from origin/dev tip;
-         │     commits log + NEXT.md to feature branch)
-         │
-         ├─ /launch RS-XX --close     ← opens single PR with everything
-         │
-         ├─ Rebase-merge PR
-         │
-         └─ /branch finish (or claude-squad delete)
+worktree (on feature branch):
+   /start-session                 ← v1.8.0.1+: paired with /end-session
+   │   (refreshes NEXT.md from origin/dev tip; orients on issue)
+   │
+   /launch RS-XX --auto           ← Standard tier
+      │
+      ├─ Plan-review verdict?
+      │    Pass → continue
+      │    Revise → feedback loop, re-review
+      │    Block → abort, edit spec, restart
+      │
+      ├─ (Dev runs autonomously)
+      │
+      ├─ QA verdict?
+      │    Pass → continue to UAT
+      │    Partial → plan-amendment usually
+      │    Fail → stop, diagnose, no auto-rerun
+      │
+      ├─ UAT (/vbw:vibe --verify or local smoke)
+      │
+      ├─ /end-session             ← v1.8.0+: BEFORE --close
+      │    (refuses on dev/main; refreshes NEXT.md;
+      │     commits log + NEXT.md to feature branch)
+      │
+      ├─ /launch RS-XX --close    ← opens single PR with everything
+      │
+      ├─ Rebase-merge PR (atomic commits flow onto dev)
+      │
+      └─ exit (back to parent)
+
+parent:
+   /branch finish                 ← removes worktree + local branch
 
 …then later, batch-promote dev → main:
-   gh pr create --base main --head dev …
-   /g-promote-main --post-merge
+   /g-promote-main → squash → /g-promote-main --post-merge
 ```
 
 ---
