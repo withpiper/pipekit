@@ -2,7 +2,76 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.7.0`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0`.
+
+---
+
+## v1.8.0 — 2026-04-30
+
+### What's New
+
+**One-PR-per-issue release.** Three coupled fixes that close the cherry-pick friction observed during RS-22 work and tighten the per-issue loop. Closes #15, #16, #17.
+
+#### `/end-session` re-orders before `/launch --close` (closes #15)
+
+The biggest day-to-day friction in v1.6.0/v1.7.0: /end-session ran *after* /launch --close, so the session log + NEXT.md update landed on a feature branch *after* PR merge — orphaned unless cherry-picked. The runbook documented a workaround that cost one extra PR (5-min gate-check tax) per issue.
+
+v1.8.0 reverses the order: **/end-session runs first, /launch --close second.** Both inside the worktree, on the feature branch. The session log + NEXT.md update commit to the feature branch *before* the PR opens; /launch --close then bundles everything into the single PR. **One PR per issue. No cherry-pick.**
+
+Two coupled changes inside /end-session:
+
+1. **Integration-branch refusal.** /end-session refuses to run if the current branch is `dev` or `main`. Pre-flight A added; clear error message points to RUNBOOK.md § The loop step 10. Prevents accidental direct-to-integration writes.
+2. **NEXT.md base refresh.** Inside the feature worktree, NEXT.md is a snapshot from when `/branch` ran. If a parallel session has shipped to dev since, the snapshot is stale. Pre-flight B fetches `origin/<integration>` and `git checkout`s NEXT.md to the current dev tip *before* recomputing. Race window shrinks from "hours of work in worktree" to "minutes between /end-session and PR merge."
+
+#### Short branch names from `/branch --linear` (closes #16)
+
+`/branch --linear RS-21` used to produce `feature/ethan/rs-21-record-edit-delete-with-change-tracking` (40+ chars, awkward in TUIs and PR titles, derived from Linear's verbose `gitBranchName`).
+
+v1.8.0 derives a short slug from the Linear title: **`feature/RS-21-edit-delete`** (issue ID + 2-3 meaningful words). Algorithm is deterministic — same Linear title always yields the same slug. Stopwords (`with`, `and`, `the`, `for`, `of`, `to`, `in`, `on`, `a`, `an`, `change`, `tracking`, `record`) are stripped before picking the first 2-3 words.
+
+The printed spawn hint also updates: `cd .worktrees/<branch> && claude --dangerously-skip-permissions` — saves a manual flag every time.
+
+#### Recommended merge strategy: rebase feature→dev, squash dev→main (closes #17)
+
+Squash-merging *everything* (v1.7.0's recommendation) flattens atomic per-task commits on dev — unreadable in GitKraken/git-log, useless for `git blame` per task, breaks `git bisect`. Squash-merging dev → main is correct (kills phantom-conflict topology), but feature → dev should preserve atomic commits.
+
+v1.8.0 documents the right combination:
+
+| Hop | Strategy |
+|---|---|
+| feature/* → dev | **Rebase** (preserves atomic commits as a linear sequence) |
+| dev → main | **Squash** (one release commit; kills merge-commit topology) |
+| Anything → merge-commit | **Disabled** (creates phantom conflicts on subsequent promotes) |
+
+New `scripts/pipekit-configure-repo.sh` flips all four GitHub repo settings idempotently in one shot:
+
+```bash
+bash scripts/pipekit-configure-repo.sh <org>/<repo>
+```
+
+Updated: `RUNBOOK.md` § One-time setup, `sop/Git_and_Deployment.md` § Merge Strategy by Hop. The actual flip is per-consumer (Pipekit doesn't enforce repo settings — it recommends).
+
+### Migration
+
+For consuming projects on v1.7.0:
+
+1. `./scripts/sync-method.sh v1.8.0` — pulls updated `/branch`, `/end-session`, `/launch` skills, `Git_and_Deployment.md`, `RUNBOOK.md`, and the new `scripts/pipekit-configure-repo.sh` helper.
+2. **Configure your repo's merge strategy:**
+   ```bash
+   bash scripts/pipekit-configure-repo.sh <org>/<repo>
+   ```
+3. **New per-issue loop** — see `RUNBOOK.md` § The loop. The order is now: `/end-session` → `/launch --close` → rebase-merge PR → `/branch finish`. The cherry-pick workaround documented in v1.7.0 is removed.
+4. No config / template / state-ID changes. Old per-issue flow (`/launch --close` first, /end-session after, cherry-pick log) still works if invoked in that order — but strongly prefer the new order.
+
+### Open items deferred to v1.8.1
+
+- **Port `/g-promote-dev`, `/g-promote-main`, `/g-test-vercel`, `/g-deploy`, `/g-promote-beta`** from rs-vault/piper into Pipekit with parameterization via `method.config.md`. Currently these are project-local copies, diverged between consumers. Folding them into Pipekit closes the per-issue + promotion loop end-to-end.
+
+### Open items deferred to v1.9.0
+
+- `/pipekit-resume` — state-file consumer for cross-session resumption (carried forward).
+- Diagnostic gate output (no more bare `REMEDIATION_REQUIRED`).
+- Orchestrator-side permission-denial detection (carried since v1.4.0).
 
 ---
 

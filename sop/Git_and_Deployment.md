@@ -69,6 +69,29 @@ dev  (active development)
 | `beta` (three-tier only) | Protected. Requires PR + CI passing. No direct merges. |
 | `dev` | Default branch for PRs. CI runs on all PRs targeting dev. |
 
+### Merge Strategy by Hop (v1.8.0+)
+
+Match the merge strategy to the hop. The combination below preserves history readability *and* eliminates the merge-commit topology problem (which produced phantom conflicts on subsequent dev → main promotes — observed and resolved during the v1.7.0/v1.8.0 work).
+
+| Hop | Strategy | Rationale |
+|---|---|---|
+| `feature/*` → `dev` | **Rebase** | Preserves atomic commits as a linear sequence on dev. Readable in GitKraken/git-log; useful for `git blame`, `git bisect` per task. |
+| `dev` → `beta` (three-tier only) | **Rebase** | Same rationale as feature → dev — atomic commit history rolls forward. |
+| `dev` → `main` (two-tier) or `beta` → `main` (three-tier) | **Squash** | One commit per release on main. Clean release history; no merge bubbles to back-merge. |
+| Any hop | **Never merge-commit** | Merge bubbles cause phantom conflicts on the next promote PR. Disable in repo settings. |
+
+**One-shot configure** (idempotent — safe to re-run on any consuming repo):
+
+```bash
+gh api repos/<org>/<repo> --method PATCH \
+  -f delete_branch_on_merge=true \
+  -f allow_merge_commit=false \
+  -f allow_squash_merge=true \
+  -f allow_rebase_merge=true
+```
+
+When you click "Merge pull request" in the GitHub UI, the dropdown will let you pick. Match it to the hop using the table above.
+
 ---
 
 ## Release Flow

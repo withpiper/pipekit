@@ -28,6 +28,52 @@ This skill is invoked when the user says:
 
 ## Execution Steps
 
+### Pre-flight A — Integration-branch refusal (v1.8.0+)
+
+Before doing anything else, check what branch we're on. If `git branch --show-current` returns the integration branch (`dev`) or production branch (`main`), **refuse with a clear error**:
+
+```bash
+CURRENT=$(git branch --show-current)
+case "$CURRENT" in
+  dev|main|master)
+    echo "ERROR: /end-session is meant to run on a feature branch inside a worktree." >&2
+    echo "  Current branch: $CURRENT" >&2
+    echo "  This guard exists because writing the session log directly to" >&2
+    echo "  $CURRENT would either fail (branch protection) or pollute" >&2
+    echo "  integration history. Run /end-session from inside the feature" >&2
+    echo "  worktree, BEFORE /launch --close opens the PR." >&2
+    echo "" >&2
+    echo "  See RUNBOOK.md § The loop, step 10." >&2
+    exit 1
+    ;;
+esac
+```
+
+Rationale: starting v1.8.0 (#15), /end-session is part of the feature-branch flow. It runs *before* /launch --close so the session log + NEXT.md update ship in the same PR as the code. Running it on dev/main is either blocked by branch protection or — worse — succeeds and creates a divergent direct write.
+
+If you genuinely need to write a session log without a feature branch (e.g., session of pure planning, no ship), commit your work first, branch off dev, then run /end-session in the new branch.
+
+---
+
+### Pre-flight B — Refresh NEXT.md from integration tip (v1.8.0+)
+
+Inside the feature worktree, NEXT.md is a snapshot from when `/branch` was run. If a parallel session has shipped to `dev` since, that snapshot is stale. Before recomputing NEXT.md (Step 7b.1), pull dev's current version:
+
+```bash
+INTEGRATION="$INTEGRATION"  # resolved by Step 0a below
+git fetch origin "$INTEGRATION" --quiet
+if git cat-file -e "origin/$INTEGRATION:NEXT.md" 2>/dev/null; then
+  git checkout "origin/$INTEGRATION" -- NEXT.md
+  echo "✓ NEXT.md refreshed to origin/$INTEGRATION (parallel-session-safe base)"
+fi
+```
+
+This loads only NEXT.md — no branch switch, no other state change. The recompute logic in Step 7b.1 is from-Linear-truth, so the base just affects "Last updated" and optional sections (parallelizable / blocked). Race window shrinks from "hours of work in worktree" to "minutes between /end-session and PR merge."
+
+**Ordering note:** `$INTEGRATION` is resolved in the next sub-step (the existing Session Shutdown Preflight reads `method.config.md` § Git Architecture). In practice: read config → resolve `$INTEGRATION` → refresh NEXT.md → continue with the rest of the preflight.
+
+---
+
 ### Step 0 — Session Shutdown Preflight
 
 This step is **transparent and confirmatory**: it scans the workspace for everything that typically needs cleanup after a ship (feature branch, agent worktrees, stale locks, orphan branches), presents a plan, and waits for approval before executing anything destructive. No silent cleanup.

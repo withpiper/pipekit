@@ -341,6 +341,10 @@ Do **not** auto-advance to `--close`. The user must explicitly invoke it. This i
 
 Invoked when the user returns with verify confirmed (either via `/vbw:vibe --verify` passed, or via project-precedent self-verification on non-VBW-native layouts).
 
+**v1.8.0+ ordering:** the canonical pattern is `/end-session` → `/launch --close`, both inside the worktree on the feature branch. /end-session writes the session log + NEXT.md to the feature branch first; /launch --close then opens the PR with code + log + NEXT.md bundled. One PR per issue. See `RUNBOOK.md` § The loop, steps 10–11.
+
+If `/launch --close` is invoked **without** a preceding `/end-session`, proceed normally — the close path is independent. The session log will then need to land via the v1.7.0 cherry-pick workaround (or simply run `/end-session` later from a fresh chore branch off dev). Strongly prefer the new ordering.
+
 [Heavy: before transitioning, verify all close-gate artifacts are present:
 - QA report exists and is passing
 - Security review report exists at the path defined in `method.config.md`
