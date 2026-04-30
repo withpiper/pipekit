@@ -136,3 +136,15 @@ pnpm turbo run check-types
 pnpm turbo run lint
 pnpm turbo run test
 ```
+
+## Stack (v1.8.1+)
+
+Stack-specific values consumed by `/g-promote-dev`, `/g-promote-main`, `/g-test-vercel`, `/g-deploy`. Leave blank to disable that capability — skills detect missing values and skip gracefully.
+
+| Key | Value | Used by |
+|-----|-------|---------|
+| **Hosting** | `vercel` \| `none` | `/g-test-vercel`, `/g-deploy` (skip Vercel-specific steps if `none`) |
+| **DB push command** | e.g. `supabase db push` | `/g-promote-dev` step 2.5 (skip migration push if blank) |
+| **Migration dir** | e.g. `supabase/migrations/` | `/g-promote-dev` (detect new migrations on the branch) |
+| **Production smoke URL** | e.g. `https://example.com` | `/g-deploy` (post-merge production smoke) |
+| **Shared DB across environments** | `yes` \| `no` | `/g-promote-dev` (warns about forward-mutation if `yes`) |
