@@ -23,7 +23,8 @@ The definitive step-by-step for shipping one Linear issue through the pipeline. 
 10. [Open the PR — `/launch --close`](#10-open-the-pr--launch---close)
 11. [Rebase-merge the PR](#11-rebase-merge-the-pr-github-ui-or-gh-pr-merge---rebase)
 12. [Smoke against dev preview (optional)](#12-smoke-against-dev-preview-optional) — `/g-test-vercel`
-13. [Worktree cleanup](#13-worktree-cleanup) — `exit` worktree, `cd ~/Projects/<repo>`, `/branch finish RS-XX-slug`
+13. [Worktree cleanup](#13-worktree-cleanup) 
+     `exit` worktree  →   `cd ~/Projects/<repo>`  → `/branch finish RS-XX-slug`
 
 **Then periodically (separate flow):**
 
@@ -51,34 +52,34 @@ Confirm these once per consuming project. They make the loop friction-free.
 | Setting | Where | Why |
 |---|---|---|
 | Branch protection on `dev` and `main` | GitHub repo Settings → Branches | Forces all changes through PRs |
-| **Rebase-merge enabled, merge-commits disallowed** | Settings → General → Pull Requests | feature → dev keeps atomic commits readable; eliminates merge-commit topology that causes phantom conflicts |
-| **Squash-merge enabled** | Same | dev → main collapses to one release commit; per-issue commits stay on dev |
+| **All merge methods enabled at repo level** (rebase + squash + merge-commit) | Settings → General → Pull Requests | Gives flexibility on feature → dev |
+| **`pipekit-main-squash-only` ruleset** | Settings → Rules → Rulesets | Enforces squash-only on `main` (machine-enforced; can't accidentally merge-commit to main) |
 | **Auto-delete head branches on merge** | Settings → General → Pull Requests | Remote cleanup is automatic; claude-squad handles local |
-| Pipekit synced to **v1.8.0+** | `./scripts/sync-method.sh v1.8.0` | One-PR-per-issue flow (no cherry-pick); short branch names |
+| Pipekit synced to **v1.8.0.6+** | `./scripts/sync-method.sh v1.8.0.6` | Per-branch ruleset enforcement |
 
-**Recommended merge strategy by hop:**
-- feature → dev: **rebase** (preserves atomic commits, readable in GitKraken/git-log)
-- dev → main: **squash** (single commit per release; kills merge-commit topology)
-- merge-commits: **never** (creates phantom conflicts on subsequent promotes)
+**Effective merge policy by hop (v1.8.0.6+):**
+- **feature → dev**: rebase OR merge-commit — your choice in the GitHub UI. Both are safe (merge-commits on dev get absorbed when dev → main squashes).
+- **dev → main**: squash-only (ruleset enforces; UI dropdown will only show "Squash and merge"). Single commit per release. No phantom-conflict trap.
 
-Verify in 30 seconds:
+**One-shot configure** (idempotent):
+
+```bash
+bash scripts/pipekit-configure-repo.sh <org>/<repo>
+```
+
+This sets repo-level merge flags AND creates/updates the main-squash-only ruleset. Safe to re-run.
+
+Verify:
 
 ```bash
 gh repo view <org>/<repo> --json deleteBranchOnMerge,squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed \
-  --jq '{deleteBranches:.deleteBranchOnMerge, squashOk:.squashMergeAllowed, rebaseOk:.rebaseMergeAllowed, mergeBlocked:(.mergeCommitAllowed|not)}'
-# Expect: {deleteBranches: true, squashOk: true, rebaseOk: true, mergeBlocked: true}
+  --jq '{deleteBranches:.deleteBranchOnMerge, squash:.squashMergeAllowed, rebase:.rebaseMergeAllowed, merge:.mergeCommitAllowed}'
+# Expect: all four true (per-branch enforcement is in the ruleset, not repo flags)
 
-grep -m1 'v1\.' method/method.md   # expect v1.8.0 or later
-```
+gh api repos/<org>/<repo>/rulesets --jq '.[] | select(.name=="pipekit-main-squash-only") | {name, enforcement}'
+# Expect: {name: "pipekit-main-squash-only", enforcement: "active"}
 
-**One-shot configure** (idempotent — safe to re-run):
-
-```bash
-gh api repos/<org>/<repo> --method PATCH \
-  -f delete_branch_on_merge=true \
-  -f allow_merge_commit=false \
-  -f allow_squash_merge=true \
-  -f allow_rebase_merge=true
+grep -m1 'v1\.' method/method.md   # expect v1.8.0.6 or later
 ```
 
 ---

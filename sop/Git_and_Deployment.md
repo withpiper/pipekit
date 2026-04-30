@@ -69,28 +69,35 @@ dev  (active development)
 | `beta` (three-tier only) | Protected. Requires PR + CI passing. No direct merges. |
 | `dev` | Default branch for PRs. CI runs on all PRs targeting dev. |
 
-### Merge Strategy by Hop (v1.8.0+)
+### Merge Strategy by Hop (v1.8.0.6+)
 
-Match the merge strategy to the hop. The combination below preserves history readability *and* eliminates the merge-commit topology problem (which produced phantom conflicts on subsequent dev → main promotes — observed and resolved during the v1.7.0/v1.8.0 work).
+Different hops want different strategies. The phantom-conflict trap (observed during v1.7.0 / v1.8.0 work) only happens when the **dev → main** hop uses a merge commit. Other hops can use whatever fits the project's history-readability preferences.
 
-| Hop | Strategy | Rationale |
-|---|---|---|
-| `feature/*` → `dev` | **Rebase** | Preserves atomic commits as a linear sequence on dev. Readable in GitKraken/git-log; useful for `git blame`, `git bisect` per task. |
-| `dev` → `beta` (three-tier only) | **Rebase** | Same rationale as feature → dev — atomic commit history rolls forward. |
-| `dev` → `main` (two-tier) or `beta` → `main` (three-tier) | **Squash** | One commit per release on main. Clean release history; no merge bubbles to back-merge. |
-| Any hop | **Never merge-commit** | Merge bubbles cause phantom conflicts on the next promote PR. Disable in repo settings. |
+| Hop | Recommended | Also OK | Rationale |
+|---|---|---|---|
+| `feature/*` → `dev` | **Rebase** | Merge-commit | Rebase = linear atomic commits; merge-commit = bubble preserving feature scope. Either works on dev (no phantom-conflict risk; bubbles get absorbed when dev → main squashes). |
+| `dev` → `beta` (three-tier) | Rebase or merge-commit | — | Same as feature → dev. |
+| **`dev` → `main`** (two-tier) or `beta` → `main` (three-tier) | **Squash (enforced)** | — | One release commit per promotion. Merge-commits here cause phantom conflicts on subsequent promotes. **Enforced by ruleset, not user discipline.** |
+
+#### Enforcement model (v1.8.0.6+): Rulesets, not repo flags
+
+Earlier (v1.7.0–v1.8.0.5) Pipekit recommended disallowing merge-commits at the repo level (`allow_merge_commit=false`). That's machine-safe but blunt — it bans merge bubbles on dev too, which some users prefer for feature-branch readability.
+
+v1.8.0.6 switches to **per-branch enforcement via GitHub Rulesets**:
+
+- Repo level: all three merge methods enabled (rebase, squash, merge-commit).
+- A `pipekit-main-squash-only` ruleset enforces squash-only on `main` specifically.
+- Other branches (dev, beta, feature/*) inherit the repo-level flexibility.
+
+Result: GitHub UI's "Merge pull request" dropdown shows all options on feature → dev PRs but only "Squash and merge" on PRs targeting main. Mistakes impossible.
 
 **One-shot configure** (idempotent — safe to re-run on any consuming repo):
 
 ```bash
-gh api repos/<org>/<repo> --method PATCH \
-  -f delete_branch_on_merge=true \
-  -f allow_merge_commit=false \
-  -f allow_squash_merge=true \
-  -f allow_rebase_merge=true
+bash scripts/pipekit-configure-repo.sh <org>/<repo>
 ```
 
-When you click "Merge pull request" in the GitHub UI, the dropdown will let you pick. Match it to the hop using the table above.
+This sets repo-level merge flags AND creates/updates the ruleset. The script lives in pipekit and gets synced into consuming projects via `sync-method.sh`.
 
 ---
 

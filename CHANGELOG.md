@@ -2,7 +2,37 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0.5`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0.6`.
+
+---
+
+## v1.8.0.6 — 2026-04-30 (patch)
+
+### What changed
+
+**Per-branch merge enforcement via GitHub Rulesets.** Earlier patches (v1.7.0–v1.8.0.5) disallowed merge-commits at the repo level to prevent the phantom-conflict trap on `main`. That's machine-safe but blunt — also bans merge bubbles on `dev`, which some users prefer for feature-branch readability in GitKraken / git-log.
+
+v1.8.0.6 switches to per-branch enforcement:
+
+- **Repo level**: all three merge methods enabled (rebase + squash + merge-commit).
+- **`pipekit-main-squash-only` ruleset**: enforces squash-only on `main`. UI dropdown will only show "Squash and merge" for PRs targeting main.
+- **Net effect**: feature → dev gets the user's choice (rebase or merge-commit). dev → main is squash, machine-enforced. Mistakes on the dangerous hop are impossible.
+
+`scripts/pipekit-configure-repo.sh` extended to handle both — repo-flag PATCH plus ruleset create-or-update via `POST/PUT /repos/<org>/<repo>/rulesets`. Idempotent. The ruleset name is `pipekit-main-squash-only` so re-runs find and update the existing rule rather than creating duplicates.
+
+### Touched
+
+- `scripts/pipekit-configure-repo.sh` — full rewrite. 2 steps: repo-level flags + ruleset.
+- `RUNBOOK.md` § One-time setup — updated table; recommends rulesets-based config.
+- `sop/Git_and_Deployment.md` § Merge Strategy by Hop — explains the per-branch model + why the change.
+
+### Migration
+
+`./scripts/sync-method.sh v1.8.0.6` then `bash scripts/pipekit-configure-repo.sh <org>/<repo>`. The script will:
+1. Re-enable `allow_merge_commit` at the repo level (was disabled by v1.7.0–v1.8.0.5).
+2. Create the `pipekit-main-squash-only` ruleset.
+
+If you want to keep the v1.8.0.5 behavior (merge-commits disallowed globally), just don't run the configure script.
 
 ---
 
