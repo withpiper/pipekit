@@ -49,6 +49,29 @@ Example parsing:
 - `/branch --fix login-redirect` -> `fix/login-redirect` from `dev`
 - `/branch --hotfix auth-crash` -> `hotfix/auth-crash` from `main`
 
+#### Slug derivation when `--linear` is passed (v1.8.0+)
+
+When the user passes only `--linear PROJ-XX` (no explicit name argument), derive the slug from the Linear issue title — but **short** (issue ID + 2-3 meaningful words), not the verbose `gitBranchName` field Linear returns.
+
+Algorithm:
+1. Fetch Linear title (already fetched in Step 3 — reuse it).
+2. Lowercase the title.
+3. Strip stopwords: `with`, `and`, `the`, `for`, `of`, `to`, `in`, `on`, `a`, `an`, `change`, `tracking`, `record` (the last three are common Linear filler — extend the list as patterns surface).
+4. Strip punctuation; split on whitespace.
+5. Take first 2–3 remaining words.
+6. Kebab-case them; prefix with the Linear ID.
+
+Result format: `<PREFIX>-<NN>-<word1>-<word2>[-<word3>]`
+
+Examples (real Linear titles):
+- `RS-21 — Record edit + delete with change tracking` → `RS-21-edit-delete`
+- `RS-19 — Sales results grid (AG Grid Community)` → `RS-19-sales-results`
+- `RS-22 — Server-side audit logging` → `RS-22-audit-logging`
+
+If the user passes both `--linear PROJ-XX` and an explicit name, the explicit name wins (use the user's name as the slug; still prefix with the Linear ID for traceability: `<PREFIX>-<NN>-<user-name>`).
+
+This is **deterministic** — same Linear title always yields the same slug.
+
 ### 2. Ensure Base Branch Is Current
 
 ```bash
@@ -145,7 +168,7 @@ Worktree: {worktree prefix from method.config.md}{kebab-name}
 Base: dev (or main for hotfix)
 
 To start working:
-  cd {worktree prefix from method.config.md}{kebab-name} && claude
+  cd {worktree prefix from method.config.md}{kebab-name} && claude --dangerously-skip-permissions
 
 When done:
   /branch finish

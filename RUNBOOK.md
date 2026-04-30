@@ -13,18 +13,34 @@ Confirm these once per consuming project. They make the loop friction-free.
 | Setting | Where | Why |
 |---|---|---|
 | Branch protection on `dev` and `main` | GitHub repo Settings → Branches | Forces all changes through PRs |
-| **Squash-merge only** (disallow merge commits) | Settings → General → Pull Requests | Eliminates merge-commit topology that causes phantom conflicts on subsequent promotes |
-| **Auto-delete head branches on merge** | Settings → General → Pull Requests | Remote cleanup is automatic; CWT/claude-squad handles local |
-| Pipekit synced to **v1.7.0+** | `./scripts/sync-method.sh v1.7.0` | Out-of-repo state directory; defer mechanism actually works |
+| **Rebase-merge enabled, merge-commits disallowed** | Settings → General → Pull Requests | feature → dev keeps atomic commits readable; eliminates merge-commit topology that causes phantom conflicts |
+| **Squash-merge enabled** | Same | dev → main collapses to one release commit; per-issue commits stay on dev |
+| **Auto-delete head branches on merge** | Settings → General → Pull Requests | Remote cleanup is automatic; claude-squad handles local |
+| Pipekit synced to **v1.8.0+** | `./scripts/sync-method.sh v1.8.0` | One-PR-per-issue flow (no cherry-pick); short branch names |
+
+**Recommended merge strategy by hop:**
+- feature → dev: **rebase** (preserves atomic commits, readable in GitKraken/git-log)
+- dev → main: **squash** (single commit per release; kills merge-commit topology)
+- merge-commits: **never** (creates phantom conflicts on subsequent promotes)
 
 Verify in 30 seconds:
 
 ```bash
-gh repo view <org>/<repo> --json deleteBranchOnMerge,squashMergeAllowed,mergeCommitAllowed \
-  --jq '{deleteBranches:.deleteBranchOnMerge, squashOk:.squashMergeAllowed, mergeBlocked:(.mergeCommitAllowed|not)}'
-# Expect: {deleteBranches: true, squashOk: true, mergeBlocked: true}
+gh repo view <org>/<repo> --json deleteBranchOnMerge,squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed \
+  --jq '{deleteBranches:.deleteBranchOnMerge, squashOk:.squashMergeAllowed, rebaseOk:.rebaseMergeAllowed, mergeBlocked:(.mergeCommitAllowed|not)}'
+# Expect: {deleteBranches: true, squashOk: true, rebaseOk: true, mergeBlocked: true}
 
-grep -m1 'v1\.' method/method.md   # expect v1.7.0 or later
+grep -m1 'v1\.' method/method.md   # expect v1.8.0 or later
+```
+
+**One-shot configure** (idempotent — safe to re-run):
+
+```bash
+gh api repos/<org>/<repo> --method PATCH \
+  -f delete_branch_on_merge=true \
+  -f allow_merge_commit=false \
+  -f allow_squash_merge=true \
+  -f allow_rebase_merge=true
 ```
 
 ---
@@ -68,13 +84,13 @@ Verifies file paths, line refs, dependencies still real. Read-only. **Skip if yo
 /branch --linear RS-XX
 ```
 
-What happens:
+What happens (v1.8.0+):
 - Pre-checks Linear status (warns if already shipped/canceled).
-- Creates `feature/<linear-slug>` (or `fix/`, `hotfix/`) branch off `dev`.
+- Creates `feature/<PREFIX>-<NN>-<2-3-word-slug>` off `dev` — short, deterministic. E.g. `feature/RS-21-edit-delete`, not the verbose Linear gitBranchName.
 - Spawns worktree at `.worktrees/<branch-name>`.
 - Symlinks `.env` and `node_modules` into the worktree.
 - Transitions Linear: Approved → In Progress.
-- Prints: `cd .worktrees/<branch-name> && claude` to enter.
+- Prints: `cd .worktrees/<branch-name> && claude --dangerously-skip-permissions` to enter.
 
 If you'd rather use a TUI for worktree management, claude-squad (`brew install claude-squad`) wraps the same primitives across multiple agents. CWT (archived 2026-04-29) — don't ingest.
 
@@ -118,7 +134,7 @@ vbw:vbw-qa returns Pass / Fail / Partial.
 
 | Verdict | What to do |
 |---|---|
-| **Pass** | Approve → `--auto` runs `/launch --close`, transitions Linear to UAT, ends |
+| **Pass** | Approve → continues to UAT (step 7) |
 | **Partial** | Read the verdict carefully. Often the right answer is **plan-amendment** (declare the deviation in SUMMARY.md) rather than re-running QA. Hand-driven amendment is one round; full re-execute is multiple agents. |
 | **Fail** | Pause hard. `/vbw:vibe --verify` for inline UAT loop, or escalate. **Do not re-run --auto on Fail** — the gate has spoken. |
 
@@ -130,39 +146,47 @@ Either:
 
 Both are valid. Use `/vbw:vibe --verify` when you want the agent-mediated checklist; smoke directly when you trust the AC.
 
-### 8. Close the session
+### 8. Close the session — `/end-session` FIRST (v1.8.0+)
 
 ```bash
 /end-session
 ```
 
-What it does (v1.7.0+):
-- Reads the deferred NEXT.md queue from `~/.cache/pipekit/<repo>/pending-next-md.json` and applies it (or recomputes if stale).
+What it does (v1.8.0+):
+- Refuses to run if you're on `dev` or `main` (guard against accidental direct-to-integration writes).
+- **Refreshes NEXT.md to `origin/<integration>` tip** — picks up any parallel-session updates so the recompute starts from a current base.
+- Reads the deferred NEXT.md queue from `~/.cache/pipekit/<repo>/pending-next-md.json` and applies/discards as appropriate.
 - Writes session log to `Logs/Sessions/YYYY-MM-DD_HHMM.md`.
-- Recomputes NEXT.md (next Approved issue / `/strategy-sync` / `/phase-plan`).
-- Commits log + NEXT.md + pushes to the **feature branch**.
+- Recomputes NEXT.md (next Approved issue / `/strategy-sync` / `/phase-plan`) on top of the refreshed base.
+- Commits log + NEXT.md to the **current feature branch**.
 
-⚠️ **Known friction (open):** /end-session writes log + NEXT.md to the feature branch. After PR merge, those commits are post-merge orphans on a deleted branch. **Workaround until v1.8.0:**
+The commit lands on the feature branch *before* the PR opens. Step 9 (`/launch --close`) then bundles everything into the single PR. **No cherry-pick; one PR per issue.**
+
+### 9. Open the PR — `/launch --close`
 
 ```bash
-# In the parent worktree, before CWT-deleting the feature worktree:
-cd ~/Projects/<repo>
-git checkout dev && git pull --ff-only
-git checkout -b chore/preserve-rs-XX-session-artifacts
-git cherry-pick <feature-branch-tip>     # picks the /end-session commit only
-git push -u origin chore/preserve-rs-XX-session-artifacts
-gh pr create --base dev --title "chore(log): preserve RS-XX session artifacts"
-# Squash-merge that PR.
+/launch RS-XX --close
 ```
 
-### 9. Promote feature → dev (if not done by --close)
+Opens feature → dev PR with code + session log + NEXT.md update. Linear → UAT. The PR has everything in one place.
 
-`/launch --close` opens the PR. Squash-merge it. Auto-delete handles the remote.
+### 10. Rebase-merge the PR (GitHub UI or `gh pr merge --rebase`)
 
-### 10. Worktree cleanup
+Atomic commits flow onto dev linearly. Auto-delete handles the remote branch.
+
+### 11. Smoke against dev preview (optional)
 
 ```bash
-/branch finish        # local: removes worktree + branch
+/g-test-vercel RS-XX           # project-side skill — pushes branch + smoke-tests preview URL
+```
+
+(Mostly relevant if you didn't run it during step 7. Otherwise skip.)
+
+### 12. Worktree cleanup
+
+```bash
+exit                           # leave the worktree session
+/branch finish                 # in parent: removes local worktree + branch
 ```
 
 Or claude-squad TUI: select the session → `d`. Same outcome.
@@ -266,9 +290,15 @@ If you see `state-file writes are best-effort during scod stages — skipping si
          │
          ├─ UAT (/vbw:vibe --verify or local smoke)
          │
-         └─ /end-session
-            └─ cherry-pick session log to dev (workaround)
-            └─ /branch finish (or claude-squad delete)
+         ├─ /end-session              ← v1.8.0+: BEFORE --close
+         │    (refuses on dev/main; refreshes NEXT.md from origin/dev tip;
+         │     commits log + NEXT.md to feature branch)
+         │
+         ├─ /launch RS-XX --close     ← opens single PR with everything
+         │
+         ├─ Rebase-merge PR
+         │
+         └─ /branch finish (or claude-squad delete)
 
 …then later, batch-promote dev → main:
    gh pr create --base main --head dev …
