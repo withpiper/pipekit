@@ -2,7 +2,25 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0.1`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0.2`.
+
+---
+
+## v1.8.0.2 — 2026-04-30 (patch)
+
+### What changed
+
+**Default `/launch` recommendations to `--auto`.** Live test on RS-21 surfaced that /start-session offered "say `/launch RS-21` (or `go` and I'll fire it)" — without `--auto`. The bare form skips the auto-chain orchestration that's the whole point of v1.6.0+. Default should match the canonical Standard-tier path.
+
+Three skill prose updates:
+
+- **`/start-session`** — new step 9 explicitly offers the next command in `--auto` form (Standard tier). Tier handling: Standard → `--auto`, Heavy → plain `/launch` (since `--auto` rejects Heavy), Quick → `/06-linear-todo-runner`.
+- **`/end-session`** — NEXT.md recompute writes `/launch RS-XX --auto` instead of bare `/launch RS-XX`. Same tier exceptions.
+- **`/launch --close`** — close-time NEXT.md logic emits `/launch {next issue} --auto`. Same tier exceptions.
+
+### Migration
+
+`./scripts/sync-method.sh v1.8.0.2`. No behavior change in the auto-chain itself; only what gets recommended in NEXT.md and what /start-session offers to fire.
 
 ---
 

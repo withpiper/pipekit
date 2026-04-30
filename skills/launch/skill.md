@@ -627,7 +627,7 @@ Tier 1 / Option 3 has two `/launch` invocations per issue: open and `--close`. E
 
 **Close-time NEXT.md logic** (priority order):
 
-1. Next Specced issue in current phase → `/launch {next issue}`
+1. Next Approved/Specced issue in current phase → `/launch {next issue} --auto` (default to `--auto` for Standard-tier; drop the flag for Heavy-tier issues since `/launch --auto` rejects Heavy)
 2. If `$STATE_DIR/pending-strategy-sync` marker exists (resolved via `bash scripts/pipekit-state-dir.sh`) → `/strategy-sync`
 3. If phase complete and synced → `/phase-plan`
 4. Otherwise → `/g-test-vercel` for the just-shipped issue
