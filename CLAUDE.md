@@ -30,6 +30,7 @@ Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a 
 - `method.md` — The full methodology (Stage 0 + 12-step pipeline, principles, tooling)
 - `method.config.template.md` — Template for project-specific config (Linear IDs, strategy docs, environments, pre-deploy gate)
 - `STARTUP.md` — Reference guide for project bootstrap (use `/startup` for the interactive flow)
+- `RUNBOOK.md` — Per-issue practical walkthrough (the loop you run most often)
 - `sop/` — Standard operating procedures (Git, Code Quality, Linear, Skills, VBW)
 - `templates/` — Concept brief, project definition, strategy doc, and spec templates
 - `templates/strategy/` — Templates for each strategy doc type (conceptual overview, technical architecture, etc.)

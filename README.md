@@ -192,6 +192,7 @@ pipekit/
   method.md                        # The methodology — pipeline, principles, tooling
   method.config.template.md        # Project config template (copied per project)
   STARTUP.md                       # Reference guide for project bootstrap
+  RUNBOOK.md                       # Per-issue step-by-step (the practical loop)
   VBW_COMMANDS.md                  # VBW command reference
   sop/                             # Standard operating procedures
     Code_Quality.md                #   Quality standards and pre-deploy gates
@@ -250,6 +251,7 @@ pipekit/
 - **[GUIDE.md](GUIDE.md)** — Complete instruction manual (start here)
 - **[method.md](method.md)** — The methodology: pipeline, principles, tooling
 - **[STARTUP.md](STARTUP.md)** — Reference guide for project bootstrap
+- **[RUNBOOK.md](RUNBOOK.md)** — Per-issue step-by-step (the practical loop you'll run most often)
 - **[VBW_COMMANDS.md](VBW_COMMANDS.md)** — VBW command reference
 - **[sop/](sop/)** — Standard operating procedures
 
