@@ -403,7 +403,7 @@ Previous `NEXT.md` likely points at the issue that just shipped. Recompute and o
 
 Source for the next action, in priority order:
 
-1. **Current phase has more Approved issues?** — recommend `/launch {next Approved issue}`. Pick the one whose dependency graph (via Linear `blocked_by` relations) unblocks the most downstream work. Briefly name what it unblocks in the "Why this one" field.
+1. **Current phase has more Approved issues?** — recommend `/launch {next Approved issue} --auto`. **Default to `--auto`** for Standard-tier issues (the canonical case). Pick the one whose dependency graph (via Linear `blocked_by` relations) unblocks the most downstream work. Briefly name what it unblocks in the "Why this one" field. *Exception:* if the issue is explicitly Heavy-tier in the spec (security review + mandatory /strategy-sync), drop `--auto` since `/launch --auto` rejects Heavy. For Quick-tier issues, recommend `/06-linear-todo-runner` instead.
 2. **Current phase fully shipped but has unshipped `Specced` issues?** — recommend moving the top-priority one to Approved (human review gate).
 3. **Current phase fully shipped and specced?** — recommend `/strategy-sync` if there's a pending-strategy-sync marker at `$STATE_DIR/pending-strategy-sync` (resolved via `scripts/pipekit-state-dir.sh`), otherwise recommend `/phase-plan` to select the next phase.
 4. **No phase active?** — recommend `/phase-plan`.

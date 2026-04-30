@@ -157,6 +157,24 @@ Prompt the user:
 
 Acknowledge their intentions and store for end-of-session reflection.
 
+### 9. Offer to fire the recommended next command (v1.8.0.2+)
+
+If NEXT.md surfaced a `/launch <ID>` recommendation AND the current branch is a feature branch matching that issue (i.e., user already ran `/branch --linear`), offer to fire the command. **Default the offered form to `--auto`** for Standard-tier issues — that's the canonical happy path:
+
+```
+Ready when you are. Say `go` and I'll run /launch RS-XX --auto
+(or run a specific variant: `/launch RS-XX` without --auto, or `/launch RS-XX --close` if you've already finished and just need to close).
+```
+
+**Tier handling:**
+- Standard tier (the common case) → offer `--auto`
+- Heavy tier (security review + mandatory `/strategy-sync`) → offer plain `/launch RS-XX` (without `--auto`); `/launch --auto` rejects Heavy
+- Quick tier → offer `/06-linear-todo-runner` (or `/launch` plain — runner handles the queue)
+
+If you don't know the tier from NEXT.md or the spec, default to `--auto` and let `/launch` reject and route appropriately if it's Heavy.
+
+If the current branch is NOT the feature branch for the recommended issue (e.g., user is still on dev), offer the issue but defer firing — point them to `/branch --linear RS-XX` first.
+
 ## Related
 
 - End Session skill (`/end-session`) - captures reflections at session end
