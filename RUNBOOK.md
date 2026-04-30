@@ -23,7 +23,7 @@ The definitive step-by-step for shipping one Linear issue through the pipeline. 
 10. [Open the PR — `/launch --close`](#10-open-the-pr--launch---close)
 11. [Rebase-merge the PR](#11-rebase-merge-the-pr-github-ui-or-gh-pr-merge---rebase)
 12. [Smoke against dev preview (optional)](#12-smoke-against-dev-preview-optional) — `/g-test-vercel`
-13. [Worktree cleanup](#13-worktree-cleanup) — `/branch finish`
+13. [Worktree cleanup](#13-worktree-cleanup) — `exit` worktree, `cd ~/Projects/<repo>`, `/branch finish RS-XX-slug`
 
 **Then periodically (separate flow):**
 
