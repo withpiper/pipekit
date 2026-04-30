@@ -176,27 +176,68 @@ When done:
 
 ## Finish Subcommand
 
-`/branch finish` cleans up the current worktree and branch.
+`/branch finish` cleans up a worktree and its branch.
+
+### Where to run it (v1.8.0.5+)
+
+**Run from the parent repo** (`~/Projects/<repo>`), not from inside the worktree being removed. `git worktree remove` fails if you're inside the directory it's deleting.
+
+Typical sequence after the feature PR is rebase-merged:
+
+```bash
+# Inside the worktree:
+exit                          # leave claude (drops to shell)
+
+# Back at the parent shell:
+cd ~/Projects/<repo>          # if not already there
+claude                        # or attach to your existing parent session
+
+# In parent claude:
+/branch finish RS-XX-edit-delete    # explicit arg = unambiguous
+# or:
+/branch finish                       # no arg = auto-detect merged worktrees
+```
 
 ### Steps
 
-1. Detect current worktree context
-2. Check branch status:
-   - Uncommitted changes -> warn and ask to commit or stash
-   - Unpushed commits -> warn and ask to push
-   - Open PR -> show PR status
-   - Merged -> safe to clean up
-3. Offer cleanup options:
-   - Delete worktree + local branch + remote branch (if merged)
-   - Keep branch but remove worktree
-   - Cancel
-4. Execute cleanup:
-   ```bash
-   # From main repo (not the worktree being deleted)
-   git worktree remove "$WORKTREE_PATH"
-   git branch -d {branch-name}  # only if merged
-   git push origin --delete {branch-name}  # only if merged and remote exists
-   ```
+#### 1. Resolve which worktree to finish
+
+In priority order:
+
+1. **Explicit slug arg** (`/branch finish RS-XX-edit-delete`) — match against `git worktree list` paths. If found, use it. If not, error: "no worktree matches `RS-XX-edit-delete`."
+2. **Currently inside a worktree (not the parent repo)** — use the current worktree, but **error and instruct the user to `exit` and re-run from the parent**:
+   > "Detected /branch finish run from inside the worktree at <path>. Re-run from the parent repo at <repo-root> — `git worktree remove` can't delete the directory you're sitting in."
+3. **No arg, in the parent repo** — list `git worktree list` worktrees that are NOT the parent. For each, check:
+   - Is the branch merged to dev/main on `origin`? (`git branch -r --merged origin/dev | grep <branch>`)
+   - If exactly one worktree's branch is merged → that's the candidate. Confirm with user before removing.
+   - If multiple worktrees are merged → list them, ask user to pick.
+   - If none merged → list active worktrees, ask "which one to finish?"
+
+#### 2. Check branch status (after target worktree resolved)
+
+- Uncommitted changes in the target worktree → warn and ask to commit or stash (cannot stash from outside the worktree; user must cd in, stash, cd back).
+- Unpushed commits → warn and ask to push.
+- Open PR → show PR status; default action is "wait for PR to merge first."
+- Merged → safe to clean up.
+
+#### 3. Offer cleanup options
+
+- **Delete worktree + local branch** (default if merged). Auto-delete on remote already handled if `delete_branch_on_merge=true` is set on the repo (v1.7.0+ recommendation).
+- Keep branch but remove worktree.
+- Cancel.
+
+#### 4. Execute cleanup
+
+```bash
+# Run from the parent repo (this is where /branch finish executes):
+git worktree remove "$WORKTREE_PATH"
+git branch -d "$BRANCH_NAME"          # only if merged
+# Note: with delete_branch_on_merge=true, the remote branch is already gone.
+# Only run the next line if for some reason it isn't:
+# git push origin --delete "$BRANCH_NAME"
+```
+
+If `git branch -d` fails ("not fully merged" — happens after squash-merge because squash creates a new commit on dev that doesn't match the feature branch's commits in ancestry), use `git branch -D` (force-delete). Squash-merge is the correct case for `-D`; the content is on dev, the commit objects are not.
 
 ## List Subcommand
 
