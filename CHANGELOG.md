@@ -2,7 +2,67 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.6.0`.
+Pin to a specific version: `./scripts/sync-method.sh v1.7.0`.
+
+---
+
+## v1.7.0 — 2026-04-30
+
+### What's New
+
+**Bug-fix release closing the silent-drop gap left in v1.6.0.** Single observation from rs-vault RS-22 (real-time, 2026-04-29 → 2026-04-30) drove the whole release: the v1.6.0 NEXT.md defer mechanism only worked for non-VBW-scoped writers, exactly the case it was *not* meant to fix.
+
+#### Pipekit machine-local state moved out of repo (closes #13)
+
+v1.6.0 placed the deferred-NEXT.md queue and pipeline-state records inside the repo at `<repo>/.pipekit/`. VBW's file-guard hook blocks any in-repo write that isn't in the active plan's `files_modified` field. The queue file written to dodge the original block hit the same wall — net result: continued silent audit-trail loss, just one level deeper.
+
+The fix: relocate Pipekit's machine-local state to `${XDG_CACHE_HOME:-~/.cache}/pipekit/<repo-basename>/`, resolved consistently by the new `scripts/pipekit-state-dir.sh` helper. VBW's file-guard never inspects paths outside the repo, so writes succeed unconditionally — no more best-effort, no more silent drops.
+
+```bash
+# Resolve the path
+STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
+
+# Pipekit's directory layout (per consuming project):
+#   ${XDG_CACHE_HOME:-~/.cache}/pipekit/<repo-basename>/
+#     ├── pending-next-md.json     (NEXT.md defer queue)
+#     ├── pending-strategy-sync    (post-archive marker)
+#     └── pipeline-state/<issue-id>.json
+```
+
+Touched: `sop/Skills_SOP.md`, `method.md`, `VBW_COMMANDS.md`, `templates/tier-heavy.md`, seven skills (`/review-plan`, `/launch`, `/end-session`, `/06-linear-todo-runner`, `/start-session`, `/10-strategy-sync`, `/pipekit-help`), `scripts/pipekit-post-archive.sh` (with inline fallback for mid-upgrade safety), `scripts/verify-next-md-defer.sh` (asserts STATE_DIR is outside repo). The verify script's round-trip dogfood passes against the new path.
+
+#### Sync script reliability fixes
+
+- `--dry-run` now survives the self-update re-exec path (prior shift-based parser silently dropped the flag) — `fix(sync): preserve --dry-run across self-update re-exec` (47e0f9d).
+- `diff -rq` exit-1-on-difference no longer kills `--dry-run` under `set -o pipefail` — `fix(sync): tolerate diff -rq exit 1 in --dry-run pipelines` (2b400ef).
+
+These two latent bugs surfaced once `--dry-run` actually started running.
+
+#### Repo URL update
+
+Pipekit moved from `ethan-piper/pipekit` to `withpiper/pipekit`. Updated `METHOD_REPO` default, README/GUIDE/STARTUP install instructions, and `/pipekit-update` + `/startup` curl URLs (417c266). Old URL still redirects, so existing consumers don't break — but pin to v1.7.0+ to pick up the canonical reference.
+
+### Migration
+
+For consuming projects on v1.6.0:
+
+1. `./scripts/sync-method.sh v1.7.0` — pulls updated skills, SOPs, the new `scripts/pipekit-state-dir.sh` helper, and the relocated `verify-next-md-defer.sh`.
+2. **One-shot move existing state out of repo** (skip if `.pipekit/` is empty or absent):
+   ```bash
+   STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
+   mkdir -p "$STATE_DIR"
+   mv .pipekit/* "$STATE_DIR/" 2>/dev/null
+   rmdir .pipekit 2>/dev/null
+   ```
+   Files are ephemeral; a clean wipe (`rm -rf .pipekit`) is also fine — queue and state files self-recreate on next write.
+3. Optionally remove `.pipekit/` from `.gitignore` — Pipekit no longer writes there. Harmless to leave.
+4. No config / template / state-ID changes. No breaking API changes.
+
+### Open items deferred to v1.8.0
+
+- `/pipekit-resume` — state-file consumer skill for cross-session resumption (carried forward from v1.6.0/v1.7.0).
+- Orchestrator-side permission-denial detection (carried forward from v1.4.0).
+- /end-session writes session log onto the merged feature branch (orphan unless cherry-picked) — friction observation from RS-19 + RS-22 closes; right fix is for /end-session to write to integration directly.
 
 ---
 
