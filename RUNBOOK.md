@@ -6,6 +6,43 @@ The definitive step-by-step for shipping one Linear issue through the pipeline. 
 
 ---
 
+## Quick Index — follow in order
+
+**Per-issue loop:**
+
+0. [Open the session](#0-open-the-session) — `/start-session`
+1. [Pick the issue](#1-pick-the-issue) — NEXT.md / `/linear-status` / `/spec-preflight`
+2. [Branch + worktree](#2-branch--worktree) — `/branch --linear RS-XX`
+3. [Launch the auto-chain](#3-launch-the-auto-chain) — `/launch RS-XX --auto`
+4. [Decision: plan-review verdict](#4-decision-plan-review-verdict) — Pass / Revise / Block
+5. [Watch (don't intervene during) execution](#5-watch-dont-intervene-during-execution)
+6. [Decision: QA verdict](#6-decision-qa-verdict) — Pass / Partial / Fail
+7. [UAT](#7-uat) — `/vbw:vibe --verify` or local smoke
+8. [Close the session — `/end-session` FIRST (v1.8.0+)](#8-close-the-session--end-session-first-v180)
+9. [Open the PR — `/launch --close`](#9-open-the-pr--launch---close)
+10. [Rebase-merge the PR](#10-rebase-merge-the-pr-github-ui-or-gh-pr-merge---rebase)
+11. [Smoke against dev preview (optional)](#11-smoke-against-dev-preview-optional) — `/g-test-vercel`
+12. [Worktree cleanup](#12-worktree-cleanup) — `/branch finish`
+
+**Then periodically (separate flow):**
+
+- P1–P4. [Promote dev → main](#promote-dev--main) — `/g-promote-main` → squash → `/g-promote-main --post-merge` → `/strategy-sync`
+
+**If something goes wrong:**
+
+- [Phantom conflicts on dev → main PR](#phantom-conflicts-on-dev--main-pr)
+- [Stale git index lock](#stale-git-index-lock)
+- [Plan-reviewer Block on round 2 (stalemate)](#plan-reviewer-block-on-round-2-stalemate)
+- [State-file or NEXT.md write hook-blocked](#state-file-or-nextmd-write-hook-blocked)
+
+**Reference:**
+
+- [One-time setup (per repo)](#one-time-setup-per-repo) — squash/rebase/auto-delete config + `pipekit-configure-repo.sh`
+- [Decision tree at a glance](#decision-tree-at-a-glance)
+- [What's NOT in this runbook](#whats-not-in-this-runbook-separate-flows)
+
+---
+
 ## One-time setup (per repo)
 
 Confirm these once per consuming project. They make the loop friction-free.
