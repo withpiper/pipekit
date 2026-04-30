@@ -2,7 +2,24 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0.4`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0.5`.
+
+---
+
+## v1.8.0.5 — 2026-04-30 (patch)
+
+### What changed
+
+**`/branch finish` clarified — accepts explicit slug arg, auto-detects merged worktrees.** Live RS-59 observation: RUNBOOK step 13 said "exit + /branch finish" but didn't make clear that /branch finish runs from the parent repo (not from inside the worktree being removed), and the skill itself didn't define how it would identify the right worktree if multiple existed.
+
+This patch:
+
+- **`skills/branch/skill.md`** — Finish subcommand now documents the run-from-parent contract explicitly and adds a 3-tier resolution algorithm: (1) explicit slug arg matches a worktree path; (2) running from inside a worktree errors with a clear "exit and re-run from parent" message; (3) no-arg in parent auto-detects merged-on-origin worktrees, confirms the unambiguous one, or asks user to pick from multiple.
+- **`RUNBOOK.md`** — step 13 split into Part A (exit) + Part B (cd to parent, run /branch finish). Notes that squash-merge breaks `git branch -d`'s ancestry check; `-D` is the correct response.
+
+### Migration
+
+`./scripts/sync-method.sh v1.8.0.5`. Pure documentation + skill-prose change; no behavior change unless you were relying on `/branch finish` running from inside the worktree (which fails today regardless).
 
 ---
 

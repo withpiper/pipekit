@@ -241,12 +241,41 @@ Atomic commits flow onto dev linearly. Auto-delete handles the remote branch.
 
 ### 13. Worktree cleanup
 
+This step has two parts because `git worktree remove` can't delete the directory you're sitting in.
+
+**Part A — exit the worktree session:**
+
 ```bash
-exit                           # leave the worktree session
-/branch finish                 # in parent: removes local worktree + branch
+exit       # leaves claude, drops to your shell at .worktrees/RS-XX-…
 ```
 
-Or claude-squad TUI: select the session → `d`. Same outcome.
+**Part B — go to the parent repo and finish:**
+
+```bash
+cd ~/Projects/<repo>           # parent repo, NOT the worktree
+claude                         # start (or attach to) your parent claude session
+```
+
+Then in the parent claude:
+
+```bash
+/branch finish RS-XX-edit-delete    # explicit slug = unambiguous
+```
+
+Or without the arg:
+
+```bash
+/branch finish                       # auto-detects merged worktrees; confirms with you
+```
+
+Auto-detect logic: `/branch finish` lists worktrees whose branch is merged on `origin`. If exactly one matches, it confirms. If multiple match, it asks you to pick.
+
+What it does:
+- Removes the worktree directory under `.worktrees/`.
+- Deletes the local branch (`-D` if needed — squash-merge breaks `-d`'s "fully merged" check, that's normal).
+- Remote branch is already gone (auto-delete-on-merge handled it when the PR was squash-merged).
+
+**Or** if you use claude-squad: TUI → select the session → `d`. Same outcome.
 
 ---
 
