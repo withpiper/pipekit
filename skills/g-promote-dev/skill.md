@@ -55,10 +55,10 @@ Guard:
 
 ### 3. Pre-deploy gate
 
-Run the gate command read from config:
+Run the gate command read from config. `$GATE_CMD` is a string of commands joined by `&&` (e.g. `pnpm typecheck && pnpm lint && pnpm test`). Bare `$GATE_CMD` would only invoke the first command and pass `&&` as a literal argument, so use `eval` so the shell parses the chain correctly:
 
 ```bash
-$GATE_CMD
+eval "$GATE_CMD"
 ```
 
 If any check fails, STOP and surface the output. Do not create a PR with a broken gate. The gate is project-defined; trust the config.
@@ -122,7 +122,7 @@ If the user declines, continue to step 5 — PR will still be created.
 git push -u origin "$CURRENT_BRANCH"
 ```
 
-If upstream already exists and is ahead, drop the `-u`. If push is rejected (non-fast-forward), surface the rebase command and stop: `git pull --rebase origin $CURRENT_BRANCH`.
+`-u` is idempotent — safe to use whether or not upstream tracking is already set. If push is rejected (non-fast-forward), surface the rebase command and stop: `git pull --rebase origin $CURRENT_BRANCH`.
 
 ### 6. Extract Linear issue references
 

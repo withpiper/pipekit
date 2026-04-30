@@ -2,7 +2,30 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.1`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
+
+---
+
+## v1.8.2 — 2026-04-30
+
+### Fixes
+
+Four bugs surfaced in the v1.8 code review (v1.7.0..v1.8.1). All Quick-tier fixes, no behavior changes for the happy path.
+
+- **`/start-session`** — Pre-flight `INTEGRATION` resolver was a literal `$(...)` placeholder. The skill couldn't run end-to-end on a feature worktree. Inlined the same fallback chain `/end-session` Step 0a uses.
+- **`/end-session`** — Pre-flight B used a no-op `INTEGRATION="$INTEGRATION"` self-assignment with a forward reference to Step 0a. Inlined the resolver so Pre-flight B is self-contained; Step 0a still refines from `method.config.md` afterward.
+- **`/g-promote-dev` Step 3** — Bare `$GATE_CMD` only invoked the first command in an `&&` chain; `&&` became a literal arg. Wrapped in `eval` so the shell parses the chain.
+- **`/g-promote-dev` Step 5** — Removed misleading "drop the `-u`" advice. `-u` is idempotent; the actual non-fast-forward case was already documented correctly in the next sentence.
+
+### Filed for v1.9.0
+
+Three issues drafted from the same review, deferred:
+
+- `pipekit-configure-repo.sh` hardening — Rulesets PUT preserves bypass actors, auth/admin precheck, error surfacing
+- `/g-promote-dev` Linear-state ownership — three skills now transition the same issue; canonical ownership map needed
+- `/launch --auto` refactor — define stalemate overlap precisely, fix Revise default ordering, consider state-machine restructure
+
+Drafts in `temp/issue-v1.9-*.md`.
 
 ---
 

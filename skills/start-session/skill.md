@@ -31,7 +31,13 @@ This skill is invoked when the user says:
 2. **Inside a feature worktree** — "orient me on the issue I just /branch'd into." NEXT.md in the worktree is the snapshot from when /branch ran, possibly stale if a parallel session shipped to dev since. Refresh it.
 
 ```bash
-INTEGRATION=$(...)              # from method.config.md § Git Architecture; same resolver as /end-session uses
+# Resolve integration branch (same fallback chain as /end-session Step 0a).
+# Prefer method.config.md § Git Architecture if available; otherwise fall back
+# to origin/dev or origin's default HEAD.
+INTEGRATION=$(git show-ref --verify --quiet refs/remotes/origin/dev && echo dev || echo "")
+if [ -z "$INTEGRATION" ]; then
+  INTEGRATION=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo main)
+fi
 CURRENT=$(git branch --show-current)
 
 case "$CURRENT" in
