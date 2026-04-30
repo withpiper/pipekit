@@ -2,7 +2,26 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0.3`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0.4`.
+
+---
+
+## v1.8.0.4 — 2026-04-30 (patch)
+
+### What changed
+
+**QA-Pass default is now `pause-for-end-session`, not `close-now`.** Live RS-59 observation: /launch --auto's QA-Pass prompt still recommended `close` as the default action, which routes through the v1.7.0 cherry-pick path and defeats v1.8.0's "one PR per issue" model.
+
+The recommended flow on QA Pass is:
+
+1. `pause-for-end-session` (new default) — exit cleanly so the user can run `/end-session` (writes log + NEXT.md to the feature branch), then `/launch --close` (opens the single bundled PR). One PR. No cherry-pick.
+2. `close-now` (legacy, preserved) — old v1.7.0 behavior; closes immediately, requires cherry-pick of the session log later.
+
+Touched: `skills/launch/skill.md` auto-chain mode step 6 prose. Fail/Partial defaults unchanged (`pause-here`).
+
+### Migration
+
+`./scripts/sync-method.sh v1.8.0.4`. No breaking changes — `close-now` is still available for users who prefer the v1.7.0 flow.
 
 ---
 
