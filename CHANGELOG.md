@@ -2,7 +2,35 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0.2`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.0.3`.
+
+---
+
+## v1.8.0.3 — 2026-04-30 (patch)
+
+### What changed
+
+**`/launch --auto` no longer auto-advances on Revise.** Live RS-21 observation: plan-reviewer returned Revise, Lead applied the fixes, and `--auto` proceeded straight to Dev — without re-spawning plan-reviewer to validate the revised plan. The user did not approve skipping re-review. The "verdict gate" was effectively a no-op for Revise.
+
+Root cause: skills/launch/skill.md treated Revise as a soft-pass — `proceed on Pass / Revise; abort on Block`. That's wrong. Revise's whole purpose is "fix and re-review."
+
+v1.8.0.3 implements round-2 plan-review on Revise:
+
+1. Round 1 Revise → spawn Lead to apply blocking fixes
+2. **Re-spawn plan-reviewer with the revised PLAN.md (NEW)**
+3. Round-2 verdict: Pass → Dev; Revise → loop to round 3; Block → abort
+4. **Stalemate detection at round 3+**: if round 3's Revise verdict overlaps with round 2's blocking items, pause and surface to user. No auto-loop on round 4.
+
+An explicit override `proceed-without-re-review` exists for the rare case where the user genuinely wants to skip re-review. The override is logged to the pipeline state file (`override: "skip-plan-review-round-2"`).
+
+### Touched
+
+- `skills/launch/skill.md` — auto-chain mode step 3 expanded with round-2 logic; "proceed on Pass / Revise" wording removed in 3 places
+- `RUNBOOK.md` — plan-review verdict decision-point table updated with new defaults
+
+### Migration
+
+`./scripts/sync-method.sh v1.8.0.3`. No behavior change in Pass or Block paths. Revise now defaults to `apply-fixes-and-re-review` instead of `proceed`. If you rely on the old soft-pass behavior, use the explicit `proceed-without-re-review` option.
 
 ---
 

@@ -285,7 +285,7 @@ PROJ-XXX is in Building. Run this sequence:
   1. /vbw:vibe --plan {phase-slug}      ← VBW Lead writes PLAN.md
   2. /review-plan {phase-slug}           ← Pipekit's plan-review gate
                                             (calls plan-reviewer agent)
-  3. (read review verdict — proceed only on Pass or Revise)
+  3. (read review verdict — Pass: proceed to Dev; Revise: Lead-revise + round-2 plan-review loop until Pass or Block; Block: abort)
   4. /vbw:vibe --execute {phase-slug}    ← VBW Dev builds with atomic commits
   5. /vbw:vibe --verify {phase-slug}     ← VBW QA (see "Verify path" note below)
   6. /launch PROJ-XXX --close            ← Pipekit transitions Linear to UAT
@@ -441,7 +441,7 @@ If any check fails, refuse to close with a list of missing artifacts and stop. D
 `/launch PROJ-XXX --auto` orchestrates the Standard-tier pipeline end-to-end with exactly **three human inputs**:
 
 1. Tier confirmation (the existing Step 1.5 prompt)
-2. `/review-plan` verdict gate (proceed on Pass / Revise; abort on Block)
+2. `/review-plan` verdict gate — Pass proceeds to Dev; Revise triggers Lead-revise + round-2 plan-review (loop until Pass / Block / stalemate); Block aborts
 3. QA verdict gate (proceed on Pass; abort on Fail / Partial)
 
 Everything else — VBW Lead writing PLAN.md, plan-reviewer reviewing it, VBW Dev executing, VBW QA verifying, the final `--close` — runs without prompting. Each pipeline stage runs as a **fresh subagent** spawned via the Task tool, so the fresh-chat discipline (`method.md` § Fresh-Chat Discipline) is preserved: the orchestrator's conversation context never bleeds into Lead, plan-reviewer, Dev, or QA reasoning.
@@ -467,19 +467,33 @@ After Steps 1–6 complete unchanged (gate validation, tier confirm, dependency 
 3. **PAUSE — AskUserQuestion** with the verdict surfaced:
 
    ```
-   Plan-reviewer verdict: {Pass | Revise | Block} — {Readiness Score}/10
+   Plan-reviewer verdict (round {N}): {Pass | Revise | Block} — {Readiness Score}/10
 
    {Block: surface the Blocking Issues list verbatim}
-   {Revise: surface the Non-Blocking Improvements list verbatim}
+   {Revise: surface the Blocking Issues list (must-fix) AND Non-Blocking Improvements (optional) verbatim}
 
-   Proceed to execution?
+   How to proceed?
    ```
 
-   Options:
-   - **Pass / Revise** → `proceed` (default), `pause-here`, `abort`
+   Options depend on verdict:
+   - **Pass** → `proceed` (default — Dev runs next), `pause-here`, `abort`
+   - **Revise** → `apply-fixes-and-re-review` (default — re-spawn Lead with the blocking items, then re-spawn plan-reviewer; loop to step 3 as round N+1), `proceed-without-re-review` (skip the gate; record explicit user choice in state file), `pause-here`, `abort`
    - **Block** → `abort` (default), `route-to-light-spec-revise`, `route-to-vbw-plan` (Lead-revise)
 
-   On `proceed`, continue to step 4. On `pause-here`, exit cleanly with the user back in control (NEXT.md points at `/vbw:vibe --execute {phase-slug}`). On `abort` or any routing choice, exit with the corresponding pointer in NEXT.md and do not spawn Dev.
+   **Revise default = re-review, NOT proceed.** v1.6.0–v1.8.0.2 incorrectly defaulted Revise to `proceed`, treating it as a soft pass. Per #21 (live RS-21 observation), Revise must trigger:
+
+   3a. Spawn Lead with the blocking items as scope (`subagent_type: "vbw:vbw-lead"`, task description: "Apply these blocking fixes to PLAN.md: <verbatim items>. Do NOT rewrite tasks unless required by the fix.").
+
+   3b. After Lead returns the revised PLAN.md, **re-spawn plan-reviewer** (back to step 2). Increment a round counter.
+
+   3c. Round-2 verdict handling:
+   - Pass → proceed to Dev (step 4)
+   - Revise (round 2) → repeat 3a + 3b again as round 3
+   - Block (round 2+) → abort
+
+   3d. **Stalemate detection at round 3+ Revise.** If round 3's Revise verdict overlaps with round 2's blocking items (i.e., Lead is failing to apply the same fixes plan-reviewer keeps flagging), surface this to the user via AskUserQuestion: "Plan-reviewer is flagging the same items in round 3 that it flagged in round 2. The spec may need hand-editing rather than auto-revision. Pause and edit the spec, or override and proceed?" Default: pause. Do NOT auto-loop a 4th round.
+
+   On `apply-fixes-and-re-review`, proceed with 3a/3b/3c above. On `proceed-without-re-review`, log the explicit override to the pipeline state file (`override: "skip-plan-review-round-2"`) and continue to step 4. On `pause-here`, exit with user back in control. On `abort`, exit with NEXT.md pointing appropriately.
 
 4. **Spawn vbw:vbw-dev via Task tool** with `subagent_type: "vbw:vbw-dev"`. Task description: execute the plan at the given phase slug, atomic commits per the project's CLAUDE.md conventions. The standard VBW execution prompt applies. **Include the permission-denial protocol from Step 7b.1 in the task description** — Dev must stop on `EditPermissionDenied` / `HookFeedbackBlocked` and surface the denial rather than burning turns.
 
