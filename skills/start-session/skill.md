@@ -23,6 +23,36 @@ This skill is invoked when the user says:
 
 ## Execution Steps
 
+### Pre-flight — Refresh NEXT.md from integration tip (v1.8.0.1+)
+
+`/start-session` runs in two contexts:
+
+1. **Project root on `dev`/`main`** — "what should I work on?" Surfaces NEXT.md and pending markers as-is. No refresh needed; you're already on the integration branch.
+2. **Inside a feature worktree** — "orient me on the issue I just /branch'd into." NEXT.md in the worktree is the snapshot from when /branch ran, possibly stale if a parallel session shipped to dev since. Refresh it.
+
+```bash
+INTEGRATION=$(...)              # from method.config.md § Git Architecture; same resolver as /end-session uses
+CURRENT=$(git branch --show-current)
+
+case "$CURRENT" in
+  "$INTEGRATION"|main|master)
+    : # On integration — no refresh needed
+    ;;
+  *)
+    # On a feature branch — refresh NEXT.md from origin/<integration>
+    git fetch origin "$INTEGRATION" --quiet
+    if git cat-file -e "origin/$INTEGRATION:NEXT.md" 2>/dev/null; then
+      git checkout "origin/$INTEGRATION" -- NEXT.md
+      echo "✓ NEXT.md refreshed to origin/$INTEGRATION (parallel-session-safe view)"
+    fi
+    ;;
+esac
+```
+
+This makes /start-session symmetric with /end-session: both refresh NEXT.md from `origin/<integration>` before reading/writing it. /start-session never refuses to run (unlike /end-session) — both contexts are valid.
+
+---
+
 ### 1. Note the Start Time
 
 Record the current timestamp for duration tracking.
