@@ -2,7 +2,69 @@
 
 All notable Pipekit releases. Versioning follows semver-ish — minor bumps for new capability, patch for fixes/docs only.
 
-Pin to a specific version: `./scripts/sync-method.sh v1.8.0.6`.
+Pin to a specific version: `./scripts/sync-method.sh v1.8.1`.
+
+---
+
+## v1.8.1 — 2026-04-30
+
+### What's New
+
+**`/g-promote-dev` ported from project-local copies into Pipekit.** First skill in the `/g-*` port (v1.8.1–v1.8.5). Eliminates divergence between rs-vault's and piper's project-local copies; bug fixes propagate via `/pipekit-update`.
+
+#### `skills/g-promote-dev/skill.md` (NEW)
+
+Parameterized via `method.config.md`. Reads:
+
+- § Linear → Issue prefix (e.g. `RS`, `PROJ`)
+- § Linear → Workflow State IDs → In Progress
+- § Git Architecture → Integration branch (`dev`)
+- § Pre-Deploy Gate
+- § Stack → Hosting (`vercel` | `none`), DB push command (e.g. `supabase db push`), Migration dir, Shared DB across environments
+
+Skips capabilities gracefully when stack values are missing (no Vercel? No DB? Skill still works for the PR-only path).
+
+The migration push step (was hardcoded for rs-vault's shared Supabase) is now config-driven:
+- If `DB_PUSH_CMD` empty → skip migration step entirely
+- If `SHARED_DB=yes` → warn about forward-mutation, default-no on push prompt
+- If `SHARED_DB=no` → default-yes on push prompt (separate dev/prod DBs make this safe)
+
+#### `method.config.template.md` — § Stack section (NEW)
+
+New keys for skill parameterization:
+
+| Key | Used by |
+|---|---|
+| Hosting (`vercel` \| `none`) | `/g-test-vercel`, `/g-deploy` |
+| DB push command | `/g-promote-dev` |
+| Migration dir | `/g-promote-dev` |
+| Production smoke URL | `/g-deploy` |
+| Shared DB across environments (`yes` \| `no`) | `/g-promote-dev` |
+
+### Migration
+
+For rs-vault and other consumers with project-local `/g-promote-dev`:
+
+```bash
+./scripts/sync-method.sh v1.8.1
+```
+
+Pipekit's parameterized `g-promote-dev` will replace the project-local copy. Before running, verify your `method.config.md` has:
+- § Linear → Issue prefix ✓
+- § Linear → State IDs → In Progress ✓
+- § Pre-Deploy Gate ✓
+- § Stack section populated (NEW — copy from `method.config.template.md`)
+
+For rs-vault specifically: Stack section should set `Hosting=vercel`, `DB push command=supabase db push`, `Migration dir=supabase/migrations/`, `Shared DB across environments=yes` to preserve current behavior.
+
+If you need to keep the project-local version (e.g. piper hasn't migrated yet), place it at `.claude/overrides/skills/g-promote-dev/skill.md` — sync-method.sh will preserve the override.
+
+### Open items deferred to v1.8.2 – v1.8.5
+
+- v1.8.2: `/g-promote-main` port
+- v1.8.3: `/g-test-vercel` port
+- v1.8.4: `/g-deploy` port
+- v1.8.5: `/g-promote-beta` port (three-tier flows; piper-relevant)
 
 ---
 
