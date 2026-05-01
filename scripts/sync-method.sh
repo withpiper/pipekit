@@ -192,6 +192,24 @@ sync_file "$TEMP/scripts/verify-next-md-defer.sh" "$PROJECT_ROOT/scripts/verify-
 [ -f "$PROJECT_ROOT/scripts/verify-next-md-defer.sh" ] && chmod +x "$PROJECT_ROOT/scripts/verify-next-md-defer.sh"
 sync_file "$TEMP/scripts/pipekit-configure-repo.sh" "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" "scripts/pipekit-configure-repo.sh"
 [ -f "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh"
+sync_file "$TEMP/scripts/pipekit-journal-hook.sh" "$PROJECT_ROOT/scripts/pipekit-journal-hook.sh" "scripts/pipekit-journal-hook.sh"
+[ -f "$PROJECT_ROOT/scripts/pipekit-journal-hook.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-journal-hook.sh"
+
+# --- Sync v2 bin/pk dispatcher (alpha) ---
+# v2 daily-loop runner. Coexists with v1 skills — non-colliding names.
+if [ -d "$TEMP/bin" ]; then
+  echo ""
+  echo "v2 bin/:"
+  mkdir -p "$PROJECT_ROOT/bin"
+  sync_file "$TEMP/bin/pk" "$PROJECT_ROOT/bin/pk" "bin/pk"
+  [ -f "$PROJECT_ROOT/bin/pk" ] && chmod +x "$PROJECT_ROOT/bin/pk"
+fi
+
+# --- Sync v2 templates ---
+if [ -d "$TEMP/templates/v2" ]; then
+  mkdir -p "$PROJECT_ROOT/method/templates/v2"
+  sync_dir "$TEMP/templates/v2" "$PROJECT_ROOT/method/templates/v2" "templates/v2/"
+fi
 
 # --- Sync canonical .claude/rules/ files ---
 # Contract: Pipekit owns three canonical rule files prefixed `pipekit-`
