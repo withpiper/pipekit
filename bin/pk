@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.4"
+PK_VERSION="2.0.0-alpha.5"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -217,10 +217,13 @@ pk_branch_issue_id() {
   branch=$(pk_current_branch)
   local prefix
   prefix=$(pk_issue_prefix)
+  # `|| true` because under `set -euo pipefail`, grep with no matches exits 1
+  # and pipefail propagates that through the pipeline, killing the script.
+  # Empty output is the correct "no issue ID found" signal here.
   if [ -n "$prefix" ]; then
-    echo "$branch" | grep -oE "${prefix}-[0-9]+" | head -1
+    { echo "$branch" | grep -oE "${prefix}-[0-9]+" | head -1; } || true
   else
-    echo "$branch" | grep -oE "[A-Z]+-[0-9]+" | head -1
+    { echo "$branch" | grep -oE "[A-Z]+-[0-9]+" | head -1; } || true
   fi
 }
 
@@ -318,7 +321,7 @@ cmd_status() {
     if [ "$count" = "0" ]; then
       echo "  (none)"
     else
-      echo "$issues" | jq -r '.[] | "  \(.identifier) — \(.title)"' | head -10
+      { echo "$issues" | jq -r '.[] | "  \(.identifier) — \(.title)"' | head -10; } || true
     fi
   done
   # Local in-flight
@@ -506,8 +509,9 @@ $highlights" || true
 
 cmd_verify() {
   local cmd
-  cmd=$(grep -A20 "^## Pre-Deploy Gate" "$(pk_config_path)" 2>/dev/null \
-    | grep -A20 '^```' | grep -v '^```' | head -10)
+  # `|| true` — same pipefail-grep-no-match issue as elsewhere
+  cmd=$({ grep -A20 "^## Pre-Deploy Gate" "$(pk_config_path)" 2>/dev/null \
+    | grep -A20 '^```' | grep -v '^```' | head -10; } || true)
   if [ -z "$cmd" ]; then
     echo "No Pre-Deploy Gate configured in method.config.md."
     return 1
