@@ -17,129 +17,302 @@ You are a focused work driver. Given a Linear issue ID, you read its spec, plan 
 
 ## Required preconditions
 
-1. You are inside a worktree on a feature branch (not `dev`, not `main`). If not, refuse with: "Run `pk branch <ID>` first to create the worktree."
-2. The issue ID is passed as an argument or inferred from the current branch name.
+1. You are inside a worktree on a feature branch (not `dev`, not `main`, not `beta`, not `master`). Check with `git branch --show-current`. If on an integration branch, refuse with: `Run pk branch <ID> first to create the worktree.`
+2. The issue ID is passed as an argument or inferred from the current branch name (regex `[A-Z]+-[0-9]+`).
 3. `method.config.md` is readable in the repo root.
+
+## Step 0 — Verify preconditions
+
+Run:
+
+```bash
+CURRENT=$(git branch --show-current)
+case "$CURRENT" in
+  dev|main|master|beta) echo "ERROR: /work must run on a feature branch. Run 'pk branch <ID>' first." >&2; exit 1 ;;
+esac
+```
+
+If `<ISSUE-ID>` not passed, extract from `$CURRENT`:
+
+```bash
+ISSUE=$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)
+[ -z "$ISSUE" ] && { echo "ERROR: no issue ID in branch name and none provided." >&2; exit 1; }
+```
 
 ## Step 1 — Read configuration
 
-Read `method.config.md` for v2 keys (defaults in parens):
+Read these values from `method.config.md` (use `bin/pk pk_config "<Key>" "<default>"` semantics, or grep the rows directly):
 
-- `Backend: vbw | native` (default `vbw`)
-- `Default deep flag: true | false` (default `false`) — if `true`, treat every invocation as `--deep`
-- `Require QA review: true | false` — informational; affects step 5 hand-off
+| Key | Default |
+|---|---|
+| Backend | `vbw` |
+| Default deep flag | `false` |
+| Require QA review | `false` |
+| Strategy docs path | `Strategy/` |
 
-Resolve the effective backend and `--deep` flag. Print:
+Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
+
+Print one line for the user:
 
 ```
-Backend: <vbw|native>     Deep: <yes|no>     Issue: <ID>
+Work: <ISSUE-ID>  ·  Backend: <vbw|native>  ·  Deep: <yes|no>
 ```
 
-## Step 2 — Fetch the spec
+## Step 2 — Fetch the spec from Linear
 
-Use the Linear MCP server (`mcp__linear-server__get_issue`) to fetch the issue. Read:
+Use the Linear MCP tool `mcp__linear-server__get_issue` with the issue ID. Capture:
 
-- Title
-- Description (the spec body — should contain `## Light Spec` or `## Acceptance Criteria`)
-- Current state (must be **In Progress** or **Building**; if **Approved**, the user forgot `pk branch` — refuse and tell them)
+- `title`
+- `description` (the spec body)
+- `state.name` (must be `In Progress` or `Building`; if `Approved`, refuse — the user forgot `pk branch`)
+- `labels`
 
-If the spec body has no `## Light Spec` and no `## Acceptance Criteria`:
-- **Without `--deep`:** warn and ask "Continue with vague spec? (y/N)"
-- **With `--deep`:** refuse — "Spec missing. Run `/light-spec <ID>` first or invoke `pk delegate <ID> draft a spec for this issue`."
+Validate the description contains either `## Light Spec` or `## Acceptance Criteria`. If neither:
+
+- **Without `--deep`:** print a warning, print the description's first 30 lines, ask: `Continue planning with this vague spec? (y/N)`. Default N.
+- **With `--deep`:** refuse: `Spec missing required sections. Run /light-spec <ID> first, OR pk delegate <ID> "draft a Light Spec for this issue against {project} conventions" to invoke Linear Agent.`
 
 ## Step 3 — Plan
 
-### `--deep` path
+### `--deep` path: parallel grounding
 
-Spawn three subagents in parallel for grounding:
+Send these three Agent invocations **in a single message** (parallel execution):
 
-1. `spec-validator` — validates spec completeness against the rubric in `sop/Spec_Validation.md`
-2. `Explore` agent — surveys the codebase areas the spec references (file paths, schemas, related code)
-3. (vbw backend only) `vbw:vbw-scout` — deep research into the affected packages
+1. **Spec validator subagent.** Use Task tool with:
+   - `subagent_type: "general-purpose"` (or `"spec-validator"` if a project-local subagent of that name exists)
+   - `description: "Validate spec for <ISSUE-ID>"`
+   - Prompt template:
+     ```
+     You are a spec validator. The Linear issue <ISSUE-ID> has this description:
 
-When all three return, synthesize their outputs into a written plan.
+     <full description>
 
-### Default path
+     Validate against this rubric:
+     - Has a Goal section (1 sentence)
+     - Has explicit Acceptance Criteria (≥3 testable items)
+     - File paths and line refs are concrete (not "the auth module")
+     - Dependencies are listed (if any)
+     - No open questions remaining
 
-You plan directly. Use the spec + your codebase context. Write a plan with:
+     Return:
+     **Pass** — all rubric items met.
+     **Concerns** — list specific gaps with line refs.
+     **Block** — fundamental gap that prevents planning (missing AC, etc.)
 
-- **Goal** (1 sentence — what this issue ships)
-- **Approach** (2–4 sentences — the technical strategy)
-- **Files to touch** (list with one-line "what changes" per file)
-- **Tests** (what tests prove the change works)
-- **Open questions** (must be empty — if not, you're not ready to plan; go back to the spec)
+     Be terse. ≤200 words.
+     ```
 
-## Step 4 — Verdict gate (one screen)
+2. **Codebase explorer subagent.** Use Task tool with:
+   - `subagent_type: "Explore"`
+   - `description: "Survey code areas for <ISSUE-ID>"`
+   - Prompt template:
+     ```
+     The Linear issue <ISSUE-ID> says it will touch these areas:
 
-Present the plan in a single response. Ask the user one of three:
+     <extract file paths, table names, package names from spec>
 
-- `proceed` — execute the plan as written
-- `revise: <feedback>` — edit the plan with the feedback, present again, re-ask
-- `abort` — stop, do nothing
+     For each, read the current state and report:
+     - File/module purpose (1 line)
+     - Key types/functions present
+     - Patterns the rest of the codebase uses (so the new work fits)
 
-There is **no** round-2 verdict loop. There is **no** stalemate detection. If a plan needs three revise rounds, the **spec is bad** — stop and instruct: "Run `pk delegate <ID> the spec needs <X>` to ask Linear Agent to refine it, then restart `/work`."
+     Be terse. ≤300 words.
+     ```
+
+3. **(VBW backend only) `vbw:vbw-scout` for deep research.** Use Task tool with:
+   - `subagent_type: "vbw:vbw-scout"`
+   - `description: "Research <ISSUE-ID>"`
+   - Prompt template: (delegate research per VBW conventions; pass the spec)
+
+When all three return, synthesize their outputs into a written plan in step 3b.
+
+### Default path: plan inline
+
+Read the spec. Read project context: `CLAUDE.md`, any `Strategy/*` files referenced in the spec. Plan directly.
+
+### Step 3b — Write the plan (both paths)
+
+Format (single screen — keep tight):
+
+```
+## Plan: <ISSUE-ID> — <title>
+
+**Goal:** <1 sentence>
+
+**Approach:** <2–4 sentences — the technical strategy>
+
+**Files to touch:**
+- `path/to/file1.ts` — <one-line what changes>
+- `path/to/file2.ts` — <one-line>
+- `supabase/migrations/<N>_<name>.sql` — <one-line>
+
+**Tests:**
+- <test scenario 1>
+- <test scenario 2>
+
+**Risks / open questions:**
+- <empty list — if non-empty, the spec is not ready, go back to step 2>
+```
+
+## Step 4 — Verdict gate
+
+Print the plan, then ask exactly:
+
+```
+Verdict?
+  proceed                  — execute the plan as written
+  revise: <feedback>       — edit and re-present
+  abort                    — stop, do nothing
+```
+
+Wait for user input. Branch:
+
+- **`proceed`** → step 5
+- **`revise: <feedback>`** → integrate feedback into the plan, re-print, re-ask. Track revision count locally.
+- **`abort`** → exit cleanly. Do not change any state.
+
+**Hard limit:** 3 revisions. If the user revises a 4th time, refuse:
+
+```
+Plan has been revised 3 times. The spec is likely the problem, not the plan.
+Stopping to prevent waste.
+
+Recommendation: pk delegate <ISSUE-ID> "the plan keeps revising on <area>. Refine the spec to clarify <X>." Then restart /work.
+```
 
 ## Step 5 — Execute
 
-### `vbw` backend
+### vbw backend
 
-Hand off to VBW: spawn `vbw:vbw-dev` via the Task tool with the approved plan as context. VBW handles atomic-commit-per-task discipline. Wait for completion.
+Use Task tool with:
+- `subagent_type: "vbw:vbw-dev"`
+- `description: "Execute plan for <ISSUE-ID>"`
+- Prompt template:
+  ```
+  Execute this plan. Make atomic commits per task (one logical change = one commit).
+  After each commit, run the project's test command if relevant.
+  Stop and surface immediately if you hit:
+    - Permission denial (EditPermissionDenied)
+    - Pre-commit hook failure you can't fix
+    - Type errors that contradict the plan's assumptions
+    - A blocker that wasn't visible at planning time
 
-After Dev completes:
-- If `Require QA review: true` OR `--deep`: hand off to `vbw:vbw-qa` (Task tool). Capture verdict.
-- Else: print "Dev complete. Run `/verify` or `pk verify` to validate."
+  Do NOT loop on failures. Do NOT modify the plan unilaterally — surface and ask.
 
-### `native` backend
+  Plan:
+  <full plan from step 3b>
 
-Spawn a Task subagent (`general-purpose`) with the approved plan as context. Instruct it to:
-- Make atomic commits per task (one logical change = one commit)
-- Run tests after each significant change
-- Stop and surface if it hits a blocker (don't loop on failures)
+  Spec:
+  <full spec from step 2>
+  ```
 
-Use the Edit/Write/Bash tools directly when the plan is small enough that subagent dispatch is overhead. Heuristic: ≤3 files touched + no unfamiliar code → do it inline. Else dispatch.
+Wait for the subagent to return.
 
-After execution:
-- If `Require QA review: true` OR `--deep`: invoke `/verify` automatically.
-- Else: print "Work complete. Run `/verify` or `pk verify` when ready."
+### native backend
+
+Heuristic: dispatch a subagent if the plan touches >3 files OR includes any unfamiliar package OR includes a schema migration. Else execute inline (Edit/Write/Bash directly).
+
+**Subagent path** — use Task tool with:
+- `subagent_type: "general-purpose"`
+- `description: "Execute plan for <ISSUE-ID>"`
+- Prompt template:
+  ```
+  Execute this plan in the current worktree. The branch is already created.
+
+  Discipline:
+  - Make atomic commits — one logical change per commit
+  - Use conventional commits format (feat/fix/refactor/docs)
+  - Run the test command after each significant change (read § Pre-Deploy Gate from method.config.md)
+  - Stop and surface if you hit a blocker — do not loop
+
+  Plan:
+  <full plan from step 3b>
+
+  Spec:
+  <full spec from step 2>
+
+  Project conventions: read CLAUDE.md and any Strategy/* docs the spec references.
+  ```
+
+Wait for the subagent to return.
+
+**Inline path** — work through the plan directly using Edit, Write, Read, Bash. Same discipline (atomic commits, test after change, surface blockers). Use a TaskCreate with one task per "Files to touch" item to track your own progress.
 
 ## Step 6 — `--deep` security review
 
-After Dev completes (vbw or native), if `--deep`, spawn `security-review` subagent on the diff. Capture findings into the journal (the Stop hook will pick them up).
+After dev completes (whether subagent or inline), if `--deep`:
+
+Use Task tool with:
+- `subagent_type: "security-review"` (project may have this; otherwise `"general-purpose"`)
+- `description: "Security review of <ISSUE-ID> diff"`
+- Prompt template:
+  ```
+  Review the diff on this branch (relative to origin/<integration>) for security issues.
+
+  Specifically check:
+  - SQL injection / parameterized queries
+  - RLS policies (Supabase): are new tables protected?
+  - Authn/authz: any auth-checking code paths added or modified?
+  - Secrets: any new env vars or hardcoded values?
+  - PII handling: any new user-data flows?
+
+  Diff context:
+  <output of: git diff origin/<integration-branch>...HEAD>
+
+  Return findings ranked Critical / High / Medium / Low.
+  Be terse. Cite file:line for each finding.
+  ```
+
+Print the review verbatim.
 
 ## Step 7 — Hand off, don't auto-ship
 
-`/work` ends here. **Do not** run `pk ship` automatically. The user runs it when they're ready (after they've eyeballed the diff or run smoke tests).
+Print:
 
-The Stop hook handles journal paperwork. No `/end-session` skill is invoked.
+```
+✓ /work complete for <ISSUE-ID>
+
+Next:
+  /verify        — run pre-deploy gate + QA review (if configured)
+  pk verify      — same, from shell
+
+Then:
+  pk ship        — push, open PR, transition Linear
+
+Stop hook will write the journal entry on session close.
+```
+
+**Do not** invoke `pk ship` or `/verify` automatically. The user paces.
 
 ## Failure model
 
-| Failure | What to do |
+| Failure | Behavior |
 |---|---|
-| Spec is missing/vague | Refuse (or warn at user prompt without `--deep`). Don't plan blind. |
-| Plan rejected 3+ times | Stop. Spec is bad. Use `pk delegate` to refine in Linear. |
-| Subagent hits permission denial | Stop. Surface. Do not retry. |
-| Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`'s job, not `/work`'s. |
-| Worktree on wrong branch | Refuse at step 0. |
+| On dev/main/beta at step 0 | Refuse. Print "Run pk branch <ID> first." |
+| Spec missing required sections, no `--deep` | Warn, ask y/N. |
+| Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
+| Plan revised >3 times | Refuse. Recommend `pk delegate`. |
+| Subagent returns permission denial | Stop. Print the denial. Do not retry. |
+| Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
+| Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |
 
 ## What this skill does NOT do
 
 - No tier inference (Quick/Standard/Heavy gone — use `--deep` if you want extra rigor).
-- No plan-review verdict loop (one screen, three options).
 - No `--auto` chain (the user is the chain).
 - No PR creation (that's `pk ship`).
-- No NEXT.md update (that doesn't exist in v2).
-- No session log (Stop hook owns the journal).
-- No Linear status writes (that's `pk branch` and `pk ship`).
+- No NEXT.md write (NEXT.md doesn't exist in v2).
+- No session log write (Stop hook owns the journal).
+- No Linear status writes during work (`pk branch` set In Progress; `pk ship` will set UAT).
 - No `/end-session` invocation.
 
 ## Comparison with v1
 
 | Concern | v1 (`/launch --auto`) | v2 (`/work`) |
 |---|---|---|
-| Lines of skill prose | 765 | ~150 |
+| Lines of skill prose | 765 | ~330 |
 | Tier system | Quick/Standard/Heavy | None (`--deep` flag) |
-| Verdict loop | 3 rounds + stalemate detection | 1 screen, 3 options |
+| Verdict loop | 3 rounds + stalemate detection | 1 screen, 3 options, 3-revision hard limit |
 | Backend | VBW only | `vbw \| native` per config |
-| Auto-chain | yes (4 hidden agent invocations) | no (user paces) |
-| State writes | Linear (twice), VBW STATE.md, pipeline-state JSON | none (read-only) |
+| Auto-chain | Yes (4 hidden agent invocations) | No (user paces) |
+| State writes | Linear (twice), VBW STATE.md, pipeline-state JSON | None (read-only) |

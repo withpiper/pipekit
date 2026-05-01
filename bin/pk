@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.0"
+PK_VERSION="2.0.0-alpha.2"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -542,6 +542,102 @@ cmd_promote() {
   echo "Open the PR in browser to squash-merge."
 }
 
+cmd_log() {
+  local current
+  current=$(pk_current_branch)
+  if [ -z "$current" ]; then
+    echo "ERROR: not on a branch (detached HEAD?)" >&2
+    return 1
+  fi
+  case "$current" in
+    dev|main|master|beta)
+      echo "On integration branch ($current). Journals are per-feature."
+      return 0 ;;
+  esac
+  local root
+  root=$(pk_repo_root)
+  local journal_in_repo
+  journal_in_repo=$(pk_config "Journal in repo" "true")
+  local journal_path
+  if [ "$journal_in_repo" = "false" ]; then
+    local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/pipekit"
+    journal_path="$state_dir/$(basename "$root")/journal/${current}.md"
+  else
+    journal_path="$root/.pipekit/journal/${current}.md"
+  fi
+  if [ ! -f "$journal_path" ]; then
+    echo "No journal yet for $current."
+    echo "  Expected at: $journal_path"
+    echo "  The Stop hook writes on session close. Wire it via templates/v2/settings-snippet.json."
+    return 0
+  fi
+  cat "$journal_path"
+}
+
+cmd_init() {
+  local root
+  root=$(pk_repo_root) || { echo "ERROR: not in a git repo" >&2; return 1; }
+  local cfg="$root/method.config.md"
+  if [ ! -f "$cfg" ]; then
+    echo "ERROR: method.config.md missing." >&2
+    echo "  Run sync-method.sh first, or copy method.config.template.md to method.config.md." >&2
+    return 1
+  fi
+  echo "── pk init ──"
+  echo ""
+  echo "Checking your method.config.md for v2 keys..."
+  echo ""
+  local needed=("Backend" "Integration branch" "Promote to main" "Require QA review")
+  local missing=()
+  for k in "${needed[@]}"; do
+    local v
+    v=$(pk_config "$k" "")
+    if [ -z "$v" ]; then
+      missing+=("$k")
+    else
+      echo "  ✓ $k: $v"
+    fi
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo ""
+    echo "Missing v2 keys (using defaults):"
+    for k in "${missing[@]}"; do echo "  ⚠ $k"; done
+    echo ""
+    echo "Add the V2 section from method/templates/v2/ or method.config.template.md to set explicitly."
+  fi
+  # Check journal hook
+  echo ""
+  echo "Journal hook:"
+  if [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
+    echo "  ✓ scripts/pipekit-journal-hook.sh present"
+  else
+    echo "  ✗ scripts/pipekit-journal-hook.sh missing — re-sync from a v2 ref"
+  fi
+  if [ -f "$root/.claude/settings.json" ] && grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
+    echo "  ✓ Stop hook wired in .claude/settings.json"
+  else
+    echo "  ⚠ Stop hook not wired"
+    echo "    Add this to .claude/settings.json (merge with existing hooks):"
+    echo ""
+    if [ -f "$root/method/templates/v2/settings-snippet.json" ]; then
+      cat "$root/method/templates/v2/settings-snippet.json" | sed 's/^/      /'
+    fi
+  fi
+  # Linear API key
+  echo ""
+  local key_var key
+  key_var=$(pk_linear_api_key_var)
+  key=$(pk_linear_api_key)
+  if [ -n "$key" ]; then
+    echo "  ✓ \$$key_var is set"
+  else
+    echo "  ✗ \$$key_var not exported. Set in shell rc:"
+    echo "    export $key_var=lin_api_xxx"
+  fi
+  echo ""
+  echo "Next: pk doctor (deeper check) → pk next (find an issue) → pk branch <ID>"
+}
+
 cmd_delegate() {
   local id="${1:-}"
   shift || true
@@ -569,6 +665,8 @@ Subcommands:
   pk promote                      dev → main batch promote
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk doctor                       Diagnose v2 setup (config, env, deps)
+  pk init                         Walkthrough config check + setup hints
+  pk log                          Show journal for current feature branch
   pk help                         Show this help
 
 All subcommands are idempotent. Recovery = rerun the command.
@@ -711,6 +809,8 @@ main() {
     promote)  cmd_promote "$@" ;;
     delegate) cmd_delegate "$@" ;;
     doctor)   cmd_doctor "$@" ;;
+    init)     cmd_init "$@" ;;
+    log)      cmd_log "$@" ;;
     help|-h|--help) cmd_help ;;
     version|-v|--version) cmd_version ;;
     *) echo "Unknown subcommand: $sub" >&2; cmd_help; exit 1 ;;
