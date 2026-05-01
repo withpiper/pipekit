@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.2"
+PK_VERSION="2.0.0-alpha.4"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -106,7 +106,8 @@ pk_issue_prefix() {
 
 pk_linear_gql() {
   local query="$1"
-  local variables="${2:-{\}}"
+  local variables="${2:-}"
+  [ -z "$variables" ] && variables='{}'
   local key
   key=$(pk_linear_api_key)
   if [ -z "$key" ]; then
