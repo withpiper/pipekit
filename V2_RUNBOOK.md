@@ -1,0 +1,220 @@
+# Pipekit v2 — Runbook (alpha.12+)
+
+> **North star:** safe and frictionless. Helps, never adds work.
+
+The v2 daily loop on one page. Read top-to-bottom. Coexists with v1 — v1 commands still work, choose whichever you trust.
+
+---
+
+## One-time setup (per consuming project)
+
+```
+1. ./scripts/sync-method.sh v2.0.0-alpha.12       (or latest tag)
+2. Append "## V2" config block to method.config.md (see V2.md § examples)
+3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
+4. Wire Stop hook into .claude/settings.json       (paste from method/templates/v2/)
+5. ./bin/pk init     →  ./bin/pk doctor            (expect all green)
+```
+
+---
+
+## Per-issue flowchart
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
+└─────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [1] Find next issue                                      │
+  │     ./bin/pk next                                        │
+  │     • reads Linear (Approved, prio desc) + git state     │
+  │     • prints next issue + suggested command              │
+  │     • optional: ./bin/pk status   (full board view)      │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [2] Branch + worktree                                    │
+  │     ./bin/pk branch <ID>                                 │
+  │     • creates feature/<ID>-<3-word-slug>                 │
+  │     • worktree at .worktrees/<ID>-<slug>                 │
+  │     • symlinks .env / .env.local / .mcp.json             │
+  │     • copies parent's bin/pk into worktree (alpha.12+)   │
+  │     • Linear: Approved → In Progress                     │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+       cd .worktrees/<ID>-<slug>
+       claude --dangerously-skip-permissions
+       │
+┌──────┴──────────────────────────────────────────────────────────┐
+│  WORKTREE       cwd: .worktrees/<ID>-<slug>     branch: feature │
+└─────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [3] Plan + execute                                       │
+  │     /work <ID>            (or /work <ID> --deep)         │
+  │     • reads spec from Linear                             │
+  │     • plans (one-screen)                                 │
+  │     • verdict: proceed | revise: <feedback> | abort      │
+  │     • dispatches dev (vbw or native per config)          │
+  │     • atomic commits, gate-aware                         │
+  │     • --deep adds spec-validator + plan-review +         │
+  │       security-review subagents                          │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [4] Verify                                               │
+  │     /verify         (or ./bin/pk verify)                 │
+  │     • runs § Pre-Deploy Gate from method.config.md       │
+  │     • if Require QA review=true: spawns QA subagent      │
+  │     • returns Pass / Partial / Fail with per-AC table    │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+       (Stop hook auto-writes journal entry on session close)
+       │
+       exit                       (back to terminal)
+       cd ~/Projects/<repo>       (back to parent)
+       claude --dangerously-skip-permissions
+       │
+┌──────┴──────────────────────────────────────────────────────────┐
+│  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
+└─────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [5] Ship                                                 │
+  │     ./bin/pk ship           (or --env=<env> or --review) │
+  │     • push (idempotent)                                  │
+  │     • gh pr create against integration branch            │
+  │     • Linear: Building → UAT (or → In Review)            │
+  │     • --review: spawns antagonistic reviewer agent       │
+  │       (alpha.12: prints invocation; alpha.13: automated) │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [6] Merge PR (manual, GitHub UI)                         │
+  │     • feature → dev: merge-commit (history visibility)   │
+  │     • feature → main: squash (single commit per release) │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [7] Cleanup                                              │
+  │     ./bin/pk done <ID>                                   │
+  │     • verifies PR merged                                 │
+  │     • posts journal highlights to Linear                 │
+  │     • Linear: UAT → Done                                 │
+  │     • removes worktree, deletes local branch             │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+       ◇ accumulated 1-3 dev merges?
+              │
+       No  ───┼───→  loop to [1]
+              │
+       Yes ───┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [8] Promote dev → main      (separate, batched)          │
+  │     ./bin/pk promote                                     │
+  │     • only runs if Promote to main: true in config       │
+  │     • git pull dev, run pre-deploy gate                  │
+  │     • opens dev → main PR (squash-merge per ruleset)     │
+  └──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Command cheat sheet
+
+| # | Step | Command | Where | Auth |
+|---|---|---|---|---|
+| 1 | Find next | `./bin/pk next` | parent, dev | reads Linear |
+| 1 | Quick status | `./bin/pk status` | parent | reads Linear |
+| 2 | Branch | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
+| 3 | Plan + execute | `/work <ID>` | worktree | reads Linear |
+| 3 | (Variant) | `/work <ID> --deep` | worktree | reads Linear; spawns 3 grounding agents |
+| 4 | Verify | `/verify` or `./bin/pk verify` | worktree | local-only |
+| 5 | Ship | `./bin/pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
+| 5 | (Variant) | `./bin/pk ship --review` | worktree | + spawns antagonistic reviewer |
+| 5 | (Variant) | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
+| 7 | Cleanup | `./bin/pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree |
+| 8 | Promote | `./bin/pk promote` | parent, dev | dev → main batch |
+| meta | Diagnose | `./bin/pk doctor` | anywhere | config + API ping |
+| meta | Bootstrap | `./bin/pk init` | repo root | walks setup |
+| meta | View journal | `./bin/pk log` | worktree, feature | local-only |
+| meta | Linear Agent | `./bin/pk delegate <ID> <prompt>` | anywhere | posts @Linear-mentioned comment |
+| meta | Help | `./bin/pk help` | anywhere | — |
+
+---
+
+## Configuration (`method.config.md` § V2)
+
+| Key | Values | Default | Used by |
+|---|---|---|---|
+| **Backend** | `vbw` \| `native` | `vbw` | `/work` agent dispatch |
+| **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` PR base |
+| **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` enabled |
+| **Require QA review** | `true` \| `false` | `false` | `/verify` runs QA subagent |
+| **Default deep flag** | `true` \| `false` | `false` | `/work` always uses `--deep` |
+| **Ship environments** | comma list | `dev,main` | `pk ship --env=<name>` |
+| **Linear API key env var** | name | `LINEAR_API_KEY` | `pk` Linear access |
+| **Journal in repo** | `true` \| `false` | `true` | Stop-hook journal location |
+
+Secret resolution priority (alpha.9+): **`.env.local` > `.env` > process env**.
+
+---
+
+## Recovery (one rule)
+
+**Rerun the command.** Every `pk *` is idempotent against Linear+git ground truth.
+
+| Failure | Behavior |
+|---|---|
+| `pk branch` mid-failure | Rerun. Worktree exists? skip. Linear correct? skip. |
+| `/work` interrupted during plan | Rerun. Plan committed? skip to dev. |
+| `pk ship` after PR opens but Linear didn't transition | Rerun. PR exists? skip create, transition only. |
+| `pk done` before merge | Refuses with "PR not merged yet." Merge first, retry. |
+| `pk done` from inside worktree | Refuses. `exit && cd ~/Projects/<repo> && claude` then retry with `<ID>` arg. |
+| Stop hook fails | Best-effort — never blocks the session. Manual `pk log` works regardless. |
+
+If a `pk *` rerun doesn't resolve in one cycle, fall back to v1 (`/branch --linear`, `/launch --auto`, `/end-session`). Capture the failure and we patch in next alpha.
+
+---
+
+## Coexistence with v1
+
+| Step | v1 | v2 |
+|---|---|---|
+| Find next | `cat NEXT.md` | `pk next` |
+| Status | `/linear-status` | `pk status` |
+| Branch | `/branch --linear <ID>` | `pk branch <ID>` |
+| Session start | `/start-session` | (none — Stop hook handles paperwork) |
+| Plan + work | `/launch <ID> --auto` | `/work <ID>` |
+| Verify | `/vbw:vibe --verify` | `/verify` |
+| End session | `/end-session` | (Stop hook) |
+| Open PR | `/launch <ID> --close` | `pk ship` |
+| Cleanup | `/branch finish <slug>` | `pk done <ID>` |
+| Promote | `/g-promote-main` | `pk promote` |
+
+Both work. Switch back at any time. v2 commands are non-colliding.
+
+---
+
+## Backlog
+
+- **alpha.13** — automated subagent dispatch from `pk ship --review` (currently prints invocation, doesn't auto-run)
+- **alpha.13** — `pk done` — extract richer journal highlights for Linear comment
+- **beta.1** — multi-env `pk ship --env=<env>` for Piper (Vercel + Supabase branch + LaunchDarkly)
+- **beta.1** — skills directory reorg: `skills/{loop,stage0,orthogonal}/` subdirs
+- **beta.2** — GitHub Actions workflow `pr-review.yml` — antagonistic review on PR open (CI-side)
+- **GA** — delete v1 skills (currently coexisting), retag `RUNBOOK.md` as v2-only
+- **GA** — `pk install` global installer so `pk` is on PATH (no `./bin/pk` prefix)
