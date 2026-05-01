@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.6"
+PK_VERSION="2.0.0-alpha.7"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -121,9 +121,10 @@ pk_linear_gql() {
 }
 
 # Get issue by identifier (e.g. "RS-30"). Prints JSON.
+# Minimal field set — only fields callers (cmd_branch, cmd_ship) actually use.
 pk_linear_issue() {
   local id="$1"
-  local q='query($id: String!) { issue(id: $id) { id identifier title state { id name type } branchName description url assignee { name } } }'
+  local q='query($id: String!) { issue(id: $id) { id identifier title } }'
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -r '.data.issue // empty'
 }
 
