@@ -89,12 +89,34 @@ The v2 daily loop on one page. Read top-to-bottom. Coexists with v1 — v1 comma
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [5] Ship                                                 │
-  │     ./bin/pk ship           (or --env=<env> or --review) │
+  │     ./bin/pk ship           (or --env=<env>)             │
   │     • push (idempotent)                                  │
   │     • gh pr create against integration branch            │
   │     • Linear: Building → UAT (or → In Review)            │
-  │     • --review: spawns antagonistic reviewer agent       │
-  │       (alpha.12: prints invocation; alpha.13: automated) │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [5b] Antagonistic PR review  (RECOMMENDED — opt-in)      │
+  │      ./bin/pk ship --review     OR                       │
+  │      Invoke pr-review-toolkit:code-reviewer manually     │
+  │                                                          │
+  │      • Spawns reviewer subagent against the diff         │
+  │      • Rubric: auth correctness, brand hygiene, test     │
+  │        coverage gaps, prod-posture invariants,           │
+  │        unspec'd-but-needed cross-cutting concerns        │
+  │      • Posts findings as PR review comment via gh REST   │
+  │      • Severity-ranked: Critical / High / Medium / Low   │
+  │                                                          │
+  │      Why: catches things /work and /verify don't —       │
+  │      they validate spec adherence, the reviewer plays    │
+  │      devil's advocate. RS-60 ship found 1 critical +     │
+  │      3 high real issues this way. Don't skip on          │
+  │      anything auth/security/financial.                   │
+  │                                                          │
+  │      alpha.12 status: --review prints the invocation     │
+  │      template; you copy-run it. alpha.13 will auto-      │
+  │      dispatch the subagent and post directly.            │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -144,8 +166,8 @@ The v2 daily loop on one page. Read top-to-bottom. Coexists with v1 — v1 comma
 | 3 | (Variant) | `/work <ID> --deep` | worktree | reads Linear; spawns 3 grounding agents |
 | 4 | Verify | `/verify` or `./bin/pk verify` | worktree | local-only |
 | 5 | Ship | `./bin/pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
-| 5 | (Variant) | `./bin/pk ship --review` | worktree | + spawns antagonistic reviewer |
 | 5 | (Variant) | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
+| **5b** | **Antagonistic review** | **`./bin/pk ship --review`** | **worktree** | **spawns code-reviewer agent → posts findings to PR** |
 | 7 | Cleanup | `./bin/pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree |
 | 8 | Promote | `./bin/pk promote` | parent, dev | dev → main batch |
 | meta | Diagnose | `./bin/pk doctor` | anywhere | config + API ping |
@@ -170,6 +192,53 @@ The v2 daily loop on one page. Read top-to-bottom. Coexists with v1 — v1 comma
 | **Journal in repo** | `true` \| `false` | `true` | Stop-hook journal location |
 
 Secret resolution priority (alpha.9+): **`.env.local` > `.env` > process env**.
+
+---
+
+## Antagonistic PR review (the third gate)
+
+The v2 pipeline has three gates, only the first two are mandatory:
+
+| Gate | What it catches | When |
+|---|---|---|
+| `/work` plan-verdict | Spec ambiguity, missing AC coverage, scope mismatch | Before any code is written |
+| `/verify` (gate + QA) | Build/lint/type errors, AC traceability, omissions, scope creep | After code is written, before push |
+| **`pk ship --review`** | **Cross-cutting concerns NOT in the spec** — auth posture, security headers, brand hygiene, test rot, double-click races, race conditions, things-the-spec-didn't-think-to-mention | **After PR opens, before merge** |
+
+The first two validate **spec adherence**. The third plays **devil's advocate** — finds what the spec didn't ask but should have.
+
+### When to use `--review`
+
+Always opt in for:
+- Anything touching auth, RLS, sessions, OAuth
+- Financial logic (math, FX, tax, invoicing)
+- New external API integrations
+- Security headers / CSP changes
+- Anything labeled `auth-rls`, `payments`, `pii`, `compliance`, `breaking-change`
+
+Skip for:
+- Pure copy/UI tweaks
+- Internal-only refactors with no external surface
+
+### Manual invocation (alpha.12 — until alpha.13 automates it)
+
+If `pk ship --review` doesn't dispatch automatically, invoke directly:
+
+```
+Invoke `pr-review-toolkit:code-reviewer` agent on PR #<N> with antagonistic
+rubric. Cite file:line for findings. Group by severity. Post review via:
+  gh api -X POST repos/<owner>/<repo>/pulls/<N>/reviews \
+    -f event=COMMENT -f body="<full markdown>"
+```
+
+### What it found tonight (RS-60 → PR #82)
+
+- **Critical:** `enable_signup=false` documented but not boot-enforced
+- **High:** e2e tests not in pre-deploy gate (will rot)
+- **High:** `validateRedirectTo` zero e2e coverage for open-redirect attacks
+- **High:** Server Action double-click race creates orphan PKCE codes
+
+All four became RS-61 — none would have been caught by `/work` or `/verify` alone.
 
 ---
 
