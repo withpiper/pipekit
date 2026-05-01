@@ -43,7 +43,7 @@ case "$CURRENT" in
     echo "  integration history. Run /end-session from inside the feature" >&2
     echo "  worktree, BEFORE /launch --close opens the PR." >&2
     echo "" >&2
-    echo "  See RUNBOOK.md § The loop, step 10." >&2
+    echo "  See RUNBOOK.md steps [5]–[6]." >&2
     exit 1
     ;;
 esac
