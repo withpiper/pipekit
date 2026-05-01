@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.10"
+PK_VERSION="2.0.0-alpha.11"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -171,12 +171,19 @@ pk_linear_issues_in_state() {
 pk_linear_set_state() {
   local id="$1"
   local state_name="$2"
-  local team_id
-  team_id=$(pk_team_id)
-  # First, fetch state ID by name
-  local state_q='query($team: String!, $name: String!) { workflowStates(filter: {team: {id: {eq: $team}}, name: {eq: $name}}) { nodes { id name } } }'
+  # Filter workflowStates by team NAME (reliable — pk_team_name reads
+  # method.config.md robustly). Earlier versions used team.id.eq with
+  # pk_team_id, but Team ID may be empty in many configs and the filter
+  # silently returned no states, masquerading as "state not found".
+  local team_name
+  team_name=$(pk_team_name)
+  if [ -z "$team_name" ]; then
+    echo "ERROR: Team name not set in method.config.md" >&2
+    return 1
+  fi
+  local state_q='query($team: String!, $name: String!) { workflowStates(filter: {team: {name: {eq: $team}}, name: {eq: $name}}) { nodes { id name } } }'
   local state_id
-  state_id=$(pk_linear_gql "$state_q" "$(jq -n --arg team "$team_id" --arg name "$state_name" '{team:$team, name:$name}')" \
+  state_id=$(pk_linear_gql "$state_q" "$(jq -n --arg team "$team_name" --arg name "$state_name" '{team:$team, name:$name}')" \
     | jq -r '.data.workflowStates.nodes[0].id // empty')
   if [ -z "$state_id" ]; then
     echo "ERROR: state '$state_name' not found in Linear team" >&2
@@ -464,13 +471,29 @@ cmd_ship() {
 }
 
 cmd_done() {
+  local id="${1:-}"
   local current
-  current=$(pk_current_branch)
   local issue
-  issue=$(pk_branch_issue_id)
-  if [ -z "$issue" ]; then
-    echo "ERROR: not on a feature branch" >&2
-    return 1
+  if [ -n "$id" ]; then
+    # Explicit ID — find the matching feature branch by glob.
+    # This is the supported path: pk done is meant to run from the parent
+    # repo (so it can delete the worktree), where the current branch is
+    # 'dev' or 'main', not the feature branch being cleaned up.
+    issue="$id"
+    current=$(git branch --list "feature/${id}-*" --format="%(refname:short)" 2>/dev/null | head -1)
+    if [ -z "$current" ]; then
+      echo "ERROR: no local feature branch found matching feature/${id}-*" >&2
+      return 1
+    fi
+  else
+    # No arg — must be on the feature branch (rare; can only happen if
+    # called from inside a worktree but worktree-removal will refuse).
+    current=$(pk_current_branch)
+    issue=$(pk_branch_issue_id)
+    if [ -z "$issue" ]; then
+      echo "ERROR: pass <ISSUE-ID> or run from a feature branch (e.g. pk done RS-60)" >&2
+      return 1
+    fi
   fi
 
   # Verify PR is merged
