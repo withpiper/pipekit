@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.7"
+PK_VERSION="2.0.0-alpha.8"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -85,7 +85,28 @@ pk_linear_api_key_var() {
 pk_linear_api_key() {
   local var
   var=$(pk_linear_api_key_var)
-  eval echo "\${$var:-}"
+  # First: process env (most common — set in shell rc)
+  local val
+  val=$(eval echo "\${$var:-}")
+  if [ -n "$val" ]; then
+    echo "$val"
+    return 0
+  fi
+  # Fallback: source project-local .env files. Robust against Claude Code
+  # bash subshells that don't inherit the user's shell exports.
+  # Order: .env.local (private overrides) → .env (project defaults).
+  local root
+  root=$(pk_repo_root) || { echo ""; return 0; }
+  for f in "$root/.env.local" "$root/.env"; do
+    if [ -f "$f" ]; then
+      val=$(grep -E "^(export +)?${var}=" "$f" 2>/dev/null | tail -1 | sed -E "s/^(export +)?${var}=//; s/^['\"]//; s/['\"]$//")
+      if [ -n "$val" ]; then
+        echo "$val"
+        return 0
+      fi
+    fi
+  done
+  echo ""
 }
 
 pk_team_name() {
