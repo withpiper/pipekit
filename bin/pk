@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.9"
+PK_VERSION="2.0.0-alpha.10"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -174,9 +174,7 @@ pk_linear_set_state() {
   local team_id
   team_id=$(pk_team_id)
   # First, fetch state ID by name
-  local state_q='query($team: String!, $name: String!) {
-    workflowStates(filter: {team: {id: {eq: $team}}, name: {eq: $name}}) { nodes { id name } }
-  }'
+  local state_q='query($team: String!, $name: String!) { workflowStates(filter: {team: {id: {eq: $team}}, name: {eq: $name}}) { nodes { id name } } }'
   local state_id
   state_id=$(pk_linear_gql "$state_q" "$(jq -n --arg team "$team_id" --arg name "$state_name" '{team:$team, name:$name}')" \
     | jq -r '.data.workflowStates.nodes[0].id // empty')
@@ -200,9 +198,7 @@ pk_linear_set_state() {
     echo "  Linear: $id already in '$state_name' (skip)"
     return 0
   fi
-  local mutation='mutation($id: String!, $state: String!) {
-    issueUpdate(id: $id, input: {stateId: $state}) { success }
-  }'
+  local mutation='mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: {stateId: $state}) { success } }'
   pk_linear_gql "$mutation" "$(jq -n --arg id "$issue_uuid" --arg state "$state_id" '{id:$id, state:$state}')" >/dev/null
   echo "  Linear: $id $current_state → $state_name"
 }
@@ -218,9 +214,7 @@ pk_linear_comment() {
     echo "ERROR: issue $id not found" >&2
     return 1
   fi
-  local mutation='mutation($issue: String!, $body: String!) {
-    commentCreate(input: {issueId: $issue, body: $body}) { success }
-  }'
+  local mutation='mutation($issue: String!, $body: String!) { commentCreate(input: {issueId: $issue, body: $body}) { success } }'
   pk_linear_gql "$mutation" "$(jq -n --arg issue "$issue_uuid" --arg body "$body" '{issue:$issue, body:$body}')" >/dev/null
   echo "  Linear: comment posted on $id"
 }
