@@ -341,7 +341,7 @@ Do **not** auto-advance to `--close`. The user must explicitly invoke it. This i
 
 Invoked when the user returns with verify confirmed (either via `/vbw:vibe --verify` passed, or via project-precedent self-verification on non-VBW-native layouts).
 
-**v1.8.0+ ordering:** the canonical pattern is `/end-session` → `/launch --close`, both inside the worktree on the feature branch. /end-session writes the session log + NEXT.md to the feature branch first; /launch --close then opens the PR with code + log + NEXT.md bundled. One PR per issue. See `RUNBOOK.md` § The loop, steps 10–11.
+**v1.8.0+ ordering:** the canonical pattern is `/end-session` → `/launch --close`, both inside the worktree on the feature branch. /end-session writes the session log + NEXT.md to the feature branch first; /launch --close then opens the PR with code + log + NEXT.md bundled. One PR per issue. See `RUNBOOK.md` steps [5]–[7].
 
 If `/launch --close` is invoked **without** a preceding `/end-session`, proceed normally — the close path is independent. The session log will then need to land via the v1.7.0 cherry-pick workaround (or simply run `/end-session` later from a fresh chore branch off dev). Strongly prefer the new ordering.
 
@@ -515,7 +515,7 @@ After Steps 1–6 complete unchanged (gate validation, tier confirm, dependency 
 
    **Recommend `pause-for-end-session` for QA Pass.** The auto-chain stops here cleanly; the user runs `/end-session` (writes log + NEXT.md to the feature branch), then `/launch --close` (opens the single PR with everything bundled). One PR per issue, no cherry-pick.
 
-   `close-now` is preserved for users who want the old behavior — but warn them it triggers the cherry-pick workaround documented in RUNBOOK.md (cherry-pick the session log onto a chore branch off dev → second PR).
+   `close-now` is preserved for users who want the old behavior — but warn them it triggers the cherry-pick workaround documented in `RUNBOOK_legacy.md` (cherry-pick the session log onto a chore branch off dev → second PR).
 
    On `pause-for-end-session`, exit cleanly with NEXT.md pointing at `/end-session` (or, since /end-session is the next step regardless, just exit and let the user invoke it). Linear stays in Building. On `close-now`, continue to step 7 (legacy path). On `pause-here` (Fail/Partial), exit cleanly. On `re-execute-with-scope` (Fail/Partial), prompt for fix scope and re-spawn `vbw:vbw-dev` (loop back to step 4 with the new scope; do NOT re-run plan-review). On `abort`, exit.
 
