@@ -568,6 +568,7 @@ Subcommands:
   pk verify                       Run the project's pre-deploy gate
   pk promote                      dev → main batch promote
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
+  pk doctor                       Diagnose v2 setup (config, env, deps)
   pk help                         Show this help
 
 All subcommands are idempotent. Recovery = rerun the command.
@@ -575,6 +576,109 @@ All subcommands are idempotent. Recovery = rerun the command.
 Config: method.config.md in repo root. v2 keys are optional (sensible defaults).
 North star: safe and frictionless. Helps, never adds work.
 EOF
+}
+
+cmd_doctor() {
+  local fail=0
+  local warn=0
+  echo "── pk doctor ──"
+  echo ""
+  # Repo
+  local root
+  root=$(pk_repo_root || echo "")
+  if [ -n "$root" ]; then
+    echo "  ✓ Git repo: $root"
+  else
+    echo "  ✗ Not in a git repo"
+    fail=$((fail+1))
+  fi
+  # Deps
+  for tool in jq gh git curl; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      echo "  ✓ $tool installed"
+    else
+      echo "  ✗ $tool missing"
+      fail=$((fail+1))
+    fi
+  done
+  # Config
+  local cfg
+  cfg=$(pk_config_path 2>/dev/null || echo "")
+  if [ -n "$cfg" ] && [ -f "$cfg" ]; then
+    echo "  ✓ method.config.md found"
+  else
+    echo "  ⚠ method.config.md missing — using defaults"
+    warn=$((warn+1))
+  fi
+  # Linear key
+  local key_var key
+  key_var=$(pk_linear_api_key_var)
+  key=$(pk_linear_api_key)
+  if [ -n "$key" ]; then
+    echo "  ✓ Linear API key set (\$$key_var)"
+  else
+    echo "  ✗ Linear API key not set — export $key_var=lin_api_…"
+    fail=$((fail+1))
+  fi
+  # Linear team
+  local team team_id
+  team=$(pk_team_name)
+  team_id=$(pk_team_id)
+  if [ -n "$team" ]; then
+    echo "  ✓ Linear team: $team"
+  else
+    echo "  ⚠ Linear team name missing in method.config.md"
+    warn=$((warn+1))
+  fi
+  if [ -n "$team_id" ]; then
+    echo "  ✓ Linear team ID set"
+  else
+    echo "  ⚠ Linear team ID missing — pk_linear_set_state may degrade"
+    warn=$((warn+1))
+  fi
+  # Linear API ping
+  if [ -n "$key" ]; then
+    local resp
+    resp=$(pk_linear_gql 'query{viewer{name}}' 2>/dev/null || echo "")
+    local viewer
+    viewer=$(echo "$resp" | jq -r '.data.viewer.name // empty' 2>/dev/null)
+    if [ -n "$viewer" ]; then
+      echo "  ✓ Linear API reachable (viewer: $viewer)"
+    else
+      echo "  ✗ Linear API call failed"
+      fail=$((fail+1))
+    fi
+  fi
+  # Integration branch
+  echo "  • Integration branch: $(pk_integration_branch)"
+  # Backend
+  echo "  • Backend: $(pk_config "Backend" "vbw")"
+  # Journal hook
+  if [ -n "$root" ] && [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
+    echo "  ✓ Journal hook script present"
+  else
+    echo "  ⚠ Journal hook script missing — re-run sync-method.sh from a v2 ref"
+    warn=$((warn+1))
+  fi
+  # Stop hook configured?
+  if [ -n "$root" ] && [ -f "$root/.claude/settings.json" ]; then
+    if grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
+      echo "  ✓ Stop hook wired in .claude/settings.json"
+    else
+      echo "  ⚠ Stop hook not wired — see method/templates/v2/settings-snippet.json"
+      warn=$((warn+1))
+    fi
+  fi
+  echo ""
+  if [ $fail -gt 0 ]; then
+    echo "Result: $fail error(s), $warn warning(s). Fix errors before using pk."
+    return 1
+  fi
+  if [ $warn -gt 0 ]; then
+    echo "Result: $warn warning(s). pk should work but check the items above."
+  else
+    echo "Result: all green. pk is ready."
+  fi
 }
 
 cmd_version() {
@@ -606,6 +710,7 @@ main() {
     verify)   cmd_verify "$@" ;;
     promote)  cmd_promote "$@" ;;
     delegate) cmd_delegate "$@" ;;
+    doctor)   cmd_doctor "$@" ;;
     help|-h|--help) cmd_help ;;
     version|-v|--version) cmd_version ;;
     *) echo "Unknown subcommand: $sub" >&2; cmd_help; exit 1 ;;
