@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.11"
+PK_VERSION="2.0.0-alpha.12"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -257,13 +257,18 @@ pk_worktree_path() {
   echo "$root/.worktrees/${id}"
 }
 
-# Slugify issue title — lowercase, replace non-alnum with -, collapse, trim, max 30 chars.
+# Slugify issue title — lowercase, replace non-alnum with -, collapse, trim,
+# keep first 3 words. Short slugs keep status bars and worktree paths sane.
+# Stop words removed up-front (and, the, of, for, in, on, to, with) so the
+# 3-word window lands on meaningful tokens. e.g. "Wire Microsoft SSO sign-in
+# into /login (app-side)" → "wire-microsoft-sso", not "wire-microsoft-sso-
+# sign-in-into-login-app-side".
 pk_slug() {
   local title="$1"
   echo "$title" \
     | tr '[:upper:]' '[:lower:]' \
-    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
-    | cut -c1-30
+    | sed -E 's/\b(and|the|of|for|in|on|to|with|into|a|an)\b//g; s/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+    | cut -d- -f1-3
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,6 +406,14 @@ cmd_branch() {
     fi
   done
 
+  # Sync parent's bin/pk into the worktree. Worktrees check out the committed
+  # version of bin/pk (often older than the parent's working tree, especially
+  # during alpha when patches land mid-flight). Without this, the worktree
+  # runs an outdated pk while the parent has the fixes.
+  if [ -f "$root/bin/pk" ] && [ "$root" != "$wt_path" ]; then
+    cp "$root/bin/pk" "$wt_path/bin/pk" 2>/dev/null && chmod +x "$wt_path/bin/pk"
+  fi
+
   # Linear status: → In Progress (idempotent)
   pk_linear_set_state "$id" "In Progress" || true
 
@@ -411,9 +424,11 @@ cmd_branch() {
 
 cmd_ship() {
   local env=""
+  local review=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --env=*) env="${1#--env=}"; shift ;;
+      --review) review=true; shift ;;
       *) shift ;;
     esac
   done
@@ -468,6 +483,32 @@ cmd_ship() {
     *) target_state="In Review" ;;
   esac
   pk_linear_set_state "$issue" "$target_state" || pk_linear_set_state "$issue" "In Review" || true
+
+  # Antagonistic review (opt-in via --review). Surfaces issues that /work
+  # and /verify don't catch — security posture, test coverage gaps, double-
+  # click races, etc. Posts findings as a PR review comment.
+  if $review; then
+    echo ""
+    echo "Spawning antagonistic code review against $pr_url..."
+    local pr_number
+    pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
+    cat <<INSTRUCTIONS
+Review the diff antagonistically. Find what could go wrong. Question every
+shortcut. Cite file:line for each finding. Group by severity
+(Critical/High/Medium/Low/Nit). Then post the review as a PR comment via:
+
+  gh api -X POST repos/<owner>/<repo>/pulls/${pr_number}/reviews \\
+    -f event=COMMENT -f body="<your full review markdown>"
+
+PR: $pr_url
+Issue: $issue ($target_state)
+Branch: $current
+INSTRUCTIONS
+    echo ""
+    echo "Run /pr-review-toolkit:review-pr or invoke pr-review-toolkit:code-reviewer"
+    echo "agent with the above instructions. (Automated subagent dispatch from"
+    echo "shell is alpha.13 — for now, copy the instructions into a Claude session.)"
+  fi
 }
 
 cmd_done() {
@@ -703,7 +744,7 @@ Subcommands:
   pk next                         What should I do now?
   pk status                       Quick triage of the Linear board + worktrees
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
-  pk ship [--env=<env>]           Push, gh pr create, Linear → In Review/UAT
+  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → In Review/UAT (optional antagonistic review)
   pk done                         Verify PR merged, cleanup, Linear → Done
   pk verify                       Run the project's pre-deploy gate
   pk promote                      dev → main batch promote
