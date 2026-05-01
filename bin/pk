@@ -136,11 +136,7 @@ pk_linear_issues_in_state() {
     echo "ERROR: Team name not set in method.config.md" >&2
     return 1
   fi
-  local q='query($team: String!, $state: String!) {
-    issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) {
-      nodes { identifier title priority state { name } updatedAt }
-    }
-  }'
+  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title state { name } } } }'
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" '{team:$team, state:$state}')" \
     | jq -r '.data.issues.nodes // []'
 }
