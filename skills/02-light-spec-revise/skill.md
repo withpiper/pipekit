@@ -109,8 +109,19 @@ Parse bulleted lists (`*` or `-` prefix) into per-item strings.
 **If Verdict is `Pass`:**
 
 1. Report: _"Latest agent verdict is **Pass** (score: X/10). No revision needed."_
-2. If Non-Blocking Improvements exist, offer to apply them opt-in **per item** (see Phase 7 rules).
-3. Exit if user declines.
+2. If Non-Blocking Improvements exist, walk through them interactively — **one `AskUserQuestion` call per improvement**, with options:
+
+   | Label | Description |
+   |---|---|
+   | `Apply (Recommended)` (or label adjusted to recommendation) | Why this improvement is worth folding in + what it changes in the spec. |
+   | `Defer to follow-up issue` | Skip in this spec; capture as a follow-up Linear issue if the improvement is meaningful but out of scope. |
+   | `Drop` | Reject the suggestion; note rationale in spec's Notes section. |
+
+   For each improvement, the recommendation defaults to **Apply** unless the improvement contradicts an existing decision. Reasoning lives in the description.
+
+   After all improvements: re-present the spec, confirm, then publish per Phase 7 rules.
+
+3. Exit if user declines all and there are no remaining improvements.
 
 **If Verdict is `Revise`:**
 

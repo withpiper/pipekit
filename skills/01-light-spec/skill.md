@@ -103,8 +103,39 @@ Before presenting to the user, audit every section:
 ### Phase 4 — Present and Iterate
 
 1. Show the draft spec to the user.
-2. Ask: _"Want to refine anything before I push this to Linear?"_
-3. Iterate until the user approves.
+2. **If the spec has any items in `## Risks & Open Questions`** — walk through them interactively before publishing:
+
+   ```
+   This spec has N open question(s). Walk through with recommendations? (default Y)
+   ```
+
+   If yes (default), **for each open question**, call the `AskUserQuestion` tool — one question per call so each gets its own dialog. Structure:
+
+   - `header`: short chip (≤12 chars) summarizing the question topic — e.g., "Save view"
+   - `question`: the full question, ending with `?`
+   - `options`: 2–4 mutually-exclusive choices. **First option is your recommendation** with `(Recommended)` suffix on the label. Each option's `description` carries the reasoning + trade-off (1–2 sentences).
+   - The "Other" option is auto-provided by the tool — do not include manually.
+
+   Standard option set per question (adapt as needed):
+
+   | Label | Description |
+   |---|---|
+   | `<recommended action> (Recommended)` | Why this is the best fit + the trade-off the user accepts by picking it. |
+   | `Keep as TBD` | Leave in Risks & Open Questions; defer to planning or implementation. |
+   | `Drop / out of scope` | Remove from this spec entirely. Use when the question reveals the item shouldn't ship in this issue. |
+
+   Add a fourth option only when there's a genuinely distinct alternative to the recommendation (e.g., "Persist now" vs "Persist later") — don't pad to four.
+
+   **After the user answers**, edit the spec inline:
+   - **Recommended / different answer:** move the question from Risks & Open Questions to Decisions, with the chosen path as the resolution
+   - **Keep as TBD:** leave it in Risks & Open Questions; mark `[TBD]`
+   - **Drop / out of scope:** remove the related Requirements/AC entries; note in Notes that the item was dropped
+
+3. Re-present the updated spec (one final read-through) with the new Decisions section visible.
+4. Ask: _"Want to refine anything else before I push this to Linear?"_
+5. Iterate until the user approves.
+
+**Why interactive walk-through:** open questions left in the spec body get visually skimmed and silently shipped as "implicit." Forcing each through `AskUserQuestion` turns every TBD into a deliberate decision (committed / deferred / dropped) — same lesson family as the behavioral-AC discipline above. No question gets lost in prose.
 
 ### Phase 5 — Publish to Linear
 
