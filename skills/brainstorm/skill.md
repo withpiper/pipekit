@@ -19,6 +19,8 @@ This skill is invoked when the user says:
 
 Take a rough idea from the user, explore the codebase to understand feasibility, create a structured analysis, and capture it as a Linear issue.
 
+**Run from the parent project root**, not from inside a `pk branch` worktree. Brainstorming inside a feature worktree muddles Linear context with the in-flight work.
+
 ## Execution Steps
 
 ### Phase 1 — EXPAND (Brainstorm)
@@ -34,8 +36,7 @@ Take a rough idea from the user, explore the codebase to understand feasibility,
    - `priority`: 0 (None) — triage sets real priority later
    - Ask user which project to assign (or leave unassigned)
    - `state`: Triage
-6. If complexity is **High** → suggest creating a detailed spec via `/light-spec`
-7. **Output**: issue identifier and Linear URL
+6. **Output**: issue identifier and Linear URL
 
 ### Phase 2 — HOLD (Disposition)
 
@@ -49,8 +50,10 @@ Immediately after creating the issue, force a disposition decision:
 
 **If Now:**
 - Ask which stage/phase this belongs to
-- Move issue to "Needs Spec" via `mcp__linear-server__save_issue`
-- Inform: _"Ready for `/light-spec {issue}` when you start the phase."_
+- Route by complexity tier (see Complexity Guidelines for tier mapping):
+  - **Quick (Low)** → move to "Approved". Inform: _"Ready for `pk branch {issue}` then `/work {issue}` — no spec needed."_
+  - **Standard (Medium)** → move to "Needs Spec". Inform: _"Ready for `/light-spec {issue}`, then `pk branch {issue}` + `/work {issue}`."_
+  - **Heavy (High)** → move to "Needs Spec". Inform: _"Heavy tier — run `/light-spec {issue}` first; `/launch` will route through full VBW planning."_
 
 **If Later:**
 - Ask for a **trigger type** from the grammar below (parsable triggers are what let `/roadmap-review` auto-surface this later — prose triggers get flagged as manual-review)
@@ -90,9 +93,13 @@ If the disposition is **Now** and the brainstorm is broad, cut to v1 scope:
 
 ## Complexity Guidelines
 
-- **Low (~2-4 hours):** UI-only, simple CRUD, existing infrastructure
-- **Medium (~6-10 hours):** New API endpoint, combines existing systems
-- **High (~12-20+ hours):** New infrastructure, complex logic, multiple integrations → suggest `/speckit`
+Each complexity level maps to a `/launch` tier. The tier determines whether a spec is required and which execution path runs.
+
+| Complexity | `/launch` Tier | Effort | Examples | Spec? |
+|------------|----------------|--------|----------|-------|
+| **Low** | Quick | ~2-4h | UI-only, simple CRUD, existing infrastructure | No — straight to `pk branch` + `/work` |
+| **Medium** | Standard | ~6-10h | New API endpoint, combines existing systems | Yes — `/light-spec` first |
+| **High** | Heavy | ~12-20+h | New infrastructure, complex logic, multiple integrations | Yes — `/light-spec`, full VBW route |
 
 ## Description Template
 
