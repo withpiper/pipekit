@@ -220,7 +220,7 @@ Skip for:
 - Pure copy/UI tweaks
 - Internal-only refactors with no external surface
 
-### Manual invocation (alpha.12 — until alpha.13 automates it)
+### Manual invocation (still required as of alpha.13 — auto-dispatch deferred to alpha.14)
 
 If `pk ship --review` doesn't dispatch automatically, invoke directly:
 
@@ -254,6 +254,8 @@ All four became RS-61 — none would have been caught by `/work` or `/verify` al
 | `pk done` before merge | Refuses with "PR not merged yet." Merge first, retry. |
 | `pk done` from inside worktree | Refuses. `exit && cd ~/Projects/<repo> && claude` then retry with `<ID>` arg. |
 | Stop hook fails | Best-effort — never blocks the session. Manual `pk log` works regardless. |
+| `gh pr view` returns empty / `pk ship` says "no PR" wrongly | GraphQL rate-limited. Alpha.13 added REST fallback in `pk_gh_pr_view` / `pk_gh_pr_create` — rerun. Confirm with `gh api rate_limit --jq '.resources.graphql.remaining'`. |
+| Old VBW hook errors after `/plugin update vbw` | Plugin upgrades within a Claude Code session leave stale in-memory script paths. The disk cache is correct; the running session isn't. Restart Claude Code in the parent **and any active worktrees**. Errors are typically benign noise — restart at convenience, not mid-flow. |
 
 If a `pk *` rerun doesn't resolve in one cycle, fall back to v1 (`/branch --linear`, `/launch --auto`, `/end-session`). Capture the failure and we patch in next alpha.
 
@@ -280,10 +282,25 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 
 ## Backlog
 
-- **alpha.13** — automated subagent dispatch from `pk ship --review` (currently prints invocation, doesn't auto-run)
-- **alpha.13** — `pk done` — extract richer journal highlights for Linear comment
+### Shipped in alpha.13 (2026-05-02)
+
+- REST fallback for `gh pr view` / `gh pr create` (GraphQL rate-limit resilience)
+- `/work --backend=vbw|native` per-invocation override
+- `/brainstorm` + `/brainstorm-review` v2 tier routing
+- Consolidated v2 alpha CHANGELOG entry
+
+### alpha.14 candidates
+
+- Automated subagent dispatch from `pk ship --review` (currently prints invocation, doesn't auto-run)
+- `pk done` — extract richer journal highlights for Linear comment
+- `pk promote` — detect local-edit conflict pattern with incoming dev, offer take-remote option
+- `pk install` global installer so `pk` is on PATH (no `./bin/` prefix)
+
+### beta candidates
+
 - **beta.1** — multi-env `pk ship --env=<env>` for Piper (Vercel + Supabase branch + LaunchDarkly)
 - **beta.1** — skills directory reorg: `skills/{loop,stage0,orthogonal}/` subdirs
 - **beta.2** — GitHub Actions workflow `pr-review.yml` — antagonistic review on PR open (CI-side)
 - **GA** — delete v1 skills (currently coexisting), retag `RUNBOOK.md` as v2-only
 - **GA** — `pk install` global installer so `pk` is on PATH (no `./bin/pk` prefix)
+
