@@ -329,6 +329,32 @@ git push
 - [ ] Merge when ready
 ```
 
+### 6.6 Post Linear comment (visibility)
+
+After fixes are pushed, post a Linear comment on the PR's linked issue summarizing the triage. This closes the mid-loop visibility gap — Linear sees `In Progress → UAT → Done` today, but the *what happened with this review* context lives only on the PR.
+
+Identify the Linear issue from:
+- The PR title's `<TEAM>-<N>:` prefix (e.g. `RS-73: …`), OR
+- The PR body's `Closes <TEAM>-<N>` line, OR
+- The current branch name's `feature/<TEAM>-<N>-…` token.
+
+Post via `pk_linear_comment <ISSUE-ID> "<body>"` (the helper `pk done` uses), or via the Linear MCP `mcp__linear-server__save_comment` tool. Body format:
+
+```markdown
+**`/pr-fix` triage complete** (PR #<N>)
+
+- **Fixed:** <count> (commits <sha1>..<shaN>)
+  - <list each finding briefly>
+- **Rejected:** <count>
+  - <each, with reason — e.g. "C1 — AG Grid var() support verified via MCP">
+- **Deferred:** <count>
+  - <each, with follow-up issue link if opened>
+
+PR: <pr-url>
+```
+
+If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip this step silently — print `(no Linear issue linked; skipping comment)` and continue.
+
 ---
 
 ## Edge Cases

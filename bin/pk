@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0"
+PK_VERSION="2.1.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -151,6 +151,65 @@ pk_linear_issue() {
   local id="$1"
   local q='query($id: String!) { issue(id: $id) { id identifier title } }'
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -r '.data.issue // empty'
+}
+
+# Read the current phase name from .vbw-planning/PHASES.md by extracting
+# the heading text after "## Current Phase:". Returns empty if no PHASES.md
+# or no current-phase heading. Used by phase-aware pk next.
+pk_current_phase_name() {
+  local root phases
+  root=$(pk_repo_root)
+  phases="$root/.vbw-planning/PHASES.md"
+  [ -f "$phases" ] || return 0
+  grep -m1 -E '^## Current Phase:' "$phases" 2>/dev/null \
+    | sed -E 's/^## Current Phase:[[:space:]]*//; s/[[:space:]]+$//'
+}
+
+# Match the current phase name to a linear-map.json project entry and return
+# its Linear project ID (UUID). Returns empty if no match.
+#
+# Matching is fuzzy because PHASES.md and linear-map.json may use different
+# separators ("Phase 2.5 — Vault Redesign" vs "Phase 2.5: Vault Redesign").
+# Strategy: normalize both sides to a "phase-key" by extracting the leading
+# "Phase X.Y" or "Phase X" token and lowercasing the rest for substring match.
+pk_current_phase_project_id() {
+  local root map name
+  root=$(pk_repo_root)
+  map="$root/.vbw-planning/linear-map.json"
+  [ -f "$map" ] || return 0
+  name=$(pk_current_phase_name)
+  [ -z "$name" ] && return 0
+  # Extract leading phase token (e.g. "Phase 2.5" from "Phase 2.5 — Foo")
+  local phase_token
+  phase_token=$(echo "$name" | grep -oE '^Phase [0-9]+(\.[0-9]+)?' | head -1)
+  jq -r --arg name "$name" --arg token "$phase_token" '
+    .projects // {} | to_entries | map(.value)
+    | map(select(
+        .name == $name
+        or ($token != "" and (.name | startswith($token)))
+      ))
+    | .[0].id // empty
+  ' "$map" 2>/dev/null
+}
+
+# Get issues in a state for the current team, scoped to a Linear project ID.
+# Same shape as pk_linear_issues_in_state but adds project filter. Empty
+# project_id falls back to the unscoped query.
+pk_linear_issues_in_state_project() {
+  local state="$1" project_id="$2"
+  local team
+  team=$(pk_team_name)
+  if [ -z "$team" ]; then
+    echo "ERROR: Team name not set in method.config.md" >&2
+    return 1
+  fi
+  if [ -z "$project_id" ]; then
+    pk_linear_issues_in_state "$state"
+    return $?
+  fi
+  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title state { name } } } }'
+  pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" --arg project "$project_id" '{team:$team, state:$state, project:$project}')" \
+    | jq -r '.data.issues.nodes // []'
 }
 
 # Get issues in a state for current team. State name like "Approved".
@@ -400,10 +459,69 @@ cmd_next() {
     echo "Switch to $integration first:  git checkout $integration"
     return 0
   fi
+  # Phase-aware mode if PHASES.md + linear-map.json are present and a
+  # current phase is defined. Falls back to the global "next Approved
+  # anywhere" behaviour when no phase context is available.
+  local phase_name phase_project
+  phase_name=$(pk_current_phase_name)
+  phase_project=$(pk_current_phase_project_id)
+
+  if [ -n "$phase_name" ] && [ -n "$phase_project" ]; then
+    echo "On $current — Phase: $phase_name"
+    echo ""
+    local in_progress approved needs_spec ip_count ap_count ns_count
+    in_progress=$(pk_linear_issues_in_state_project "In Progress" "$phase_project" 2>/dev/null || echo "[]")
+    approved=$(pk_linear_issues_in_state_project "Approved" "$phase_project" 2>/dev/null || echo "[]")
+    needs_spec=$(pk_linear_issues_in_state_project "Needs Spec" "$phase_project" 2>/dev/null || echo "[]")
+    ip_count=$(echo "$in_progress" | jq 'length')
+    ap_count=$(echo "$approved" | jq 'length')
+    ns_count=$(echo "$needs_spec" | jq 'length')
+
+    if [ "$ip_count" -gt 0 ]; then
+      echo "In Progress ($ip_count):"
+      echo "$in_progress" | jq -r '.[] | "  \(.identifier) — \(.title)"'
+      echo ""
+    fi
+    if [ "$ap_count" -gt 0 ]; then
+      echo "Approved — ready for pk branch ($ap_count):"
+      echo "$approved" | jq -r '.[] | "  \(.identifier) — \(.title)"'
+      local next_id
+      next_id=$(echo "$approved" | jq -r '.[0].identifier')
+      echo ""
+      echo "Run:  pk branch $next_id"
+      echo ""
+    fi
+    if [ "$ns_count" -gt 0 ]; then
+      echo "Needs Spec — run /light-spec to advance ($ns_count):"
+      echo "$needs_spec" | jq -r '.[] | "  \(.identifier) — \(.title)"'
+      echo ""
+      if [ "$ap_count" = "0" ]; then
+        local first_ns
+        first_ns=$(echo "$needs_spec" | jq -r '.[0].identifier')
+        echo "Run:  /light-spec $first_ns   (or batch the queue)"
+        echo ""
+      fi
+    fi
+    if [ "$ip_count" = "0" ] && [ "$ap_count" = "0" ] && [ "$ns_count" = "0" ]; then
+      echo "Phase $phase_name has no In Progress / Approved / Needs Spec issues."
+      echo "Check  pk status  for the full board, or update PHASES.md to the next phase."
+    fi
+
+    # Other phases — surface Approved work outside current phase
+    local global_approved global_count outside_count
+    global_approved=$(pk_linear_issues_in_state "Approved" 2>/dev/null || echo "[]")
+    global_count=$(echo "$global_approved" | jq 'length')
+    outside_count=$((global_count - ap_count))
+    if [ "$outside_count" -gt 0 ]; then
+      echo "Other phases: $outside_count Approved issue(s) outside current phase. Use  pk status  to see all."
+    fi
+    return 0
+  fi
+
+  # Legacy fallback — no phase context available
   echo "On $current — looking for next Approved issue in Linear..."
-  local approved
+  local approved count
   approved=$(pk_linear_issues_in_state "Approved" 2>/dev/null || echo "[]")
-  local count
   count=$(echo "$approved" | jq 'length')
   if [ "$count" = "0" ]; then
     echo "No Approved issues. Check  pk status  for the full board."
@@ -594,8 +712,20 @@ Branch: $current
 INSTRUCTIONS
     echo ""
     echo "Run /pr-review-toolkit:review-pr or invoke pr-review-toolkit:code-reviewer"
-    echo "agent with the above instructions. (Automated subagent dispatch from"
-    echo "shell is alpha.13 — for now, copy the instructions into a Claude session.)"
+    echo "agent with the above instructions. Once the review posts, the reviewer"
+    echo "(or follow-up /pr-fix) should also post a Linear comment summarizing"
+    echo "severity counts + verdict + PR URL — see pk_linear_comment helper."
+    echo ""
+    echo "(Automated subagent dispatch + auto Linear post is on the v2.1+"
+    echo "backlog — see RUNBOOK § Backlog for /ship skill spec.)"
+
+    # Best-effort: post a Linear comment now flagging that an antagonistic
+    # review is in flight. Closes the visibility gap where Linear only sees
+    # In Progress → UAT → Done with no record of the review having happened.
+    pk_linear_comment "$issue" "**Antagonistic review requested** — \`pk ship --review\`
+
+PR: $pr_url
+Reviewer subagent invocation printed in pk output. Findings will land as a PR review comment; check the PR for results." || true
   fi
 }
 
