@@ -69,6 +69,26 @@ Write the spec using the **Light Spec Template** below. Fill in every section.
 
 **Scope discipline:** Specs define WHAT, not HOW. Litmus test: if a statement can be rewritten as "change X line" or "use Y syntax," it is implementation detail — remove it. If a statement can be rewritten as "the system should [observable behavior]," it belongs in the spec. Do not include file paths to create, function signatures, or implementation patterns — VBW planning agents own the HOW.
 
+**Acceptance Criteria discipline (behavioral, not presence-only):** Every AC must verify *observable behavior*, not *element presence*. A spec that ships ACs like "component X exists" / "function Y is called" lets implementations pass tests without actually working — surfaced 2026-05-02 by RS-63/64 in rs-vault, where tests + 7-check gate + antagonistic review all passed but the running app was 60% broken (search bar non-functional, panel didn't animate, Notes save unwired, History tab placeholder, integration step skipped).
+
+Bad → Better examples:
+
+| ❌ Presence-only AC | ✅ Behavioral AC |
+|---|---|
+| "Component `<Search>` exists" | "Given /page renders, when user types 'SW3' in the search input, then results filter to addresses containing 'SW3' within 300ms" |
+| "Save button calls `onSave`" | "Given user clicks Save, when fetch resolves, then DB row contains the value AND UI shows 'saved' state AND reloading the page shows the persisted value" |
+| "Tabs render" | "Given drawer is open, when user clicks each of the 4 tabs, then each tab renders its real content (not 'coming soon' placeholder)" |
+| "Token `--color-x` exists in globals.css" | "Given page renders at 1440px viewport, when computed style of `.foo` is read, then `background-color` resolves to `var(--color-x)`" |
+| "Animation duration matches `--duration-base`" | "Given user clicks toggle, when panel transitions, then `getAnimations()` reports duration ≈ 180ms AND visual state changes from collapsed to expanded" |
+
+For UI surfaces, **at least one AC must be a visual or computed-style assertion** — not just unit-test presence. If the spec is design-driven, reference the figma source explicitly and require pixel-diff or computed-style verification.
+
+**Cross-spec handoff awareness:** If this spec references another issue with phrases like *"X will replace…"*, *"X consumes…"*, *"X provides…"*, that's a load-bearing handoff promise. Either:
+- Include the handoff *itself* as an AC in the predecessor's spec ("The integration in file Y is updated to use the new component, replacing the placeholder"), OR
+- Mark it explicitly in the successor's spec as a required integration step ("This issue must update file Y to consume…").
+
+Don't leave handoff promises buried in prose. Today's miss (RS-64) shipped because RS-63 said "RS-64 will replace the placeholder" but RS-64's AC didn't include the integration step. Both passed; the app was broken.
+
 ### Phase 3.5 — Planning Readiness Check
 
 Before presenting to the user, audit every section:
@@ -196,6 +216,10 @@ Thoughts that mean "slow down and widen scope." Paired with `.claude/rules/pipek
 | "The POC shows the answer already" | POC is reference, not spec. Translate observable behaviors into testable requirements; don't assume the planner reads POC code. |
 | "Authority is obvious from context" | It isn't. Specs without an explicit authoritative layer (DB, utils, API) are the #1 cause of spec revision. Name it. |
 | "I'll skip the review agent, the spec is clear" | Clear-seeming specs fail planning review most often — the clarity is in your head, not on the page. Run the review. |
+| "AC says `<Component> exists` and that's enough" | Presence ≠ behavior. The thing under test is what the user sees and does. Replace with behavioral AC: input → expected output, observable in the running app. |
+| "AC says `onSave callback fires`" | Mock-tests are not user-tests. Add an end-to-end AC: data persists, UI reflects, page reload shows it. |
+| "Integration into `<other-file>` is implied" | Implicit integration steps were the RS-64 miss. If the spec touches one component but requires updating another to use it, name the second update as an explicit AC. |
+| "Visual matches figma" (without measurable check) | Unmeasurable. Replace with: pixel-diff threshold (e.g. < 5% at 1440px), or computed-style assertions on key tokens, or both. |
 
 ---
 
