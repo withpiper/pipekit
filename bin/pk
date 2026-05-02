@@ -286,30 +286,43 @@ pk_gh_repo_slug() {
 
 # Look up a PR by head branch. Output: JSON {state, url, number} or empty.
 # state is normalized to GraphQL shape (OPEN / CLOSED / MERGED).
+#
+# Prefers REST over GraphQL. The REST quota (5000/hr) is a separate bucket
+# from GraphQL's, and `gh pr view` (GraphQL) was burning quota on every
+# successful pk call — multiple worktrees + repeated `pk status` exhausted
+# the GraphQL pool mid-day. REST returns the same data with no downside.
+# GraphQL is kept as a fallback only for the case where REST fails (network,
+# auth, etc.) — not for rate-limit recovery in the other direction.
 pk_gh_pr_view() {
   local branch="$1"
+  local slug
+  slug=$(pk_gh_repo_slug)
+  if [ -n "$slug" ]; then
+    local owner="${slug%%/*}"
+    local rest
+    rest=$(gh api "repos/${slug}/pulls?head=${owner}:${branch}&state=all&per_page=1" 2>/dev/null | jq -c '.[0] // empty' 2>/dev/null)
+    if [ -n "$rest" ]; then
+      echo "$rest" | jq -c '{
+        state: (if .merged_at then "MERGED" elif .state == "open" then "OPEN" else "CLOSED" end),
+        url: .html_url,
+        number: .number
+      }'
+      return 0
+    fi
+  fi
+  # REST returned nothing — try GraphQL as last resort.
   local result
   result=$(gh pr view "$branch" --json state,url,number 2>/dev/null || true)
   if [ -n "$result" ] && [ "$result" != "null" ]; then
     echo "$result"
-    return 0
   fi
-  local slug
-  slug=$(pk_gh_repo_slug) || return 0
-  [ -z "$slug" ] && return 0
-  local owner="${slug%%/*}"
-  local rest
-  rest=$(gh api "repos/${slug}/pulls?head=${owner}:${branch}&state=all&per_page=1" 2>/dev/null | jq -c '.[0] // empty' 2>/dev/null)
-  [ -z "$rest" ] && return 0
-  echo "$rest" | jq -c '{
-    state: (if .merged_at then "MERGED" elif .state == "open" then "OPEN" else "CLOSED" end),
-    url: .html_url,
-    number: .number
-  }'
 }
 
-# Create a PR. Args: --base X --head Y --title T --body B. Falls back to
-# REST when gh pr create fails (rate limit, GraphQL error). Outputs the PR URL.
+# Create a PR. Args: --base X --head Y --title T --body B. Outputs the PR URL.
+#
+# Prefers REST (5000/hr quota, separate bucket from GraphQL). Caller must
+# ensure the head branch is pushed to origin first; pk ship and pk promote
+# both do this. GraphQL kept as fallback for non-rate-limit failures.
 pk_gh_pr_create() {
   local base head title body
   while [ $# -gt 0 ]; do
@@ -321,22 +334,26 @@ pk_gh_pr_create() {
       *) echo "pk_gh_pr_create: unknown arg $1" >&2; return 2 ;;
     esac
   done
+  local slug
+  slug=$(pk_gh_repo_slug)
+  if [ -n "$slug" ]; then
+    local rest_url rest_err
+    rest_err=$(mktemp)
+    rest_url=$(gh api -X POST "repos/${slug}/pulls" \
+      -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
+      --jq '.html_url' 2>"$rest_err")
+    if [ -n "$rest_url" ]; then
+      rm -f "$rest_err"
+      echo "$rest_url"
+      return 0
+    fi
+    # REST failed — surface error and try GraphQL as last resort.
+    echo "REST pr create failed: $(tail -1 "$rest_err")" >&2
+    rm -f "$rest_err"
+  fi
   local out
   if out=$(gh pr create --base "$base" --head "$head" --title "$title" --body "$body" 2>&1); then
     echo "$out" | grep -oE 'https://[^ ]+' | head -1
-    return 0
-  fi
-  # GraphQL path failed — try REST. Surface gh's stderr to caller for context.
-  echo "gh pr create failed; falling back to REST API..." >&2
-  echo "  (gh said: $(echo "$out" | tail -1))" >&2
-  local slug
-  slug=$(pk_gh_repo_slug) || { echo "$out" >&2; return 1; }
-  local rest_url
-  rest_url=$(gh api -X POST "repos/${slug}/pulls" \
-    -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
-    --jq '.html_url' 2>/dev/null)
-  if [ -n "$rest_url" ]; then
-    echo "$rest_url"
     return 0
   fi
   echo "$out" >&2
@@ -672,6 +689,19 @@ cmd_verify() {
 }
 
 cmd_promote() {
+  local stash=false take_remote=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stash)       stash=true;       shift ;;
+      --take-remote) take_remote=true; shift ;;
+      *) echo "pk promote: unknown arg $1" >&2; return 2 ;;
+    esac
+  done
+  if $stash && $take_remote; then
+    echo "ERROR: --stash and --take-remote are mutually exclusive." >&2
+    return 2
+  fi
+
   local promote
   promote=$(pk_config "Promote to main" "true")
   if [ "$promote" != "true" ]; then
@@ -686,9 +716,51 @@ cmd_promote() {
   fi
   echo "Promote $integration → main"
   echo "  1. Sync $integration"
-  git checkout "$integration" && git pull --ff-only
+  git checkout "$integration"
+
+  # Conflict-pattern guard: local edits to tracked files can block the
+  # ff-only pull when incoming commits touch the same paths. Surface the
+  # situation explicitly with two recoverable options.
+  local dirty
+  dirty=$(git status --porcelain | grep -E '^( M|M | A|A )' || true)
+  local stash_made=false
+  if [ -n "$dirty" ]; then
+    if $take_remote; then
+      echo "  → --take-remote: discarding local edits to tracked files:"
+      echo "$dirty" | sed 's/^/      /'
+      git fetch origin "$integration" --quiet
+      while IFS= read -r line; do
+        local path
+        path=$(echo "$line" | awk '{print $2}')
+        [ -n "$path" ] && git checkout "origin/$integration" -- "$path"
+      done <<< "$dirty"
+    elif $stash; then
+      echo "  → --stash: stashing local edits before pull"
+      git stash push -m "pk promote auto-stash $(date +%s)" -- $(echo "$dirty" | awk '{print $2}') >/dev/null
+      stash_made=true
+    else
+      echo ""
+      echo "ERROR: local modifications to tracked files may block the fast-forward:" >&2
+      echo "$dirty" | sed 's/^/    /' >&2
+      echo "" >&2
+      echo "Options:" >&2
+      echo "  pk promote --stash         stash these edits before pull, pop after PR opens" >&2
+      echo "  pk promote --take-remote   discard local edits in favor of incoming dev" >&2
+      echo "  (or) commit / stash / discard manually, then rerun pk promote" >&2
+      return 1
+    fi
+  fi
+
+  if ! git pull --ff-only; then
+    echo "ERROR: ff-only pull failed unexpectedly. Resolve manually and rerun pk promote." >&2
+    $stash_made && echo "  Note: your edits are stashed (git stash list)." >&2
+    return 1
+  fi
   echo "  2. Run pre-deploy gate"
-  cmd_verify || return 1
+  if ! cmd_verify; then
+    $stash_made && echo "  Note: your edits are stashed (git stash list — run 'git stash pop' to restore)." >&2
+    return 1
+  fi
   echo "  3. Open promote PR"
   local date promote_url
   date=$(date +%Y-%m-%d)
@@ -696,6 +768,10 @@ cmd_promote() {
     --title "Promote $integration → main ($date)" \
     --body "Batch promote. Squash-merge per ruleset.") || return 1
   echo "PR: $promote_url"
+  if $stash_made; then
+    echo ""
+    echo "Note: your local edits are stashed. Run 'git stash pop' after the promote PR is merged."
+  fi
   echo "Open the PR in browser to squash-merge."
 }
 
@@ -819,7 +895,7 @@ Subcommands:
   pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → In Review/UAT (optional antagonistic review)
   pk done                         Verify PR merged, cleanup, Linear → Done
   pk verify                       Run the project's pre-deploy gate
-  pk promote                      dev → main batch promote
+  pk promote [--stash|--take-remote]  dev → main batch promote (flags resolve local-edit conflicts with incoming dev)
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk doctor                       Diagnose v2 setup (config, env, deps)
   pk init                         Walkthrough config check + setup hints
