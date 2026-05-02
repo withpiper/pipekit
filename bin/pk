@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0-alpha.13"
+PK_VERSION="2.0.0-alpha.14"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -642,15 +642,34 @@ cmd_done() {
     $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
   ')
 
-  # Extract journal highlights → Linear comment (best-effort)
+  # Build a richer Linear comment from git + journal (best-effort).
+  # Falls back gracefully when any signal is missing.
+  local merge_base commits diffstat session_count pr_url_done
+  merge_base=$(git merge-base "$current" "$(pk_integration_branch)" 2>/dev/null || echo "")
+  if [ -n "$merge_base" ]; then
+    commits=$(git log "${merge_base}..${current}" --pretty=format:'- %h %s' 2>/dev/null | head -20)
+    diffstat=$(git diff --shortstat "${merge_base}..${current}" 2>/dev/null | sed 's/^[[:space:]]*//')
+  fi
   local journal="$root/.pipekit/journal/${current}.md"
   if [ -f "$journal" ]; then
-    local highlights
-    highlights=$(head -50 "$journal")
-    pk_linear_comment "$issue" "**Session journal:**
-
-$highlights" || true
+    session_count=$(grep -c '^---$' "$journal" 2>/dev/null || echo 0)
   fi
+  pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
+
+  local body="**Shipped — ${issue}**"
+  [ -n "$pr_url_done" ] && body="$body
+PR: $pr_url_done"
+  [ -n "$diffstat" ]    && body="$body
+Diff: $diffstat"
+  [ -n "$session_count" ] && [ "$session_count" -gt 0 ] && body="$body
+Sessions: $session_count"
+  if [ -n "$commits" ]; then
+    body="$body
+
+**Commits:**
+$commits"
+  fi
+  pk_linear_comment "$issue" "$body" || true
 
   # Linear → Done
   pk_linear_set_state "$issue" "Done" || true
@@ -884,6 +903,79 @@ cmd_delegate() {
   pk_linear_comment "$id" "$body"
 }
 
+cmd_install() {
+  local force=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force=true; shift ;;
+      *) echo "pk install: unknown arg $1" >&2; return 2 ;;
+    esac
+  done
+
+  # Resolve to realpath so re-invoking via the installed symlink still sees
+  # the original source file and the idempotency check below works.
+  local src raw
+  raw="${BASH_SOURCE[0]}"
+  if command -v realpath >/dev/null 2>&1; then
+    src=$(realpath "$raw")
+  else
+    src="$(cd "$(dirname "$raw")" && pwd -P)/$(basename "$raw")"
+    # Walk one symlink level if -P didn't resolve it (macOS bash 3 quirk)
+    [ -L "$src" ] && src=$(cd "$(dirname "$src")" && cd "$(dirname "$(readlink "$src")")" && pwd -P)/$(basename "$(readlink "$src")")
+  fi
+  if [ ! -f "$src" ]; then
+    echo "ERROR: cannot locate own script path." >&2
+    return 1
+  fi
+
+  # Pick a writable bin directory on PATH. Prefer /usr/local/bin (universal),
+  # fall back to ~/.local/bin (no sudo needed).
+  local target_dir=""
+  for d in /usr/local/bin "$HOME/.local/bin"; do
+    if [ -d "$d" ] && [ -w "$d" ]; then
+      target_dir="$d"
+      break
+    fi
+    if [ "$d" = "$HOME/.local/bin" ] && [ ! -d "$d" ]; then
+      mkdir -p "$d" && target_dir="$d" && break
+    fi
+  done
+  if [ -z "$target_dir" ]; then
+    echo "ERROR: no writable bin directory found." >&2
+    echo "  Tried: /usr/local/bin, ~/.local/bin" >&2
+    echo "  Try: sudo ln -s $src /usr/local/bin/pk" >&2
+    return 1
+  fi
+
+  local target="$target_dir/pk"
+  if [ -L "$target" ] || [ -e "$target" ]; then
+    local existing
+    existing=$(readlink "$target" 2>/dev/null || echo "$target")
+    if [ "$existing" = "$src" ]; then
+      echo "Already installed: $target → $src"
+      return 0
+    fi
+    if ! $force; then
+      echo "ERROR: $target exists and points elsewhere ($existing)." >&2
+      echo "  Use 'pk install --force' to overwrite." >&2
+      return 1
+    fi
+    rm -f "$target"
+  fi
+
+  ln -s "$src" "$target"
+  echo "Installed: $target → $src"
+
+  case ":$PATH:" in
+    *:"$target_dir":*) ;;
+    *)
+      echo ""
+      echo "WARNING: $target_dir is not on \$PATH."
+      echo "  Add to your shell rc: export PATH=\"$target_dir:\$PATH\""
+      ;;
+  esac
+}
+
 cmd_help() {
   cat <<EOF
 pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
@@ -899,6 +991,7 @@ Subcommands:
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk doctor                       Diagnose v2 setup (config, env, deps)
   pk init                         Walkthrough config check + setup hints
+  pk install [--force]            Symlink pk onto \$PATH (so 'pk' replaces './bin/pk')
   pk log                          Show journal for current feature branch
   pk help                         Show this help
 
@@ -1043,6 +1136,7 @@ main() {
     delegate) cmd_delegate "$@" ;;
     doctor)   cmd_doctor "$@" ;;
     init)     cmd_init "$@" ;;
+    install)  cmd_install "$@" ;;
     log)      cmd_log "$@" ;;
     help|-h|--help) cmd_help ;;
     version|-v|--version) cmd_version ;;

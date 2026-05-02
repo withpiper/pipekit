@@ -25,9 +25,15 @@ A `pk` shell dispatcher + `/work` and `/verify` skills replace the heavy multi-s
 - **REST fallback** — `pk_gh_pr_view` and `pk_gh_pr_create` fall through to GitHub REST when GraphQL is rate-limited (alpha.13). Caught the friction of GraphQL exhaustion silently misreading as "PR not found."
 - **Linear robustness** — single-line GraphQL queries, minimal field selections, `.env.local` fallback for the API key, team-name filtering on state transitions.
 
-### Alpha.13 (this batch)
+### Alpha.14 (latest)
 
-- gh REST fallback for `pr view` / `pr create` (helpers + 5 call-site replacements)
+- `pk install` global installer — symlinks pk onto `$PATH` (`/usr/local/bin` or `~/.local/bin`); idempotent through the installed symlink
+- `pk done` richer Linear comment — commits, diffstat, session count, PR link (replaces raw 50-line journal head dump)
+- `pk promote --stash` / `--take-remote` flags — resolve local-edit conflicts with incoming dev (today's friction pattern)
+
+### Alpha.13
+
+- gh REST fallback for `pr view` / `pr create` — initially fallback-only, then **inverted to REST-first** after a session-wide GraphQL exhaustion proved the fallback wasn't enough. REST has its own quota bucket; pk no longer burns GraphQL on normal operation
 - `/work --backend=vbw|native` per-invocation override
 - Brainstorm skills updated for v2 tier routing (`/brainstorm`, `/brainstorm-review`)
 - This consolidated changelog entry
