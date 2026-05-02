@@ -271,6 +271,78 @@ pk_slug() {
     | cut -d- -f1-3
 }
 
+# gh CLI uses GraphQL by default; when rate-limited it returns empty results
+# that look identical to "PR not found". These helpers retry through the REST
+# API (separate, more generous rate limit bucket) when GraphQL fails or is
+# empty. See alpha.13 backlog: gh REST fallback.
+pk_gh_repo_slug() {
+  # Parse owner/repo from git remote — pure local, no API call.
+  # Critical: this helper supports the REST-fallback path, which fires
+  # precisely when GraphQL is exhausted, so it cannot itself call GraphQL.
+  local url
+  url=$(git remote get-url origin 2>/dev/null) || return 1
+  echo "$url" | sed -E 's#^.*github\.com[:/]##; s#\.git$##'
+}
+
+# Look up a PR by head branch. Output: JSON {state, url, number} or empty.
+# state is normalized to GraphQL shape (OPEN / CLOSED / MERGED).
+pk_gh_pr_view() {
+  local branch="$1"
+  local result
+  result=$(gh pr view "$branch" --json state,url,number 2>/dev/null || true)
+  if [ -n "$result" ] && [ "$result" != "null" ]; then
+    echo "$result"
+    return 0
+  fi
+  local slug
+  slug=$(pk_gh_repo_slug) || return 0
+  [ -z "$slug" ] && return 0
+  local owner="${slug%%/*}"
+  local rest
+  rest=$(gh api "repos/${slug}/pulls?head=${owner}:${branch}&state=all&per_page=1" 2>/dev/null | jq -c '.[0] // empty' 2>/dev/null)
+  [ -z "$rest" ] && return 0
+  echo "$rest" | jq -c '{
+    state: (if .merged_at then "MERGED" elif .state == "open" then "OPEN" else "CLOSED" end),
+    url: .html_url,
+    number: .number
+  }'
+}
+
+# Create a PR. Args: --base X --head Y --title T --body B. Falls back to
+# REST when gh pr create fails (rate limit, GraphQL error). Outputs the PR URL.
+pk_gh_pr_create() {
+  local base head title body
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --base)  base="$2";  shift 2 ;;
+      --head)  head="$2";  shift 2 ;;
+      --title) title="$2"; shift 2 ;;
+      --body)  body="$2";  shift 2 ;;
+      *) echo "pk_gh_pr_create: unknown arg $1" >&2; return 2 ;;
+    esac
+  done
+  local out
+  if out=$(gh pr create --base "$base" --head "$head" --title "$title" --body "$body" 2>&1); then
+    echo "$out" | grep -oE 'https://[^ ]+' | head -1
+    return 0
+  fi
+  # GraphQL path failed — try REST. Surface gh's stderr to caller for context.
+  echo "gh pr create failed; falling back to REST API..." >&2
+  echo "  (gh said: $(echo "$out" | tail -1))" >&2
+  local slug
+  slug=$(pk_gh_repo_slug) || { echo "$out" >&2; return 1; }
+  local rest_url
+  rest_url=$(gh api -X POST "repos/${slug}/pulls" \
+    -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
+    --jq '.html_url' 2>/dev/null)
+  if [ -n "$rest_url" ]; then
+    echo "$rest_url"
+    return 0
+  fi
+  echo "$out" >&2
+  return 1
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommands
 # ─────────────────────────────────────────────────────────────────────────────
@@ -285,7 +357,7 @@ cmd_next() {
     echo "On branch: $current"
     echo "Issue: $issue"
     local pr_state
-    pr_state=$(gh pr view "$current" --json state,url 2>/dev/null || echo "")
+    pr_state=$(pk_gh_pr_view "$current")
     if [ -n "$pr_state" ]; then
       local state url
       state=$(echo "$pr_state" | jq -r '.state')
@@ -456,7 +528,7 @@ cmd_ship() {
 
   # Idempotent: PR already exists?
   local pr_url
-  pr_url=$(gh pr view "$current" --json url --jq .url 2>/dev/null || echo "")
+  pr_url=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
   if [ -n "$pr_url" ]; then
     echo "PR already exists: $pr_url"
   else
@@ -468,10 +540,9 @@ cmd_ship() {
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
     echo "Opening PR against $target..."
-    gh pr create --base "$target" --head "$current" \
+    pr_url=$(pk_gh_pr_create --base "$target" --head "$current" \
       --title "${issue}: ${title:-$current}" \
-      --body "$pr_body"
-    pr_url=$(gh pr view "$current" --json url --jq .url)
+      --body "$pr_body") || return 1
     echo "PR: $pr_url"
   fi
 
@@ -539,7 +610,7 @@ cmd_done() {
 
   # Verify PR is merged
   local pr_state
-  pr_state=$(gh pr view "$current" --json state --jq .state 2>/dev/null || echo "")
+  pr_state=$(pk_gh_pr_view "$current" | jq -r '.state // empty')
   if [ "$pr_state" != "MERGED" ]; then
     echo "ERROR: PR for $current is not merged (state: ${pr_state:-NOT_FOUND})" >&2
     echo "  Run  pk ship  to open the PR, or merge it manually first." >&2
@@ -619,11 +690,12 @@ cmd_promote() {
   echo "  2. Run pre-deploy gate"
   cmd_verify || return 1
   echo "  3. Open promote PR"
-  local date
+  local date promote_url
   date=$(date +%Y-%m-%d)
-  gh pr create --base main --head "$integration" \
+  promote_url=$(pk_gh_pr_create --base main --head "$integration" \
     --title "Promote $integration → main ($date)" \
-    --body "Batch promote. Squash-merge per ruleset."
+    --body "Batch promote. Squash-merge per ruleset.") || return 1
+  echo "PR: $promote_url"
   echo "Open the PR in browser to squash-merge."
 }
 
