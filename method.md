@@ -1,6 +1,8 @@
 # Pipekit
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-08 *(content predates v2 cut; see banner below)*
+
+> ⚠️ **v2 transition (2026-05-02):** Pipekit's daily loop has been replaced by `bin/pk` + `/work` + `/verify`. The canonical operational doc is now [`RUNBOOK.md`](./RUNBOOK.md). References below to `/launch`, `/branch`, `/start-session`, `/end-session`, `/linear-status`, `/g-promote-*` describe the **retired v1 daily loop** — those skills now live under `archive/v1-skills/` and are no longer the recommended path. Stage 0 (foundation) and orthogonal skills (`/light-spec`, `/brainstorm`, `/pr-fix`, etc.) are unchanged. A full method.md rewrite is queued for v2.0.1.
 
 ## Overview
 

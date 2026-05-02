@@ -6,9 +6,38 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
-## v2.0.0-alpha — 2026-05-01 → 2026-05-02 (in development)
+## v2.0.0 — 2026-05-02
 
-> The v2 daily-loop redesign. Long-running on `v2/main`; not yet promoted to `main`. Sync target for early adopters: `v2.0.0-alpha.13`.
+> Cut to v2 after RS-63 proved the v2 ↔ VBW handshake on a Heavy spike (rs-vault). v1 daily-loop skills retired to `archive/v1-skills/`. v2 is now the canonical Pipekit.
+
+### What changed at the cut
+
+- **`bin/pk` is the dispatcher.** All daily-loop work goes through `pk next / pk branch / pk ship / pk done / pk promote`. Idempotent against Linear+git ground truth.
+- **`/work` + `/verify`** replace the v1 launch chain. `/work --backend=vbw|native` chooses execution backend per-invocation.
+- **`RUNBOOK.md`** is now the v2 one-page flowchart (was `V2_RUNBOOK.md`). Old runbooks archived.
+- **`method.md`** carries a v2 transition banner; full rewrite queued for v2.0.1.
+
+### v1 retirement (skills moved to `archive/v1-skills/`)
+
+`/branch`, `/launch`, `/launch-native`, `/start-session`, `/end-session`, `/linear-status`, `/g-promote-dev`. All replaced by `pk` subcommands or the Stop hook (journal). Stage 0 skills (`/concept`, `/define`, `/strategy-create`, `/startup`, `/roadmap-create`, `/phase-plan`) and orthogonal skills (`/light-spec`, `/brainstorm`, `/pr-fix`, `/sync-linear`, etc.) are unchanged — v2 only retires the daily loop.
+
+### Validation
+
+- rs-vault Phase 1 closeout (RS-25, RS-30, RS-60, RS-61, RS-62) shipped on the v2 loop
+- RS-63 (Phase 2.5 Foundation + Search redesign) — Heavy spike, vbw backend, antagonistic review, /pr-fix triage all worked end-to-end
+- DB migration auto-apply workflow (`db-migrate.yml` + `db-pr-check.yml`) shipped, secrets verified via dry-run
+
+### Known gaps (v2.0.1)
+
+- `method.md` still references v1 paths (banner added, rewrite queued)
+- `sync-method.sh` may copy v1 skill paths — needs audit
+- See `RUNBOOK.md § Backlog` for alpha.15-style improvements that didn't land at the cut: phase-aware `pk next`, `resources/` vs `temp/` portable convention, `/ship` skill auto-dispatch
+
+---
+
+## v2.0.0-alpha — 2026-05-01 → 2026-05-02
+
+> Pre-cut development. 14 alphas across two days. v2/main long-running branch.
 
 ### What v2 is
 

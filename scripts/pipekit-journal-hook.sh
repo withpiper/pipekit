@@ -58,7 +58,11 @@ else
 fi
 
 mkdir -p "$JOURNAL_DIR" 2>/dev/null || exit 0
-JOURNAL_FILE="$JOURNAL_DIR/${BRANCH}.md"
+# Replace / in branch name with - so feature/X-Y becomes feature-X-Y.md.
+# Without this, branches with slashes (feature/*, chore/*, fix/*) write to
+# nested subdirs that don't exist, causing silent journal-write failures.
+BRANCH_SAFE="${BRANCH//\//-}"
+JOURNAL_FILE="$JOURNAL_DIR/${BRANCH_SAFE}.md"
 
 # Initialize journal if it doesn't exist
 if [ ! -f "$JOURNAL_FILE" ]; then
