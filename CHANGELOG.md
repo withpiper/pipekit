@@ -6,6 +6,48 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.0.0-alpha — 2026-05-01 → 2026-05-02 (in development)
+
+> The v2 daily-loop redesign. Long-running on `v2/main`; not yet promoted to `main`. Sync target for early adopters: `v2.0.0-alpha.13`.
+
+### What v2 is
+
+A `pk` shell dispatcher + `/work` and `/verify` skills replace the heavy multi-step v1 launch chain. The daily loop is `pk next → pk branch <ID> → /work <ID> → pk ship → pk done → pk promote`. Idempotent at every step; runs from a worktree.
+
+### Highlights across 13 alphas
+
+- **`bin/pk`** — daily-loop dispatcher (next, status, branch, ship, done, verify, promote, log, doctor, delegate). Idempotent + safe to re-run.
+- **`/work`** — plan + execute a Linear issue from inside its worktree. Backend-pluggable (`vbw` | `native`), now overridable per-invocation via `--backend=`.
+- **`/verify`** — pre-ship validation skill paired with `pk ship --review` for antagonistic code review.
+- **Worktree pk-sync** — `pk branch` copies the parent's `bin/pk` into the worktree so feature work always uses the project's pinned dispatcher version (alpha.12).
+- **Stop hook** — `scripts/pipekit-journal-hook.sh` writes a per-feature branch journal on every Claude Code Stop event.
+- **Short slugs** — `pk_slug` strips stop words and trims to 3 tokens, keeping worktree paths and status bars sane.
+- **REST fallback** — `pk_gh_pr_view` and `pk_gh_pr_create` fall through to GitHub REST when GraphQL is rate-limited (alpha.13). Caught the friction of GraphQL exhaustion silently misreading as "PR not found."
+- **Linear robustness** — single-line GraphQL queries, minimal field selections, `.env.local` fallback for the API key, team-name filtering on state transitions.
+
+### Alpha.13 (this batch)
+
+- gh REST fallback for `pr view` / `pr create` (helpers + 5 call-site replacements)
+- `/work --backend=vbw|native` per-invocation override
+- Brainstorm skills updated for v2 tier routing (`/brainstorm`, `/brainstorm-review`)
+- This consolidated changelog entry
+
+### Carried into beta candidates
+
+- Multi-env `pk ship --env=` for Piper-style multi-environment delivery
+- Automated subagent dispatch from `pk ship --review` (currently prints invocation)
+- `pk done` richer Linear comments from journal highlights
+- `pk install` global installer
+- Skills directory reorg: `skills/{loop,stage0,orthogonal}/`
+- GitHub Actions `pr-review.yml` (CI-side antagonistic review)
+
+### Notes
+
+- v2 is **not** synced via `sync-method.sh` yet — the script's v2 paths exist but consuming projects pull `bin/pk` and the new skills directly.
+- The full v2 design rationale lives in `archive/v2-design-2026-05-01/` (5 design docs from the redesign session).
+
+---
+
 ## v1.8.2 — 2026-04-30
 
 ### Fixes

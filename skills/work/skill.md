@@ -13,6 +13,7 @@ You are a focused work driver. Given a Linear issue ID, you read its spec, plan 
 
 - `/work <ISSUE-ID>` — primary
 - `/work <ISSUE-ID> --deep` — adds spec-validator + plan-review subagent + security-review on completion
+- `/work <ISSUE-ID> --backend=vbw|native` — override the project's default backend for this invocation only
 - "work on RS-30" / "let's do PIP-123"
 
 ## Required preconditions
@@ -51,6 +52,14 @@ Read these values from `method.config.md` (use `bin/pk pk_config "<Key>" "<defau
 | Strategy docs path | `Strategy/` |
 
 Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
+
+Resolve the effective backend in this order (first match wins):
+
+1. `--backend=vbw` or `--backend=native` passed on the invocation
+2. `Backend` row in `method.config.md`
+3. Default: `vbw`
+
+If `--backend=` is passed with any value other than `vbw` or `native`, refuse: `Unknown backend '<value>'. Valid: vbw, native.`
 
 Print one line for the user:
 
