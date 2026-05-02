@@ -6,6 +6,23 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.1.1 — 2026-05-02
+
+> Notepad convention: replaces retired v1 NEXT.md.
+
+### What changed
+
+- **`pk init` seeds a gitignored `notepad.md`** if one doesn't already exist, and ensures `.gitignore` excludes it. Free-form personal scratch space; never committed.
+- **`.gitignore` (pipekit's own)** adds `notepad.md` for pipekit-side development.
+- **`method.md` documents the convention** — NEXT.md is officially retired; consuming projects should delete any committed NEXT.md and rely on `pk next` for canonical "what's next?".
+- **`pk init` flags stale NEXT.md** if found, suggesting the cleanup command (does not auto-delete — user's call).
+
+### Why
+
+v1's `NEXT.md` was machine-readable state. v2's `pk next` (phase-aware as of v2.1.0) replaces that role. Consuming projects kept editing `NEXT.md` manually as a personal notepad, which created git-status churn + drift from any auto-source. `notepad.md` (gitignored) is the right shape for that use case.
+
+---
+
 ## v2.1.0 — 2026-05-02
 
 > Three improvements surfaced during rs-vault Phase 2.5 execution. Same-day v2.0.0 → v2.1.0.

@@ -1,4 +1,4 @@
-# Pipekit Runbook (v2.1.0)
+# Pipekit Runbook (v2.1.1)
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -9,12 +9,13 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.1.0                (or latest tag)
+1. ./scripts/sync-method.sh v2.1.1                (or latest tag)
 2. Append "## V2" config block to method.config.md (see V2.md § examples)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. Wire Stop hook into .claude/settings.json       (paste from method/templates/v2/)
-5. ./bin/pk init     →  ./bin/pk doctor            (expect all green)
-6. ./bin/pk install                                (puts pk on $PATH globally)
+5. ./bin/pk init                                   (seeds notepad.md, checks config; expect all green)
+6. ./bin/pk doctor                                 (deeper diagnostic)
+7. ./bin/pk install                                (puts pk on $PATH globally)
 ```
 
 ---
