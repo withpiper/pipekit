@@ -296,22 +296,37 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 - `pk promote --stash` / `--take-remote` flags for local-edit conflict resolution
 - REST-first ordering in `pk_gh_pr_view` / `pk_gh_pr_create` (was burning GraphQL quota)
 
-### alpha.15 candidates
+### v2.1 candidates
 
 - **`resources/` vs `temp/` portable convention** — `resources/` for committed reference materials (design handoffs, spec dependencies); `temp/` fully gitignored for ephemera. Bake into `method.md`, `templates/`, and consuming-project bootstrap. Surfaced 2026-05-02 when RS-63's `/work` couldn't see the design handoff (lived in parent's `temp/`, gitignored, didn't travel to worktree).
 - **`pk branch` worktree-aware resource sync** — copy `resources/` (and any `.pkignore`-listed paths) into new worktrees so gitignored-but-needed files travel with the work. Companion to the convention above.
 - **Phase-aware `pk next`** — surfaces issues grouped by status within the current phase: In Progress, Approved, Needs Spec (with `/light-spec` hint per item), separated from "Other phases". Reads current phase from `PHASES.md`, scopes Linear queries by project ID from `linear-map.json`. Today's `pk next` only finds the first Approved issue anywhere — silent when current phase has none even though there's actionable work (`/light-spec` candidates). Surfaced 2026-05-02 during RS-63 execution: Phase 2.5 had RS-63 in flight + 6 Needs Spec issues but `pk next` was useless.
 - **Mid-loop Linear visibility for review + fix** — `pk ship --review` (or `/ship` when it lands) should post a Linear comment summarizing the antagonistic review (severity counts, recommendation, PR comment URL) when the review is posted. `/pr-fix` should post a Linear comment when triage completes (fixes applied, findings rejected with reason, deferrals). Today's gap: Linear sees `In Progress → UAT → Done` but no record of "review found 16 things, 1 was a false positive verified via MCP, 7 fixed, 8 deferred." That context lives only on the PR. Surfaced 2026-05-02 during RS-63 review/fix cycle.
 
-### Flowchart promotion (v2.0.1)
+### Flowchart promotion (v2.1)
 
 When the visual-review and cross-spec-verify items below ship as actual code/skill changes, the flowchart in §"Per-issue flowchart" needs an update:
 
 - **Insert a new step between [4] Verify and [5] Ship**: visual-state verification — runs Playwright (or equivalent) against the worktree's running app at key user states, diffs against figma source. Optional gate (config: `Require visual review: true|false`). Catches the class of miss where components compile + tests pass but the integration didn't land (today's RS-64 example).
 - **Update [5b] Antagonistic PR review** to call out the cross-spec handoff check explicitly: reviewer must fetch predecessor specs (any "X will…" references) and verify each promise landed in this PR.
 - **Add a [5c] /pr-fix triage** step explicitly in the flowchart (currently implicit between 5b and merge).
+- **Add a [5d] /pr-security-review** opt-in step (see new skill candidate below) — fires on PRs touching `supabase/migrations/`, `*.sql`, or `SECURITY DEFINER` functions.
 
-Today's flowchart shows steps 1–8 with 5b inserted but no visual review and no /pr-fix. After v2.0.1 ships, the chain becomes: 1 → 2 → 3 → 4 → **4b (visual)** → 5 → 5b → **5c (/pr-fix)** → 6 → 7 → 8.
+Today's flowchart shows steps 1–8 with 5b inserted but no visual review, no /pr-fix, no security review. After v2.1 ships, the chain becomes: 1 → 2 → 3 → 4 → **4b (visual)** → 5 → 5b → **5c (/pr-fix)** → **5d (/pr-security-review, opt-in)** → 6 → 7 → 8.
+
+### v2.1 — new skill: /pr-security-review
+
+**Gap surfaced 2026-05-02 PM by RS-74:** rs-vault has `/security-review` (a periodic codebase audit) and `pr-review-toolkit:review-pr` (a generic antagonistic review), but **nothing purpose-built for "security-focused review of THIS PR's diff."** Migration PRs (new RLS policies, `SECURITY DEFINER` functions, audit-log access) need a focused skill that bakes in the right rubric.
+
+Proposed `/pr-security-review` scope:
+
+- Fires on PRs touching: `supabase/migrations/**`, `*.sql`, files containing `SECURITY DEFINER`, `auth.uid()` references, RLS policy definitions
+- Loads a security-specific antagonistic prompt (RLS correctness, search_path hardening, function gate semantics, action allowlist coverage, PII / admin-only data leak vectors, type regen accuracy)
+- Posts findings as a PR review comment via `gh api -X POST .../pulls/<N>/reviews` — same shape as `pk ship --review`, separate prompt
+- Caller can run it in addition to `pk ship --review` (they cover different surface area) or instead, depending on PR shape
+- Companion to `/pr-fix` — its triage flow already verifies findings before applying
+
+This is **different from `/security-review`** (periodic repo-wide audit) and **different from `pr-review-toolkit:review-pr`** (broad PR review). Same skill family as `/pr-fix` — focused, PR-diff-scoped, opinionated rubric.
 
 ### Surfaced 2026-05-02 PM (RS-64 cross-spec miss)
 
