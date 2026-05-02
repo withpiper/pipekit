@@ -289,12 +289,18 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 - `/brainstorm` + `/brainstorm-review` v2 tier routing
 - Consolidated v2 alpha CHANGELOG entry
 
-### alpha.14 candidates
+### Shipped in alpha.14 (2026-05-02 PM)
 
-- Automated subagent dispatch from `pk ship --review` (currently prints invocation, doesn't auto-run)
-- `pk done` — extract richer journal highlights for Linear comment
-- `pk promote` — detect local-edit conflict pattern with incoming dev, offer take-remote option
-- `pk install` global installer so `pk` is on PATH (no `./bin/` prefix)
+- `pk install` global installer (symlinks pk to `/usr/local/bin` or `~/.local/bin`)
+- `pk done` — richer Linear comment (commits + diffstat + session count + PR URL)
+- `pk promote --stash` / `--take-remote` flags for local-edit conflict resolution
+- REST-first ordering in `pk_gh_pr_view` / `pk_gh_pr_create` (was burning GraphQL quota)
+
+### alpha.15 candidates
+
+- **`resources/` vs `temp/` portable convention** — `resources/` for committed reference materials (design handoffs, spec dependencies); `temp/` fully gitignored for ephemera. Bake into `method.md`, `templates/`, and consuming-project bootstrap. Surfaced 2026-05-02 when RS-63's `/work` couldn't see the design handoff (lived in parent's `temp/`, gitignored, didn't travel to worktree).
+- **`pk branch` worktree-aware resource sync** — copy `resources/` (and any `.pkignore`-listed paths) into new worktrees so gitignored-but-needed files travel with the work. Companion to the convention above.
+- Automated subagent dispatch from `pk ship --review` — see `temp/ship-skill-spec.md` for full scope. Crosses shell ↔ skill ↔ subagent boundary; needs `/ship` skill wrapper.
 
 ### beta candidates
 
@@ -302,5 +308,4 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 - **beta.1** — skills directory reorg: `skills/{loop,stage0,orthogonal}/` subdirs
 - **beta.2** — GitHub Actions workflow `pr-review.yml` — antagonistic review on PR open (CI-side)
 - **GA** — delete v1 skills (currently coexisting), retag `RUNBOOK.md` as v2-only
-- **GA** — `pk install` global installer so `pk` is on PATH (no `./bin/pk` prefix)
 
