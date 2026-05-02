@@ -76,19 +76,8 @@ The v2 daily loop on one page. Read top-to-bottom. Coexists with v1 — v1 comma
   └──────────────────────────────────────────────────────────┘
        │
        ▼
-       (Stop hook auto-writes journal entry on session close)
-       │
-       exit                       (back to terminal)
-       cd ~/Projects/<repo>       (back to parent)
-       claude --dangerously-skip-permissions
-       │
-┌──────┴──────────────────────────────────────────────────────────┐
-│  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
-└─────────────────────────────────────────────────────────────────┘
-       │
-       ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [5] Ship                                                 │
+  │ [5] Ship   (still in worktree, still on feature branch)  │
   │     ./bin/pk ship           (or --env=<env>)             │
   │     • push (idempotent)                                  │
   │     • gh pr create against integration branch            │
@@ -125,6 +114,17 @@ The v2 daily loop on one page. Read top-to-bottom. Coexists with v1 — v1 comma
   │     • feature → dev: merge-commit (history visibility)   │
   │     • feature → main: squash (single commit per release) │
   └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+       (Stop hook auto-writes journal entry on session close)
+       │
+       exit                       (leave Claude in worktree)
+       cd ~/Projects/<repo>       (back to parent repo)
+       claude --dangerously-skip-permissions
+       │
+┌──────┴──────────────────────────────────────────────────────────┐
+│  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
+└─────────────────────────────────────────────────────────────────┘
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
