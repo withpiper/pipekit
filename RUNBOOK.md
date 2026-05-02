@@ -303,6 +303,16 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 - **Phase-aware `pk next`** — surfaces issues grouped by status within the current phase: In Progress, Approved, Needs Spec (with `/light-spec` hint per item), separated from "Other phases". Reads current phase from `PHASES.md`, scopes Linear queries by project ID from `linear-map.json`. Today's `pk next` only finds the first Approved issue anywhere — silent when current phase has none even though there's actionable work (`/light-spec` candidates). Surfaced 2026-05-02 during RS-63 execution: Phase 2.5 had RS-63 in flight + 6 Needs Spec issues but `pk next` was useless.
 - **Mid-loop Linear visibility for review + fix** — `pk ship --review` (or `/ship` when it lands) should post a Linear comment summarizing the antagonistic review (severity counts, recommendation, PR comment URL) when the review is posted. `/pr-fix` should post a Linear comment when triage completes (fixes applied, findings rejected with reason, deferrals). Today's gap: Linear sees `In Progress → UAT → Done` but no record of "review found 16 things, 1 was a false positive verified via MCP, 7 fixed, 8 deferred." That context lives only on the PR. Surfaced 2026-05-02 during RS-63 review/fix cycle.
 
+### Flowchart promotion (v2.0.1)
+
+When the visual-review and cross-spec-verify items below ship as actual code/skill changes, the flowchart in §"Per-issue flowchart" needs an update:
+
+- **Insert a new step between [4] Verify and [5] Ship**: visual-state verification — runs Playwright (or equivalent) against the worktree's running app at key user states, diffs against figma source. Optional gate (config: `Require visual review: true|false`). Catches the class of miss where components compile + tests pass but the integration didn't land (today's RS-64 example).
+- **Update [5b] Antagonistic PR review** to call out the cross-spec handoff check explicitly: reviewer must fetch predecessor specs (any "X will…" references) and verify each promise landed in this PR.
+- **Add a [5c] /pr-fix triage** step explicitly in the flowchart (currently implicit between 5b and merge).
+
+Today's flowchart shows steps 1–8 with 5b inserted but no visual review and no /pr-fix. After v2.0.1 ships, the chain becomes: 1 → 2 → 3 → 4 → **4b (visual)** → 5 → 5b → **5c (/pr-fix)** → 6 → 7 → 8.
+
 ### Surfaced 2026-05-02 PM (RS-64 cross-spec miss)
 
 A Phase 2.5 issue (RS-63) explicitly handed off integration work to its successor (RS-64) — *"RS-64 will replace the placeholder with real Drawer chrome + PropertyCard."* RS-64's PR shipped the components but never integrated them into `search-page.tsx`. Antagonistic review missed it (only had RS-64's AC to check). When the user later asked Claude in the worktree about the placeholder + provided a screenshot, Claude **rationalized the status quo** ("wiring harness for something to come later") rather than checking against intent. Three process gaps:
