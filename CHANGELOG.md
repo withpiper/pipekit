@@ -6,6 +6,26 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.1.0 — 2026-05-02
+
+> Three improvements surfaced during rs-vault Phase 2.5 execution. Same-day v2.0.0 → v2.1.0.
+
+### What changed
+
+- **`/pr-security-review` skill** (new) — security-focused antagonistic PR review for migrations, RLS policies, SECURITY DEFINER functions, GRANT/REVOKE, auth code, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories. Different from `/security-review` (periodic repo audit) and `/pr-fix` (broad PR review). Surfaced by RS-74 (rs-vault saved_searches migration) where neither existing skill fit the security-focused PR-diff need.
+- **Phase-aware `pk next`** — reads `## Current Phase:` from `.vbw-planning/PHASES.md`, matches to `linear-map.json` project entry via `Phase X.Y` prefix (handles em-dash vs colon separator drift), groups Linear results by status: In Progress / Approved / Needs Spec, with per-group next-action hints. Surfaces "Other phases: N Approved outside" footer. Falls back to legacy global behaviour when no phase context is available. Surfaced by Phase 2.5 having 6 Needs Spec issues + RS-63 In Progress while old `pk next` reported nothing.
+- **Mid-loop Linear visibility for `pk ship --review` + `/pr-fix`** — `pk ship --review` now posts a Linear comment flagging the review-in-flight; `/pr-fix` Phase 6.6 posts a triage-complete summary with fixed/rejected/deferred counts. Closes the gap where Linear sees `In Progress → UAT → Done` but no record of the review/fix cycle's findings.
+
+### v2.1 backlog still open (deferred to v2.1.x or v2.2)
+
+- `resources/` vs `temp/` portable convention + `pk branch` worktree resource sync
+- Cross-spec handoff verification at flowchart level (skill prose already shipped in v2.0; flowchart promotion deferred)
+- Visual + functional verification step in flowchart (Playwright + diff infra — too big for same-day cut)
+- "Defended status quo" guardrail at flowchart level (already in `/work` prose; flowchart promotion deferred)
+- `/ship` skill auto-dispatch (subagent boundary — see `temp/ship-skill-spec.md`)
+
+---
+
 ## v2.0.0 — 2026-05-02
 
 > Cut to v2 after RS-63 proved the v2 ↔ VBW handshake on a Heavy spike (rs-vault). v1 daily-loop skills retired to `archive/v1-skills/`. v2 is now the canonical Pipekit.

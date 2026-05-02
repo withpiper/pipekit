@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.0.0"
+PK_VERSION="2.1.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -712,8 +712,20 @@ Branch: $current
 INSTRUCTIONS
     echo ""
     echo "Run /pr-review-toolkit:review-pr or invoke pr-review-toolkit:code-reviewer"
-    echo "agent with the above instructions. (Automated subagent dispatch from"
-    echo "shell is alpha.13 — for now, copy the instructions into a Claude session.)"
+    echo "agent with the above instructions. Once the review posts, the reviewer"
+    echo "(or follow-up /pr-fix) should also post a Linear comment summarizing"
+    echo "severity counts + verdict + PR URL — see pk_linear_comment helper."
+    echo ""
+    echo "(Automated subagent dispatch + auto Linear post is on the v2.1+"
+    echo "backlog — see RUNBOOK § Backlog for /ship skill spec.)"
+
+    # Best-effort: post a Linear comment now flagging that an antagonistic
+    # review is in flight. Closes the visibility gap where Linear only sees
+    # In Progress → UAT → Done with no record of the review having happened.
+    pk_linear_comment "$issue" "**Antagonistic review requested** — \`pk ship --review\`
+
+PR: $pr_url
+Reviewer subagent invocation printed in pk output. Findings will land as a PR review comment; check the PR for results." || true
   fi
 }
 
