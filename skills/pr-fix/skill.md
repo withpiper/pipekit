@@ -54,6 +54,22 @@ git diff dev...HEAD --stat
 git log dev..HEAD --oneline
 ```
 
+### 1.2.5 Cross-spec handoff scan
+
+If the PR's Linear issue (or referenced sibling issues) contains phrases like *"X will replace…"*, *"X consumes…"*, *"X provides…"*, that's a load-bearing handoff promise. **Predecessor specs may carry ACs that this PR is responsible for landing**, even if the PR's own spec doesn't list them.
+
+For each cross-spec reference found in the issue:
+
+1. Fetch the predecessor's spec via Linear MCP
+2. Extract any "this issue's successor will…" handoff promises
+3. **Verify each promise landed in the diff:**
+   - "Wires X into Y" → grep the diff for `Y` references that introduce `X`
+   - "Replaces placeholder Z" → grep the diff for `Z` removal AND replacement
+   - "Persists data via W" → confirm a Server Action / migration / RLS rule for W exists
+4. **Any unfulfilled handoff is a Critical finding** — same severity as a missing AC, regardless of whether the current PR's own AC list passes.
+
+This catches the class of miss surfaced 2026-05-02 by RS-64 in rs-vault: the PR shipped its own ACs cleanly but never delivered the integration step its predecessor (RS-63) had promised. Both passed; the app was broken.
+
 ### 1.3 Synthesize Intent
 
 Write a 2-3 sentence **intent statement**: what the PR is doing and why, derived from title, body, commit messages, and diff shape. This anchors the entire review.

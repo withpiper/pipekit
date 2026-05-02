@@ -274,6 +274,36 @@ Use Task tool with:
 
 Print the review verbatim.
 
+## Step 6.5 — Behavioral self-check before declaring complete
+
+Before printing the hand-off, verify the work *behaviorally* — not just that tests pass. Tests-pass + 7-check-gate-green is necessary but not sufficient: see RS-63/64 in rs-vault (2026-05-02), where every check passed but the running app was 60% broken.
+
+For UI changes — if the spec touched any user-visible surface:
+- **Run the app locally** (or check the existing dev server) and verify the changed surface renders correctly.
+- **Click the new affordances.** If the spec says "Save button persists notes," click Save and confirm the data round-trips. Don't trust callback-fire mocks.
+- **Diff against the design source** if one exists (`resources/<handoff>/...`). Note any deviations in the hand-off summary.
+
+For integration changes — if the spec promised "X will replace Y" or "this updates Z to consume W":
+- **Grep the integration site** to verify the swap landed. Example: if the spec says "wire `<NewComponent>` into `<page.tsx>`", grep for both `<NewComponent>` (should be present) and `<OldComponent>` (should be absent).
+- **Don't ship if the predecessor's promised handoff is still un-integrated.** That's the RS-64 miss in concrete form.
+
+If something fails this self-check, **surface it in the hand-off summary** — don't paper over. The user paces; they decide whether to ship-with-known-gap or revise.
+
+### Anti-rationalization guard
+
+If the user asks during execution about visible state — *"is this correct?"*, *"why does it look like this?"*, *"shouldn't there be X here?"* — and provides a screenshot or describes what they see:
+
+**Default behavior: skepticism + verification, not defense.**
+
+1. **Re-read the relevant section of the spec** (don't paraphrase from memory)
+2. **Grep the integration site** (don't infer from comments)
+3. **Compare what's shown to what the spec says**
+4. **Surface any gap honestly**, even if a comment in the code "explains" the current state as intentional (placeholder comments are load-bearing only when the predecessor's spec doesn't promise replacement)
+
+Do **not** generate plausible-sounding rationale that fits the visible artifact. RS-64's miss got worse because Claude pattern-matched on a placeholder comment header and explained the missing integration as "wiring harness for something to come later" — when in fact RS-63's spec said "RS-64 will replace the placeholder." The integration was promised; the comment was misleading; rationalizing made the user trust a broken state.
+
+When in doubt, default to: *"Let me check the spec and the integration site before I answer."*
+
 ## Step 7 — Hand off, don't auto-ship
 
 Print:
