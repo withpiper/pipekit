@@ -1,4 +1,4 @@
-# Pipekit Runbook (v2.0.0)
+# Pipekit Runbook (v2.1.0)
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -9,11 +9,12 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.0.0-alpha.12       (or latest tag)
+1. ./scripts/sync-method.sh v2.1.0                (or latest tag)
 2. Append "## V2" config block to method.config.md (see V2.md § examples)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. Wire Stop hook into .claude/settings.json       (paste from method/templates/v2/)
 5. ./bin/pk init     →  ./bin/pk doctor            (expect all green)
+6. ./bin/pk install                                (puts pk on $PATH globally)
 ```
 
 ---
@@ -27,11 +28,18 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [1] Find next issue                                      │
-  │     ./bin/pk next                                        │
-  │     • reads Linear (Approved, prio desc) + git state     │
-  │     • prints next issue + suggested command              │
-  │     • optional: ./bin/pk status   (full board view)      │
+  │ [1] Find next issue   (phase-aware as of v2.1.0)         │
+  │     pk next                                              │
+  │     • reads "## Current Phase:" from PHASES.md           │
+  │     • matches to linear-map.json project entry           │
+  │     • groups Linear results by status:                   │
+  │         In Progress  (with /work hint)                   │
+  │         Approved     (with pk branch hint)               │
+  │         Needs Spec   (with /light-spec hint)             │
+  │     • surfaces "Other phases: N Approved outside" footer │
+  │     • falls back to global "next Approved" when no       │
+  │       PHASES.md or linear-map.json present               │
+  │     • optional: pk status   (full unscoped board view)   │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -87,25 +95,73 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [5b] Antagonistic PR review  (RECOMMENDED — opt-in)      │
-  │      ./bin/pk ship --review     OR                       │
-  │      Invoke pr-review-toolkit:code-reviewer manually     │
+  │      pk ship --review                                    │
   │                                                          │
-  │      • Spawns reviewer subagent against the diff         │
-  │      • Rubric: auth correctness, brand hygiene, test     │
-  │        coverage gaps, prod-posture invariants,           │
-  │        unspec'd-but-needed cross-cutting concerns        │
-  │      • Posts findings as PR review comment via gh REST   │
+  │      • Prints reviewer subagent invocation               │
+  │      • Posts a Linear comment flagging review-in-flight  │
+  │        (v2.1.0 — closes mid-loop visibility gap)         │
+  │      • You paste invocation into Claude session;         │
+  │        agent reviews + posts findings as PR comment      │
   │      • Severity-ranked: Critical / High / Medium / Low   │
   │                                                          │
-  │      Why: catches things /work and /verify don't —       │
-  │      they validate spec adherence, the reviewer plays    │
-  │      devil's advocate. RS-60 ship found 1 critical +     │
-  │      3 high real issues this way. Don't skip on          │
-  │      anything auth/security/financial.                   │
+  │      Rubric: auth correctness, brand hygiene, test       │
+  │      coverage gaps, prod-posture invariants, unspec'd-   │
+  │      but-needed cross-cutting concerns. The reviewer     │
+  │      plays devil's advocate vs /work + /verify which     │
+  │      validate spec adherence.                            │
   │                                                          │
-  │      alpha.12 status: --review prints the invocation     │
-  │      template; you copy-run it. alpha.13 will auto-      │
-  │      dispatch the subagent and post directly.            │
+  │      Don't skip on anything auth/security/financial.     │
+  │      Status: --review prints the invocation template;    │
+  │      auto-dispatch is on the v2.1+ backlog.              │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [5c] /pr-fix triage   (RECOMMENDED — after 5b findings)  │
+  │      /pr-fix                                             │
+  │                                                          │
+  │      • Reads PR review comments + diff                   │
+  │      • Cross-spec handoff scan (v2.0.1 skill prose):     │
+  │        fetches predecessor specs via Linear MCP, checks  │
+  │        every "X will…" promise landed in this PR;        │
+  │        unfulfilled handoff = Critical regardless of own  │
+  │        AC list                                           │
+  │      • Confidence scoring per finding (verify before     │
+  │        applying — Critical findings have a verification  │
+  │        bar, see Calibration notes below)                 │
+  │      • Interactive: user picks which to fix / reject /   │
+  │        defer                                             │
+  │      • Applies fixes as separate commits, validates      │
+  │        gate, force-pushes to PR                          │
+  │      • Posts Linear comment with triage summary          │
+  │        (fixed N / rejected N / deferred N) — v2.1.0      │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [5d] /pr-security-review  (OPT-IN — security surface)    │
+  │      /pr-security-review                                 │
+  │                                                          │
+  │      Run when the PR touches ANY of:                     │
+  │      • supabase/migrations/** or *.sql files             │
+  │      • SECURITY DEFINER function definitions             │
+  │      • CREATE POLICY / ALTER POLICY (RLS)                │
+  │      • GRANT / REVOKE statements                         │
+  │      • auth code, middleware, session handling           │
+  │      • Server Actions on privileged tables (audit_log,   │
+  │        profiles, auth.users)                             │
+  │                                                          │
+  │      Surface-specific rubrics: M1-M8 migrations, R1-R6   │
+  │      RLS, S1-S8 SECURITY DEFINER, G1-G3 GRANT/REVOKE,    │
+  │      A1-A5 auth, P1-P4 server actions on privileged.    │
+  │                                                          │
+  │      Different from pk ship --review (broad/generic)     │
+  │      and /security-review (periodic repo audit). Run     │
+  │      ALONGSIDE 5b for security-sensitive PRs — they      │
+  │      cover different surface area.                       │
+  │                                                          │
+  │      Posts findings to PR + Linear summary comment.      │
+  │      v2.1.0 added — surfaced by RS-74 (rs-vault).        │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -159,19 +215,23 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 | # | Step | Command | Where | Auth |
 |---|---|---|---|---|
-| 1 | Find next | `./bin/pk next` | parent, dev | reads Linear |
-| 1 | Quick status | `./bin/pk status` | parent | reads Linear |
-| 2 | Branch | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
+| 1 | Find next (phase-aware) | `pk next` | parent, dev | reads PHASES.md + Linear |
+| 1 | Quick status | `pk status` | parent | reads Linear (full board, unscoped) |
+| 2 | Branch | `pk branch <ID>` | parent, dev | writes Linear (In Progress) |
 | 3 | Plan + execute | `/work <ID>` | worktree | reads Linear |
 | 3 | (Variant) | `/work <ID> --deep` | worktree | reads Linear; spawns 3 grounding agents |
-| 4 | Verify | `/verify` or `./bin/pk verify` | worktree | local-only |
-| 5 | Ship | `./bin/pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
-| 5 | (Variant) | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
-| **5b** | **Antagonistic review** | **`./bin/pk ship --review`** | **worktree** | **spawns code-reviewer agent → posts findings to PR** |
-| 7 | Cleanup | `./bin/pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree |
-| 8 | Promote | `./bin/pk promote` | parent, dev | dev → main batch |
-| meta | Diagnose | `./bin/pk doctor` | anywhere | config + API ping |
-| meta | Bootstrap | `./bin/pk init` | repo root | walks setup |
+| 3 | (Variant) | `/work <ID> --backend=vbw\|native` | worktree | per-invocation backend override (v2.0) |
+| 4 | Verify | `/verify` or `pk verify` | worktree | local-only |
+| 5 | Ship | `pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
+| 5 | (Variant) | `pk ship --env=<env>` | worktree | + targets specific environment |
+| **5b** | **Antagonistic review** | **`pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
+| **5c** | **/pr-fix triage** | **`/pr-fix`** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
+| **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
+| 7 | Cleanup | `pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree + posts journal highlights |
+| 8 | Promote | `pk promote [--stash\|--take-remote]` | parent, dev | dev → main batch (v2.0 added flag) |
+| meta | Diagnose | `pk doctor` | anywhere | config + API ping |
+| meta | Bootstrap | `pk init` | repo root | walks setup |
+| meta | Install | `pk install` | repo root | symlinks pk onto $PATH (v2.0) |
 | meta | View journal | `./bin/pk log` | worktree, feature | local-only |
 | meta | Linear Agent | `./bin/pk delegate <ID> <prompt>` | anywhere | posts @Linear-mentioned comment |
 | meta | Help | `./bin/pk help` | anywhere | — |
@@ -296,37 +356,25 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 - `pk promote --stash` / `--take-remote` flags for local-edit conflict resolution
 - REST-first ordering in `pk_gh_pr_view` / `pk_gh_pr_create` (was burning GraphQL quota)
 
-### v2.1 candidates
+### Shipped in v2.1.0 (2026-05-02 PM)
+
+- ✅ **Phase-aware `pk next`** — reads current phase from PHASES.md + linear-map.json; groups by status (In Progress / Approved / Needs Spec) with per-group next-action hints; "Other phases" footer.
+- ✅ **`/pr-security-review` skill** — security-focused antagonistic PR review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, auth, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories.
+- ✅ **Mid-loop Linear visibility for `pk ship --review` + `/pr-fix`** — both now post Linear comments. `pk ship --review` flags review-in-flight; `/pr-fix` Phase 6.6 posts triage-complete summary.
+
+### v2.1.x / v2.2 candidates (still backlog)
 
 - **`resources/` vs `temp/` portable convention** — `resources/` for committed reference materials (design handoffs, spec dependencies); `temp/` fully gitignored for ephemera. Bake into `method.md`, `templates/`, and consuming-project bootstrap. Surfaced 2026-05-02 when RS-63's `/work` couldn't see the design handoff (lived in parent's `temp/`, gitignored, didn't travel to worktree).
 - **`pk branch` worktree-aware resource sync** — copy `resources/` (and any `.pkignore`-listed paths) into new worktrees so gitignored-but-needed files travel with the work. Companion to the convention above.
-- **Phase-aware `pk next`** — surfaces issues grouped by status within the current phase: In Progress, Approved, Needs Spec (with `/light-spec` hint per item), separated from "Other phases". Reads current phase from `PHASES.md`, scopes Linear queries by project ID from `linear-map.json`. Today's `pk next` only finds the first Approved issue anywhere — silent when current phase has none even though there's actionable work (`/light-spec` candidates). Surfaced 2026-05-02 during RS-63 execution: Phase 2.5 had RS-63 in flight + 6 Needs Spec issues but `pk next` was useless.
-- **Mid-loop Linear visibility for review + fix** — `pk ship --review` (or `/ship` when it lands) should post a Linear comment summarizing the antagonistic review (severity counts, recommendation, PR comment URL) when the review is posted. `/pr-fix` should post a Linear comment when triage completes (fixes applied, findings rejected with reason, deferrals). Today's gap: Linear sees `In Progress → UAT → Done` but no record of "review found 16 things, 1 was a false positive verified via MCP, 7 fixed, 8 deferred." That context lives only on the PR. Surfaced 2026-05-02 during RS-63 review/fix cycle.
 
-### Flowchart promotion (v2.1)
+### Flowchart promotion (still pending — v2.1.x or v2.2)
 
-When the visual-review and cross-spec-verify items below ship as actual code/skill changes, the flowchart in §"Per-issue flowchart" needs an update:
+v2.1.0 added [5c] /pr-fix and [5d] /pr-security-review explicitly to the flowchart. Two items still pending:
 
-- **Insert a new step between [4] Verify and [5] Ship**: visual-state verification — runs Playwright (or equivalent) against the worktree's running app at key user states, diffs against figma source. Optional gate (config: `Require visual review: true|false`). Catches the class of miss where components compile + tests pass but the integration didn't land (today's RS-64 example).
-- **Update [5b] Antagonistic PR review** to call out the cross-spec handoff check explicitly: reviewer must fetch predecessor specs (any "X will…" references) and verify each promise landed in this PR.
-- **Add a [5c] /pr-fix triage** step explicitly in the flowchart (currently implicit between 5b and merge).
-- **Add a [5d] /pr-security-review** opt-in step (see new skill candidate below) — fires on PRs touching `supabase/migrations/`, `*.sql`, or `SECURITY DEFINER` functions.
+- **Insert a new step between [4] Verify and [5] Ship**: visual-state verification — runs Playwright (or equivalent) against the worktree's running app at key user states, diffs against figma source. Optional gate (config: `Require visual review: true|false`). Catches the class of miss where components compile + tests pass but the integration didn't land (RS-64 example). **Deferred** because this needs new infra (Playwright + diff library + figma-source resolver) — too big for the v2.1.0 same-day cut.
+- **"Defended status quo" guardrail at flowchart level** — already in `/work` skill prose (Step 6.5), but could be promoted to a dedicated flowchart step. Lower priority since the prose is already in.
 
-Today's flowchart shows steps 1–8 with 5b inserted but no visual review, no /pr-fix, no security review. After v2.1 ships, the chain becomes: 1 → 2 → 3 → 4 → **4b (visual)** → 5 → 5b → **5c (/pr-fix)** → **5d (/pr-security-review, opt-in)** → 6 → 7 → 8.
-
-### v2.1 — new skill: /pr-security-review
-
-**Gap surfaced 2026-05-02 PM by RS-74:** rs-vault has `/security-review` (a periodic codebase audit) and `pr-review-toolkit:review-pr` (a generic antagonistic review), but **nothing purpose-built for "security-focused review of THIS PR's diff."** Migration PRs (new RLS policies, `SECURITY DEFINER` functions, audit-log access) need a focused skill that bakes in the right rubric.
-
-Proposed `/pr-security-review` scope:
-
-- Fires on PRs touching: `supabase/migrations/**`, `*.sql`, files containing `SECURITY DEFINER`, `auth.uid()` references, RLS policy definitions
-- Loads a security-specific antagonistic prompt (RLS correctness, search_path hardening, function gate semantics, action allowlist coverage, PII / admin-only data leak vectors, type regen accuracy)
-- Posts findings as a PR review comment via `gh api -X POST .../pulls/<N>/reviews` — same shape as `pk ship --review`, separate prompt
-- Caller can run it in addition to `pk ship --review` (they cover different surface area) or instead, depending on PR shape
-- Companion to `/pr-fix` — its triage flow already verifies findings before applying
-
-This is **different from `/security-review`** (periodic repo-wide audit) and **different from `pr-review-toolkit:review-pr`** (broad PR review). Same skill family as `/pr-fix` — focused, PR-diff-scoped, opinionated rubric.
+After those land, final shape will be: 1 → 2 → 3 → 4 → **4b (visual)** → 5 → 5b → 5c → 5d → 6 → 7 → 8.
 
 ### Surfaced 2026-05-02 PM (RS-64 cross-spec miss)
 
