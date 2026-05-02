@@ -300,6 +300,7 @@ Both work. Switch back at any time. v2 commands are non-colliding.
 
 - **`resources/` vs `temp/` portable convention** — `resources/` for committed reference materials (design handoffs, spec dependencies); `temp/` fully gitignored for ephemera. Bake into `method.md`, `templates/`, and consuming-project bootstrap. Surfaced 2026-05-02 when RS-63's `/work` couldn't see the design handoff (lived in parent's `temp/`, gitignored, didn't travel to worktree).
 - **`pk branch` worktree-aware resource sync** — copy `resources/` (and any `.pkignore`-listed paths) into new worktrees so gitignored-but-needed files travel with the work. Companion to the convention above.
+- **Phase-aware `pk next`** — surfaces issues grouped by status within the current phase: In Progress, Approved, Needs Spec (with `/light-spec` hint per item), separated from "Other phases". Reads current phase from `PHASES.md`, scopes Linear queries by project ID from `linear-map.json`. Today's `pk next` only finds the first Approved issue anywhere — silent when current phase has none even though there's actionable work (`/light-spec` candidates). Surfaced 2026-05-02 during RS-63 execution: Phase 2.5 had RS-63 in flight + 6 Needs Spec issues but `pk next` was useless.
 - Automated subagent dispatch from `pk ship --review` — see `temp/ship-skill-spec.md` for full scope. Crosses shell ↔ skill ↔ subagent boundary; needs `/ship` skill wrapper.
 
 ### beta candidates
