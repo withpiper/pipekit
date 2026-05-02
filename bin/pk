@@ -26,7 +26,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.1.0"
+PK_VERSION="2.1.1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1016,6 +1016,39 @@ cmd_init() {
     echo "  ✗ \$$key_var not exported. Set in shell rc:"
     echo "    export $key_var=lin_api_xxx"
   fi
+  # Notepad convention (v2.1.1+) — seed a gitignored personal notepad if
+  # one doesn't already exist. Replaces v1's NEXT.md (which was machine-
+  # readable state — pk next is now canonical for "what to do next").
+  echo ""
+  echo "Notepad:"
+  local notepad="$root/notepad.md"
+  local gi="$root/.gitignore"
+  if [ ! -f "$notepad" ]; then
+    cat > "$notepad" <<NOTEPAD
+# Notepad
+
+Personal scratch — gitignored, never committed. Use freely.
+
+For "what should I do next?" run \`pk next\` (phase-aware as of pipekit v2.1.0).
+NOTEPAD
+    echo "  ✓ created notepad.md (gitignored, personal scratch)"
+  else
+    echo "  ✓ notepad.md already exists (kept as-is)"
+  fi
+  if [ -f "$gi" ] && ! grep -qE '^notepad\.md$' "$gi"; then
+    echo "" >> "$gi"
+    echo "# personal notepad — replaces v1 NEXT.md; free-form, never committed" >> "$gi"
+    echo "notepad.md" >> "$gi"
+    echo "  ✓ added 'notepad.md' to .gitignore"
+  elif [ -f "$gi" ]; then
+    echo "  ✓ .gitignore already excludes notepad.md"
+  fi
+  # If a stale NEXT.md is hanging around, flag it (don't auto-delete — user's call)
+  if [ -f "$root/NEXT.md" ]; then
+    echo "  ⚠ NEXT.md present — v1 artifact, retired in v2. Consider removing:"
+    echo "      git rm NEXT.md  &&  git commit -m 'chore: retire NEXT.md (use pk next)'"
+  fi
+
   echo ""
   echo "Next: pk doctor (deeper check) → pk next (find an issue) → pk branch <ID>"
 }

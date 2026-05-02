@@ -3,6 +3,13 @@
 **Last updated:** 2026-04-08 *(content predates v2 cut; see banner below)*
 
 > ⚠️ **v2 transition (2026-05-02):** Pipekit's daily loop has been replaced by `bin/pk` + `/work` + `/verify`. The canonical operational doc is now [`RUNBOOK.md`](./RUNBOOK.md). References below to `/launch`, `/branch`, `/start-session`, `/end-session`, `/linear-status`, `/g-promote-*` describe the **retired v1 daily loop** — those skills now live under `archive/v1-skills/` and are no longer the recommended path. Stage 0 (foundation) and orthogonal skills (`/light-spec`, `/brainstorm`, `/pr-fix`, etc.) are unchanged. A full method.md rewrite is queued for v2.0.1.
+>
+> **NEXT.md is retired.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer. v2 replaces it with `pk next` (which reads Linear directly + scopes to the current phase via `PHASES.md` as of v2.1.0). Consuming projects should:
+> - Delete any committed `NEXT.md` (`git rm NEXT.md`)
+> - Add `notepad.md` to `.gitignore` for personal free-form notes (never committed; replaces NEXT.md as a human scratch space)
+> - Use `pk next` for the canonical "what's next?" answer
+>
+> `pk init` (v2.1.1+) seeds a starter `notepad.md` and adds the gitignore line on first run. If a stale `NEXT.md` is present, `pk init` flags it but does not auto-delete.
 
 ## Overview
 
