@@ -1,0 +1,16 @@
+{
+  "_comment_pipekit_v2": "Add this Stop hook entry to your project's .claude/settings.json (merge with existing hooks). Path resolves at hook-run time; works inside worktrees.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/scripts/pipekit-journal-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,1147 @@
+#!/usr/bin/env bash
+# pk — Pipekit v2 daily-loop dispatcher
+#
+# North star: safe and frictionless. Helps, never adds work.
+#
+# All subcommands are idempotent against Linear+git ground truth.
+# Recovery = rerun the command. Read state, decide what's left, do only that.
+#
+# Subcommands:
+#   pk next                 — what should I do now? (Linear + git → next command)
+#   pk status               — quick triage of in-flight + UAT + Approved
+#   pk branch <ID>          — create worktree+branch, Linear → In Progress
+#   pk ship [--env=<env>]   — push, gh pr create, Linear → In Review
+#   pk done                 — verify PR merged, cleanup worktree+branch, Linear → Done
+#   pk verify               — light verify (run test cmd from method.config.md)
+#   pk promote              — dev → main batch promote (multi-tier projects)
+#   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
+#
+# Linear access: GraphQL via $LINEAR_API_KEY (env var name configurable in
+# method.config.md → "Linear API key env var"). If absent, scripts that need
+# Linear print a clear "set LINEAR_API_KEY" and exit.
+
+set -euo pipefail
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Discovery & configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+PK_VERSION="2.0.0"
+
+pk_repo_root() {
+  git rev-parse --show-toplevel 2>/dev/null
+}
+
+pk_config_path() {
+  local root
+  root=$(pk_repo_root) || return 1
+  echo "$root/method.config.md"
+}
+
+# Read a value from method.config.md by row label. Looks for table rows like:
+#   | **Backend** | `native` | ... |
+# Prints the first backticked or pipe-delimited value after the label.
+pk_config() {
+  local label="$1"
+  local default="${2:-}"
+  local path
+  path=$(pk_config_path) || { echo "$default"; return 0; }
+  [ -f "$path" ] || { echo "$default"; return 0; }
+  local line
+  line=$(grep -E "^\| \*\*${label}\*\*" "$path" 2>/dev/null | head -1 || true)
+  if [ -z "$line" ]; then
+    echo "$default"
+    return 0
+  fi
+  # Extract second column. Strip pipes, backticks, asterisks; trim.
+  local value
+  value=$(echo "$line" | awk -F'|' '{print $3}' | sed 's/`//g; s/\*\*//g; s/^ *//; s/ *$//')
+  if [ -z "$value" ]; then
+    echo "$default"
+  else
+    echo "$value"
+  fi
+}
+
+# Resolve integration branch with fallback chain.
+pk_integration_branch() {
+  local cfg
+  cfg=$(pk_config "Integration branch" "")
+  if [ -n "$cfg" ]; then
+    echo "$cfg"
+    return 0
+  fi
+  if git show-ref --verify --quiet refs/remotes/origin/dev 2>/dev/null; then
+    echo "dev"
+    return 0
+  fi
+  git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main"
+}
+
+pk_linear_api_key_var() {
+  pk_config "Linear API key env var" "LINEAR_API_KEY"
+}
+
+pk_linear_api_key() {
+  local var
+  var=$(pk_linear_api_key_var)
+  local val
+  # Priority for secrets: project-local > process env > empty.
+  # This protects against a stale-inherited process env (e.g. Claude Code
+  # bash subshell launched before the user fixed their key) overriding
+  # the authoritative project-local key.
+  # Order: .env.local (private overrides) → .env (project defaults) → $VAR.
+  local root
+  root=$(pk_repo_root) || root=""
+  if [ -n "$root" ]; then
+    for f in "$root/.env.local" "$root/.env"; do
+      if [ -f "$f" ]; then
+        val=$(grep -E "^(export +)?${var}=" "$f" 2>/dev/null | tail -1 | sed -E "s/^(export +)?${var}=//; s/^['\"]//; s/['\"]$//")
+        if [ -n "$val" ]; then
+          echo "$val"
+          return 0
+        fi
+      fi
+    done
+  fi
+  # Last resort: process env. Useful for ambient overrides + projects without .env.
+  val=$(eval echo "\${$var:-}")
+  if [ -n "$val" ]; then
+    echo "$val"
+    return 0
+  fi
+  echo ""
+}
+
+pk_team_name() {
+  pk_config "Team name" ""
+}
+
+pk_team_id() {
+  pk_config "Team ID" ""
+}
+
+pk_issue_prefix() {
+  pk_config "Issue prefix" ""
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Linear GraphQL helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+pk_linear_gql() {
+  local query="$1"
+  local variables="${2:-}"
+  [ -z "$variables" ] && variables='{}'
+  local key
+  key=$(pk_linear_api_key)
+  if [ -z "$key" ]; then
+    echo "ERROR: Linear API key not set. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..." >&2
+    return 1
+  fi
+  curl -sS -X POST https://api.linear.app/graphql \
+    -H "Authorization: $key" \
+    -H "Content-Type: application/json" \
+    --data "$(jq -n --arg q "$query" --argjson v "$variables" '{query:$q, variables:$v}')"
+}
+
+# Get issue by identifier (e.g. "RS-30"). Prints JSON.
+# Minimal field set — only fields callers (cmd_branch, cmd_ship) actually use.
+pk_linear_issue() {
+  local id="$1"
+  local q='query($id: String!) { issue(id: $id) { id identifier title } }'
+  pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -r '.data.issue // empty'
+}
+
+# Get issues in a state for current team. State name like "Approved".
+pk_linear_issues_in_state() {
+  local state="$1"
+  local team
+  team=$(pk_team_name)
+  if [ -z "$team" ]; then
+    echo "ERROR: Team name not set in method.config.md" >&2
+    return 1
+  fi
+  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title state { name } } } }'
+  pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" '{team:$team, state:$state}')" \
+    | jq -r '.data.issues.nodes // []'
+}
+
+# Update issue state by identifier + state name.
+pk_linear_set_state() {
+  local id="$1"
+  local state_name="$2"
+  # Filter workflowStates by team NAME (reliable — pk_team_name reads
+  # method.config.md robustly). Earlier versions used team.id.eq with
+  # pk_team_id, but Team ID may be empty in many configs and the filter
+  # silently returned no states, masquerading as "state not found".
+  local team_name
+  team_name=$(pk_team_name)
+  if [ -z "$team_name" ]; then
+    echo "ERROR: Team name not set in method.config.md" >&2
+    return 1
+  fi
+  local state_q='query($team: String!, $name: String!) { workflowStates(filter: {team: {name: {eq: $team}}, name: {eq: $name}}) { nodes { id name } } }'
+  local state_id
+  state_id=$(pk_linear_gql "$state_q" "$(jq -n --arg team "$team_name" --arg name "$state_name" '{team:$team, name:$name}')" \
+    | jq -r '.data.workflowStates.nodes[0].id // empty')
+  if [ -z "$state_id" ]; then
+    echo "ERROR: state '$state_name' not found in Linear team" >&2
+    return 1
+  fi
+  # Resolve issue UUID from identifier
+  local issue_q='query($id: String!) { issue(id: $id) { id state { name } } }'
+  local resp
+  resp=$(pk_linear_gql "$issue_q" "$(jq -n --arg id "$id" '{id:$id}')")
+  local current_state issue_uuid
+  current_state=$(echo "$resp" | jq -r '.data.issue.state.name // empty')
+  issue_uuid=$(echo "$resp" | jq -r '.data.issue.id // empty')
+  if [ -z "$issue_uuid" ]; then
+    echo "ERROR: issue $id not found" >&2
+    return 1
+  fi
+  # Idempotent: skip if already in target state
+  if [ "$current_state" = "$state_name" ]; then
+    echo "  Linear: $id already in '$state_name' (skip)"
+    return 0
+  fi
+  local mutation='mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: {stateId: $state}) { success } }'
+  pk_linear_gql "$mutation" "$(jq -n --arg id "$issue_uuid" --arg state "$state_id" '{id:$id, state:$state}')" >/dev/null
+  echo "  Linear: $id $current_state → $state_name"
+}
+
+pk_linear_comment() {
+  local id="$1"
+  local body="$2"
+  local issue_q='query($id: String!) { issue(id: $id) { id } }'
+  local issue_uuid
+  issue_uuid=$(pk_linear_gql "$issue_q" "$(jq -n --arg id "$id" '{id:$id}')" \
+    | jq -r '.data.issue.id // empty')
+  if [ -z "$issue_uuid" ]; then
+    echo "ERROR: issue $id not found" >&2
+    return 1
+  fi
+  local mutation='mutation($issue: String!, $body: String!) { commentCreate(input: {issueId: $issue, body: $body}) { success } }'
+  pk_linear_gql "$mutation" "$(jq -n --arg issue "$issue_uuid" --arg body "$body" '{issue:$issue, body:$body}')" >/dev/null
+  echo "  Linear: comment posted on $id"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Git / worktree helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+pk_current_branch() {
+  git branch --show-current 2>/dev/null
+}
+
+# Extract issue ID from current branch name. Looks for <PREFIX>-<digits> anywhere.
+pk_branch_issue_id() {
+  local branch
+  branch=$(pk_current_branch)
+  local prefix
+  prefix=$(pk_issue_prefix)
+  # `|| true` because under `set -euo pipefail`, grep with no matches exits 1
+  # and pipefail propagates that through the pipeline, killing the script.
+  # Empty output is the correct "no issue ID found" signal here.
+  if [ -n "$prefix" ]; then
+    { echo "$branch" | grep -oE "${prefix}-[0-9]+" | head -1; } || true
+  else
+    { echo "$branch" | grep -oE "[A-Z]+-[0-9]+" | head -1; } || true
+  fi
+}
+
+pk_worktree_path() {
+  local id="$1"
+  local root
+  root=$(pk_repo_root)
+  echo "$root/.worktrees/${id}"
+}
+
+# Slugify issue title — lowercase, replace non-alnum with -, collapse, trim,
+# keep first 3 words. Short slugs keep status bars and worktree paths sane.
+# Stop words removed up-front (and, the, of, for, in, on, to, with) so the
+# 3-word window lands on meaningful tokens. e.g. "Wire Microsoft SSO sign-in
+# into /login (app-side)" → "wire-microsoft-sso", not "wire-microsoft-sso-
+# sign-in-into-login-app-side".
+pk_slug() {
+  local title="$1"
+  echo "$title" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/\b(and|the|of|for|in|on|to|with|into|a|an)\b//g; s/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+    | cut -d- -f1-3
+}
+
+# gh CLI uses GraphQL by default; when rate-limited it returns empty results
+# that look identical to "PR not found". These helpers retry through the REST
+# API (separate, more generous rate limit bucket) when GraphQL fails or is
+# empty. See alpha.13 backlog: gh REST fallback.
+pk_gh_repo_slug() {
+  # Parse owner/repo from git remote — pure local, no API call.
+  # Critical: this helper supports the REST-fallback path, which fires
+  # precisely when GraphQL is exhausted, so it cannot itself call GraphQL.
+  local url
+  url=$(git remote get-url origin 2>/dev/null) || return 1
+  echo "$url" | sed -E 's#^.*github\.com[:/]##; s#\.git$##'
+}
+
+# Look up a PR by head branch. Output: JSON {state, url, number} or empty.
+# state is normalized to GraphQL shape (OPEN / CLOSED / MERGED).
+#
+# Prefers REST over GraphQL. The REST quota (5000/hr) is a separate bucket
+# from GraphQL's, and `gh pr view` (GraphQL) was burning quota on every
+# successful pk call — multiple worktrees + repeated `pk status` exhausted
+# the GraphQL pool mid-day. REST returns the same data with no downside.
+# GraphQL is kept as a fallback only for the case where REST fails (network,
+# auth, etc.) — not for rate-limit recovery in the other direction.
+pk_gh_pr_view() {
+  local branch="$1"
+  local slug
+  slug=$(pk_gh_repo_slug)
+  if [ -n "$slug" ]; then
+    local owner="${slug%%/*}"
+    local rest
+    rest=$(gh api "repos/${slug}/pulls?head=${owner}:${branch}&state=all&per_page=1" 2>/dev/null | jq -c '.[0] // empty' 2>/dev/null)
+    if [ -n "$rest" ]; then
+      echo "$rest" | jq -c '{
+        state: (if .merged_at then "MERGED" elif .state == "open" then "OPEN" else "CLOSED" end),
+        url: .html_url,
+        number: .number
+      }'
+      return 0
+    fi
+  fi
+  # REST returned nothing — try GraphQL as last resort.
+  local result
+  result=$(gh pr view "$branch" --json state,url,number 2>/dev/null || true)
+  if [ -n "$result" ] && [ "$result" != "null" ]; then
+    echo "$result"
+  fi
+}
+
+# Create a PR. Args: --base X --head Y --title T --body B. Outputs the PR URL.
+#
+# Prefers REST (5000/hr quota, separate bucket from GraphQL). Caller must
+# ensure the head branch is pushed to origin first; pk ship and pk promote
+# both do this. GraphQL kept as fallback for non-rate-limit failures.
+pk_gh_pr_create() {
+  local base head title body
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --base)  base="$2";  shift 2 ;;
+      --head)  head="$2";  shift 2 ;;
+      --title) title="$2"; shift 2 ;;
+      --body)  body="$2";  shift 2 ;;
+      *) echo "pk_gh_pr_create: unknown arg $1" >&2; return 2 ;;
+    esac
+  done
+  local slug
+  slug=$(pk_gh_repo_slug)
+  if [ -n "$slug" ]; then
+    local rest_url rest_err
+    rest_err=$(mktemp)
+    rest_url=$(gh api -X POST "repos/${slug}/pulls" \
+      -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
+      --jq '.html_url' 2>"$rest_err")
+    if [ -n "$rest_url" ]; then
+      rm -f "$rest_err"
+      echo "$rest_url"
+      return 0
+    fi
+    # REST failed — surface error and try GraphQL as last resort.
+    echo "REST pr create failed: $(tail -1 "$rest_err")" >&2
+    rm -f "$rest_err"
+  fi
+  local out
+  if out=$(gh pr create --base "$base" --head "$head" --title "$title" --body "$body" 2>&1); then
+    echo "$out" | grep -oE 'https://[^ ]+' | head -1
+    return 0
+  fi
+  echo "$out" >&2
+  return 1
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommands
+# ─────────────────────────────────────────────────────────────────────────────
+
+cmd_next() {
+  local current
+  current=$(pk_current_branch)
+  local issue
+  issue=$(pk_branch_issue_id)
+  if [ -n "$issue" ]; then
+    # On a feature branch — show in-flight state
+    echo "On branch: $current"
+    echo "Issue: $issue"
+    local pr_state
+    pr_state=$(pk_gh_pr_view "$current")
+    if [ -n "$pr_state" ]; then
+      local state url
+      state=$(echo "$pr_state" | jq -r '.state')
+      url=$(echo "$pr_state" | jq -r '.url')
+      echo "PR: $state — $url"
+      case "$state" in
+        OPEN)   echo ""; echo "Next: review/merge the PR, then  pk done" ;;
+        MERGED) echo ""; echo "Next: pk done" ;;
+        CLOSED) echo ""; echo "Next: PR closed without merge — investigate, then  pk done  to clean up" ;;
+      esac
+    else
+      echo "PR: not opened yet"
+      echo ""
+      echo "Next: /work $issue   (or  pk ship  if work is done)"
+    fi
+    return 0
+  fi
+  # Not on a feature branch — find next Approved
+  local integration
+  integration=$(pk_integration_branch)
+  if [ "$current" != "$integration" ] && [ "$current" != "main" ]; then
+    echo "Current branch: $current (not feature, not integration)"
+    echo "Switch to $integration first:  git checkout $integration"
+    return 0
+  fi
+  echo "On $current — looking for next Approved issue in Linear..."
+  local approved
+  approved=$(pk_linear_issues_in_state "Approved" 2>/dev/null || echo "[]")
+  local count
+  count=$(echo "$approved" | jq 'length')
+  if [ "$count" = "0" ]; then
+    echo "No Approved issues. Check  pk status  for the full board."
+    return 0
+  fi
+  local next_id next_title
+  next_id=$(echo "$approved" | jq -r '.[0].identifier')
+  next_title=$(echo "$approved" | jq -r '.[0].title')
+  echo "Next: $next_id — $next_title"
+  echo ""
+  echo "Run:  pk branch $next_id"
+  if [ "$count" -gt 1 ]; then
+    echo ""
+    echo "($count Approved issues total. Use  pk status  to see all.)"
+  fi
+}
+
+cmd_status() {
+  local team
+  team=$(pk_team_name)
+  if [ -z "$team" ]; then
+    echo "ERROR: Team name not set in method.config.md" >&2
+    return 1
+  fi
+  echo "── Linear: $team ──"
+  for state in "In Progress" "Building" "UAT" "Approved"; do
+    local issues count
+    issues=$(pk_linear_issues_in_state "$state" 2>/dev/null || echo "[]")
+    count=$(echo "$issues" | jq 'length')
+    echo ""
+    echo "$state ($count):"
+    if [ "$count" = "0" ]; then
+      echo "  (none)"
+    else
+      { echo "$issues" | jq -r '.[] | "  \(.identifier) — \(.title)"' | head -10; } || true
+    fi
+  done
+  # Local in-flight
+  echo ""
+  echo "── Local worktrees ──"
+  local root
+  root=$(pk_repo_root)
+  if [ -d "$root/.worktrees" ]; then
+    git worktree list | grep "\.worktrees/" || echo "  (none)"
+  else
+    echo "  (none)"
+  fi
+}
+
+cmd_branch() {
+  local id="${1:-}"
+  if [ -z "$id" ]; then
+    echo "Usage: pk branch <ISSUE-ID>" >&2
+    return 1
+  fi
+  local issue
+  issue=$(pk_linear_issue "$id")
+  if [ -z "$issue" ]; then
+    echo "ERROR: issue $id not found in Linear" >&2
+    return 1
+  fi
+  local title slug
+  title=$(echo "$issue" | jq -r '.title')
+  slug=$(pk_slug "$title")
+  local branch_name="feature/${id}-${slug}"
+  local root wt_path
+  root=$(pk_repo_root)
+  wt_path="$root/.worktrees/${id}-${slug}"
+
+  # Idempotent: worktree already exists?
+  if [ -d "$wt_path" ]; then
+    echo "Worktree already exists: $wt_path"
+  else
+    local integration
+    integration=$(pk_integration_branch)
+    echo "Creating worktree at $wt_path off $integration..."
+    git fetch origin "$integration" --quiet
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+      git worktree add "$wt_path" "$branch_name"
+    else
+      git worktree add "$wt_path" -b "$branch_name" "origin/$integration"
+    fi
+  fi
+
+  # Symlink env files (idempotent)
+  for envf in .env .env.local .env.dev .env.prod .mcp.json .sentryclirc; do
+    if [ -f "$root/$envf" ] && [ ! -e "$wt_path/$envf" ]; then
+      ln -sf "$root/$envf" "$wt_path/$envf"
+    fi
+  done
+
+  # Sync parent's bin/pk into the worktree. Worktrees check out the committed
+  # version of bin/pk (often older than the parent's working tree, especially
+  # during alpha when patches land mid-flight). Without this, the worktree
+  # runs an outdated pk while the parent has the fixes.
+  if [ -f "$root/bin/pk" ] && [ "$root" != "$wt_path" ]; then
+    cp "$root/bin/pk" "$wt_path/bin/pk" 2>/dev/null && chmod +x "$wt_path/bin/pk"
+  fi
+
+  # Linear status: → In Progress (idempotent)
+  pk_linear_set_state "$id" "In Progress" || true
+
+  echo ""
+  echo "Done. To enter:"
+  echo "  cd $wt_path && claude --dangerously-skip-permissions"
+}
+
+cmd_ship() {
+  local env=""
+  local review=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --env=*) env="${1#--env=}"; shift ;;
+      --review) review=true; shift ;;
+      *) shift ;;
+    esac
+  done
+
+  local current
+  current=$(pk_current_branch)
+  local issue
+  issue=$(pk_branch_issue_id)
+  if [ -z "$issue" ]; then
+    echo "ERROR: not on a feature branch (no issue ID in branch name)" >&2
+    return 1
+  fi
+
+  # Push (idempotent — git is fine with re-pushes)
+  echo "Pushing $current..."
+  git push -u origin "$current"
+
+  # PR target
+  local target
+  if [ -n "$env" ]; then
+    target="$env"
+  else
+    target=$(pk_integration_branch)
+  fi
+
+  # Idempotent: PR already exists?
+  local pr_url
+  pr_url=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
+  if [ -n "$pr_url" ]; then
+    echo "PR already exists: $pr_url"
+  else
+    local title
+    title=$(pk_linear_issue "$issue" | jq -r '.title // empty')
+    local pr_body="Closes $issue"
+    [ -n "$title" ] && pr_body="$pr_body — $title"
+    pr_body="$pr_body
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+    echo "Opening PR against $target..."
+    pr_url=$(pk_gh_pr_create --base "$target" --head "$current" \
+      --title "${issue}: ${title:-$current}" \
+      --body "$pr_body") || return 1
+    echo "PR: $pr_url"
+  fi
+
+  # Linear: → In Review / UAT (state name varies; try common ones)
+  local target_state
+  case "$target" in
+    main) target_state="UAT" ;;
+    dev|beta) target_state="UAT" ;;
+    *) target_state="In Review" ;;
+  esac
+  pk_linear_set_state "$issue" "$target_state" || pk_linear_set_state "$issue" "In Review" || true
+
+  # Antagonistic review (opt-in via --review). Surfaces issues that /work
+  # and /verify don't catch — security posture, test coverage gaps, double-
+  # click races, etc. Posts findings as a PR review comment.
+  if $review; then
+    echo ""
+    echo "Spawning antagonistic code review against $pr_url..."
+    local pr_number
+    pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
+    cat <<INSTRUCTIONS
+Review the diff antagonistically. Find what could go wrong. Question every
+shortcut. Cite file:line for each finding. Group by severity
+(Critical/High/Medium/Low/Nit). Then post the review as a PR comment via:
+
+  gh api -X POST repos/<owner>/<repo>/pulls/${pr_number}/reviews \\
+    -f event=COMMENT -f body="<your full review markdown>"
+
+PR: $pr_url
+Issue: $issue ($target_state)
+Branch: $current
+INSTRUCTIONS
+    echo ""
+    echo "Run /pr-review-toolkit:review-pr or invoke pr-review-toolkit:code-reviewer"
+    echo "agent with the above instructions. (Automated subagent dispatch from"
+    echo "shell is alpha.13 — for now, copy the instructions into a Claude session.)"
+  fi
+}
+
+cmd_done() {
+  local id="${1:-}"
+  local current
+  local issue
+  if [ -n "$id" ]; then
+    # Explicit ID — find the matching feature branch by glob.
+    # This is the supported path: pk done is meant to run from the parent
+    # repo (so it can delete the worktree), where the current branch is
+    # 'dev' or 'main', not the feature branch being cleaned up.
+    issue="$id"
+    current=$(git branch --list "feature/${id}-*" --format="%(refname:short)" 2>/dev/null | head -1)
+    if [ -z "$current" ]; then
+      echo "ERROR: no local feature branch found matching feature/${id}-*" >&2
+      return 1
+    fi
+  else
+    # No arg — must be on the feature branch (rare; can only happen if
+    # called from inside a worktree but worktree-removal will refuse).
+    current=$(pk_current_branch)
+    issue=$(pk_branch_issue_id)
+    if [ -z "$issue" ]; then
+      echo "ERROR: pass <ISSUE-ID> or run from a feature branch (e.g. pk done RS-60)" >&2
+      return 1
+    fi
+  fi
+
+  # Verify PR is merged
+  local pr_state
+  pr_state=$(pk_gh_pr_view "$current" | jq -r '.state // empty')
+  if [ "$pr_state" != "MERGED" ]; then
+    echo "ERROR: PR for $current is not merged (state: ${pr_state:-NOT_FOUND})" >&2
+    echo "  Run  pk ship  to open the PR, or merge it manually first." >&2
+    return 1
+  fi
+
+  local root
+  root=$(pk_repo_root)
+  local wt_path
+  wt_path=$(git worktree list --porcelain | awk -v branch="$current" '
+    /^worktree / {wt=$2}
+    $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
+  ')
+
+  # Build a richer Linear comment from git + journal (best-effort).
+  # Falls back gracefully when any signal is missing.
+  local merge_base commits diffstat session_count pr_url_done
+  merge_base=$(git merge-base "$current" "$(pk_integration_branch)" 2>/dev/null || echo "")
+  if [ -n "$merge_base" ]; then
+    commits=$(git log "${merge_base}..${current}" --pretty=format:'- %h %s' 2>/dev/null | head -20)
+    diffstat=$(git diff --shortstat "${merge_base}..${current}" 2>/dev/null | sed 's/^[[:space:]]*//')
+  fi
+  local journal="$root/.pipekit/journal/${current}.md"
+  if [ -f "$journal" ]; then
+    session_count=$(grep -c '^---$' "$journal" 2>/dev/null || echo 0)
+  fi
+  pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
+
+  local body="**Shipped — ${issue}**"
+  [ -n "$pr_url_done" ] && body="$body
+PR: $pr_url_done"
+  [ -n "$diffstat" ]    && body="$body
+Diff: $diffstat"
+  [ -n "$session_count" ] && [ "$session_count" -gt 0 ] && body="$body
+Sessions: $session_count"
+  if [ -n "$commits" ]; then
+    body="$body
+
+**Commits:**
+$commits"
+  fi
+  pk_linear_comment "$issue" "$body" || true
+
+  # Linear → Done
+  pk_linear_set_state "$issue" "Done" || true
+
+  # Cleanup must run from parent
+  if [ "$wt_path" != "" ] && [ "$root" != "$wt_path" ]; then
+    if [ "$(pwd)" = "$wt_path" ]; then
+      echo ""
+      echo "You're inside the worktree. Exit and rerun from parent:"
+      echo "  exit && cd $root && claude"
+      echo "  pk done"
+      return 1
+    fi
+  fi
+
+  echo "Removing worktree..."
+  if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+    git worktree remove "$wt_path" --force 2>/dev/null || rm -rf "$wt_path"
+  fi
+  echo "Deleting local branch $current..."
+  git branch -D "$current" 2>/dev/null || true
+  echo "Done."
+}
+
+cmd_verify() {
+  local cmd
+  # `|| true` — same pipefail-grep-no-match issue as elsewhere
+  cmd=$({ grep -A20 "^## Pre-Deploy Gate" "$(pk_config_path)" 2>/dev/null \
+    | grep -A20 '^```' | grep -v '^```' | head -10; } || true)
+  if [ -z "$cmd" ]; then
+    echo "No Pre-Deploy Gate configured in method.config.md."
+    return 1
+  fi
+  echo "Running pre-deploy gate..."
+  echo "$cmd" | bash
+}
+
+cmd_promote() {
+  local stash=false take_remote=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stash)       stash=true;       shift ;;
+      --take-remote) take_remote=true; shift ;;
+      *) echo "pk promote: unknown arg $1" >&2; return 2 ;;
+    esac
+  done
+  if $stash && $take_remote; then
+    echo "ERROR: --stash and --take-remote are mutually exclusive." >&2
+    return 2
+  fi
+
+  local promote
+  promote=$(pk_config "Promote to main" "true")
+  if [ "$promote" != "true" ]; then
+    echo "Promote to main is disabled in method.config.md (single-tier project)."
+    return 0
+  fi
+  local integration
+  integration=$(pk_integration_branch)
+  if [ "$integration" = "main" ]; then
+    echo "Integration branch is already main — nothing to promote."
+    return 0
+  fi
+  echo "Promote $integration → main"
+  echo "  1. Sync $integration"
+  git checkout "$integration"
+
+  # Conflict-pattern guard: local edits to tracked files can block the
+  # ff-only pull when incoming commits touch the same paths. Surface the
+  # situation explicitly with two recoverable options.
+  local dirty
+  dirty=$(git status --porcelain | grep -E '^( M|M | A|A )' || true)
+  local stash_made=false
+  if [ -n "$dirty" ]; then
+    if $take_remote; then
+      echo "  → --take-remote: discarding local edits to tracked files:"
+      echo "$dirty" | sed 's/^/      /'
+      git fetch origin "$integration" --quiet
+      while IFS= read -r line; do
+        local path
+        path=$(echo "$line" | awk '{print $2}')
+        [ -n "$path" ] && git checkout "origin/$integration" -- "$path"
+      done <<< "$dirty"
+    elif $stash; then
+      echo "  → --stash: stashing local edits before pull"
+      git stash push -m "pk promote auto-stash $(date +%s)" -- $(echo "$dirty" | awk '{print $2}') >/dev/null
+      stash_made=true
+    else
+      echo ""
+      echo "ERROR: local modifications to tracked files may block the fast-forward:" >&2
+      echo "$dirty" | sed 's/^/    /' >&2
+      echo "" >&2
+      echo "Options:" >&2
+      echo "  pk promote --stash         stash these edits before pull, pop after PR opens" >&2
+      echo "  pk promote --take-remote   discard local edits in favor of incoming dev" >&2
+      echo "  (or) commit / stash / discard manually, then rerun pk promote" >&2
+      return 1
+    fi
+  fi
+
+  if ! git pull --ff-only; then
+    echo "ERROR: ff-only pull failed unexpectedly. Resolve manually and rerun pk promote." >&2
+    $stash_made && echo "  Note: your edits are stashed (git stash list)." >&2
+    return 1
+  fi
+  echo "  2. Run pre-deploy gate"
+  if ! cmd_verify; then
+    $stash_made && echo "  Note: your edits are stashed (git stash list — run 'git stash pop' to restore)." >&2
+    return 1
+  fi
+  echo "  3. Open promote PR"
+  local date promote_url
+  date=$(date +%Y-%m-%d)
+  promote_url=$(pk_gh_pr_create --base main --head "$integration" \
+    --title "Promote $integration → main ($date)" \
+    --body "Batch promote. Squash-merge per ruleset.") || return 1
+  echo "PR: $promote_url"
+  if $stash_made; then
+    echo ""
+    echo "Note: your local edits are stashed. Run 'git stash pop' after the promote PR is merged."
+  fi
+  echo "Open the PR in browser to squash-merge."
+}
+
+cmd_log() {
+  local current
+  current=$(pk_current_branch)
+  if [ -z "$current" ]; then
+    echo "ERROR: not on a branch (detached HEAD?)" >&2
+    return 1
+  fi
+  case "$current" in
+    dev|main|master|beta)
+      echo "On integration branch ($current). Journals are per-feature."
+      return 0 ;;
+  esac
+  local root
+  root=$(pk_repo_root)
+  local journal_in_repo
+  journal_in_repo=$(pk_config "Journal in repo" "true")
+  local journal_path
+  if [ "$journal_in_repo" = "false" ]; then
+    local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/pipekit"
+    journal_path="$state_dir/$(basename "$root")/journal/${current}.md"
+  else
+    journal_path="$root/.pipekit/journal/${current}.md"
+  fi
+  if [ ! -f "$journal_path" ]; then
+    echo "No journal yet for $current."
+    echo "  Expected at: $journal_path"
+    echo "  The Stop hook writes on session close. Wire it via templates/v2/settings-snippet.json."
+    return 0
+  fi
+  cat "$journal_path"
+}
+
+cmd_init() {
+  local root
+  root=$(pk_repo_root) || { echo "ERROR: not in a git repo" >&2; return 1; }
+  local cfg="$root/method.config.md"
+  if [ ! -f "$cfg" ]; then
+    echo "ERROR: method.config.md missing." >&2
+    echo "  Run sync-method.sh first, or copy method.config.template.md to method.config.md." >&2
+    return 1
+  fi
+  echo "── pk init ──"
+  echo ""
+  echo "Checking your method.config.md for v2 keys..."
+  echo ""
+  local needed=("Backend" "Integration branch" "Promote to main" "Require QA review")
+  local missing=()
+  for k in "${needed[@]}"; do
+    local v
+    v=$(pk_config "$k" "")
+    if [ -z "$v" ]; then
+      missing+=("$k")
+    else
+      echo "  ✓ $k: $v"
+    fi
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo ""
+    echo "Missing v2 keys (using defaults):"
+    for k in "${missing[@]}"; do echo "  ⚠ $k"; done
+    echo ""
+    echo "Add the V2 section from method/templates/v2/ or method.config.template.md to set explicitly."
+  fi
+  # Check journal hook
+  echo ""
+  echo "Journal hook:"
+  if [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
+    echo "  ✓ scripts/pipekit-journal-hook.sh present"
+  else
+    echo "  ✗ scripts/pipekit-journal-hook.sh missing — re-sync from a v2 ref"
+  fi
+  if [ -f "$root/.claude/settings.json" ] && grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
+    echo "  ✓ Stop hook wired in .claude/settings.json"
+  else
+    echo "  ⚠ Stop hook not wired"
+    echo "    Add this to .claude/settings.json (merge with existing hooks):"
+    echo ""
+    if [ -f "$root/method/templates/v2/settings-snippet.json" ]; then
+      cat "$root/method/templates/v2/settings-snippet.json" | sed 's/^/      /'
+    fi
+  fi
+  # Linear API key
+  echo ""
+  local key_var key
+  key_var=$(pk_linear_api_key_var)
+  key=$(pk_linear_api_key)
+  if [ -n "$key" ]; then
+    echo "  ✓ \$$key_var is set"
+  else
+    echo "  ✗ \$$key_var not exported. Set in shell rc:"
+    echo "    export $key_var=lin_api_xxx"
+  fi
+  echo ""
+  echo "Next: pk doctor (deeper check) → pk next (find an issue) → pk branch <ID>"
+}
+
+cmd_delegate() {
+  local id="${1:-}"
+  shift || true
+  local prompt="$*"
+  if [ -z "$id" ] || [ -z "$prompt" ]; then
+    echo "Usage: pk delegate <ISSUE-ID> <prompt-for-Linear-Agent>" >&2
+    echo "  Posts an @Linear-mentioned comment to invoke the Linear Agent." >&2
+    return 1
+  fi
+  local body="@Linear $prompt"
+  pk_linear_comment "$id" "$body"
+}
+
+cmd_install() {
+  local force=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force=true; shift ;;
+      *) echo "pk install: unknown arg $1" >&2; return 2 ;;
+    esac
+  done
+
+  # Resolve to realpath so re-invoking via the installed symlink still sees
+  # the original source file and the idempotency check below works.
+  local src raw
+  raw="${BASH_SOURCE[0]}"
+  if command -v realpath >/dev/null 2>&1; then
+    src=$(realpath "$raw")
+  else
+    src="$(cd "$(dirname "$raw")" && pwd -P)/$(basename "$raw")"
+    # Walk one symlink level if -P didn't resolve it (macOS bash 3 quirk)
+    [ -L "$src" ] && src=$(cd "$(dirname "$src")" && cd "$(dirname "$(readlink "$src")")" && pwd -P)/$(basename "$(readlink "$src")")
+  fi
+  if [ ! -f "$src" ]; then
+    echo "ERROR: cannot locate own script path." >&2
+    return 1
+  fi
+
+  # Pick a writable bin directory on PATH. Prefer /usr/local/bin (universal),
+  # fall back to ~/.local/bin (no sudo needed).
+  local target_dir=""
+  for d in /usr/local/bin "$HOME/.local/bin"; do
+    if [ -d "$d" ] && [ -w "$d" ]; then
+      target_dir="$d"
+      break
+    fi
+    if [ "$d" = "$HOME/.local/bin" ] && [ ! -d "$d" ]; then
+      mkdir -p "$d" && target_dir="$d" && break
+    fi
+  done
+  if [ -z "$target_dir" ]; then
+    echo "ERROR: no writable bin directory found." >&2
+    echo "  Tried: /usr/local/bin, ~/.local/bin" >&2
+    echo "  Try: sudo ln -s $src /usr/local/bin/pk" >&2
+    return 1
+  fi
+
+  local target="$target_dir/pk"
+  if [ -L "$target" ] || [ -e "$target" ]; then
+    local existing
+    existing=$(readlink "$target" 2>/dev/null || echo "$target")
+    if [ "$existing" = "$src" ]; then
+      echo "Already installed: $target → $src"
+      return 0
+    fi
+    if ! $force; then
+      echo "ERROR: $target exists and points elsewhere ($existing)." >&2
+      echo "  Use 'pk install --force' to overwrite." >&2
+      return 1
+    fi
+    rm -f "$target"
+  fi
+
+  ln -s "$src" "$target"
+  echo "Installed: $target → $src"
+
+  case ":$PATH:" in
+    *:"$target_dir":*) ;;
+    *)
+      echo ""
+      echo "WARNING: $target_dir is not on \$PATH."
+      echo "  Add to your shell rc: export PATH=\"$target_dir:\$PATH\""
+      ;;
+  esac
+}
+
+cmd_help() {
+  cat <<EOF
+pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
+
+Subcommands:
+  pk next                         What should I do now?
+  pk status                       Quick triage of the Linear board + worktrees
+  pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
+  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → In Review/UAT (optional antagonistic review)
+  pk done                         Verify PR merged, cleanup, Linear → Done
+  pk verify                       Run the project's pre-deploy gate
+  pk promote [--stash|--take-remote]  dev → main batch promote (flags resolve local-edit conflicts with incoming dev)
+  pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
+  pk doctor                       Diagnose v2 setup (config, env, deps)
+  pk init                         Walkthrough config check + setup hints
+  pk install [--force]            Symlink pk onto \$PATH (so 'pk' replaces './bin/pk')
+  pk log                          Show journal for current feature branch
+  pk help                         Show this help
+
+All subcommands are idempotent. Recovery = rerun the command.
+
+Config: method.config.md in repo root. v2 keys are optional (sensible defaults).
+North star: safe and frictionless. Helps, never adds work.
+EOF
+}
+
+cmd_doctor() {
+  local fail=0
+  local warn=0
+  echo "── pk doctor ──"
+  echo ""
+  # Repo
+  local root
+  root=$(pk_repo_root || echo "")
+  if [ -n "$root" ]; then
+    echo "  ✓ Git repo: $root"
+  else
+    echo "  ✗ Not in a git repo"
+    fail=$((fail+1))
+  fi
+  # Deps
+  for tool in jq gh git curl; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      echo "  ✓ $tool installed"
+    else
+      echo "  ✗ $tool missing"
+      fail=$((fail+1))
+    fi
+  done
+  # Config
+  local cfg
+  cfg=$(pk_config_path 2>/dev/null || echo "")
+  if [ -n "$cfg" ] && [ -f "$cfg" ]; then
+    echo "  ✓ method.config.md found"
+  else
+    echo "  ⚠ method.config.md missing — using defaults"
+    warn=$((warn+1))
+  fi
+  # Linear key
+  local key_var key
+  key_var=$(pk_linear_api_key_var)
+  key=$(pk_linear_api_key)
+  if [ -n "$key" ]; then
+    echo "  ✓ Linear API key set (\$$key_var)"
+  else
+    echo "  ✗ Linear API key not set — export $key_var=lin_api_…"
+    fail=$((fail+1))
+  fi
+  # Linear team
+  local team team_id
+  team=$(pk_team_name)
+  team_id=$(pk_team_id)
+  if [ -n "$team" ]; then
+    echo "  ✓ Linear team: $team"
+  else
+    echo "  ⚠ Linear team name missing in method.config.md"
+    warn=$((warn+1))
+  fi
+  if [ -n "$team_id" ]; then
+    echo "  ✓ Linear team ID set"
+  else
+    echo "  ⚠ Linear team ID missing — pk_linear_set_state may degrade"
+    warn=$((warn+1))
+  fi
+  # Linear API ping
+  if [ -n "$key" ]; then
+    local resp
+    resp=$(pk_linear_gql 'query{viewer{name}}' 2>/dev/null || echo "")
+    local viewer
+    viewer=$(echo "$resp" | jq -r '.data.viewer.name // empty' 2>/dev/null)
+    if [ -n "$viewer" ]; then
+      echo "  ✓ Linear API reachable (viewer: $viewer)"
+    else
+      echo "  ✗ Linear API call failed"
+      fail=$((fail+1))
+    fi
+  fi
+  # Integration branch
+  echo "  • Integration branch: $(pk_integration_branch)"
+  # Backend
+  echo "  • Backend: $(pk_config "Backend" "vbw")"
+  # Journal hook
+  if [ -n "$root" ] && [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
+    echo "  ✓ Journal hook script present"
+  else
+    echo "  ⚠ Journal hook script missing — re-run sync-method.sh from a v2 ref"
+    warn=$((warn+1))
+  fi
+  # Stop hook configured?
+  if [ -n "$root" ] && [ -f "$root/.claude/settings.json" ]; then
+    if grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
+      echo "  ✓ Stop hook wired in .claude/settings.json"
+    else
+      echo "  ⚠ Stop hook not wired — see method/templates/v2/settings-snippet.json"
+      warn=$((warn+1))
+    fi
+  fi
+  echo ""
+  if [ $fail -gt 0 ]; then
+    echo "Result: $fail error(s), $warn warning(s). Fix errors before using pk."
+    return 1
+  fi
+  if [ $warn -gt 0 ]; then
+    echo "Result: $warn warning(s). pk should work but check the items above."
+  else
+    echo "Result: all green. pk is ready."
+  fi
+}
+
+cmd_version() {
+  echo "pk $PK_VERSION"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dispatcher
+# ─────────────────────────────────────────────────────────────────────────────
+
+main() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required. Install: brew install jq" >&2
+    exit 1
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "ERROR: gh CLI is required. Install: brew install gh" >&2
+    exit 1
+  fi
+
+  local sub="${1:-help}"
+  shift || true
+  case "$sub" in
+    next)     cmd_next "$@" ;;
+    status)   cmd_status "$@" ;;
+    branch)   cmd_branch "$@" ;;
+    ship)     cmd_ship "$@" ;;
+    done)     cmd_done "$@" ;;
+    verify)   cmd_verify "$@" ;;
+    promote)  cmd_promote "$@" ;;
+    delegate) cmd_delegate "$@" ;;
+    doctor)   cmd_doctor "$@" ;;
+    init)     cmd_init "$@" ;;
+    install)  cmd_install "$@" ;;
+    log)      cmd_log "$@" ;;
+    help|-h|--help) cmd_help ;;
+    version|-v|--version) cmd_version ;;
+    *) echo "Unknown subcommand: $sub" >&2; cmd_help; exit 1 ;;
+  esac
+}
+
+main "$@"

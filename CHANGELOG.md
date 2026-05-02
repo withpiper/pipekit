@@ -6,6 +6,83 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.0.0 — 2026-05-02
+
+> Cut to v2 after RS-63 proved the v2 ↔ VBW handshake on a Heavy spike (rs-vault). v1 daily-loop skills retired to `archive/v1-skills/`. v2 is now the canonical Pipekit.
+
+### What changed at the cut
+
+- **`bin/pk` is the dispatcher.** All daily-loop work goes through `pk next / pk branch / pk ship / pk done / pk promote`. Idempotent against Linear+git ground truth.
+- **`/work` + `/verify`** replace the v1 launch chain. `/work --backend=vbw|native` chooses execution backend per-invocation.
+- **`RUNBOOK.md`** is now the v2 one-page flowchart (was `V2_RUNBOOK.md`). Old runbooks archived.
+- **`method.md`** carries a v2 transition banner; full rewrite queued for v2.0.1.
+
+### v1 retirement (skills moved to `archive/v1-skills/`)
+
+`/branch`, `/launch`, `/launch-native`, `/start-session`, `/end-session`, `/linear-status`, `/g-promote-dev`. All replaced by `pk` subcommands or the Stop hook (journal). Stage 0 skills (`/concept`, `/define`, `/strategy-create`, `/startup`, `/roadmap-create`, `/phase-plan`) and orthogonal skills (`/light-spec`, `/brainstorm`, `/pr-fix`, `/sync-linear`, etc.) are unchanged — v2 only retires the daily loop.
+
+### Validation
+
+- rs-vault Phase 1 closeout (RS-25, RS-30, RS-60, RS-61, RS-62) shipped on the v2 loop
+- RS-63 (Phase 2.5 Foundation + Search redesign) — Heavy spike, vbw backend, antagonistic review, /pr-fix triage all worked end-to-end
+- DB migration auto-apply workflow (`db-migrate.yml` + `db-pr-check.yml`) shipped, secrets verified via dry-run
+
+### Known gaps (v2.0.1)
+
+- `method.md` still references v1 paths (banner added, rewrite queued)
+- `sync-method.sh` may copy v1 skill paths — needs audit
+- See `RUNBOOK.md § Backlog` for alpha.15-style improvements that didn't land at the cut: phase-aware `pk next`, `resources/` vs `temp/` portable convention, `/ship` skill auto-dispatch
+
+---
+
+## v2.0.0-alpha — 2026-05-01 → 2026-05-02
+
+> Pre-cut development. 14 alphas across two days. v2/main long-running branch.
+
+### What v2 is
+
+A `pk` shell dispatcher + `/work` and `/verify` skills replace the heavy multi-step v1 launch chain. The daily loop is `pk next → pk branch <ID> → /work <ID> → pk ship → pk done → pk promote`. Idempotent at every step; runs from a worktree.
+
+### Highlights across 13 alphas
+
+- **`bin/pk`** — daily-loop dispatcher (next, status, branch, ship, done, verify, promote, log, doctor, delegate). Idempotent + safe to re-run.
+- **`/work`** — plan + execute a Linear issue from inside its worktree. Backend-pluggable (`vbw` | `native`), now overridable per-invocation via `--backend=`.
+- **`/verify`** — pre-ship validation skill paired with `pk ship --review` for antagonistic code review.
+- **Worktree pk-sync** — `pk branch` copies the parent's `bin/pk` into the worktree so feature work always uses the project's pinned dispatcher version (alpha.12).
+- **Stop hook** — `scripts/pipekit-journal-hook.sh` writes a per-feature branch journal on every Claude Code Stop event.
+- **Short slugs** — `pk_slug` strips stop words and trims to 3 tokens, keeping worktree paths and status bars sane.
+- **REST fallback** — `pk_gh_pr_view` and `pk_gh_pr_create` fall through to GitHub REST when GraphQL is rate-limited (alpha.13). Caught the friction of GraphQL exhaustion silently misreading as "PR not found."
+- **Linear robustness** — single-line GraphQL queries, minimal field selections, `.env.local` fallback for the API key, team-name filtering on state transitions.
+
+### Alpha.14 (latest)
+
+- `pk install` global installer — symlinks pk onto `$PATH` (`/usr/local/bin` or `~/.local/bin`); idempotent through the installed symlink
+- `pk done` richer Linear comment — commits, diffstat, session count, PR link (replaces raw 50-line journal head dump)
+- `pk promote --stash` / `--take-remote` flags — resolve local-edit conflicts with incoming dev (today's friction pattern)
+
+### Alpha.13
+
+- gh REST fallback for `pr view` / `pr create` — initially fallback-only, then **inverted to REST-first** after a session-wide GraphQL exhaustion proved the fallback wasn't enough. REST has its own quota bucket; pk no longer burns GraphQL on normal operation
+- `/work --backend=vbw|native` per-invocation override
+- Brainstorm skills updated for v2 tier routing (`/brainstorm`, `/brainstorm-review`)
+- This consolidated changelog entry
+
+### Carried into beta candidates
+
+- Multi-env `pk ship --env=` for Piper-style multi-environment delivery
+- Automated subagent dispatch from `pk ship --review` (currently prints invocation)
+- `pk done` richer Linear comments from journal highlights
+- `pk install` global installer
+- Skills directory reorg: `skills/{loop,stage0,orthogonal}/`
+- GitHub Actions `pr-review.yml` (CI-side antagonistic review)
+
+### Notes
+
+- v2 is **not** synced via `sync-method.sh` yet — the script's v2 paths exist but consuming projects pull `bin/pk` and the new skills directly.
+- The full v2 design rationale lives in `archive/v2-design-2026-05-01/` (5 design docs from the redesign session).
+
+---
+
 ## v1.8.2 — 2026-04-30
 
 ### Fixes

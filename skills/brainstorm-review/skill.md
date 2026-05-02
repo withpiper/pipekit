@@ -18,6 +18,8 @@ You are a brainstorm triage coordinator. Your job is to batch-triage untriaged L
 
 Issues created by `/brainstorm` land in Triage or Ideas with no disposition. They accumulate, create noise, and get forgotten. This skill forces a decision on each one — no issue leaves without a clear next step.
 
+**Run from the parent project root**, not from inside a `pk branch` worktree.
+
 ## Execution Steps
 
 ### Phase 1 — Fetch Undisposed Issues
@@ -79,7 +81,10 @@ Disposition:
 1. Ask which phase/stage
 2. If the brainstorm is broad, run REDUCE: _"What's the smallest useful version? What can wait?"_
 3. Update description with `## v1 Scope` if reduced
-4. Move to "On Deck" or "Needs Spec" based on phase timing
+4. Route by complexity tier (matches `/brainstorm` tier mapping):
+   - **Low → Quick:** move to "Approved" — ready for `pk branch {issue}` + `/work {issue}` (no spec)
+   - **Medium → Standard:** move to "Needs Spec" — ready for `/light-spec {issue}`
+   - **High → Heavy:** move to "Needs Spec" — `/light-spec` mandatory, full VBW route via `/launch`
 5. Set priority (ask user)
 6. Assign to correct project/initiative
 
@@ -129,7 +134,8 @@ Reviewed: {N} issues
 
 Next steps:
   - /phase-plan --rebalance if "Now" items should enter the current phase
-  - /light-spec {issue} for any "Now" items in Needs Spec
+  - /light-spec {issue} for any "Now" items in Needs Spec (Standard/Heavy)
+  - pk branch {issue} + /work {issue} for any "Now" items in Approved (Quick)
   - /roadmap-review to validate the updated board
 ```
 

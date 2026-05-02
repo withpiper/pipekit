@@ -148,3 +148,40 @@ Stack-specific values consumed by `/g-promote-dev`, `/g-promote-main`, `/g-test-
 | **Migration dir** | e.g. `supabase/migrations/` | `/g-promote-dev` (detect new migrations on the branch) |
 | **Production smoke URL** | e.g. `https://example.com` | `/g-deploy` (post-merge production smoke) |
 | **Shared DB across environments** | `yes` \| `no` | `/g-promote-dev` (warns about forward-mutation if `yes`) |
+
+## V2 (alpha — additive; v1 keys above still apply)
+
+Keys consumed by `bin/pk` and the v2 `/work` + `/verify` skills. Safe to leave blank — v2 falls back to sensible defaults derived from v1 keys.
+
+| Key | Value | Default | Used by |
+|-----|-------|---------|---------|
+| **Backend** | `vbw` \| `native` | `vbw` | `/work` — chooses agent dispatch path |
+| **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
+| **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
+| **Require QA review** | `true` \| `false` | `false` | `/verify` (auto-spawns QA subagent if `true`) |
+| **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
+| **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
+| **Linear API key env var** | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
+| **Journal in repo** | `true` \| `false` | `true` | Stop hook journal location |
+
+### Example (rs-vault)
+
+```
+Backend: native
+Integration branch: main
+Promote to main: false
+Require QA review: false
+Default deep flag: false
+Ship environments: main
+```
+
+### Example (Piper)
+
+```
+Backend: vbw
+Integration branch: dev
+Promote to main: true
+Require QA review: true
+Default deep flag: false
+Ship environments: dev,beta,main
+```
