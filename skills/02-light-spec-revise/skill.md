@@ -247,15 +247,15 @@ Do **not** apply Non-Blocking Improvements silently or in bulk.
 
 3. Offer to re-trigger the Spec Review Agent using the same manual-paste pattern as `/light-spec` Phase 6. Output the ready-to-paste trigger comment and remind the user: _"Paste in Linear's UI, not via MCP — the mention has to be a structured node for the agent to fire."_
 
-### Phase 10 — NEXT.md output
+### Phase 10 — Next-step output
 
-Overwrite `NEXT.md` at the project root:
+Emit an inline `➜ Next:` line in your terminal output:
 
-- If the revision is expected to pass on next review → `/launch PROJ-XXX`
+- If the revision is expected to pass on next review → `pk branch PROJ-XXX` (then `/work PROJ-XXX` inside the worktree)
 - If another pass is likely (some Unresolved blockers remain, or the user deferred fixes) → `/light-spec-revise PROJ-XXX`
-- If stalemate was surfaced and the user chose override → `/launch PROJ-XXX` (override clears the path)
+- If stalemate was surfaced and the user chose override → `pk branch PROJ-XXX` (override clears the path)
 
-Emit inline `➜ Next:` line matching `NEXT.md` content. See the NEXT.md convention in `sop/Skills_SOP.md`.
+Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear.
 
 ---
 
@@ -282,5 +282,5 @@ The skill MUST NEVER:
 ## Related Skills
 
 - `/light-spec` — creates the spec; Phase 6 sets up the feedback loop this skill closes.
-- `/launch` — consumes `Pass`-verdict specs for planning + execution.
+- `pk branch` + `/work` — consumes `Pass`-verdict specs for planning + execution (v2 daily loop).
 - `/spec-validator` — heavier validator for full Strategy docs (not Light Specs).
