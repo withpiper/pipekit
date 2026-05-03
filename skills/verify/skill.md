@@ -185,7 +185,7 @@ Do **not** auto-ship on Pass. The user runs `pk ship` when ready.
 
 ## What this skill does NOT do
 
-- No `/end-session` writes — Stop hook owns the journal.
+- No session-log writes — `/pk-exit` owns the session log.
 - No Linear status updates — `pk ship` and `pk done` post the necessary ones.
 - No PR creation — `pk ship` is separate.
 - No re-running of failed tests — fix and re-invoke (idempotent).

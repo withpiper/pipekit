@@ -162,7 +162,6 @@ Keys consumed by `bin/pk` and the v2 `/work` + `/verify` skills. Safe to leave b
 | **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
 | **Linear API key env var** | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
-| **Journal in repo** | `true` \| `false` | `true` | Stop hook journal location |
 
 ### Example (rs-vault)
 

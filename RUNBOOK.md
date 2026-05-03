@@ -1,4 +1,4 @@
-# Pipekit Runbook (v2.1.1)
+# Pipekit Runbook (v2.1.2)
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -9,14 +9,15 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.1.1                (or latest tag)
+1. ./scripts/sync-method.sh v2.1.2                (or latest tag)
 2. Append "## V2" config block to method.config.md (see V2.md § examples)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
-4. Wire Stop hook into .claude/settings.json       (paste from method/templates/v2/)
-5. ./bin/pk init                                   (seeds notepad.md, checks config; expect all green)
-6. ./bin/pk doctor                                 (deeper diagnostic)
-7. ./bin/pk install                                (puts pk on $PATH globally)
+4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
+5. ./bin/pk doctor                                 (deeper diagnostic)
+6. ./bin/pk install                                (puts pk on $PATH globally)
 ```
+
+> v2.1.2 retired the bash Stop hook. Session logs are now written by `/pk-exit` (the last command of each Claude session — see flowchart [End]).
 
 ---
 
@@ -173,9 +174,8 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   └──────────────────────────────────────────────────────────┘
        │
        ▼
-       (Stop hook auto-writes journal entry on session close)
-       │
-       exit                       (leave Claude in worktree)
+       /pk-exit                   (writes Logs/Sessions/<date>_<HHMM>.md narrative)
+       /exit                      (close Claude in worktree)
        cd ~/Projects/<repo>       (back to parent repo)
        claude --dangerously-skip-permissions
        │
@@ -214,28 +214,30 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 ## Command cheat sheet
 
-| # | Step | Command | Where | Auth |
-|---|---|---|---|---|
-| 1 | Find next (phase-aware) | `pk next` | parent, dev | reads PHASES.md + Linear |
-| 1 | Quick status | `pk status` | parent | reads Linear (full board, unscoped) |
-| 2 | Branch | `pk branch <ID>` | parent, dev | writes Linear (In Progress) |
-| 3 | Plan + execute | `/work <ID>` | worktree | reads Linear |
-| 3 | (Variant) | `/work <ID> --deep` | worktree | reads Linear; spawns 3 grounding agents |
-| 3 | (Variant) | `/work <ID> --backend=vbw\|native` | worktree | per-invocation backend override (v2.0) |
-| 4 | Verify | `/verify` or `pk verify` | worktree | local-only |
-| 5 | Ship | `pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
-| 5 | (Variant) | `pk ship --env=<env>` | worktree | + targets specific environment |
-| **5b** | **Antagonistic review** | **`pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
-| **5c** | **/pr-fix triage** | **`/pr-fix`** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
-| **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree + posts journal highlights |
-| 8 | Promote | `pk promote [--stash\|--take-remote]` | parent, dev | dev → main batch (v2.0 added flag) |
-| meta | Diagnose | `pk doctor` | anywhere | config + API ping |
-| meta | Bootstrap | `pk init` | repo root | walks setup |
-| meta | Install | `pk install` | repo root | symlinks pk onto $PATH (v2.0) |
-| meta | View journal | `./bin/pk log` | worktree, feature | local-only |
-| meta | Linear Agent | `./bin/pk delegate <ID> <prompt>` | anywhere | posts @Linear-mentioned comment |
-| meta | Help | `./bin/pk help` | anywhere | — |
+> Each `pk` row shows the global `pk` form (after `pk install`) and the `./bin/pk` repo-local form. They're equivalent; pick whichever matches your shell state.
+
+| # | Step | Command (global) | Command (repo-local) | Where | Auth |
+|---|---|---|---|---|---|
+| 1 | Find next (phase-aware) | `pk next` | `./bin/pk next` | parent, dev | reads PHASES.md + Linear |
+| 1 | Quick status | `pk status` | `./bin/pk status` | parent | reads Linear (full board, unscoped) |
+| 2 | Branch | `pk branch <ID>` | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
+| 3 | Plan + execute | `/work <ID>` | — (skill) | worktree | reads Linear |
+| 3 | (Variant) | `/work <ID> --deep` | — (skill) | worktree | reads Linear; spawns 3 grounding agents |
+| 3 | (Variant) | `/work <ID> --backend=vbw\|native` | — (skill) | worktree | per-invocation backend override (v2.0) |
+| 4 | Verify | `/verify` | `./bin/pk verify` | worktree | local-only |
+| 5 | Ship | `pk ship` | `./bin/pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
+| 5 | (Variant) | `pk ship --env=<env>` | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
+| **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
+| **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
+| **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
+| 7 | Cleanup | `pk done <ID>` | `./bin/pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree + posts journal highlights |
+| 8 | Promote | `pk promote [--stash\|--take-remote]` | `./bin/pk promote [--stash\|--take-remote]` | parent, dev | dev → main batch (v2.0 added flag) |
+| meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
+| meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
+| meta | Install | `pk install` | `./bin/pk install` | repo root | symlinks pk onto $PATH (v2.0) |
+| meta | View journal | `pk log` | `./bin/pk log` | worktree, feature | local-only |
+| meta | Linear Agent | `pk delegate <ID> <prompt>` | `./bin/pk delegate <ID> <prompt>` | anywhere | posts @Linear-mentioned comment |
+| meta | Help | `pk help` | `./bin/pk help` | anywhere | — |
 
 ---
 
@@ -250,7 +252,6 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 | **Default deep flag** | `true` \| `false` | `false` | `/work` always uses `--deep` |
 | **Ship environments** | comma list | `dev,main` | `pk ship --env=<name>` |
 | **Linear API key env var** | name | `LINEAR_API_KEY` | `pk` Linear access |
-| **Journal in repo** | `true` \| `false` | `true` | Stop-hook journal location |
 
 Secret resolution priority (alpha.9+): **`.env.local` > `.env` > process env**.
 
@@ -314,7 +315,7 @@ All four became RS-61 — none would have been caught by `/work` or `/verify` al
 | `pk ship` after PR opens but Linear didn't transition | Rerun. PR exists? skip create, transition only. |
 | `pk done` before merge | Refuses with "PR not merged yet." Merge first, retry. |
 | `pk done` from inside worktree | Refuses. `exit && cd ~/Projects/<repo> && claude` then retry with `<ID>` arg. |
-| Stop hook fails | Best-effort — never blocks the session. Manual `pk log` works regardless. |
+| Forgot to run `/pk-exit` before closing | No log written for that session. No recovery — write a manual entry in `Logs/Sessions/` if it mattered. |
 | `gh pr view` returns empty / `pk ship` says "no PR" wrongly | GraphQL rate-limited. Alpha.13 added REST fallback in `pk_gh_pr_view` / `pk_gh_pr_create` — rerun. Confirm with `gh api rate_limit --jq '.resources.graphql.remaining'`. |
 | Old VBW hook errors after `/plugin update vbw` | Plugin upgrades within a Claude Code session leave stale in-memory script paths. The disk cache is correct; the running session isn't. Restart Claude Code in the parent **and any active worktrees**. Errors are typically benign noise — restart at convenience, not mid-flow. |
 
@@ -329,10 +330,10 @@ If a `pk *` rerun doesn't resolve in one cycle, fall back to v1 (`/branch --line
 | Find next | `cat NEXT.md` | `pk next` |
 | Status | `/linear-status` | `pk status` |
 | Branch | `/branch --linear <ID>` | `pk branch <ID>` |
-| Session start | `/start-session` | (none — Stop hook handles paperwork) |
+| Session start | `/start-session` | (none — `pk next` is the entry point) |
 | Plan + work | `/launch <ID> --auto` | `/work <ID>` |
 | Verify | `/vbw:vibe --verify` | `/verify` |
-| End session | `/end-session` | (Stop hook) |
+| End session | `/end-session` | `/pk-exit` |
 | Open PR | `/launch <ID> --close` | `pk ship` |
 | Cleanup | `/branch finish <slug>` | `pk done <ID>` |
 | Promote | `/g-promote-main` | `pk promote` |
