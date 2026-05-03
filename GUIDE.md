@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-05-03 *(rewritten for v2.1.2)*
 
 ---
 
@@ -20,17 +20,18 @@ A complete guide to using Pipekit from project inception through production deli
    - [Step 0.6: Roadmap Create](#step-06-roadmap-create)
    - [Step 0.7: Phase Plan](#step-07-phase-plan)
 5. [Stage 0 Gate: Roadmap Review](#stage-0-gate-roadmap-review)
-6. [Stage 1: Definition](#stage-1-definition)
+6. [Stage 1: Spec](#stage-1-spec)
    - [Light Spec](#light-spec)
    - [Agent Review](#agent-review)
    - [Human Review](#human-review)
-7. [Stage 2: Launch & Planning](#stage-2-launch--planning)
-   - [Launch](#launch)
-   - [VBW Plan](#vbw-plan)
-   - [Plan Review](#plan-review)
-8. [Stage 3: Execution](#stage-3-execution)
-   - [Execution](#execution)
-   - [QA](#qa)
+7. [Stage 2: Plan + Build](#stage-2-plan--build)
+   - [Branch](#branch)
+   - [Work](#work)
+   - [Plan Review (vbw backend)](#plan-review-vbw-backend)
+8. [Stage 3: Verify + Ship](#stage-3-verify--ship)
+   - [Verify](#verify)
+   - [Ship](#ship)
+   - [PR Review (opt-in)](#pr-review-opt-in)
    - [UAT](#uat)
 9. [Stage 4: Release](#stage-4-release)
 10. [Stage 5: Documentation Loop](#stage-5-documentation-loop)
@@ -89,25 +90,45 @@ STAGE 0: FOUNDATION (a contract — greenfield path shown below)
           populated         "Needs Spec")
 
 
-STAGES 1-5: DEVELOPMENT PIPELINE (repeats per phase/feature)
+STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
 ──────────────────────────────────────────────────────────────────────
 
-  /light-spec ──→ Agent Review ──→ Human Review ──→ /launch
-       │                │                │              │
-   Structured      Pass/Revise      Approved       Gates checked,
-   spec created    verdict          by human       complexity routed
+  Stage 1: Spec
+    /light-spec ──→ Agent Review ──→ Human Review
+         │                │                │
+     Structured      Pass/Revise      Approved
+     spec in         verdict          by human in
+     Linear                           Linear
 
-      ──→ VBW Plan ──→ Plan Review ──→ Execution ──→ QA ──→ UAT
-              │              │              │          │       │
-          PLAN.md        Validated       Atomic     Verified  Human
-          created        or revised      commits    against   accepts
-                                                    goals
+  Stage 2: Plan + Build
+    pk next ──→ pk branch <ID> ──→ /work <ID>   (→ /review-plan if vbw backend)
+        │             │                  │
+    Phase-aware   Worktree +         Plan-verdict
+    Linear        Linear → In        gate, then
+    grouping      Progress           execute
 
-      ──→ Ship ──→ /strategy-sync
-           │              │
-       Production     Strategy docs
-       release        updated to match
-                      what was built
+  Stage 3: Verify + Ship
+    /verify ──→ pk ship [--review]   (→ /pr-fix | /pr-security-review) ──→ UAT
+        │            │                                                       │
+    Pre-deploy    Push, PR, Linear                                       Human
+    gate + AC     → UAT                                                  accepts
+    table
+
+  Stage 4: Release
+    pk done <ID> ──→ pk promote
+         │                │
+     Worktree         dev → main (or
+     cleanup +        dev → beta → main)
+     Linear → Done    PR
+
+  Stage 5: Doc Loop
+    /strategy-sync (after UAT)
+         │
+     Strategy docs updated
+     to match what was built
+
+  Per session (not per issue):
+    /pk-exit ──→ Logs/Sessions/<date>_<HHMM>.md  (last command of every Claude Code session)
 
 BETWEEN PHASES:
 ──────────────────────────────────────────────────────────────────────
@@ -121,7 +142,7 @@ BETWEEN PHASES:
 
 ## Stage 0: Foundation
 
-Stage 0 is the **foundation contract** — a set of artifacts the dev pipeline (Stages 1-5) requires before `/launch` is safe. It is not a script you run once; it is a pre-condition. *How* the contract is satisfied depends on your entry mode.
+Stage 0 is the **foundation contract** — a set of artifacts the dev pipeline (Stages 1-5) requires before the daily loop is safe to run. It is not a script you run once; it is a pre-condition. *How* the contract is satisfied depends on your entry mode.
 
 ### Entry Modes
 
@@ -133,7 +154,7 @@ Pick the mode that matches your situation. Full description in [method.md § Ent
 | **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
 | **Inherited** | New contributor joining a Pipekit project | None — verify foundation, jump to dev pipeline | All of Stage 0 |
 
-`/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/launch`). `/strategy-from-code` (auto-audit for brownfield) is deferred to v1.4.0; brownfield currently routes through `/strategy-create` with a manual-edit note.
+`/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/work`). `/strategy-from-code` (auto-audit for brownfield) is deferred to v1.4.0; brownfield currently routes through `/strategy-create` with a manual-edit note.
 
 The rest of this section describes the **greenfield flow** in detail. Brownfield skips Steps 0.1 and 0.2 — adapt accordingly. Inherited mode runs no Stage 0 steps; jump straight to [Stage 1](#stage-1-definition) once the foundation check passes.
 
@@ -294,9 +315,9 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
    | **Two-tier** | `dev` → `main` | Solo dev, small teams, preview URLs suffice for UAT |
    | **Three-tier** | `dev` → `beta` → `main` | Teams with QA, need stable UAT env, regulated industries |
 
-   This decision is recorded in `method.config.md` and determines:
+   This decision is recorded in `method.config.md` (under `Ship environments` in the V2 keys) and determines:
    - Which environments to configure (2 or 3)
-   - Which promotion skills to create (`/g-promote-beta` only needed for three-tier)
+   - The chain `pk promote` walks (`dev,main` for two-tier; `dev,beta,main` for three-tier)
    - How Linear status transitions work on merge (see `sop/Git_and_Deployment.md`)
 
 3. **Repository** — GitHub repo, framework init, TypeScript strict, .gitignore, .env.example
@@ -429,7 +450,7 @@ If any check fails, the report tells you exactly which skill to run to fix it.
 
 ---
 
-## Stage 1: Definition
+## Stage 1: Spec
 
 Stage 1 turns raw issues into planning-safe specs. This is where the "no guesswork" principle is enforced most rigorously.
 
@@ -497,130 +518,157 @@ After agent review passes, you review the spec in Linear. This is where product 
 
 ---
 
-## Stage 2: Launch & Planning
+## Stage 2: Plan + Build
 
-### Launch
+### Branch
 
-**Skill:** `/launch PROJ-1` or `/launch --milestone WP-1`
+**Commands:** `pk next` then `pk branch <ID>`
 **Input:** Approved spec
-**Output:** Issue moved to "Building," execution route determined
+**Output:** Worktree + feature branch + Linear → In Progress
 
-`/launch` is the formalized trigger that transitions a spec to execution. It validates three gates before proceeding:
+`pk next` is phase-aware (v2.1.0+): it reads `## Current Phase:` from `.vbw-planning/PHASES.md`, matches to `linear-map.json`, and groups Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Falls back to global "next Approved" when no phase context.
 
-| Gate | What It Checks | Failure Action |
-|------|---------------|---------------|
-| **Spec gate** | Issue has a Light Spec or AC section | Stop — run `/light-spec` |
-| **Dependency gate** | All `blocked_by` issues are Done | Stop — resolve blockers |
-| **Milestone gate** | All sibling issues in the milestone are at least Specced | Stop — spec the siblings (or `--force` to bypass) |
+`pk branch <ID>` is mechanical setup — idempotent against Linear+git ground truth. It creates the worktree, the branch, and transitions Linear:
 
-**Tier resolution (always confirmed with human):** before gates run, `/launch` resolves a tier — Quick, Standard, or Heavy — that shapes *which gates apply*. Tier inference is advisory; auto escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
+- Creates `feature/<ID>-<3-word-slug>` (slug derived from issue title)
+- Worktree at `.worktrees/<ID>-<slug>`
+- Symlinks `.env` / `.env.local` / `.mcp.json` into the worktree
+- Copies parent's `bin/pk` so v2 commands work from inside the worktree
+- Linear: Approved → In Progress
 
-**Complexity routing:** The spec's complexity field determines the execution path (Standard tier; Quick always batches, Heavy always full VBW):
+After branching, `cd .worktrees/<ID>-<slug>` and start a fresh Claude Code session inside the worktree (fresh-chat discipline — see method.md § Fresh-Chat Discipline).
 
-| Complexity | Route | What Happens |
-|-----------|-------|-------------|
-| **Low** (~2-4h) | `/linear-todo-runner` | AC is the plan. Queued for batch execution. |
-| **Medium** (~6-10h) | VBW Lead → Dev → QA | Full planning cycle with PLAN.md. |
-| **High** (~12-20h+) | VBW Lead → Dev → QA | Full planning cycle, likely multi-task. |
+### Work
 
-**Batch mode:** `/launch --milestone WP-1` or `/launch --project "Search"` validates and launches all ready issues at once.
-
-### VBW Plan
-
-**Tool:** VBW Lead Agent (spun up by `/launch`)
+**Skill:** `/work <ID>` (or `/work <ID> --deep`)
 **Input:** Approved spec from Linear
-**Output:** `PLAN.md` in `.vbw-planning/phases/`
+**Output:** Code committed against verify/done criteria
 
-For Medium/High complexity issues, the VBW Lead Agent reads the spec and decomposes it into atomic tasks. Each task has:
-- Description of what to do
-- Verify criteria (how to check it worked)
-- Done criteria (what "complete" means)
-- Files likely to be modified
+`/work` is the consolidated plan + execute skill. It reads the spec from Linear and produces a one-screen plan with a **verdict gate** before any code is written:
 
-The plan is placed in `.vbw-planning/phases/{phase-slug}/PLAN.md`.
+- `proceed` — plan is sound, execute as planned
+- `revise: <feedback>` — plan needs adjustment
+- `abort` — issue isn't ready / scope was wrong
 
-### Plan Review
+Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
 
-**Tool:** `plan-reviewer` agent (spun up by `/launch`)
-**Input:** PLAN.md
+**Backend dispatch** is per `method.config.md`:
+
+| Backend | What `/work` does |
+|---------|-------------------|
+| `vbw` | Spawns `vbw-lead` to generate `PLAN.md`, then `vbw-dev` to execute. PLAN.md captures task decomposition with verify/done criteria per task. Each task gets one atomic commit. |
+| `native` | Plans + executes in your current Claude session. Uses parallel `Agent` calls only for grounding (codebase reads, doc lookups). No PLAN.md artifact. |
+
+`--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
+
+**All commits include the issue ID** in the message format: `feat(scope): description (PROJ-1)`. CLAUDE.md conventions are followed (vbw-dev reads it; native backend reads it via your session).
+
+### Plan Review (vbw backend)
+
+**Skill:** `/review-plan` (spawns `plan-reviewer` agent at `model: opus`)
+**Input:** `PLAN.md` (vbw backend only — native backend has no PLAN.md to review)
 **Output:** Validated plan or revision requests
 
-The plan reviewer stress-tests:
+Run between `vbw-lead`'s plan generation and `vbw-dev`'s execution. The plan reviewer stress-tests:
+
 - Scope alignment with the spec
-- Task dependencies and ordering
+- Task atomicity (each task produces one logical commit)
+- Dependencies and ordering
 - Success criteria completeness
 - Risk identification
 
-If the plan fails review, it goes back to the Lead Agent for rework. Once the plan passes AND you approve it, execution begins.
+If the plan fails review, it goes back to vbw-lead for rework. Once the plan passes, vbw-dev's execution begins.
 
 ---
 
-## Stage 3: Execution
+## Stage 3: Verify + Ship
 
-### Execution
+### Verify
 
-**Tool:** VBW Dev Agent or `/linear-todo-runner`
-**Input:** Approved plan (or AC for Low complexity)
-**Output:** Atomic commits per task
+**Skill:** `/verify` (or `pk verify`)
+**Input:** Completed work in the worktree
+**Output:** Pre-deploy gate report — Pass / Partial / Fail with per-AC table
 
-**For VBW-planned work:** The Dev Agent executes each task in the plan sequentially, making one commit per task. All commits include the issue ID in the message format: `feat(scope): description (PROJ-1)`.
+`/verify` runs the project's pre-deploy gate from `method.config.md` § Pre-Deploy Gate (typically types + lint + test). Returns:
 
-**For batch-runner work:** `/linear-todo-runner` processes multiple Low-complexity issues in parallel, spawning up to 4 worker agents in isolated worktrees. Each agent reads the issue's AC and implements independently.
+- Overall verdict (Pass / Partial / Fail)
+- Per-AC table (which acceptance criteria are satisfied, which aren't)
+- If `Require QA review: true` in `method.config.md`, also spawns the QA subagent for goal-backward verification (starts from AC, works backward)
 
-**Key rules:**
-- One commit per task (atomic)
-- Issue ID in every commit message
-- Pre-deploy gate must pass before reporting done
-- CLAUDE.md conventions followed (the agent reads it)
+If verify fails → fix the gaps in the worktree (often by re-invoking `/work` with feedback) and rerun. If verify passes → ship.
 
-### QA
+### Ship
 
-**Tool:** VBW QA Agent (spun up by `/launch`)
-**Input:** Completed tasks
-**Output:** Verification report
+**Command:** `pk ship` (or `pk ship --review` for antagonistic review)
+**Input:** Verify-passed worktree
+**Output:** Branch pushed, PR open against integration branch, Linear → UAT
 
-The QA agent uses goal-backward methodology — it starts from the acceptance criteria and works backward to verify each one is met. It also runs the pre-deploy gate (type-check, lint, test).
+`pk ship` is idempotent — rerun is safe. It:
 
-If QA passes → issue moves to UAT.
-If QA fails → issue stays in Building, feedback goes back to the Dev Agent.
+- Pushes the feature branch (skips if already current)
+- Opens a PR via `gh pr create` against the integration branch from `method.config.md` (`Integration branch: dev` for most projects)
+- Transitions Linear from In Progress → UAT (or → In Review per project config)
+
+`pk ship --review` additionally:
+
+- Posts a Linear comment flagging review-in-flight (closes the mid-loop visibility gap — v2.1.0)
+- Prints the antagonistic reviewer subagent invocation for you to paste into a Claude session
+
+The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention. Don't skip on anything auth, security, financial, or compliance-adjacent.
+
+### PR Review (opt-in)
+
+**Skills:** `/pr-fix` and `/pr-security-review`
+
+After the reviewer posts findings to the PR, two skills triage them:
+
+**`/pr-fix`** — precision PR review across 4 dimensions with confidence-gated findings. Reads PR review comments + diff, scans for cross-spec handoff promises (any "X will…" reference in the spec must have landed in this PR), then lets you triage interactively (fix / reject / defer). Applies fixes as separate commits, validates the gate, force-pushes to the PR. Posts a Linear comment with the triage summary (fixed N / rejected N / deferred N).
+
+**`/pr-security-review`** — security-focused antagonistic review for migrations, RLS policies, SECURITY DEFINER functions, GRANT/REVOKE, auth code, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories. Use **instead of** (or alongside) the generic reviewer when the PR touches any of those surfaces.
+
+Skip PR review for pure copy/UI tweaks and internal-only refactors with no external surface. Always opt in for anything labeled `auth-rls`, `payments`, `pii`, `compliance`, `breaking-change`.
 
 ### UAT
 
-**Tool:** You
-**Input:** Built feature
-**Output:** Accepted or rejected
+**Tool:** You (in the running app — Vercel preview URL or local dev)
+**Input:** Built feature, PR open with preview deployment
+**Output:** Accepted or rejected against spec AC
 
-Your turn. Test the feature against the spec's acceptance criteria under real usage conditions. Use `/g-test-vercel` (or equivalent) to push the branch and get a preview URL.
+Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Move to Done in Linear, then promote with `/g-promote-dev`.
-**Reject:** Describe what's wrong — the issue re-enters execution with your feedback.
+**Accept:** Merge the PR (squash). Then exit the worktree and run `pk done <ID>` from the parent repo — this cleans up the worktree + branch and posts commits + diffstat to Linear.
+
+**Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
 
 ---
 
 ## Stage 4: Release
 
-**Every step forward is a PR.** No direct merges between long-lived branches.
+**Every step forward is a PR.** No direct merges between long-lived branches. Promotion is owned by `pk promote`, configured per project via `Ship environments` in `method.config.md` (e.g., `dev,main` or `dev,beta,main`).
 
 Your git architecture (chosen during `/startup`) determines the release flow:
 
 **Two-tier** (`dev` → `main`):
 ```
-feature/* → PR to dev → PR to main
+feature/* → pk ship (PR to dev) → pk promote (PR to main)
 ```
-- Promotion skills: `/g-promote-dev`, `/g-promote-main`
-- Merge to main → issues move to Done
+- `pk ship` opens the feature → dev PR (Linear → UAT)
+- After UAT merge of the dev PR, `pk done <ID>` closes the issue (→ Done)
+- `pk promote` opens the dev → main PR
 
 **Three-tier** (`dev` → `beta` → `main`):
 ```
-feature/* → PR to dev → PR to beta → PR to main
+feature/* → pk ship (PR to dev) → pk promote (PR to beta) → pk promote (PR to main)
 ```
-- Promotion skills: `/g-promote-dev`, `/g-promote-beta`, `/g-promote-main`
-- Merge to beta → issues move to UAT
-- Merge to main → issues move to Done
+- `pk ship` opens the feature → dev PR
+- Merge to beta keeps the issue in UAT
+- After main merge, `pk done <ID>` transitions the issue to Done
 
-Each project creates its own promotion skills during `/startup` Phase 9, based on the chosen model.
+**Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
-**CI enforces the pre-deploy gate at every PR.** If types, lint, or tests fail, the merge is blocked.
+- **CI** enforces the pre-deploy gate at every PR. If types, lint, or tests fail, the merge is blocked.
+- **Vercel** deploys preview on PR open and prod on main merge.
+- **GitHub Actions** (Supabase projects only): `db-pr-check.yml` validates migrations on PR open against ephemeral postgres; `db-migrate.yml` applies them on main merge. Lift the workflow pair from rs-vault if your project doesn't have them yet.
 
 ---
 
@@ -721,7 +769,7 @@ WP-2 (Search) — 8 issues:
 
 ### Milestone Gating
 
-`/launch` uses milestones for its gating check: all sibling issues in a milestone must be at least Specced before any can launch. This ensures coordinated planning within a feature cluster.
+`/work` uses milestones for its gating check: all sibling issues in a milestone must be at least Specced before any can enter Plan + Build. This ensures coordinated planning within a feature cluster.
 
 ### Linear Cycles (Optional)
 
@@ -873,7 +921,7 @@ VBW (Vibe-Based Workflow) is the planning and execution engine. Here's where its
 
 ### Keeping VBW Updated
 
-When `/launch` routes Low-complexity issues to the batch runner (bypassing VBW planning), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
+When `/work` runs against Low-complexity issues with `Backend: native` (in-context plan + execute, no PLAN.md), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
 
 ---
 
@@ -1046,33 +1094,67 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Phase Next | `/phase-plan --next` | Archive + plan next phase |
 | Phase Rebalance | `/phase-plan --rebalance` | Adjust current phase |
 
-### Development Pipeline
+### Stage 1: Spec
 
 | Skill | Command | What It Does |
 |-------|---------|-------------|
-| Roadmap Review | `/roadmap-review` | Full health check (Stage 0 gate) |
-| Brainstorm | `/brainstorm` | Feature-level ideation |
+| Roadmap Review | `/roadmap-review` | Full health check (Stage 0 → Stage 1 gate) |
+| Brainstorm | `/brainstorm` | Feature-level ideation (within an existing project) |
 | Light Spec | `/light-spec PROJ-1` | Create spec for an issue |
 | Light Spec Revise | `/light-spec-revise PROJ-1` | Apply Spec Review Agent feedback surgically |
-| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before /launch (file paths, baselines, Linear status). Read-only. |
-| Launch | `/launch PROJ-1` | Validate gates → route → execute |
-| Launch Auto | `/launch PROJ-1 --auto` | Standard tier only: auto-chain Lead → plan-review → Dev → QA → close. Pauses only at the two verdict gates (3 human inputs total). |
-| Launch Batch | `/launch --milestone WP-1` | Launch all ready issues in a WP |
-| Launch Dry Run | `/launch --dry-run PROJ-1` | Check gates without executing |
-| Todo Runner | `/linear-todo-runner` | Batch execute Low-complexity issues |
-| Todo Prep | `/linear-todo-runner --prep` | Generate draft AC for unspecced issues |
+| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before `pk branch` (file paths, baselines, Linear status). Read-only. |
+| Spec Validator | `/spec-validator` | Validate spec completeness |
 
-### Ongoing Operations
+### Stage 2: Plan + Build (the v2 daily loop)
+
+| Command / Skill | Invocation | What It Does |
+|-----------------|------------|-------------|
+| Find next | `pk next` | Phase-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
+| Branch | `pk branch <ID>` | Worktree + feature branch + Linear → In Progress (idempotent) |
+| Work | `/work <ID>` | Plan + execute. Verdict gate before code. Dispatches to `vbw` or `native` backend per `method.config.md`. |
+| Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
+| Plan Review | `/review-plan` | Spawn `plan-reviewer` against `PLAN.md` (vbw backend only) |
+
+### Stage 3: Verify + Ship
+
+| Command / Skill | Invocation | What It Does |
+|-----------------|------------|-------------|
+| Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
+| Ship | `pk ship` | Push, open PR against integration branch, Linear → UAT |
+| Ship + Review | `pk ship --review` | Above + Linear "review-in-flight" comment + reviewer invocation printed |
+| PR Fix | `/pr-fix` | Triage PR review findings (fix / reject / defer); posts Linear summary |
+| PR Security Review | `/pr-security-review` | Antagonistic security review for migrations / RLS / SECURITY DEFINER / auth |
+
+### Stage 4: Release
+
+| Command | Invocation | What It Does |
+|---------|------------|-------------|
+| Done | `pk done <ID>` | Post-merge: cleanup worktree+branch, post commits/diffstat to Linear, → Done |
+| Promote | `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` |
+
+### Stage 5: Doc Loop
 
 | Skill | Command | What It Does |
 |-------|---------|-------------|
+| Strategy Sync | `/strategy-sync` | Update Strategy docs to match shipped code |
+
+### Per session
+
+| Skill | Command | What It Does |
+|-------|---------|-------------|
+| Exit | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md` (last command of every Claude Code session) |
+
+### Ongoing operations
+
+| Command / Skill | Invocation | What It Does |
+|-----------------|------------|-------------|
+| Status | `pk status` | Full unscoped Linear board view |
+| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts |
+| Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
 | Sync Linear | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
-| Linear Status | `/linear-status` | Quick board triage view |
-| Branch | `/branch feature-name` | Create worktree + branch + Linear link |
-| Start Session | `/start-session` | Review progress, capture intentions |
-| End Session | `/end-session` | Changelog, Linear updates |
-| Strategy Sync | `/strategy-sync` | Update docs to match shipped code |
+| Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
+| Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
 | Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
 | Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project |
 | Update + Push | `/pipekit-update --push` | Push improvements back to method repo |
@@ -1095,7 +1177,7 @@ Key skills include a `## Red Flags` section — self-sabotage thoughts that Clau
 | "This doesn't need a Linear issue" | Every idea gets an issue. Issues without tracking get forgotten. |
 | "I'll keep it in Ideas for now" | "Keep" without a trigger condition is how issues die |
 
-Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, `/launch`, `/light-spec`, `/brainstorm`.
+Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, `/work`, `/light-spec`, `/brainstorm`.
 
 ---
 
