@@ -244,14 +244,14 @@ When you encounter these situations, take the safer path:
 - **Splitting a milestone across many phases** → If you're splitting across 4+ phases, the milestone itself may be too big — consider breaking it up in Linear.
 - **Stale issues in "Needs Spec"** → If an issue has been in "Needs Spec" for >3 days, investigate. Either spec it or swap it out for something ready.
 
-## NEXT.md Output
+## Next-step output
 
-After phase planning completes, overwrite `NEXT.md` at the project root pointing to the highest-leverage first `/01-light-spec` call. Include why that issue was picked, what parallelizes after it, and what's blocked until it lands. See the NEXT.md convention in `sop/Skills_SOP.md`. The inline `➜ Next:` message and `NEXT.md` content must be identical — emit them together.
+After phase planning completes, emit an inline `➜ Next:` line in your terminal output pointing to the highest-leverage first `/01-light-spec` call. Include why that issue was picked, what parallelizes after it, and what's blocked until it lands. Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear.
 
 ## Related
 
 - `/roadmap-create` — previous step: creates the roadmap and populates Linear
 - `/roadmap-review` — run after phase planning to validate before speccing
 - `/light-spec` — next step: spec the first issue in the phase
-- `/launch` — executes specced issues (uses milestones for gating, not phases)
-- `/linear-status` — quick board view (complementary to `--status`)
+- `/work` — executes specced issues (uses milestones for gating, not phases)
+- `pk status` / `pk next` — quick board view (complementary to `--status`)
