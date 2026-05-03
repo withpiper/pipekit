@@ -25,7 +25,7 @@ bash "$(find ~/.claude/plugins/cache/vbw-marketplace/vbw -maxdepth 1 -mindepth 1
 |---------|-------------|
 | `/vbw:status [--verbose] [--metrics]` | Display project progress dashboard with phase status, velocity metrics, and next action. |
 
-> **Deprecated (v1.35.0):** `/vbw:qa` and `/vbw:verify` were removed from the public help surface and absorbed into `/vbw:vibe --verify`. They still exist as hidden internal commands for direct invocation by `/launch`, but new work should route through `/vbw:vibe` for the integrated QA + UAT flow.
+> **Deprecated (VBW v1.35.0):** `/vbw:qa` and `/vbw:verify` were removed from the public help surface and absorbed into `/vbw:vibe --verify`. They still exist as hidden internal commands; in Pipekit v2, the `/verify` skill (or `pk verify`) is the canonical entry point and dispatches to VBW's verification path when `Backend: vbw`.
 
 ## Supporting — The Safety Net
 
@@ -62,7 +62,7 @@ VBW v1.35.0 added configurable lifecycle hooks via `.vbw-planning/config.json` u
 
 | Hook | When it fires | Pipekit usage |
 |------|---------------|----------------|
-| `post_archive` | After `/vbw:vibe --archive` completes | `scripts/pipekit-post-archive.sh` writes a `pending-strategy-sync` marker to Pipekit's out-of-repo state dir (resolved by `scripts/pipekit-state-dir.sh`); surfaced by `/start-session` |
+| `post_archive` | After `/vbw:vibe --archive` completes | `scripts/pipekit-post-archive.sh` writes a `pending-strategy-sync` marker to Pipekit's out-of-repo state dir (resolved by `scripts/pipekit-state-dir.sh`); surfaced by `pk doctor` and `/pipekit-help` on the next session |
 
 See `method.md` § Event Hook: Post-Archive → Strategy Sync for registration details.
 
