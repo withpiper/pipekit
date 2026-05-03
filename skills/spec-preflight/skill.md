@@ -5,7 +5,7 @@ description: Empirical pre-flight checks on a Linear issue's spec. Verifies file
 
 # Spec Preflight Skill
 
-You verify that the empirical claims in a Linear issue's spec match reality, *before* `/launch` consumes the spec. Spec Review Agent reviews narrative coherence; this skill reviews facts. The two are complementary — agent review catches "is the spec well-shaped?", `/spec-preflight` catches "is the spec still true?".
+You verify that the empirical claims in a Linear issue's spec match reality, *before* `pk branch <ID>` + `/work` consume the spec. Spec Review Agent reviews narrative coherence; this skill reviews facts. The two are complementary — agent review catches "is the spec well-shaped?", `/spec-preflight` catches "is the spec still true?".
 
 This skill is **read-only**: it never edits the spec, never transitions Linear status, never writes any project file. Output goes to stdout only. (A scratch file under `/tmp/` is acceptable for analysis state.)
 
@@ -18,13 +18,13 @@ Read `method.config.md` for project context (Linear team prefix, state IDs, proj
 
 ## When to use
 
-Between Spec Review Agent passing and `/launch`. The pipeline position:
+Between Spec Review Agent passing and `pk branch`. The pipeline position:
 
 ```
-/light-spec → Spec Review Agent → human approval → /spec-preflight → /launch
+/light-spec → Spec Review Agent → human approval → /spec-preflight → pk branch <ID> → /work
 ```
 
-For Quick-tier issues that skip agent review entirely, this skill is the only automated check before `/launch` — surface it in the Quick-tier template too.
+For Quick-tier issues that skip agent review entirely, this skill is the only automated check before `pk branch` — surface it in the Quick-tier template too.
 
 ## When NOT to use
 
@@ -91,7 +91,7 @@ A line range past EOF is a divergence — record `resolves: false`.
 
 #### 3c — phase-detect baseline
 
-Resolve `phase-detect.sh` using the same lookup chain as `/launch` Step 1.6 (since v1.4.1):
+Resolve `phase-detect.sh` using the same lookup chain as `/work` (which inherited it from the v1 `/launch` Step 1.6 logic):
 
 ```bash
 PHASE_DETECT=""
@@ -125,7 +125,7 @@ Re-fetch the issue (or reuse Step 1's payload if still in scope). Compare `state
 
 #### 3e — Dependencies
 
-For each `blocked_by` identifier (from `relations` and from any narrative claims in Step 2.5), call `mcp__linear-server__get_issue` and read `state.name`. Record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `/launch` Step 2 would also catch — surfacing it pre-launch saves a round trip.
+For each `blocked_by` identifier (from `relations` and from any narrative claims in Step 2.5), call `mcp__linear-server__get_issue` and read `state.name`. Record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `pk branch` / `/work` would also catch — surfacing it pre-flight saves a round trip.
 
 If the Linear MCP server times out or is unavailable on any individual fetch: record that specific dependency as `unverified — Linear API timeout` and continue. Do not fail the whole verdict on infrastructure flake. (See Graceful Degradation below.)
 
@@ -148,14 +148,14 @@ Verdict: {PASS | REVISE} — {one-line reason if REVISE}
 
 Verdict rules:
 
-- **PASS** — every category is `✓` or `n/a` (no claims of that type) or graceful-degradation `⚠ unverified` for phase-detect / Linear API. The user can proceed to `/launch` without manual gut-checking.
-- **REVISE** — at least one real divergence: missing file, unresolved line, phase-detect mismatch, status mismatch, or non-Done dependency. The user updates the spec (or resolves the blocker) before `/launch`.
+- **PASS** — every category is `✓` or `n/a` (no claims of that type) or graceful-degradation `⚠ unverified` for phase-detect / Linear API. The user can proceed to `pk branch <ID>` without manual gut-checking.
+- **REVISE** — at least one real divergence: missing file, unresolved line, phase-detect mismatch, status mismatch, or non-Done dependency. The user updates the spec (or resolves the blocker) before `pk branch`.
 
 When emitting REVISE, point at *where* in the spec the divergence sits — by AC number, by section heading, or by the claim text — so the human can edit surgically rather than re-reading the whole spec.
 
 ### Step 5 — Stop
 
-Print the verdict. Do nothing else. Do not call `/launch`. Do not transition Linear. Do not write `NEXT.md` (this skill doesn't move the pipeline forward; it gates the next move).
+Print the verdict. Do nothing else. Do not call `pk branch` or `/work`. Do not transition Linear. Do not write any project file (NEXT.md is retired in v2 anyway, but this skill writes nothing — it gates the next move).
 
 ## Graceful Degradation
 
@@ -185,7 +185,7 @@ Pre-flight checks for RS-87 (Standard tier):
   ✓ Linear status: Approved (matches spec)
   ✓ Dependencies: 2/2 Done
 
-Verdict: PASS — spec is empirically current. Proceed to /launch.
+Verdict: PASS — spec is empirically current. Proceed to pk branch RS-87.
 ```
 
 REVISE with a real divergence:
@@ -200,7 +200,7 @@ Pre-flight checks for RS-51 (Standard tier):
   ✓ Dependencies: 2/2 Done
 
 Verdict: REVISE — phase-detect baseline divergence at AC #1.
-Update the spec's "currently returns phase_count=0" line before /launch.
+Update the spec's "currently returns phase_count=0" line before pk branch.
 ```
 
 REVISE with infrastructure degradation plus a real divergence:
@@ -215,15 +215,15 @@ Pre-flight checks for RS-92 (Quick tier):
   ⚠ Dependencies: 1/2 verified — RS-89 Linear API timeout
 
 Verdict: REVISE — src/lib/old-auth.ts cited in §Technical Context no longer exists.
-Likely renamed during recent refactor; update the spec path before /launch.
+Likely renamed during recent refactor; update the spec path before pk branch.
 ```
 
 ## Rules of Engagement
 
-- **Read-only.** Never edit the spec. Never transition Linear. Never write `NEXT.md`. The only writes allowed are scratch files under `/tmp/` for parsing state.
+- **Read-only.** Never edit the spec. Never transition Linear. Never write any project file. The only writes allowed are scratch files under `/tmp/` for parsing state.
 - **No false confidence.** A graceful-degradation `⚠` is not a `✓`. The verdict surfaces what was unverified so the human can re-run later or accept the gap.
 - **Specific divergences.** When something fails, name *which* claim failed (AC #, section heading, file path, dependency identifier) — not just "phase-detect mismatch." The user shouldn't have to grep the spec to find what to fix.
-- **Don't recurse into `/launch`.** This skill ends at the verdict. The user invokes `/launch` themselves on PASS, or `/light-spec-revise` on REVISE.
+- **Don't recurse into the daily loop.** This skill ends at the verdict. The user invokes `pk branch <ID>` themselves on PASS (then `/work` from inside the worktree), or `/light-spec-revise` on REVISE.
 
 ## Relationship to Other Skills
 
@@ -232,4 +232,4 @@ Likely renamed during recent refactor; update the spec path before /launch.
 | `/light-spec` | Produces the spec this skill verifies. |
 | Spec Review Agent | Reviews narrative coherence. `/spec-preflight` reviews empirical claims — complementary, not redundant. |
 | `/light-spec-revise` | Where the user goes on REVISE if the spec body is the problem (most cases). |
-| `/launch` | Consumes specs that have passed `/spec-preflight`. `/launch` Step 1.6 also reads `phase-detect.sh`, but as a launch-time informational gate, not as a spec-vs-reality check. |
+| `pk branch` + `/work` | The v2 daily loop consumes specs that have passed `/spec-preflight`. `/work` also reads `phase-detect.sh` (inherited from v1's `/launch` Step 1.6 logic), but as a runtime informational gate, not as a spec-vs-reality check. |

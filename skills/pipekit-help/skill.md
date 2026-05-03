@@ -54,8 +54,8 @@ Resolve the *latest* phase by mtime of `.vbw-planning/phases/*/PLAN.md`. Don't i
    ```
 5. If no rule matches, print:
    ```
-   ➜ Next: /linear-status
-     Why: state didn't match any known rule — start from the board view
+   ➜ Next: pk status
+     Why: state didn't match any known rule — start from the full board view
    ```
 
 ## Rules of engagement
@@ -78,8 +78,8 @@ Resolve the *latest* phase by mtime of `.vbw-planning/phases/*/PLAN.md`. Don't i
 ```
 
 ```
-➜ Next: /launch PROJ-247 --close
-  Why: VERIFICATION.md present and current branch matches PROJ-247
+➜ Next: pk ship
+  Why: /verify passed and current branch matches PROJ-247 — ready to push + open PR
 ```
 
 ## Customization

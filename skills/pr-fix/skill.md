@@ -390,4 +390,4 @@ If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip 
 - `/code-review` — Lighter-weight review (no interactive discussion, no fixes)
 - `/security-review` — Comprehensive weekly security audit (full codebase, not PR-scoped)
 - `/commit` — For committing after manual fixes
-- `/g-promote-dev` — For promoting the branch after review passes
+- `pk ship` — Opens the feature → integration-branch PR; `pk promote` walks the chain to main

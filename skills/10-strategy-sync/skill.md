@@ -41,7 +41,7 @@ Read the project's strategy doc manifest from `method.config.md` under `## Strat
 
 Use the **Purpose** field to determine the tone and depth of updates. Use the **Audience** field to calibrate language level (stakeholder docs stay simple, developer docs include technical detail).
 
-If a Changelog doc exists in the manifest, it is excluded from sync content — it's maintained by `/end-session`. However, this skill adds a single changelog entry recording what was synced.
+If a Changelog doc exists in the manifest, it is excluded from sync content — Changelog entries are owned separately (`/release-changelog` for release notes, `/pk-exit` for per-session logs at `Logs/Sessions/`). However, this skill adds a single Changelog entry recording what was synced.
 
 **If no Strategy Docs table exists in `method.config.md`:** warn the user and suggest running `/strategy-create` to set up the manifest.
 
@@ -201,5 +201,5 @@ Run at these moments:
 - See `method.md` — this skill is the post-pipeline documentation step
 - `/strategy-create` — bootstraps the docs this skill updates
 - `/roadmap-review` — flags doc staleness; run this skill to resolve it
-- `/end-session` — maintains the Changelog doc (if one exists); this skill handles all other strategy docs
+- `/release-changelog` — generates release-level Changelog entries from git commits; complementary to this skill which keeps Strategy docs current
 - `/light-spec` — the specs that feed into this skill's comparison logic

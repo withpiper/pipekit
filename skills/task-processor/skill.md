@@ -48,7 +48,7 @@ Ask which task to work on.
 - Read full issue description for requirements
 - **Check for spec links:** Look for `**Spec:**` or `**Linked spec:**` lines in the description
   - If spec link exists → read the spec files before executing
-- Create a worktree for the work (use `/branch` skill or manually branch from `dev`)
+- Create a worktree for the work (`pk branch <ID>` for Linear-issue-based work, or `git worktree add` directly for non-Linear work)
 - Execute actions based on issue description + spec (if any)
 - Validate against success criteria
 - When done, ask user: move to **Done** or **UAT**?
@@ -74,6 +74,6 @@ Read all state IDs from your project's `method.config.md` under "Workflow State 
 
 - Linear issue workflow: `/linear PROJ-123` — full end-to-end issue workflow
 - Parallel batch execution: `/linear-todo-runner` — rolling queue with up to 4 concurrent agents
-- Branch skill: `/branch` — creates worktree + branch
-- Start/end session: `/start-session`, `/end-session`
+- Branch + worktree: `pk branch <ID>` — creates worktree + branch + Linear → In Progress
+- Session log: `/pk-exit` — narrative session log to `Logs/Sessions/<date>_<HHMM>.md` (last command of every Claude Code session)
 - Linear workspace: {Linear workspace URL from method.config.md}

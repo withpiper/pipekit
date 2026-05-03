@@ -26,8 +26,8 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 **Match:** All foundation-contract artifacts present AND no commits in the last 14 days on the current branch AND no `PLAN.md` / `REVIEW.md` / `VERIFICATION.md` markers in the latest phase.
 
-**Recommend:** `/start-session`
-**Why:** Foundation is intact and nothing is mid-flight — review past progress and capture session intentions before picking work. (Run `/startup --mode=inherited` if you want an explicit foundation audit first.)
+**Recommend:** `pk next`
+**Why:** Foundation is intact and nothing is mid-flight — `pk next` is the phase-aware entry point that groups Linear by status with per-group hints. (Run `/startup --mode=inherited` if you want an explicit foundation audit first.)
 
 ### 1d. Partial foundation — diagnose first
 
@@ -45,10 +45,10 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 ## 3. Verification done, ready to close
 
-**Match:** Latest phase has `VERIFICATION.md` AND no Linear `--close` has been recorded for the matching issue (heuristic: branch name contains a `PROJ-XXX` token AND most recent commit on this branch is post-VERIFICATION.md timestamp).
+**Match:** Latest phase has `VERIFICATION.md` AND no PR has been opened for the matching issue (heuristic: branch name contains a `PROJ-XXX` token AND most recent commit on this branch is post-VERIFICATION.md timestamp AND `gh pr list --head <branch>` returns empty).
 
-**Recommend:** `/launch <issue> --close`
-**Why:** QA passed; the only remaining step is the Pipekit close transition to UAT.
+**Recommend:** `pk ship`
+**Why:** QA passed; the only remaining step is push + open PR + Linear → UAT (`pk ship` does all three idempotently).
 
 ## 4. Plan reviewed but not executed
 
@@ -66,10 +66,10 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 ## 6. Issue Building, no plan yet
 
-**Match:** Branch is project-prefixed (`PROJ-XXX`) AND no `PLAN.md` exists for any phase referencing this issue AND Linear issue status (if checked) is "Building" AND inferred tier is Standard or Heavy.
+**Match:** Branch is project-prefixed (`PROJ-XXX`) AND no `PLAN.md` exists for any phase referencing this issue AND Linear issue status (if checked) is "In Progress" AND inferred tier is Standard or Heavy.
 
-**Recommend:** `/vbw:vibe --plan`
-**Why:** Issue is in Building but no plan has been generated yet. Start a fresh chat first (see method.md § Fresh-Chat Discipline).
+**Recommend:** `/work <issue>`
+**Why:** Issue is in worktree-and-branch state but no plan has been generated yet. `/work` does the verdict-gate planning then dispatches execution per `Backend:` config. Start a fresh chat first (see method.md § Fresh-Chat Discipline).
 
 ## 6b. Quick tier — direct to batch runner
 
@@ -96,22 +96,22 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 **Match:** Linear issue status is "Approved" AND no current branch matches the issue prefix.
 
-**Recommend:** `/launch PROJ-XXX`
-**Why:** Issue is human-approved and ready to enter Building.
+**Recommend:** `pk branch PROJ-XXX`
+**Why:** Issue is human-approved and ready to enter In Progress (`pk branch` creates the worktree + branch and transitions Linear). Then `cd` into the worktree and run `/work PROJ-XXX`.
 
 ## 10. Phase in flight, multiple candidates
 
 **Match:** Multiple Linear issues are in "Building" or "In Progress" simultaneously.
 
-**Recommend:** `/linear-status`
-**Why:** Multiple in-flight issues — pick the one to work on from the board view.
+**Recommend:** `pk status`
+**Why:** Multiple in-flight issues — `pk status` shows the full unscoped board so you can pick the one to work on.
 
 ## 11. Fallback
 
 **Match:** No prior rule matched.
 
-**Recommend:** `/linear-status`
-**Why:** State didn't match any known rule — start from the board view.
+**Recommend:** `pk status`
+**Why:** State didn't match any known rule — start from the full board view.
 
 ---
 

@@ -37,7 +37,7 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
 
 ### Phase 2: Implement
 
-1. **Create a worktree** using the `/branch` skill or manually:
+1. **Create a worktree** using `pk branch <ID>` (Linear-issue-based, recommended) or manually:
    - Branch from `dev` (default) or `main` (hotfixes only)
    - Worktree at `{worktree prefix from method.config.md}<description>/`
    - Use the appropriate prefix:
@@ -83,7 +83,7 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
 
 ### Phase 5: Cleanup
 
-1. **Clean up the worktree** using `/branch finish` or manually:
+1. **Clean up the worktree** using `pk done <ID>` (Linear-issue-based, recommended) or manually:
    ```bash
    # From main repo directory
    git worktree remove {worktree prefix from method.config.md}<description>/
@@ -125,8 +125,9 @@ Keep Linear comments concise and useful:
 
 ## Related
 
-- Branch skill: `/branch` — creates worktree + branch + optional Linear link
+- Branch + worktree: `pk branch <ID>` — creates worktree + branch + Linear → In Progress (idempotent)
+- v2 daily loop: `pk next` → `pk branch` → `/work` → `/verify` → `pk ship` → `pk done` → `/pk-exit` (recommended path; this skill is the manual hands-on alternative)
 - Batch processing: `/linear-todo-runner` — rolling parallel queue for multiple issues
-- Promotion: `/g-promote-dev` → `/g-promote-beta` → `/g-promote-main`
-- Session management: `/start-session`, `/end-session`
+- Promotion: `pk ship` (feature → integration branch) + `pk promote` (walks the chain per `Ship environments` in `method.config.md`)
+- Session log: `/pk-exit` — narrative session log to `Logs/Sessions/<date>_<HHMM>.md` (last command of every Claude Code session)
 - Git workflow: See CLAUDE.md "Branch Strategy"
