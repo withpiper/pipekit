@@ -53,7 +53,7 @@ Immediately after creating the issue, force a disposition decision:
 - Route by complexity tier (see Complexity Guidelines for tier mapping):
   - **Quick (Low)** → move to "Approved". Inform: _"Ready for `pk branch {issue}` then `/work {issue}` — no spec needed."_
   - **Standard (Medium)** → move to "Needs Spec". Inform: _"Ready for `/light-spec {issue}`, then `pk branch {issue}` + `/work {issue}`."_
-  - **Heavy (High)** → move to "Needs Spec". Inform: _"Heavy tier — run `/light-spec {issue}` first; `/launch` will route through full VBW planning."_
+  - **Heavy (High)** → move to "Needs Spec". Inform: _"Heavy tier — run `/light-spec {issue}` first; `/work` will route through full VBW planning (Backend: vbw)."_
 
 **If Later:**
 - Ask for a **trigger type** from the grammar below (parsable triggers are what let `/roadmap-review` auto-surface this later — prose triggers get flagged as manual-review)
@@ -93,9 +93,9 @@ If the disposition is **Now** and the brainstorm is broad, cut to v1 scope:
 
 ## Complexity Guidelines
 
-Each complexity level maps to a `/launch` tier. The tier determines whether a spec is required and which execution path runs.
+Each complexity level maps to a `/work` tier. The tier determines whether a spec is required and which execution path runs.
 
-| Complexity | `/launch` Tier | Effort | Examples | Spec? |
+| Complexity | `/work` Tier | Effort | Examples | Spec? |
 |------------|----------------|--------|----------|-------|
 | **Low** | Quick | ~2-4h | UI-only, simple CRUD, existing infrastructure | No — straight to `pk branch` + `/work` |
 | **Medium** | Standard | ~6-10h | New API endpoint, combines existing systems | Yes — `/light-spec` first |
