@@ -19,7 +19,7 @@
 
 ## Current machine state (verified 2026-05-03)
 
-- **Pipekit repo:** `/Users/ethanrosch/Projects/pipekit` on branch `main` at tag `v2.1.2`, with PRs #41-#48 + polish PR #49 merged on top (post-tag). Origin `git@github.com:withpiper/pipekit.git`. `bin/pk version` → `2.1.2` (PR #49 closed the prior dispatcher-vs-tag skew). Worth tagging `v2.1.3` post-#49-merge to mark the docs/skill scrub as a release cut.
+- **Pipekit repo:** `/Users/ethanrosch/Projects/pipekit` on branch `main` at tag `v2.1.2`, with PRs #41-#49 merged on top (post-tag). Origin `git@github.com:withpiper/pipekit.git`. `bin/pk version` → `2.1.2` (PR #49 closed the prior dispatcher-vs-tag skew). **`v2.1.3` tag pending** — should be cut to mark the docs/skill scrub as a release; would let consuming projects pin against a stable tag during sync.
 - **Working tree state:** clean tracked. The earlier dogfood artifacts (`method/`, `method.config.md`) were deleted in the 2026-05-03 afternoon session; `resources/nebula-piper-migration-handoff.md` (this file) is committed and tracked.
 - **Pre-existing stash:** `stash@{0}: On main: pre-terminology-rename-backup` — predates this session, left alone. The same-day `pre-v2.1.2-sync` stash was confirmed redundant (working-tree files hash-matched HEAD post-pull) and dropped.
 - **VBW plugin:** `1.36.0` at `~/.claude/plugins/cache/vbw-marketplace/vbw/1.36.0/`. `installed_plugins.json` updated `2026-05-02T13:25:01Z`, gitCommitSha `1e32b9c`. Stale `1.35.0` cache dir is leftover but inert (version resolution sorts SemVer).
@@ -179,7 +179,7 @@ cd ~/Projects/piper                           # or wherever Piper lives
 ```
 
 Verify:
-- `bin/pk version` should print `2.1.1` (the dispatcher string is one minor behind v2.1.2 — known and intentional).
+- `bin/pk version` should print `2.1.2` (closed the prior dispatcher-vs-tag skew in PR #49).
 - `RUNBOOK.md` should be the v2 one-page flowchart and reference `/pk-exit` and `notepad.md`.
 - `pk doctor` should be clean OR flag the v2.0.x Stop-hook leftovers (see Concern 7).
 
@@ -232,7 +232,7 @@ When you're confident v2 is driving Piper cleanly, promote v2.1.2 patterns into 
 
 ## Backlog you should know about (v2.1.x → v2.2)
 
-Captured in `RUNBOOK.md § Backlog`. Phase-aware `pk next`, `/pr-security-review`, mid-loop Linear visibility, `/pk-exit`, and `notepad.md` are **shipped** — don't re-build them.
+Captured in `RUNBOOK.md § Backlog`. Phase-aware `pk next`, `/pr-security-review`, mid-loop Linear visibility, `/pk-exit`, `notepad.md`, and the v2 vocabulary scrub are **shipped** — don't re-build them.
 
 Still open:
 
@@ -242,18 +242,26 @@ Still open:
 4. **"Defended status quo" guardrail at flowchart level** (already in `/work` prose; flowchart promotion deferred).
 5. **Automated subagent dispatch from `pk ship --review`** — full spec at `temp/ship-skill-spec.md`, requires a new `/ship` skill wrapper.
 6. **Multi-env `pk ship --env=`** for Piper-style environments (beta.1 blocker).
-7. **`method.md` rewrite** for v2 (banner-only at v2.0.0 cut; touched at v2.1.1; full rewrite still pending).
+7. **`method.md` rewrite** for v2 — *partially closed by PR #43 (structural rewrite landed)*. Stage 0 / orthogonal-skill sections still want a refresh pass for v2 voice consistency. Lower priority now.
 
 Don't try to land all of these at once. Pick by friction — the first one you actually hit on Piper is the right one to fix first.
+
+### Small followups from the scrub series (one-line fixes)
+
+These are pipekit-internal cleanups identified post-merge of the scrub series. Trivial to fix; bundling here so they don't get lost.
+
+- **`method/sop/Skills_SOP.md:205` stale callout.** PR #44 added a "Known follow-up: the script's hardcoded skill list still references v1 names" callout flagging the un-fixed state of `scripts/pipekit-next-step-nudge.sh`. PR #48 actually fixed that script but the callout in the SOP wasn't removed. Net effect: the SOP claims a TODO that's no longer pending. One-line removal in a tiny pipekit PR.
+- **Tag `v2.1.3`.** The scrub series (PRs #42-#49) represents ~30 files and ~1500 lines of cleanup — semver-wise a clear patch release. Tagging marks the scrub as a release cut and gives consuming projects a stable version to pin to during sync.
+- **`pk *` graceful-degradation when Linear config is blank.** Not validated. If a consuming project has no Linear workspace and runs `pk ship`, it's unclear whether `pk ship` opens the PR with a Linear-failure warning (graceful) or aborts entirely (robustness gap). Worth a probe before any project that doesn't have Linear adopts pipekit. Low priority — Piper has Linear so it doesn't bite there.
 
 ---
 
 ## What was deliberately NOT done at the v2.0.0 cut and not yet done since
 
-- Did not rewrite `method.md` (banner only at v2.0.0; v2.1.1 added notepad convention; full rewrite still pending).
-- Did not delete v1 skills. Moved to `archive/v1-skills/`. Easy to reference, easy to undo.
-- Did not audit `scripts/sync-method.sh` for v1 paths. May copy obsolete content to consuming projects. Worth a quick pass during the Piper migration.
-- Did not test v2 on Piper directly. That's the next session's job.
+- ~~Did not rewrite `method.md`~~ — **closed by PR #43** (structural rewrite around v2 daily loop landed during the scrub series). A future polish pass on Stage 0 / orthogonal-skill sections is still possible but lower priority now.
+- Did not delete v1 skills. Moved to `archive/v1-skills/`. Easy to reference, easy to undo. Deliberate.
+- ~~Did not audit `scripts/sync-method.sh` for v1 paths~~ — **closed by PR #48** (scripts + templates final cleanup). Confirmed no v1-path leaks; one stale comment fixed.
+- Did not test v2 on Piper directly. That's still the next session's job (post-distill-validation per § "Pending Piper-side action").
 
 ---
 
@@ -362,7 +370,7 @@ A spawned Explore agent pre-Piper-migration audit surfaced that the post-v2-cut 
 
 **Result:** every active `*.md` / `*.sh` / `*.json` outside `archive/v1-skills/` and `CHANGELOG.md` speaks v2. The remaining v1 references are intentional historical context (transition explanations in `CLAUDE.md:25`, provenance notes in `skills/spec-preflight/skill.md`, v1↔v2 comparison tables in `skills/work/skill.md`).
 
-**Recommend tagging `v2.1.3`** post-#49-merge to mark the scrub as a release cut. Leaving that decision to the next session.
+**Recommend tagging `v2.1.3`** to mark the scrub as a release cut. PR #49 is merged so this is unblocked — `git tag v2.1.3 && git push origin v2.1.3` from any clean checkout. Leaving the trigger to a future session.
 
 **Next move:** validate end-to-end on `../distill`. The plan: sync the post-#49 pipekit into distill (`./scripts/sync-method.sh` or `/pipekit-update`), run `pk doctor`, then run a real v2 daily-loop cycle through one Linear issue (`pk next` → `pk branch <ID>` → `/work` → `/verify` → `pk ship` → merge → `pk done` → `/pk-exit`). distill is the smaller-surface validation step before Piper.
 
