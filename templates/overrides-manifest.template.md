@@ -21,7 +21,7 @@ Overrides are applied automatically by `scripts/sync-method.sh` after the upstre
 
 | Path | Type | Authored | Why |
 |------|------|----------|-----|
-| _example: `skills/launch/skill.md`_ | full-file | 2026-04-26 | Adds project-specific gate for X; upstream gate too strict for Y workflow |
+| _example: `skills/work/skill.md`_ | full-file | 2026-04-26 | Adds project-specific gate for X; upstream gate too strict for Y workflow |
 | _example: `method.md.patch`_ | patch | 2026-04-26 | Inserts custom Stage 1.5 doc-review step required by compliance |
 
 ## Removed overrides
