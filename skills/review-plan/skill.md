@@ -81,8 +81,7 @@ or manually copy from your Pipekit checkout (templates/agents/plan-reviewer.md
 in older syncs, agents/plan-reviewer.md in current).
 
 Falling back to direct presentation: I'll show the PLAN.md structure
-and let you review manually. Note this is the same fallback /launch
-used to take when plan-reviewer was a phantom dependency.
+and let you review manually.
 ```
 
 ### Step 4 — Spawn the plan-reviewer agent
@@ -145,47 +144,19 @@ Based on the verdict:
 
 Always quote the agent's own Fast Path to Pass section verbatim — those are the concrete moves the user has to make.
 
-### Step 7 — NEXT.md update (with VBW active-plan deferral)
+### Step 7 — Next-step output
 
-Per the SOP `NEXT.md` schema in `sop/Skills_SOP.md`. Compose the intended file content with timestamp `{YYYY-MM-DD HH:MM local}` and writer `/review-plan`.
-
-Pointer logic:
+Emit an inline `➜ Next:` line in your terminal output. Pointer logic:
 
 - **Pass** → `/vbw:vibe --execute {phase-slug}`
 - **Revise** → `/vbw:vibe --execute {phase-slug}` (with note about non-blocking improvements)
 - **Block** → either `/vbw:vibe --plan {phase-slug}` (if Lead-revise scope) or `/02-light-spec-revise PROJ-XXX` (if spec/framing scope)
 
-Inline `➜ Next:` is **always emitted** to the terminal. The file write may be deferred — see below.
+Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear.
 
-#### Deferral check (v1.6.0+)
+### Step 8 — Pipeline state file
 
-Before writing `NEXT.md`, run the active-plan scope detection from `sop/Skills_SOP.md` § Deferral mechanism. `/review-plan` is the canonical case for deferral: it runs *inside* VBW's active-plan scope (the plan it just reviewed is the active plan), so VBW's file-guard hook will block a direct `NEXT.md` write unless the consuming project has adopted the `always_allow` allowlist (#12 Option B, upstream-coordinated).
-
-```bash
-ACTIVE_PLAN=""
-for plan in .vbw-planning/phases/*/[0-9]*-PLAN.md; do
-  [ -f "$plan" ] || continue
-  if grep -qE "^(files_modified:|## files_modified)" "$plan" 2>/dev/null; then
-    ACTIVE_PLAN="$plan"
-    break
-  fi
-done
-
-DEFER_NEXT_MD=0
-if [ -n "$ACTIVE_PLAN" ] && ! grep -q "NEXT\.md" "$ACTIVE_PLAN"; then
-  DEFER_NEXT_MD=1
-fi
-```
-
-If `DEFER_NEXT_MD=1`: resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR"`, write the queue file at `$STATE_DIR/pending-next-md.json` with the schema in the SOP. Mention briefly in your output: `"NEXT.md write deferred (VBW scope) — will apply on /end-session."`
-
-If `DEFER_NEXT_MD=0`: write `NEXT.md` directly at the project root.
-
-Inline `➜ Next:` and the eventual NEXT.md contents (whether written directly or via the queue) must match.
-
-#### Pipeline state file (v1.6.0+)
-
-After the verdict is delivered, resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR/pipeline-state"`, and write `$STATE_DIR/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, next_command, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution; if no Linear ID, use the phase slug. The path is out-of-repo (v1.7.0+) so no hook block; write should always succeed.
+After the verdict is delivered, resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR/pipeline-state"`, and write `$STATE_DIR/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution; if no Linear ID, use the phase slug. The path is out-of-repo so no hook block; write should always succeed.
 
 ---
 
@@ -216,7 +187,7 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 
 | Skill | Relationship |
 |-------|-------------|
-| `/launch` | Validates Linear gates, then user runs `/vbw:vibe --plan`, then `/review-plan`. `/launch` no longer spawns plan-reviewer directly (Tier 1 / Option 3 split). |
+| `/work` (vbw backend) | Spawns `vbw-lead` to produce `PLAN.md`; the user then runs `/review-plan` between vbw-lead's output and vbw-dev's execution. `/work` does not spawn plan-reviewer directly. |
 | `/vbw:vibe --plan` | Produces the `PLAN.md` this skill reviews. |
 | `/vbw:vibe --execute` | Next step after Pass / Revise. |
 | `/02-light-spec-revise` | Route here when plan-reviewer's Block verdict points at spec-level issues (framing, missing AC, scope ambiguity). |
@@ -281,6 +252,4 @@ proceed to Dev with these two improvements applied during execution.
 ➜ Next: /vbw:vibe --execute rs-14-login-routes
    (apply the two non-blocking improvements during execution; verify-step
    sharpening can land in the same task commit)
-
-NEXT.md updated.
 ```
