@@ -10,7 +10,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 ```
 1. ./scripts/sync-method.sh v2.1.2                (or latest tag)
-2. Append "## V2" config block to method.config.md (see V2.md § examples)
+2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
 5. ./bin/pk doctor                                 (deeper diagnostic)
@@ -51,7 +51,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │     • creates feature/<ID>-<3-word-slug>                 │
   │     • worktree at .worktrees/<ID>-<slug>                 │
   │     • symlinks .env / .env.local / .mcp.json             │
-  │     • copies parent's bin/pk into worktree (alpha.12+)   │
+  │     • copies parent's bin/pk into worktree               │
   │     • Linear: Approved → In Progress                     │
   └──────────────────────────────────────────────────────────┘
        │
@@ -253,7 +253,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 | **Ship environments** | comma list | `dev,main` | `pk ship --env=<name>` |
 | **Linear API key env var** | name | `LINEAR_API_KEY` | `pk` Linear access |
 
-Secret resolution priority (alpha.9+): **`.env.local` > `.env` > process env**.
+Secret resolution priority: **`.env.local` > `.env` > process env**.
 
 ---
 
@@ -282,7 +282,7 @@ Skip for:
 - Pure copy/UI tweaks
 - Internal-only refactors with no external surface
 
-### Manual invocation (still required as of alpha.13 — auto-dispatch deferred to alpha.14)
+### Manual invocation (auto-dispatch on v2.1.x backlog)
 
 If `pk ship --review` doesn't dispatch automatically, invoke directly:
 
@@ -316,53 +316,16 @@ All four became RS-61 — none would have been caught by `/work` or `/verify` al
 | `pk done` before merge | Refuses with "PR not merged yet." Merge first, retry. |
 | `pk done` from inside worktree | Refuses. `exit && cd ~/Projects/<repo> && claude` then retry with `<ID>` arg. |
 | Forgot to run `/pk-exit` before closing | No log written for that session. No recovery — write a manual entry in `Logs/Sessions/` if it mattered. |
-| `gh pr view` returns empty / `pk ship` says "no PR" wrongly | GraphQL rate-limited. Alpha.13 added REST fallback in `pk_gh_pr_view` / `pk_gh_pr_create` — rerun. Confirm with `gh api rate_limit --jq '.resources.graphql.remaining'`. |
+| `gh pr view` returns empty / `pk ship` says "no PR" wrongly | GraphQL rate-limited. `pk_gh_pr_view` / `pk_gh_pr_create` use REST fallback — rerun. Confirm with `gh api rate_limit --jq '.resources.graphql.remaining'`. |
 | Old VBW hook errors after `/plugin update vbw` | Plugin upgrades within a Claude Code session leave stale in-memory script paths. The disk cache is correct; the running session isn't. Restart Claude Code in the parent **and any active worktrees**. Errors are typically benign noise — restart at convenience, not mid-flow. |
 
-If a `pk *` rerun doesn't resolve in one cycle, fall back to v1 (`/branch --linear`, `/launch --auto`, `/end-session`). Capture the failure and we patch in next alpha.
-
----
-
-## Coexistence with v1
-
-| Step | v1 | v2 |
-|---|---|---|
-| Find next | `cat NEXT.md` | `pk next` |
-| Status | `/linear-status` | `pk status` |
-| Branch | `/branch --linear <ID>` | `pk branch <ID>` |
-| Session start | `/start-session` | (none — `pk next` is the entry point) |
-| Plan + work | `/launch <ID> --auto` | `/work <ID>` |
-| Verify | `/vbw:vibe --verify` | `/verify` |
-| End session | `/end-session` | `/pk-exit` |
-| Open PR | `/launch <ID> --close` | `pk ship` |
-| Cleanup | `/branch finish <slug>` | `pk done <ID>` |
-| Promote | `/g-promote-main` | `pk promote` |
-
-Both work. Switch back at any time. v2 commands are non-colliding.
+If a `pk *` rerun doesn't resolve in one cycle, capture the failure (paste output into your session, file a Linear issue) — every step is idempotent against Linear+git ground truth, so a real failure is a bug worth diagnosing, not something to route around.
 
 ---
 
 ## Backlog
 
-### Shipped in alpha.13 (2026-05-02)
-
-- REST fallback for `gh pr view` / `gh pr create` (GraphQL rate-limit resilience)
-- `/work --backend=vbw|native` per-invocation override
-- `/brainstorm` + `/brainstorm-review` v2 tier routing
-- Consolidated v2 alpha CHANGELOG entry
-
-### Shipped in alpha.14 (2026-05-02 PM)
-
-- `pk install` global installer (symlinks pk to `/usr/local/bin` or `~/.local/bin`)
-- `pk done` — richer Linear comment (commits + diffstat + session count + PR URL)
-- `pk promote --stash` / `--take-remote` flags for local-edit conflict resolution
-- REST-first ordering in `pk_gh_pr_view` / `pk_gh_pr_create` (was burning GraphQL quota)
-
-### Shipped in v2.1.0 (2026-05-02 PM)
-
-- ✅ **Phase-aware `pk next`** — reads current phase from PHASES.md + linear-map.json; groups by status (In Progress / Approved / Needs Spec) with per-group next-action hints; "Other phases" footer.
-- ✅ **`/pr-security-review` skill** — security-focused antagonistic PR review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, auth, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories.
-- ✅ **Mid-loop Linear visibility for `pk ship --review` + `/pr-fix`** — both now post Linear comments. `pk ship --review` flags review-in-flight; `/pr-fix` Phase 6.6 posts triage-complete summary.
+> Historical "shipped" entries live in `CHANGELOG.md`, not here. This section tracks **open** work only.
 
 ### v2.1.x / v2.2 candidates (still backlog)
 
@@ -392,5 +355,4 @@ A Phase 2.5 issue (RS-63) explicitly handed off integration work to its successo
 - **beta.1** — multi-env `pk ship --env=<env>` for Piper (Vercel + Supabase branch + LaunchDarkly)
 - **beta.1** — skills directory reorg: `skills/{loop,stage0,orthogonal}/` subdirs
 - **beta.2** — GitHub Actions workflow `pr-review.yml` — antagonistic review on PR open (CI-side)
-- **GA** — delete v1 skills (currently coexisting), retag `RUNBOOK.md` as v2-only
 
