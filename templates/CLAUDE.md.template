@@ -27,7 +27,8 @@
     skills/                  -- Portable skills
     agents/                  -- Pipekit-shipped agents (e.g., plan-reviewer)
   .vbw-planning/             -- VBW planning state (ROADMAP, PLAN.md, STATE)
-  NEXT.md                    -- Next-action pointer (written by every major skill)
+  notepad.md                 -- Personal scratch space (gitignored; seeded by `pk init`)
+  Logs/Sessions/             -- Per-session narrative logs (written by `/pk-exit`)
   method.config.md           -- Project-specific config (workflow state IDs, git arch, etc.)
 ```
 
@@ -43,21 +44,29 @@
 
 **Core principle: no code reaches a long-lived branch without a PR.**
 
-Promotion commands: `/g-promote-dev`, {`/g-promote-beta`,} `/g-promote-main`.
+Promotion mechanism: `pk ship` (feature → integration branch from `method.config.md`); `pk promote` walks the chain to `main` per `Ship environments` config (`dev,main` for two-tier; `dev,beta,main` for three-tier).
 
 ## Pipeline
 
 This project uses **Pipekit** (a portable AI-delivery methodology) wrapping **VBW** (planning and execution engine) with **Linear** (review and tracking layer).
 
-The full pipeline is documented in `method/method.md`. Core loop:
+The full pipeline is documented in `method/method.md`; the one-page operational view is in `method/RUNBOOK.md`. Core loop:
 
 ```
-/concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create
-  → /phase-plan → /light-spec → /launch → VBW execution → QA → UAT → ship
-  → /strategy-sync
+Stage 0 (one-time): /concept → /define → /strategy-create → /startup → /vbw:init
+                    → /roadmap-create → /phase-plan
+
+Daily loop (per issue):
+  /light-spec → agent review → human review     (Stage 1: Spec)
+  pk next → pk branch <ID> → /work <ID>          (Stage 2: Plan + Build)
+  /verify → pk ship [--review] → UAT             (Stage 3: Verify + Ship)
+  pk done <ID> → pk promote                      (Stage 4: Release)
+  /strategy-sync                                  (Stage 5: Doc Loop)
+
+Per session: /pk-exit (writes Logs/Sessions/<date>_<HHMM>.md before /exit)
 ```
 
-Interactive skills live in `.claude/skills/`. VBW commands live under `/vbw:*`.
+Interactive skills live in `.claude/skills/`. `pk *` commands live in `bin/pk`. VBW commands live under `/vbw:*`.
 
 ## Working Style
 
@@ -74,7 +83,7 @@ Code written without context produces rework.
 Feedback-derived rules this project has learned to follow. Add new rules when patterns emerge; never remove without explicit decision.
 
 1. **Never make decisions for the user.** Present analysis and wait for explicit approval before committing a direction.
-2. **Always review plans before execution.** After any `PLAN.md` is created, invoke the `plan-reviewer` agent before starting execution (`/launch` does this automatically).
+2. **Always review plans before execution.** When `Backend: vbw` and `vbw-lead` produces a `PLAN.md`, invoke `/review-plan` (which spawns the `plan-reviewer` agent) before starting `vbw-dev` execution.
 3. {Add project-specific rules here as they emerge.}
 
 ## Routing Pointers
@@ -108,6 +117,6 @@ If CLAUDE.md and a rules file conflict on implementation detail, the rules file 
 - Skills are for interactive sessions, not agent execution paths.
 - All VBW artifacts live in `.vbw-planning/`. Agents do not modify product code without a plan.
 - Agents must validate against the pre-deploy gate before marking work complete.
-- Do not invoke VBW agents directly in Pipekit projects. Use `/launch`, not `/vbw:lead` / `/vbw:dev`. `/launch` wraps VBW and keeps Linear/PHASES.md/NEXT.md in sync.
+- Do not invoke VBW agents directly in Pipekit projects. Use `/work`, not `/vbw:lead` / `/vbw:dev`. `/work` dispatches to the configured backend (`vbw` or `native` per `method.config.md`) and keeps Linear and the `pk *` state machine in sync.
 
 See `method/method.md` § "VBW / Pipekit Ownership Model" for details.

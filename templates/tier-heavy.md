@@ -41,11 +41,11 @@ Heavy tier always routes through full VBW planning, regardless of complexity rat
 
 ## Close path
 
-`/launch PROJ-XXX --close` checks for:
+Heavy tier adds extra checks before `pk ship` opens the PR:
 
 1. QA report present and passing
-2. Security review report present
+2. Security review report present (`/pr-security-review` is the canonical mechanism for migrations / RLS / SECURITY DEFINER / auth surface)
 3. `/strategy-sync` last-run timestamp is after this issue's last build commit
 4. No `pending-strategy-sync` marker in Pipekit's state dir (`bash scripts/pipekit-state-dir.sh`)
 
-If any check fails, `--close` is refused with a list of missing artifacts. Linear status only transitions to UAT once all checks pass.
+If any check fails, `pk ship` is refused with a list of missing artifacts. Linear status only transitions to UAT once all checks pass. Post-merge: `pk done PROJ-XXX` cleanup + Linear → Done; `pk promote` walks the chain.

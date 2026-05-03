@@ -33,7 +33,7 @@
 
 ## Routing
 
-`/launch` routes Quick tier directly to `/linear-todo-runner` regardless of complexity rating. The AC section is the executable plan.
+`/work` routes Quick tier directly to in-context execution (or `/linear-todo-runner` for batch parallel execution of multiple Quick issues). No PLAN.md generated regardless of `Backend:` config — the AC section is the executable plan.
 
 ## Required artifacts
 
@@ -42,4 +42,4 @@
 
 ## Close path
 
-`/launch PROJ-XXX --close` → Linear status to UAT. UAT pass → ship via promotion skill.
+`pk ship` → Linear status to UAT. UAT pass → merge PR → `pk done PROJ-XXX` (cleanup + Linear → Done) → `pk promote` (multi-tier projects).

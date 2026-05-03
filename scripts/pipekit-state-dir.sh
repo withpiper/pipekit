@@ -2,11 +2,11 @@
 # pipekit-state-dir.sh
 #
 # Resolve Pipekit's per-repo machine-local state directory. Pipekit's ephemeral
-# state (NEXT.md defer queue, pipeline-state records, strategy-sync marker) used
-# to live in `<repo>/.pipekit/` but that path is inside the repo and gets
-# blocked by VBW's file-guard hook when running inside an active-plan scope
-# (issue #13). The fix: relocate to an XDG-style cache dir outside the repo,
-# which the file-guard never inspects.
+# state (pipeline-state records, strategy-sync marker) lives outside the repo
+# at an XDG-style cache path. Earlier Pipekit placed these in `<repo>/.pipekit/`
+# but that path is inside the repo and gets blocked by VBW's file-guard hook
+# when running inside an active-plan scope. The relocation to an out-of-repo
+# cache dir lets writes succeed unconditionally.
 #
 # Path scheme:
 #   ${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/
@@ -14,7 +14,7 @@
 # Usage:
 #   STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
 #   mkdir -p "$STATE_DIR/pipeline-state"
-#   echo "$payload" > "$STATE_DIR/pending-next-md.json"
+#   echo "$payload" > "$STATE_DIR/pipeline-state/<issue-id>.json"
 #
 # Output: absolute path. Always succeeds; falls back to `_default` basename
 # when not inside a git repo (e.g. the helper is invoked from an arbitrary cwd).
