@@ -84,7 +84,7 @@ Disposition:
 4. Route by complexity tier (matches `/brainstorm` tier mapping):
    - **Low → Quick:** move to "Approved" — ready for `pk branch {issue}` + `/work {issue}` (no spec)
    - **Medium → Standard:** move to "Needs Spec" — ready for `/light-spec {issue}`
-   - **High → Heavy:** move to "Needs Spec" — `/light-spec` mandatory, full VBW route via `/launch`
+   - **High → Heavy:** move to "Needs Spec" — `/light-spec` mandatory, full VBW route via `/work` (with `Backend: vbw`)
 5. Set priority (ask user)
 6. Assign to correct project/initiative
 
