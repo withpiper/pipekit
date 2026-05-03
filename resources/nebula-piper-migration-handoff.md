@@ -1,8 +1,8 @@
-# Context handoff — Nebula → Pipekit v2.1.2 → Piper migration
+# Context handoff — Nebula → Pipekit v2.1.2 → distill validation → Piper migration
 
 > **Machine: Nebula** (Ethan's primary Mac). This file scopes to work originating on Nebula. Pick up from this when starting a new session here, or carry the contents to another machine if needed. Self-contained: nothing outside this file is required to continue. **You** = the next Claude session. **I** = the Nebula session that last updated this on `2026-05-03`.
 >
-> Originally written `2026-05-02` against Pipekit `v2.0.0`. Refreshed `2026-05-03` against `v2.1.2` after Pipekit shipped three same-week minor releases (v2.1.0 / .1 / .2) and Nebula advanced its checkout. Material changes flagged below.
+> Originally written `2026-05-02` against Pipekit `v2.0.0`. Refreshed `2026-05-03` against `v2.1.2` after Pipekit shipped three same-week minor releases (v2.1.0 / .1 / .2). **Refreshed again `2026-05-03` evening** after a 7-PR v2 vocabulary scrub series (#42-#48) plus a polish PR (this session). Pipekit is now end-to-end v2-clean. Next move: validate on `../distill` (consumer test) before kicking off Piper migration. Material changes flagged below.
 
 ---
 
@@ -12,14 +12,15 @@
 - v2 was validated end-to-end on rs-vault — Phase 1 closeout (RS-25 / 30 / 60 / 61 / 62) plus a Heavy spike (RS-63: VBW backend, antagonistic review, /pr-fix triage). Pipeline holds.
 - **Three v2.1.x deltas** to know about: `/pk-exit` (replaces the bash Stop hook for session logs), `notepad.md` (replaces retired `NEXT.md`), `/pr-security-review` (new) + phase-aware `pk next` (new).
 - **VBW machine plugin updated** `1.35.0 → 1.36.0` on `2026-05-02`. Cache and manifest verified.
-- **Piper is the next consumer. All migration questions resolved 2026-05-03.** See § "Migration decisions" for the resolved trade-offs (Q3 multi-env collapses into Q4 GitHub Actions port; `pk ship` becomes the single trigger for Vercel + Supabase via merge-time hooks). See § "Pending Piper-side action" for the ordered execution plan starting with a Piper-side inventory.
+- **v2 vocabulary scrub series (PRs #42-#48 + polish #49) shipped 2026-05-03 evening.** The post-v2-cut docs were riddled with v1 vocabulary leaks: `/launch`, `/branch`, `/g-promote-*`, NEXT.md writes baked into 7 active skills, and `/pipekit-help` recommending retired skills. Series cleaned every active `*.md` / `*.sh` / `*.json` outside `archive/` and `CHANGELOG.md`. After this, the entire active repo speaks v2. See § "Session log — Nebula" entry `2026-05-03 evening` for the per-PR breakdown.
+- **Next consumer test: `../distill`.** Then Piper. distill is the validation step before Piper because it's a smaller surface to catch any remaining v2 issues without putting Piper at risk. **All Piper migration questions resolved 2026-05-03.** See § "Migration decisions" for the resolved trade-offs (Q3 multi-env collapses into Q4 GitHub Actions port; `pk ship` becomes the single trigger for Vercel + Supabase via merge-time hooks). See § "Pending Piper-side action" for the ordered execution plan starting with a Piper-side inventory.
 
 ---
 
 ## Current machine state (verified 2026-05-03)
 
-- **Pipekit repo:** `/Users/ethanrosch/Projects/pipekit` on branch `main` at tag `v2.1.2`, commit `b40d985` (`feat(v2.1.2): retire bash Stop hook → /pk-exit narrative session logs (#40)`). Origin `git@github.com:withpiper/pipekit.git`. `bin/pk version` → `2.1.1` (the v2.1.2 release didn't bump the dispatcher's version string — known skew, not a bug).
-- **Working tree state:** clean tracked, plus three untracked dirs not covered by `.gitignore` and not tracked at `origin/main`: `resources/` (this file lives here), `method/`, `method.config.md`. None conflict with v2.1.2 since `origin/main` doesn't track those paths.
+- **Pipekit repo:** `/Users/ethanrosch/Projects/pipekit` on branch `main` at tag `v2.1.2`, with PRs #41-#48 + polish PR #49 merged on top (post-tag). Origin `git@github.com:withpiper/pipekit.git`. `bin/pk version` → `2.1.2` (PR #49 closed the prior dispatcher-vs-tag skew). Worth tagging `v2.1.3` post-#49-merge to mark the docs/skill scrub as a release cut.
+- **Working tree state:** clean tracked. The earlier dogfood artifacts (`method/`, `method.config.md`) were deleted in the 2026-05-03 afternoon session; `resources/nebula-piper-migration-handoff.md` (this file) is committed and tracked.
 - **Pre-existing stash:** `stash@{0}: On main: pre-terminology-rename-backup` — predates this session, left alone. The same-day `pre-v2.1.2-sync` stash was confirmed redundant (working-tree files hash-matched HEAD post-pull) and dropped.
 - **VBW plugin:** `1.36.0` at `~/.claude/plugins/cache/vbw-marketplace/vbw/1.36.0/`. `installed_plugins.json` updated `2026-05-02T13:25:01Z`, gitCommitSha `1e32b9c`. Stale `1.35.0` cache dir is leftover but inert (version resolution sorts SemVer).
 - **GitKraken hooks:** disabled in `~/.claude/settings.json` (preserved gsd-context-monitor / session-start / session-end). If a new session lands on a different machine, replicate the change. Symptom: `pk` says PR-not-found / `gh` says rate-limit-exceeded; check `gh api rate_limit --jq '.resources.graphql.remaining'`.
@@ -275,8 +276,8 @@ In order:
 - **Squash merge `merge_method=merge` via gh API** still gets squashed if the repo ruleset enforces squash-only. The API parameter is advisory, not authoritative.
 - **vbw-dev didn't dispatch vbw-lead.** v2 design: `/work` does the planning natively (in your context window), VBW only executes. If you want a planning subagent, use `--deep` for parallel grounding via Agent calls.
 - **Old branch-journal hook converted `/` to `-` in branch names** (`feature/RS-X-foo` → `feature-RS-X-foo.md` in journal dir). That hook is gone in v2.1.2 — `Logs/Sessions/<date>_<HHMM>.md` doesn't use branch names. Mentioned only in case you find old `.pipekit/journal/` artifacts in a consuming project.
-- **`bin/pk version` lags the release tag.** v2.1.2 ships `PK_VERSION="2.1.1"` in `bin/pk` because the v2.1.2 release didn't touch the dispatcher. Don't read this as a failed upgrade.
 - **v2.0.x → v2.1.2 leaves Stop-hook artifacts behind in consuming projects.** `pk doctor` flags them post-upgrade. Cleanup is manual but documented.
+- **The v2 cut left v1 vocabulary scattered through docs and skills.** Looked clean from RUNBOOK but the surrounding surface (method.md, GUIDE.md, SOPs, 17 skill files, 5 templates, scripts) still spoke v1. Worst offender: 7 skills (including Stage 0's `/startup`, `/roadmap-create`) wrote `NEXT.md` to the project root — would have polluted Piper from day 1. The 7-PR scrub series caught it. Lesson for future major version cuts: schedule the vocabulary-scrub work as part of the cut, don't assume the banner-on-top approach is enough.
 
 ---
 
@@ -338,12 +339,37 @@ No commits, no Linear writes, no Piper-side actions.
 3. **Key insight surfaced during Q3:** `pk ship` does NOT push migrations — it only opens the PR. Ethan currently runs `/g-deploy` (or similar) post-push to enact Supabase updates. Q4's GitHub Actions retire that step entirely (`db-pr-check.yml` validates on PR open, `db-migrate.yml` applies on main merge). So Q3 and Q4 collapse: with Q4 in place, `pk ship` becomes the single trigger for all three env channels. Without Q4, multi-env is broken.
 4. Restructured § "Open questions" into § "Migration decisions" (resolved table) + § "Pending Piper-side action" (5-step ordered execution plan). Updated TL;DR's last bullet to point at the new sections.
 
-No commits (working tree shows `resources/` untracked + `method/` / `method.config.md` deleted from disk — neither was tracked at HEAD, so no diff to push). No Linear writes. No Piper-side actions yet — that's the next session's job.
+No commits at end of session (working tree showed `resources/` untracked + `method/` / `method.config.md` deleted from disk — neither was tracked at HEAD). No Linear writes. PR #41 followed shortly after to commit `resources/`.
+
+### 2026-05-03 evening — v2 vocabulary scrub series
+
+A spawned Explore agent pre-Piper-migration audit surfaced that the post-v2-cut docs/skills still spoke v1 in many places. Ran a 7-PR scrub series + polish PR to clean it up before any Piper migration work touches `../piper`.
+
+**Per-PR breakdown:**
+
+| PR | Scope | Notable |
+|---|---|---|
+| **#42** | BLOCKER root docs (CLAUDE.md, README.md, STARTUP.md, RUNBOOK.md, method.config.template.md, method.md) + delete V2.md | V2.md was entirely stale (alpha-status framing); deleted outright. method.config.template lost its v1 `Stack` section (`/g-promote-*` consumers all retired). |
+| **#43** | method.md structural rewrite | Section structure had been mirroring the v1 pipeline (Stage 2 "Launch & Planning" / Stage 3 "Execution"). Rebuilt around v2 stages (Plan + Build / Verify + Ship). |
+| **#44** | SOPs + VBW_COMMANDS | `Skills_SOP.md` lost ~100 lines documenting the retired NEXT.md infrastructure (defer queue, file-guard workaround, deferral mechanism). `Git_and_Deployment.md` rewrote the workflow + DB-migration timing tables for v2's GitHub-Actions pattern. |
+| **#45** | GUIDE.md (1215-line tutorial) rewrite | Stages 1-3 narrative + Skill Quick Reference table fully rebuilt around v2 daily loop. |
+| **#46** | **Skill functional bugs (7 NEXT.md writers)** | Highest-stakes PR. `/startup`, `/roadmap-create`, `/01-light-spec`, `/02-light-spec-revise`, `/phase-plan`, `/review-plan`, `/06-linear-todo-runner` were all writing NEXT.md to the project root. `/review-plan` alone had a 40-line deferral mechanism for the v1 file-guard hook conflict — entirely dead code in v2. Stage 0 skills writing NEXT.md would have polluted Piper from day 1. |
+| **#47** | Skill prose cleanup (10 cross-refs) | The big win: `/pipekit-help` was telling users to run retired skills (Rule 1c → `/start-session`, Rule 3 → `/launch --close`, Rule 9 → `/launch PROJ-XXX`, Rules 10/11 → `/linear-status`). Updated to v2 commands. Plus `/spec-preflight` (11 cross-refs to /launch as the spec consumer), `/linear`, `/brainstorm`, etc. |
+| **#48** | Scripts + templates | `pipekit-next-step-nudge.sh` regex updated to match v2 skills (Stop-hook nudge had been silent for v2 work). `verify-next-md-defer.sh` deleted (130 lines verifying retired functionality). `CLAUDE.md.template` rebuilt — this seeds new project CLAUDE.md files, so Piper would have inherited v1 vocabulary on bootstrap. tier-quick/standard/heavy templates updated. |
+| **#49** (this session) | Polish | RUNBOOK flowchart consistency (5 boxes had mixed `pk` vs `./bin/pk` forms; standardized on bare `pk` in the daily-loop flowchart while preserving `./bin/pk` in pre-install setup steps and the dual-form reference table). `bin/pk` PK_VERSION 2.1.1 → 2.1.2 (closes the dispatcher-vs-tag skew). This handoff updated to reflect scrub-complete state. |
+
+**Net change across the series:** ~30 files touched, ~1500 lines added/removed. Largest single deletion: `verify-next-md-defer.sh` (130 lines). Largest single addition: `method.md` Step-by-Step table rebuild (+50 lines).
+
+**Result:** every active `*.md` / `*.sh` / `*.json` outside `archive/v1-skills/` and `CHANGELOG.md` speaks v2. The remaining v1 references are intentional historical context (transition explanations in `CLAUDE.md:25`, provenance notes in `skills/spec-preflight/skill.md`, v1↔v2 comparison tables in `skills/work/skill.md`).
+
+**Recommend tagging `v2.1.3`** post-#49-merge to mark the scrub as a release cut. Leaving that decision to the next session.
+
+**Next move:** validate end-to-end on `../distill`. The plan: sync the post-#49 pipekit into distill (`./scripts/sync-method.sh` or `/pipekit-update`), run `pk doctor`, then run a real v2 daily-loop cycle through one Linear issue (`pk next` → `pk branch <ID>` → `/work` → `/verify` → `pk ship` → merge → `pk done` → `/pk-exit`). distill is the smaller-surface validation step before Piper.
 
 ---
 
 ## End of handoff
 
-If you're reading this on Piper: the v2 loop is solid and now even tighter than the v2.0.0 cut (phase-aware `pk next`, `/pr-security-review`, `/pk-exit`, `notepad.md`). The pipeline is real, and the migration trade-offs are now decided — your job is execution, not deliberation. Start with § "Pending Piper-side action" step 1 (inventory). You're picking up after three productive Nebula sessions — v2 went from alpha to canonical to v2.1.2 in roughly 36 hours, plus a clean machine-level VBW upgrade and a fully-resolved migration plan. Don't break the streak.
+If you're reading this on Piper: the v2 loop is solid, and the post-cut artifact-cleanup is also done as of 2026-05-03 evening. The pipeline is real, the migration trade-offs are decided, AND the docs/skills no longer leak v1 vocabulary into your project root. Start with § "Pending Piper-side action" step 1 (inventory). If you're reading this on distill or another consumer: the v2 daily loop is what's documented in `RUNBOOK.md`; sync the latest pipekit, run `pk doctor`, then run one full cycle. You're picking up after four productive Nebula sessions (v2.0.0 cut → v2.1.x rapid releases → migration plan → vocabulary scrub series). Don't break the streak.
 
 — Pipekit session, Nebula, 2026-05-03
