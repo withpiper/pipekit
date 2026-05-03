@@ -26,46 +26,53 @@ Skills are convenience wrappers. They automate the same conventions documented i
 
 These skills work across any project that follows the method. They read `method.config.md` for project-specific values.
 
-| Skill | Purpose | Pipeline Stage |
-|-------|---------|---------------|
+| Command / Skill | Purpose | Pipeline Stage |
+|-----------------|---------|---------------|
 | `/concept` | Project-level ideation — produce a concept brief | Stage 0: Foundation |
 | `/define` | Distill concept into full project definition | Stage 0: Foundation |
 | `/strategy-create` | Bootstrap strategy docs from project definition | Stage 0: Foundation |
 | `/roadmap-create` | Create ROADMAP.md and populate Linear | Stage 0: Foundation |
 | `/phase-plan` | Select and manage execution phases | Stage 0: Foundation / Ongoing |
-| `/roadmap-review` | Pre-pipeline health check (Stage 0 gate) | Stage 0 → Stage 1 gate |
-| `/brainstorm` | Feature-level feasibility exploration | Stage 1: Definition |
-| `/brainstorm-review` | Triage untriaged Linear issues | Stage 1: Definition |
-| `/light-spec` | Structured spec generation with agent review | Stage 1: Definition |
-| `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops | Stage 1: Definition |
-| `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. | Stage 1 / pre-Launch gate |
-| `/launch` | Formalized trigger: gates → routing → execution | Stage 2: Launch & Planning |
-| `/linear-todo-runner` | Batch execution of specced issues | Stage 3: Execution |
-| `/linear` | Linear issue workflow | Anytime |
-| `/linear-status` | Quick triage view of board status | Anytime |
-| `/sync-linear` | Bidirectional VBW ↔ Linear sync | Anytime |
-| `/branch` | Create worktree + branch + optional Linear link | Anytime |
-| `/start-session` | Review past progress, capture intentions | Anytime |
-| `/end-session` | Session wrap-up: changelog, Linear updates | Anytime |
-| `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Documentation |
-| `/pr-fix` | Precision PR review + fix workflow | Anytime |
-| `/security-review` | Security review | Anytime |
-| `/spec-validator` | Validate spec completeness | Stage 1: Definition |
-| `/skill-index` | Sync skill index after changes | Anytime |
-| `/task-processor` | Process Linear tasks systematically | Stage 3: Execution |
 | `/startup` | Full project bootstrap orchestrator | Stage 0 (all steps) |
+| `/roadmap-review` | Pre-pipeline health check (Stage 0 gate) | Stage 0 → Stage 1 gate |
+| `/brainstorm` | Feature-level feasibility exploration | Stage 1: Spec |
+| `/brainstorm-review` | Triage untriaged Linear issues | Stage 1: Spec |
+| `/light-spec` | Structured spec generation with agent review | Stage 1: Spec |
+| `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops | Stage 1: Spec |
+| `/spec-preflight` | Empirical pre-flight checks on a specced Linear issue (file paths, line refs, phase-detect baseline, Linear status). Read-only. | Stage 1 → Stage 2 gate |
+| `pk next` | Phase-aware: groups Linear results by status (In Progress / Approved / Needs Spec) | Stage 2: Plan + Build |
+| `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) | Stage 2: Plan + Build |
+| `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. | Stage 2: Plan + Build |
+| `/review-plan` | Spawns `plan-reviewer` agent against `PLAN.md` (vbw backend). | Stage 2: Plan + Build |
+| `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` | Stage 3: Verify + Ship |
+| `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
+| `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary | Stage 3: Verify + Ship |
+| `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
+| `pk done <ID>` | Post-merge cleanup: worktree+branch, commits to Linear, → Done | Stage 4: Release |
+| `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` | Stage 4: Release |
+| `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |
+| `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md` | Per session |
+| `pk status` | Full unscoped Linear board view | Anytime |
+| `pk doctor` | Diagnostic: config validity, Linear API access, worktree dir, stale artifacts | Anytime |
+| `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config | One-time setup |
+| `/linear` | Linear issue workflow helper | Anytime |
+| `/sync-linear` | Bidirectional VBW ↔ Linear sync | Anytime |
+| `/pipekit-help` | Read project state, recommend next pipeline step | Anytime |
+| `/spec-validator` | Validate spec completeness | Stage 1: Spec |
+| `/security-review` | Periodic repo security audit (different from `/pr-security-review`) | Anytime |
+| `/skill-index` | Sync skill index after changes | Anytime |
+| `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
 
 ### Project-Specific Skills (stay in each project)
 
-These are tied to your stack, infrastructure, or deployment pipeline:
+In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk ship`, `pk promote`, Vercel hooks, and GitHub Actions (`db-migrate.yml` + `db-pr-check.yml` for Supabase). Project-specific skills are limited to things that genuinely depend on your domain or schema:
 
-- Promotion skills (`/g-promote-dev`, `/g-promote-beta`, `/g-promote-main`)
-- Deploy/verify skills (`/g-deploy`, `/g-test-vercel`)
-- Migration skills (`/migrate`)
-- Scaffold skills (`/component`)
-- Data management skills (`/reset-user`)
+- Component scaffolding (`/component`) — monorepo with shared UI
+- Test data reset (`/reset-user`) — auth + user system
+- Test data seeding (`/seed-data`) — repeatable fixtures
+- Schema export (`/export-schema`) — sharing schema with non-Pipekit consumers
 
 ---
 
@@ -91,63 +98,30 @@ description: One-line description of what the skill does
 3. **Use Linear MCP tools** for issue management (`mcp__linear-server__*`)
 4. **Use VBW agents** for planning and execution (`vbw:vbw-lead`, `vbw:vbw-dev`, `vbw:vbw-qa`)
 
-### The `NEXT.md` Convention
+### "What's next?" in v2 — `pk next` reads Linear
 
-Every Pipekit skill that produces a meaningful state transition (completes a pipeline step, promotes issues, ships a feature, etc.) MUST do two things in lockstep:
+v2 retired the v1 `NEXT.md` mirror. The single source of truth for "what should I do next?" is **Linear**, accessed via:
 
-1. **Print `➜ Next:` inline** in the terminal — tells the current user what command to run next and why.
-2. **Overwrite `NEXT.md` at the project root** with the same content — gives tomorrow's user (or a new session) the same pointer.
+- **`pk next`** — phase-aware (reads `## Current Phase:` from `PHASES.md`, matches to `linear-map.json`, groups Linear issues by status with per-group hints). Falls back to global "next Approved" when no phase context.
+- **`pk status`** — full unscoped board view.
+- **`/pipekit-help`** — recommends next pipeline step based on project state (push-based replacement for "what skill do I run now?").
 
-Because both are written by the same code path in the same skill run, drift is impossible. The file is fresh whenever the user closed the session.
+Skills should **not** write a `NEXT.md` file. Skills MAY still print `➜ Next:` inline at the end of their output as a courtesy hint to the current user, but the persistence layer is Linear, not a sidecar markdown file.
 
-**Required `NEXT.md` schema:**
+`pk init` (v2.1.1+) seeds a gitignored `notepad.md` at the project root for personal free-form notes (replaces NEXT.md as a human scratch space). It is never committed and never auto-written by skills.
 
-```markdown
-# Next Step
+#### Pipekit machine-local state directory
 
-**Last updated:** {YYYY-MM-DD HH:MM local} by {skill name}
-
-## Recommended next command
-`{command}`
-
-## Why this one
-{1-3 sentences on why this is the highest-leverage next action}
-
-## Parallelizable after this (optional)
-- {other commands that can run in parallel once this one starts}
-
-## Blocked, do later (optional)
-- {commands that depend on this one completing first}
-```
-
-Always include both date and time in the `Last updated` line. A bare date hides multi-session days (common when shipping more than one issue) and makes it ambiguous whether `NEXT.md` is fresh or held over from morning. Local time is fine — users read this in their terminal, not machine-parse it.
-
-**Which skills must write `NEXT.md`:**
-- `/startup` — after each step completes (always point to the next step or `/start-session` if done)
-- `/roadmap-create` — after roadmap is populated, point to `/phase-plan` or `/roadmap-review`
-- `/phase-plan` — after phase is planned, point to `/01-light-spec {first issue}`
-- `/01-light-spec` — after spec is drafted and approved, point to `/launch {issue}` or the next issue
-- `/launch` — after gates pass, point to VBW execution or the next issue to spec
-- `/strategy-sync` — after docs are updated, point to the next unshipped issue
-- `/end-session` — after session log is written, recompute based on Linear state (next Approved issue, `/strategy-sync` if pending marker exists, or `/phase-plan` if phase complete). Prevents stale NEXT.md pointing at a just-shipped issue.
-
-**`NEXT.md` lives at the project root** (not in `.vbw-planning/` — that directory is hidden and confusing for users). Visible alongside `concept-brief.md`, `project-definition.md`, `method.config.md`.
-
-**`/start-session` reads and displays it** automatically at session start, so users don't need to navigate to the file.
-
-#### Pipekit machine-local state directory (v1.7.0+)
-
-Pipekit's ephemeral, per-machine state (NEXT.md defer queue, pipeline-state records, strategy-sync marker) lives **outside** the repo at:
+Pipekit's ephemeral, per-machine state (post-archive marker, per-issue pipeline-state records) lives **outside** the repo at:
 
 ```
 ${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/
-├── pending-next-md.json           # NEXT.md defer queue (see below)
 ├── pending-strategy-sync          # post-archive marker (see /strategy-sync)
 └── pipeline-state/
     └── <issue-id>.json            # per-skill transition state
 ```
 
-**Why out-of-repo (#13):** v1.6.0 placed these files at `<repo>/.pipekit/`, which sits inside the repo and gets blocked by VBW's file-guard hook the same way `NEXT.md` does. The defer mechanism only worked for non-VBW-scoped writers — exactly the case it was *not* meant to fix. v1.7.0 moves the directory outside the repo entirely. VBW's file-guard never inspects paths outside the project, so writes succeed unconditionally.
+**Why out-of-repo:** earlier Pipekit placed these files at `<repo>/.pipekit/`, which sits inside the repo and got blocked by VBW's file-guard hook during active-plan scope. Moving the directory outside the repo lets VBW's file-guard ignore it entirely, so writes succeed unconditionally.
 
 **Resolving the path:** every skill that reads/writes Pipekit state uses the helper:
 
@@ -158,80 +132,28 @@ mkdir -p "$STATE_DIR"
 
 `scripts/pipekit-state-dir.sh` resolves `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>` (basename derived from `git rev-parse --show-toplevel`). All file paths below are *relative to* `$STATE_DIR`.
 
-**Migration from v1.6.0:** consuming projects with a populated `<repo>/.pipekit/` should one-shot move it: `mkdir -p "$(bash scripts/pipekit-state-dir.sh)" && mv .pipekit/* "$(bash scripts/pipekit-state-dir.sh)/" && rmdir .pipekit`. The files are ephemeral so a clean wipe is also fine — the queue and state files self-recreate on next write.
-
-#### NEXT.md deferral mechanism for VBW active-plan scope (v1.6.0+, relocated v1.7.0)
-
-A Pipekit skill that wants to write `NEXT.md` while the user is inside a VBW active-plan scope will be blocked by VBW's file-guard hook (NEXT.md is Pipekit-owned but not in the active plan's `files_modified` field). Per `method.md` § VBW / Pipekit Ownership Model, NEXT.md is unambiguously Pipekit's — but VBW's hook can't tell that, so the write fails and the audit trail is lost.
-
-**The fix:** any Pipekit skill that updates `NEXT.md` from a context that may run under VBW's active-plan scope (`/review-plan`, `/launch --close`, others) must run a deferral check before writing.
-
-```bash
-# Detect active VBW plan scope. Look for files_modified field in any
-# *-PLAN.md inside .vbw-planning/phases/<active>/ — VBW's file-guard
-# hook checks against this field.
-ACTIVE_PLAN=""
-for plan in .vbw-planning/phases/*/[0-9]*-PLAN.md; do
-  [ -f "$plan" ] || continue
-  if grep -qE "^(files_modified:|## files_modified)" "$plan" 2>/dev/null; then
-    ACTIVE_PLAN="$plan"
-    break
-  fi
-done
-
-DEFER_NEXT_MD=0
-if [ -n "$ACTIVE_PLAN" ] && ! grep -q "NEXT\.md" "$ACTIVE_PLAN"; then
-  # Active scope exists AND NEXT.md is not whitelisted in the plan.
-  # Defer the write instead of risking a hook block.
-  DEFER_NEXT_MD=1
-fi
-```
-
-**If `DEFER_NEXT_MD=1`**, queue the intended NEXT.md content to `$STATE_DIR/pending-next-md.json` (resolved via `scripts/pipekit-state-dir.sh`) instead of writing the file. Schema:
-
-```json
-{
-  "queued_at": "2026-04-29T14:32:00-04:00",
-  "writer": "/review-plan",
-  "active_plan": ".vbw-planning/phases/02-search-data-management/02-05-PLAN.md",
-  "content": "# Next Step\n\n**Last updated:** 2026-04-29 14:32 local by /review-plan\n\n## Recommended next command\n`/vbw:vibe --execute 02-search-data-management`\n..."
-}
-```
-
-`pending-next-md.json` holds the most recent deferred write; later deferrals overwrite earlier ones (NEXT.md tracks the *current* recommended next action — there is no value in queueing history).
-
-**Inline `➜ Next:` is NOT deferred** — only the file write. The user still sees the next-command line in the terminal output of the current skill. The deferred file write is purely the persistence/audit layer.
-
-**Apply on session-end:** `/end-session` (and any non-VBW-scoped Pipekit skill that touches NEXT.md) checks for `$STATE_DIR/pending-next-md.json` and applies the queued content atomically before its own NEXT.md logic runs. If `/end-session`'s own recompute supersedes the queued recommendation (the session shipped past the queued point), the queue is cleared without writing. The queue file is deleted post-apply — no persistent cruft.
-
-**Graceful degradation:** if VBW lands an upstream `always_allow` allowlist for the file-guard hook (Option B in #12), this Pipekit-side queue mechanism becomes redundant but does not break — `NEXT.md` writes succeed inline, the deferral check finds no active scope (because the allowlist short-circuits the hook), and the queue file is never created. Both paths coexist safely.
-
-#### Pipeline state file (v1.6.0+, relocated v1.7.0)
+#### Pipeline state file
 
 Each pipeline skill that completes a meaningful state transition writes a small JSON file to `$STATE_DIR/pipeline-state/<issue-id>.json` capturing the transition:
 
 ```json
 {
   "issue_id": "RS-19",
-  "stage": "review-plan",
+  "stage": "work",
   "timestamp": "2026-04-29T14:32:00-04:00",
   "verdict": "Pass",
-  "next_command": "/vbw:vibe --execute 02-search-data-management",
   "cwd": "/Users/x/Projects/rs-vault"
 }
 ```
 
 Fields:
 - `issue_id` — Linear ID (or phase slug for VBW-only flows)
-- `stage` — skill name minus the leading slash (`launch`, `review-plan`, `linear-todo-runner`, `launch-close`)
+- `stage` — skill / `pk` subcommand name (`work`, `verify`, `ship`, `done`, `review-plan`, etc.)
 - `timestamp` — ISO-8601 with offset
 - `verdict` — for skills that produce one (`Pass` / `Revise` / `Block` / `Fail`); `null` for transitions without a verdict
-- `next_command` — the inline `➜ Next:` text (must match what was emitted to terminal and to NEXT.md)
 - `cwd` — absolute path of the project root at the time of write
 
-The state file is consumed by `/launch --auto` to track auto-chain progress and (deferred to a future minor) by `/pipekit-resume` to recover cross-session. Skills overwrite their own most-recent record — this is a state file, not an event log. The whole tree lives under `$STATE_DIR` (out-of-repo), so nothing needs gitignoring.
-
-Because the directory sits outside the repo, state-file writes are no longer subject to VBW's file-guard hook. Writes succeed unconditionally during VBW-scoped stages — no deferral, no silent drop. (Pre-v1.7.0 best-effort behavior is removed; if a write now fails, it's a real bug.)
+The state file is consumed by `pk *` commands (e.g., `pk done` reads transition history when posting the Linear close comment) and by `/pipekit-help` for state-aware recommendations. Skills overwrite their own most-recent record — this is a state file, not an event log. The whole tree lives under `$STATE_DIR` (out-of-repo), so nothing needs gitignoring.
 
 ---
 
@@ -262,7 +184,7 @@ Defaults we've found to work well:
 | Execution (`vbw:vbw-dev`, batch runners) | `sonnet` |
 | Verification (`vbw:vbw-qa`) | `sonnet` |
 
-Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/launch/skill.md` for a worked example.
+Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents).
 
 This defaults-plus-flag pattern is the forerunner of Anthropic's model-use decision tree (in beta). When that ships, individual skills should migrate to it; this SOP section will point there instead.
 
@@ -278,7 +200,9 @@ To update: `./scripts/sync-method.sh [tag]`
 
 ## Next-Step Nudges (Opt-In Stop Hook)
 
-Pipekit ships `scripts/pipekit-next-step-nudge.sh` — a Stop hook that suggests `/pipekit-help` after a pipeline-relevant skill finishes. The hook is **opt-in** (not registered automatically) and **scoped by behavior** (silent unless the most recent assistant turn invoked `/launch`, `/light-spec`, `/light-spec-revise`, `/review-plan`, `/strategy-sync`, or `/vbw:vibe`).
+Pipekit ships `scripts/pipekit-next-step-nudge.sh` — a Stop hook that suggests `/pipekit-help` after a pipeline-relevant skill finishes. The hook is **opt-in** (not registered automatically) and **scoped by behavior** (silent unless the most recent assistant turn invoked a tracked skill).
+
+> **Known follow-up:** the script's hardcoded skill list still references v1 names (`/launch`, etc.) and needs updating to v2 (`/work`, `/verify`, `pk ship`, `pk done`). Tracked separately from this docs PR.
 
 To enable, add this to `.claude/settings.local.json`:
 
@@ -309,7 +233,7 @@ Some files in a Pipekit project are **canonical** — they encode conventions th
 
 Protection is enforced by **hook**, not by skill prose. A `PreToolUse` hook on `Edit` and `Write` blocks the call when the target path matches the protected set; the agent receives `EditPermissionDenied` (or `HookFeedbackBlocked`, depending on the hook variant). This is intentional: hooks win over `bypassPermissions` mode because hook-level guards are the project's last line of defense, and orchestrator-spawned agents are not exempt from project policy.
 
-The corresponding skill-side discipline (since v1.4.0): every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/skill.md` § Permission-denial protocol and the parallel block in `skills/launch/skill.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
+The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/skill.md` § Permission-denial protocol and the parallel block in `skills/work/skill.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
 
 When you add a new skill that spawns file-editing agents, copy the permission-denial block verbatim. When you protect a new path with a hook, document the protection in `method.config.md` so future readers know which paths are agent-write-locked and why.
 
