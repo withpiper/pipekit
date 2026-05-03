@@ -67,8 +67,8 @@ Best for: solo dev, small teams, projects where preview URLs replace a staging e
 | Preview | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion skills needed:** `/g-promote-dev`, `/g-promote-main`
-**Linear transitions:** merge to `main` → issues move to Done
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote` opens the `dev` → `main` PR.
+**Linear transitions:** `pk ship` → UAT (or In Review); merge to `main` (via `pk promote` PR) → `pk done` posts to Linear and the issue moves to Done.
 
 ### Three-Tier (dev → beta → main)
 
@@ -82,8 +82,8 @@ Best for: teams with QA, projects needing a stable UAT environment, regulated in
 | Preview | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
-**Promotion skills needed:** `/g-promote-dev`, `/g-promote-beta`, `/g-promote-main`
-**Linear transitions:** merge to `beta` → issues move to UAT; merge to `main` → issues move to Done
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote` walks `dev` → `beta` and `beta` → `main` per `Ship environments` in the V2 block below.
+**Linear transitions:** `pk ship` → UAT (or In Review); merge to `beta` → issues stay in UAT; merge to `main` (via `pk promote` PR) → issues move to Done.
 
 ### Environments
 
@@ -115,7 +115,7 @@ Add rows as needed. Common additions:
 
 ## Tiers
 
-Tiers shape which gates apply to a launched issue. `/launch` infers the tier from issue labels (`tier:quick`, `tier:standard`, `tier:heavy`) but **always confirms with the human before proceeding** — automatic tier escalation/de-escalation is disallowed by design.
+Tiers shape which gates apply to an issue. `/work` infers the tier from issue labels (`tier:quick`, `tier:standard`, `tier:heavy`) but **always confirms with the human before proceeding** — automatic tier escalation/de-escalation is disallowed by design.
 
 | Tier | Default? | Use for | Skipped gates | Added gates |
 |------|----------|---------|---------------|-------------|
@@ -137,21 +137,9 @@ pnpm turbo run lint
 pnpm turbo run test
 ```
 
-## Stack (v1.8.1+)
+## V2 keys
 
-Stack-specific values consumed by `/g-promote-dev`, `/g-promote-main`, `/g-test-vercel`, `/g-deploy`. Leave blank to disable that capability — skills detect missing values and skip gracefully.
-
-| Key | Value | Used by |
-|-----|-------|---------|
-| **Hosting** | `vercel` \| `none` | `/g-test-vercel`, `/g-deploy` (skip Vercel-specific steps if `none`) |
-| **DB push command** | e.g. `supabase db push` | `/g-promote-dev` step 2.5 (skip migration push if blank) |
-| **Migration dir** | e.g. `supabase/migrations/` | `/g-promote-dev` (detect new migrations on the branch) |
-| **Production smoke URL** | e.g. `https://example.com` | `/g-deploy` (post-merge production smoke) |
-| **Shared DB across environments** | `yes` \| `no` | `/g-promote-dev` (warns about forward-mutation if `yes`) |
-
-## V2 (alpha — additive; v1 keys above still apply)
-
-Keys consumed by `bin/pk` and the v2 `/work` + `/verify` skills. Safe to leave blank — v2 falls back to sensible defaults derived from v1 keys.
+Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible defaults — leave blank if the default fits.
 
 | Key | Value | Default | Used by |
 |-----|-------|---------|---------|
@@ -162,6 +150,7 @@ Keys consumed by `bin/pk` and the v2 `/work` + `/verify` skills. Safe to leave b
 | **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
 | **Linear API key env var** | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
+| **Migration dir** | e.g. `supabase/migrations/` | (none) | `/pr-security-review` (locate migrations to audit) |
 
 ### Example (rs-vault)
 
