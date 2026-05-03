@@ -474,7 +474,7 @@ check_skill_refs() {
       if echo "$ref" | grep -qE '^(vbw:|speckit|board|code-review|commit|simplify|skill-name)'; then
         continue  # External tools / Claude Code built-ins / generic examples
       fi
-      # Skip references with arguments (e.g., /launch PROJ-123, /light-spec PROJ-1)
+      # Skip references with arguments (e.g., /work PROJ-123, /light-spec PROJ-1)
       if echo "$ref" | grep -qE ' '; then
         continue
       fi
