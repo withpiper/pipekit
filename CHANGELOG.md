@@ -6,6 +6,43 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.1.2 — 2026-05-03
+
+> Session-log redesign: bash Stop hook retired, narrative `/pk-exit` skill restored.
+
+### What changed
+
+- **`/pk-exit` skill (new)** — writes a narrative session log to `Logs/Sessions/<YYYY-MM-DD>_<HHMM>.md` before `/exit`. Captures summary, commits shipped, decisions/findings, outstanding work, optional QA trail. Restores the v1 `/end-session` artifact shape without the v1 baggage. User runs as the last command of every Claude Code session; no auto-trigger (forget = no log, accepted tradeoff).
+- **Bash Stop hook retired (`scripts/pipekit-journal-hook.sh` deleted)** — fired on every assistant turn, dumped duplicate commit-list entries to `.pipekit/journal/<branch>.md`, couldn't write narrative anyway. The per-branch journal cache it produced is no longer used.
+- **`pk done` reads commits directly from `git log`** for its Linear close comment (was: read from `.pipekit/journal/<branch>.md`). Same Linear output, simpler source of truth, no cache to drift.
+- **`pk log` repointed** at `Logs/Sessions/` — shows the latest session log instead of the per-branch journal cat.
+- **`pk init` / `pk doctor`** create/verify `Logs/Sessions/` and flag stale Stop-hook artifacts (`scripts/pipekit-journal-hook.sh`, Stop block in `.claude/settings.json`, `.pipekit/journal/`) so consuming projects can clean up post-upgrade.
+- **`templates/v2/settings-snippet.json` deleted** — no Stop hook to wire anymore. `pk init` setup steps reduced from 7 to 6.
+- **`method.config.template.md`** drops the `Journal in repo` config key (no longer used).
+- **`RUNBOOK.md`** updated end-to-end: setup step removed, flowchart shows `/pk-exit → /exit` as the close-of-session sequence, recovery row covers "forgot to run /pk-exit", v1↔v2 table maps `/end-session → /pk-exit`.
+
+### Why
+
+The v2.0 bash Stop hook was structurally wrong on three axes: (1) Stop fires on *every* assistant turn, producing 4-10 duplicate entries per session with the same commit list — see `chore-v2.0.0-cleanup.md` from 2026-05-02 with identical commit blocks 4 times; (2) bash can't write narrative, so the entry was just `git log -5` repeated, missing the decisions/lessons/QA-trail content that made v1 session logs actually useful; (3) the per-branch journal it wrote was a cache of git log, and `pk done` was the only consumer — repointing at `git log` directly removed the entire cache without losing anything.
+
+The v1 `/end-session` skill's session-log shape (compare `rs-vault/Logs/Sessions/2026-04-26_1555.md` vs `.pipekit/journal/chore-v2.0.0-cleanup.md`) was strictly better as a human archive. `/pk-exit` restores that artifact while keeping the v2 simplifications (no NEXT.md write, no branch-status orchestration — `pk next` and `pk done` own those).
+
+### Migration (consuming projects)
+
+After `./scripts/sync-method.sh v2.1.2`:
+
+```
+# Remove the Stop hook block from .claude/settings.json (pk doctor will flag it).
+# Delete the retired hook script:
+rm scripts/pipekit-journal-hook.sh
+# Existing .pipekit/journal/ is gitignored and harmless — dies with branches on `pk done`.
+# Run pk doctor to confirm Logs/Sessions/ exists; pk init creates it if not.
+```
+
+End every Claude session with `/pk-exit` → `/exit`.
+
+---
+
 ## v2.1.1 — 2026-05-02
 
 > Notepad convention: replaces retired v1 NEXT.md.

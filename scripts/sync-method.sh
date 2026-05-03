@@ -192,8 +192,7 @@ sync_file "$TEMP/scripts/verify-next-md-defer.sh" "$PROJECT_ROOT/scripts/verify-
 [ -f "$PROJECT_ROOT/scripts/verify-next-md-defer.sh" ] && chmod +x "$PROJECT_ROOT/scripts/verify-next-md-defer.sh"
 sync_file "$TEMP/scripts/pipekit-configure-repo.sh" "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" "scripts/pipekit-configure-repo.sh"
 [ -f "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh"
-sync_file "$TEMP/scripts/pipekit-journal-hook.sh" "$PROJECT_ROOT/scripts/pipekit-journal-hook.sh" "scripts/pipekit-journal-hook.sh"
-[ -f "$PROJECT_ROOT/scripts/pipekit-journal-hook.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-journal-hook.sh"
+# pipekit-journal-hook.sh retired in v2.1.2 — replaced by /pk-exit skill (writes Logs/Sessions/<date>_<HHMM>.md).
 
 # --- Sync v2 bin/pk dispatcher (alpha) ---
 # v2 daily-loop runner. Coexists with v1 skills — non-colliding names.

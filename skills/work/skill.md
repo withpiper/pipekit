@@ -318,7 +318,7 @@ Next:
 Then:
   pk ship        — push, open PR, transition Linear
 
-Stop hook will write the journal entry on session close.
+Run /pk-exit at the end of the session to write Logs/Sessions/<date>_<HHMM>.md.
 ```
 
 **Do not** invoke `pk ship` or `/verify` automatically. The user paces.
@@ -341,7 +341,7 @@ Stop hook will write the journal entry on session close.
 - No `--auto` chain (the user is the chain).
 - No PR creation (that's `pk ship`).
 - No NEXT.md write (NEXT.md doesn't exist in v2).
-- No session log write (Stop hook owns the journal).
+- No session log write (`/pk-exit` owns the session log).
 - No Linear status writes during work (`pk branch` set In Progress; `pk ship` will set UAT).
 - No `/end-session` invocation.
 

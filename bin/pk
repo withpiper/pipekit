@@ -772,17 +772,13 @@ cmd_done() {
     $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
   ')
 
-  # Build a richer Linear comment from git + journal (best-effort).
-  # Falls back gracefully when any signal is missing.
-  local merge_base commits diffstat session_count pr_url_done
+  # Build the Linear close comment from git directly (v2.1.2+).
+  # Per-branch journals were retired — git log is the source of truth.
+  local merge_base commits diffstat pr_url_done
   merge_base=$(git merge-base "$current" "$(pk_integration_branch)" 2>/dev/null || echo "")
   if [ -n "$merge_base" ]; then
     commits=$(git log "${merge_base}..${current}" --pretty=format:'- %h %s' 2>/dev/null | head -20)
     diffstat=$(git diff --shortstat "${merge_base}..${current}" 2>/dev/null | sed 's/^[[:space:]]*//')
-  fi
-  local journal="$root/.pipekit/journal/${current}.md"
-  if [ -f "$journal" ]; then
-    session_count=$(grep -c '^---$' "$journal" 2>/dev/null || echo 0)
   fi
   pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
 
@@ -791,8 +787,6 @@ cmd_done() {
 PR: $pr_url_done"
   [ -n "$diffstat" ]    && body="$body
 Diff: $diffstat"
-  [ -n "$session_count" ] && [ "$session_count" -gt 0 ] && body="$body
-Sessions: $session_count"
   if [ -n "$commits" ]; then
     body="$body
 
@@ -925,35 +919,27 @@ cmd_promote() {
 }
 
 cmd_log() {
-  local current
-  current=$(pk_current_branch)
-  if [ -z "$current" ]; then
-    echo "ERROR: not on a branch (detached HEAD?)" >&2
-    return 1
-  fi
-  case "$current" in
-    dev|main|master|beta)
-      echo "On integration branch ($current). Journals are per-feature."
-      return 0 ;;
-  esac
+  # v2.1.2+: session logs are date-stamped narrative files written by /pk-exit.
+  # Per-branch journals were retired — they were a stale cache of git log.
   local root
-  root=$(pk_repo_root)
-  local journal_in_repo
-  journal_in_repo=$(pk_config "Journal in repo" "true")
-  local journal_path
-  if [ "$journal_in_repo" = "false" ]; then
-    local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/pipekit"
-    journal_path="$state_dir/$(basename "$root")/journal/${current}.md"
-  else
-    journal_path="$root/.pipekit/journal/${current}.md"
-  fi
-  if [ ! -f "$journal_path" ]; then
-    echo "No journal yet for $current."
-    echo "  Expected at: $journal_path"
-    echo "  The Stop hook writes on session close. Wire it via templates/v2/settings-snippet.json."
+  root=$(pk_repo_root) || { echo "ERROR: not in a git repo" >&2; return 1; }
+  local logs_dir="$root/Logs/Sessions"
+  if [ ! -d "$logs_dir" ]; then
+    echo "No session logs yet."
+    echo "  Expected at: $logs_dir"
+    echo "  Run /pk-exit at the end of each Claude session to write one."
     return 0
   fi
-  cat "$journal_path"
+  local latest
+  latest=$(ls -1 "$logs_dir" 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}.*\.md$' | sort | tail -1)
+  if [ -z "$latest" ]; then
+    echo "No session logs in $logs_dir."
+    echo "  Run /pk-exit at the end of each Claude session to write one."
+    return 0
+  fi
+  echo "── Latest session log: $latest ──"
+  echo ""
+  cat "$logs_dir/$latest"
 }
 
 cmd_init() {
@@ -987,23 +973,28 @@ cmd_init() {
     echo ""
     echo "Add the V2 section from method/templates/v2/ or method.config.template.md to set explicitly."
   fi
-  # Check journal hook
+  # Session logs (v2.1.2+: replaced the bash Stop hook + per-branch journal).
   echo ""
-  echo "Journal hook:"
-  if [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
-    echo "  ✓ scripts/pipekit-journal-hook.sh present"
+  echo "Session logs:"
+  local logs_dir="$root/Logs/Sessions"
+  if [ -d "$logs_dir" ]; then
+    local count
+    count=$(ls -1 "$logs_dir" 2>/dev/null | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}.*\.md$' || echo 0)
+    echo "  ✓ $logs_dir ($count log(s))"
   else
-    echo "  ✗ scripts/pipekit-journal-hook.sh missing — re-sync from a v2 ref"
+    mkdir -p "$logs_dir" 2>/dev/null && echo "  ✓ created $logs_dir" || echo "  ⚠ $logs_dir missing (couldn't create)"
   fi
+  echo "  Run /pk-exit at the end of every Claude session to write a session log."
+  # Flag a stale Stop hook if one is wired (v2.0/v2.1 leftover).
   if [ -f "$root/.claude/settings.json" ] && grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
-    echo "  ✓ Stop hook wired in .claude/settings.json"
-  else
-    echo "  ⚠ Stop hook not wired"
-    echo "    Add this to .claude/settings.json (merge with existing hooks):"
-    echo ""
-    if [ -f "$root/method/templates/v2/settings-snippet.json" ]; then
-      cat "$root/method/templates/v2/settings-snippet.json" | sed 's/^/      /'
-    fi
+    echo "  ⚠ stale 'pipekit-journal-hook' Stop hook in .claude/settings.json — retired in v2.1.2"
+    echo "      Remove the Stop block from .claude/settings.json; /pk-exit replaces it."
+  fi
+  if [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
+    echo "  ⚠ stale scripts/pipekit-journal-hook.sh — retired in v2.1.2; safe to delete"
+  fi
+  if [ -d "$root/.pipekit/journal" ]; then
+    echo "  ⚠ stale .pipekit/journal/ directory — retired in v2.1.2; safe to delete"
   fi
   # Linear API key
   echo ""
@@ -1240,21 +1231,21 @@ cmd_doctor() {
   echo "  • Integration branch: $(pk_integration_branch)"
   # Backend
   echo "  • Backend: $(pk_config "Backend" "vbw")"
-  # Journal hook
-  if [ -n "$root" ] && [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
-    echo "  ✓ Journal hook script present"
+  # Session logs (v2.1.2+ — replaces the retired bash Stop hook).
+  if [ -n "$root" ] && [ -d "$root/Logs/Sessions" ]; then
+    echo "  ✓ Logs/Sessions/ present"
   else
-    echo "  ⚠ Journal hook script missing — re-run sync-method.sh from a v2 ref"
+    echo "  ⚠ Logs/Sessions/ missing — pk init creates it. /pk-exit writes per-session entries."
     warn=$((warn+1))
   fi
-  # Stop hook configured?
-  if [ -n "$root" ] && [ -f "$root/.claude/settings.json" ]; then
-    if grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
-      echo "  ✓ Stop hook wired in .claude/settings.json"
-    else
-      echo "  ⚠ Stop hook not wired — see method/templates/v2/settings-snippet.json"
-      warn=$((warn+1))
-    fi
+  # Flag stale v2.0/v2.1 Stop hook artifacts if present.
+  if [ -n "$root" ] && [ -f "$root/.claude/settings.json" ] && grep -q "pipekit-journal-hook" "$root/.claude/settings.json" 2>/dev/null; then
+    echo "  ⚠ stale 'pipekit-journal-hook' Stop hook in .claude/settings.json — retired in v2.1.2"
+    warn=$((warn+1))
+  fi
+  if [ -n "$root" ] && [ -f "$root/scripts/pipekit-journal-hook.sh" ]; then
+    echo "  ⚠ stale scripts/pipekit-journal-hook.sh — retired in v2.1.2; safe to delete"
+    warn=$((warn+1))
   fi
   echo ""
   if [ $fail -gt 0 ]; then
