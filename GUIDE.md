@@ -450,7 +450,7 @@ If any check fails, the report tells you exactly which skill to run to fix it.
 
 ---
 
-## Stage 1: Definition
+## Stage 1: Spec
 
 Stage 1 turns raw issues into planning-safe specs. This is where the "no guesswork" principle is enforced most rigorously.
 
@@ -518,103 +518,127 @@ After agent review passes, you review the spec in Linear. This is where product 
 
 ---
 
-## Stage 2: Launch & Planning
+## Stage 2: Plan + Build
 
-### Launch
+### Branch
 
-**Skill:** `/launch PROJ-1` or `/launch --milestone WP-1`
+**Commands:** `pk next` then `pk branch <ID>`
 **Input:** Approved spec
-**Output:** Issue moved to "Building," execution route determined
+**Output:** Worktree + feature branch + Linear → In Progress
 
-`/launch` is the formalized trigger that transitions a spec to execution. It validates three gates before proceeding:
+`pk next` is phase-aware (v2.1.0+): it reads `## Current Phase:` from `.vbw-planning/PHASES.md`, matches to `linear-map.json`, and groups Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Falls back to global "next Approved" when no phase context.
 
-| Gate | What It Checks | Failure Action |
-|------|---------------|---------------|
-| **Spec gate** | Issue has a Light Spec or AC section | Stop — run `/light-spec` |
-| **Dependency gate** | All `blocked_by` issues are Done | Stop — resolve blockers |
-| **Milestone gate** | All sibling issues in the milestone are at least Specced | Stop — spec the siblings (or `--force` to bypass) |
+`pk branch <ID>` is mechanical setup — idempotent against Linear+git ground truth. It creates the worktree, the branch, and transitions Linear:
 
-**Tier resolution (always confirmed with human):** before gates run, `/launch` resolves a tier — Quick, Standard, or Heavy — that shapes *which gates apply*. Tier inference is advisory; auto escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
+- Creates `feature/<ID>-<3-word-slug>` (slug derived from issue title)
+- Worktree at `.worktrees/<ID>-<slug>`
+- Symlinks `.env` / `.env.local` / `.mcp.json` into the worktree
+- Copies parent's `bin/pk` so v2 commands work from inside the worktree
+- Linear: Approved → In Progress
 
-**Complexity routing:** The spec's complexity field determines the execution path (Standard tier; Quick always batches, Heavy always full VBW):
+After branching, `cd .worktrees/<ID>-<slug>` and start a fresh Claude Code session inside the worktree (fresh-chat discipline — see method.md § Fresh-Chat Discipline).
 
-| Complexity | Route | What Happens |
-|-----------|-------|-------------|
-| **Low** (~2-4h) | `/linear-todo-runner` | AC is the plan. Queued for batch execution. |
-| **Medium** (~6-10h) | VBW Lead → Dev → QA | Full planning cycle with PLAN.md. |
-| **High** (~12-20h+) | VBW Lead → Dev → QA | Full planning cycle, likely multi-task. |
+### Work
 
-**Batch mode:** `/launch --milestone WP-1` or `/launch --project "Search"` validates and launches all ready issues at once.
-
-### VBW Plan
-
-**Tool:** VBW Lead Agent (spun up by `/launch`)
+**Skill:** `/work <ID>` (or `/work <ID> --deep`)
 **Input:** Approved spec from Linear
-**Output:** `PLAN.md` in `.vbw-planning/phases/`
+**Output:** Code committed against verify/done criteria
 
-For Medium/High complexity issues, the VBW Lead Agent reads the spec and decomposes it into atomic tasks. Each task has:
-- Description of what to do
-- Verify criteria (how to check it worked)
-- Done criteria (what "complete" means)
-- Files likely to be modified
+`/work` is the consolidated plan + execute skill. It reads the spec from Linear and produces a one-screen plan with a **verdict gate** before any code is written:
 
-The plan is placed in `.vbw-planning/phases/{phase-slug}/PLAN.md`.
+- `proceed` — plan is sound, execute as planned
+- `revise: <feedback>` — plan needs adjustment
+- `abort` — issue isn't ready / scope was wrong
 
-### Plan Review
+Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
 
-**Tool:** `plan-reviewer` agent (spun up by `/launch`)
-**Input:** PLAN.md
+**Backend dispatch** is per `method.config.md`:
+
+| Backend | What `/work` does |
+|---------|-------------------|
+| `vbw` | Spawns `vbw-lead` to generate `PLAN.md`, then `vbw-dev` to execute. PLAN.md captures task decomposition with verify/done criteria per task. Each task gets one atomic commit. |
+| `native` | Plans + executes in your current Claude session. Uses parallel `Agent` calls only for grounding (codebase reads, doc lookups). No PLAN.md artifact. |
+
+`--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
+
+**All commits include the issue ID** in the message format: `feat(scope): description (PROJ-1)`. CLAUDE.md conventions are followed (vbw-dev reads it; native backend reads it via your session).
+
+### Plan Review (vbw backend)
+
+**Skill:** `/review-plan` (spawns `plan-reviewer` agent at `model: opus`)
+**Input:** `PLAN.md` (vbw backend only — native backend has no PLAN.md to review)
 **Output:** Validated plan or revision requests
 
-The plan reviewer stress-tests:
+Run between `vbw-lead`'s plan generation and `vbw-dev`'s execution. The plan reviewer stress-tests:
+
 - Scope alignment with the spec
-- Task dependencies and ordering
+- Task atomicity (each task produces one logical commit)
+- Dependencies and ordering
 - Success criteria completeness
 - Risk identification
 
-If the plan fails review, it goes back to the Lead Agent for rework. Once the plan passes AND you approve it, execution begins.
+If the plan fails review, it goes back to vbw-lead for rework. Once the plan passes, vbw-dev's execution begins.
 
 ---
 
-## Stage 3: Execution
+## Stage 3: Verify + Ship
 
-### Execution
+### Verify
 
-**Tool:** VBW Dev Agent or `/linear-todo-runner`
-**Input:** Approved plan (or AC for Low complexity)
-**Output:** Atomic commits per task
+**Skill:** `/verify` (or `pk verify`)
+**Input:** Completed work in the worktree
+**Output:** Pre-deploy gate report — Pass / Partial / Fail with per-AC table
 
-**For VBW-planned work:** The Dev Agent executes each task in the plan sequentially, making one commit per task. All commits include the issue ID in the message format: `feat(scope): description (PROJ-1)`.
+`/verify` runs the project's pre-deploy gate from `method.config.md` § Pre-Deploy Gate (typically types + lint + test). Returns:
 
-**For batch-runner work:** `/linear-todo-runner` processes multiple Low-complexity issues in parallel, spawning up to 4 worker agents in isolated worktrees. Each agent reads the issue's AC and implements independently.
+- Overall verdict (Pass / Partial / Fail)
+- Per-AC table (which acceptance criteria are satisfied, which aren't)
+- If `Require QA review: true` in `method.config.md`, also spawns the QA subagent for goal-backward verification (starts from AC, works backward)
 
-**Key rules:**
-- One commit per task (atomic)
-- Issue ID in every commit message
-- Pre-deploy gate must pass before reporting done
-- CLAUDE.md conventions followed (the agent reads it)
+If verify fails → fix the gaps in the worktree (often by re-invoking `/work` with feedback) and rerun. If verify passes → ship.
 
-### QA
+### Ship
 
-**Tool:** VBW QA Agent (spun up by `/launch`)
-**Input:** Completed tasks
-**Output:** Verification report
+**Command:** `pk ship` (or `pk ship --review` for antagonistic review)
+**Input:** Verify-passed worktree
+**Output:** Branch pushed, PR open against integration branch, Linear → UAT
 
-The QA agent uses goal-backward methodology — it starts from the acceptance criteria and works backward to verify each one is met. It also runs the pre-deploy gate (type-check, lint, test).
+`pk ship` is idempotent — rerun is safe. It:
 
-If QA passes → issue moves to UAT.
-If QA fails → issue stays in Building, feedback goes back to the Dev Agent.
+- Pushes the feature branch (skips if already current)
+- Opens a PR via `gh pr create` against the integration branch from `method.config.md` (`Integration branch: dev` for most projects)
+- Transitions Linear from In Progress → UAT (or → In Review per project config)
+
+`pk ship --review` additionally:
+
+- Posts a Linear comment flagging review-in-flight (closes the mid-loop visibility gap — v2.1.0)
+- Prints the antagonistic reviewer subagent invocation for you to paste into a Claude session
+
+The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention. Don't skip on anything auth, security, financial, or compliance-adjacent.
+
+### PR Review (opt-in)
+
+**Skills:** `/pr-fix` and `/pr-security-review`
+
+After the reviewer posts findings to the PR, two skills triage them:
+
+**`/pr-fix`** — precision PR review across 4 dimensions with confidence-gated findings. Reads PR review comments + diff, scans for cross-spec handoff promises (any "X will…" reference in the spec must have landed in this PR), then lets you triage interactively (fix / reject / defer). Applies fixes as separate commits, validates the gate, force-pushes to the PR. Posts a Linear comment with the triage summary (fixed N / rejected N / deferred N).
+
+**`/pr-security-review`** — security-focused antagonistic review for migrations, RLS policies, SECURITY DEFINER functions, GRANT/REVOKE, auth code, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories. Use **instead of** (or alongside) the generic reviewer when the PR touches any of those surfaces.
+
+Skip PR review for pure copy/UI tweaks and internal-only refactors with no external surface. Always opt in for anything labeled `auth-rls`, `payments`, `pii`, `compliance`, `breaking-change`.
 
 ### UAT
 
-**Tool:** You
-**Input:** Built feature
-**Output:** Accepted or rejected
+**Tool:** You (in the running app — Vercel preview URL or local dev)
+**Input:** Built feature, PR open with preview deployment
+**Output:** Accepted or rejected against spec AC
 
-Your turn. Test the feature against the spec's acceptance criteria under real usage conditions. Use `/g-test-vercel` (or equivalent) to push the branch and get a preview URL.
+Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Move to Done in Linear, then promote with `/g-promote-dev`.
-**Reject:** Describe what's wrong — the issue re-enters execution with your feedback.
+**Accept:** Merge the PR (squash). Then exit the worktree and run `pk done <ID>` from the parent repo — this cleans up the worktree + branch and posts commits + diffstat to Linear.
+
+**Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
 
 ---
 
