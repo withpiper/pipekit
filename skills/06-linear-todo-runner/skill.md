@@ -319,9 +319,9 @@ Set `blocked_by` relations in Linear to enforce the correct execution order.
 
 - **`/task-processor`** — Single-issue interactive pickup. Use for hands-on work. The runner is for batch automation.
 - **`/linear PROJ-XXX`** — Full end-to-end lifecycle for one issue. Use for failed issues that need manual attention.
-- **`/linear-status`** — Quick board view. Run before the runner to see what's queued.
+- **`pk status`** / **`pk next`** — Quick board view. Run before the runner to see what's queued.
 - **`/sync-linear`** — Sync VBW ↔ Linear. Run after the runner to update VBW state.
-- **`/branch`** — The runner uses `isolation: "worktree"` (Claude Code temporary worktrees), not the `/branch` skill's `{worktree prefix from method.config.md}<description>/` pattern.
+- **`pk branch`** — The runner uses `isolation: "worktree"` (Claude Code temporary worktrees), not `pk branch`'s `.worktrees/<ID>-<slug>/` pattern. Use `pk branch` for hands-on single-issue work; the runner is for parallel batch automation.
 
 ---
 
