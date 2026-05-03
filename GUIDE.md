@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-05-03 *(rewritten for v2.1.2)*
 
 ---
 
@@ -20,17 +20,18 @@ A complete guide to using Pipekit from project inception through production deli
    - [Step 0.6: Roadmap Create](#step-06-roadmap-create)
    - [Step 0.7: Phase Plan](#step-07-phase-plan)
 5. [Stage 0 Gate: Roadmap Review](#stage-0-gate-roadmap-review)
-6. [Stage 1: Definition](#stage-1-definition)
+6. [Stage 1: Spec](#stage-1-spec)
    - [Light Spec](#light-spec)
    - [Agent Review](#agent-review)
    - [Human Review](#human-review)
-7. [Stage 2: Launch & Planning](#stage-2-launch--planning)
-   - [Launch](#launch)
-   - [VBW Plan](#vbw-plan)
-   - [Plan Review](#plan-review)
-8. [Stage 3: Execution](#stage-3-execution)
-   - [Execution](#execution)
-   - [QA](#qa)
+7. [Stage 2: Plan + Build](#stage-2-plan--build)
+   - [Branch](#branch)
+   - [Work](#work)
+   - [Plan Review (vbw backend)](#plan-review-vbw-backend)
+8. [Stage 3: Verify + Ship](#stage-3-verify--ship)
+   - [Verify](#verify)
+   - [Ship](#ship)
+   - [PR Review (opt-in)](#pr-review-opt-in)
    - [UAT](#uat)
 9. [Stage 4: Release](#stage-4-release)
 10. [Stage 5: Documentation Loop](#stage-5-documentation-loop)
@@ -89,25 +90,45 @@ STAGE 0: FOUNDATION (a contract — greenfield path shown below)
           populated         "Needs Spec")
 
 
-STAGES 1-5: DEVELOPMENT PIPELINE (repeats per phase/feature)
+STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
 ──────────────────────────────────────────────────────────────────────
 
-  /light-spec ──→ Agent Review ──→ Human Review ──→ /launch
-       │                │                │              │
-   Structured      Pass/Revise      Approved       Gates checked,
-   spec created    verdict          by human       complexity routed
+  Stage 1: Spec
+    /light-spec ──→ Agent Review ──→ Human Review
+         │                │                │
+     Structured      Pass/Revise      Approved
+     spec in         verdict          by human in
+     Linear                           Linear
 
-      ──→ VBW Plan ──→ Plan Review ──→ Execution ──→ QA ──→ UAT
-              │              │              │          │       │
-          PLAN.md        Validated       Atomic     Verified  Human
-          created        or revised      commits    against   accepts
-                                                    goals
+  Stage 2: Plan + Build
+    pk next ──→ pk branch <ID> ──→ /work <ID>   (→ /review-plan if vbw backend)
+        │             │                  │
+    Phase-aware   Worktree +         Plan-verdict
+    Linear        Linear → In        gate, then
+    grouping      Progress           execute
 
-      ──→ Ship ──→ /strategy-sync
-           │              │
-       Production     Strategy docs
-       release        updated to match
-                      what was built
+  Stage 3: Verify + Ship
+    /verify ──→ pk ship [--review]   (→ /pr-fix | /pr-security-review) ──→ UAT
+        │            │                                                       │
+    Pre-deploy    Push, PR, Linear                                       Human
+    gate + AC     → UAT                                                  accepts
+    table
+
+  Stage 4: Release
+    pk done <ID> ──→ pk promote
+         │                │
+     Worktree         dev → main (or
+     cleanup +        dev → beta → main)
+     Linear → Done    PR
+
+  Stage 5: Doc Loop
+    /strategy-sync (after UAT)
+         │
+     Strategy docs updated
+     to match what was built
+
+  Per session (not per issue):
+    /pk-exit ──→ Logs/Sessions/<date>_<HHMM>.md  (last command of every Claude Code session)
 
 BETWEEN PHASES:
 ──────────────────────────────────────────────────────────────────────
@@ -121,7 +142,7 @@ BETWEEN PHASES:
 
 ## Stage 0: Foundation
 
-Stage 0 is the **foundation contract** — a set of artifacts the dev pipeline (Stages 1-5) requires before `/launch` is safe. It is not a script you run once; it is a pre-condition. *How* the contract is satisfied depends on your entry mode.
+Stage 0 is the **foundation contract** — a set of artifacts the dev pipeline (Stages 1-5) requires before the daily loop is safe to run. It is not a script you run once; it is a pre-condition. *How* the contract is satisfied depends on your entry mode.
 
 ### Entry Modes
 
@@ -133,7 +154,7 @@ Pick the mode that matches your situation. Full description in [method.md § Ent
 | **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
 | **Inherited** | New contributor joining a Pipekit project | None — verify foundation, jump to dev pipeline | All of Stage 0 |
 
-`/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/launch`). `/strategy-from-code` (auto-audit for brownfield) is deferred to v1.4.0; brownfield currently routes through `/strategy-create` with a manual-edit note.
+`/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/work`). `/strategy-from-code` (auto-audit for brownfield) is deferred to v1.4.0; brownfield currently routes through `/strategy-create` with a manual-edit note.
 
 The rest of this section describes the **greenfield flow** in detail. Brownfield skips Steps 0.1 and 0.2 — adapt accordingly. Inherited mode runs no Stage 0 steps; jump straight to [Stage 1](#stage-1-definition) once the foundation check passes.
 
@@ -294,9 +315,9 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
    | **Two-tier** | `dev` → `main` | Solo dev, small teams, preview URLs suffice for UAT |
    | **Three-tier** | `dev` → `beta` → `main` | Teams with QA, need stable UAT env, regulated industries |
 
-   This decision is recorded in `method.config.md` and determines:
+   This decision is recorded in `method.config.md` (under `Ship environments` in the V2 keys) and determines:
    - Which environments to configure (2 or 3)
-   - Which promotion skills to create (`/g-promote-beta` only needed for three-tier)
+   - The chain `pk promote` walks (`dev,main` for two-tier; `dev,beta,main` for three-tier)
    - How Linear status transitions work on merge (see `sop/Git_and_Deployment.md`)
 
 3. **Repository** — GitHub repo, framework init, TypeScript strict, .gitignore, .env.example
@@ -721,7 +742,7 @@ WP-2 (Search) — 8 issues:
 
 ### Milestone Gating
 
-`/launch` uses milestones for its gating check: all sibling issues in a milestone must be at least Specced before any can launch. This ensures coordinated planning within a feature cluster.
+`/work` uses milestones for its gating check: all sibling issues in a milestone must be at least Specced before any can enter Plan + Build. This ensures coordinated planning within a feature cluster.
 
 ### Linear Cycles (Optional)
 
@@ -873,7 +894,7 @@ VBW (Vibe-Based Workflow) is the planning and execution engine. Here's where its
 
 ### Keeping VBW Updated
 
-When `/launch` routes Low-complexity issues to the batch runner (bypassing VBW planning), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
+When `/work` runs against Low-complexity issues with `Backend: native` (in-context plan + execute, no PLAN.md), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
 
 ---
 
