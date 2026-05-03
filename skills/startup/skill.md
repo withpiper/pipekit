@@ -137,11 +137,11 @@ Foundation OK.
   Current phase: {phase name from PHASES.md}
   Issues in flight: {N from PHASES.md current phase}
 
-➜ Next: /start-session  (review past progress and capture intentions)
+➜ Next: pk next  (phase-aware: groups Linear by status with per-group hints)
    or:   /light-spec PROJ-XXX  (begin speccing an issue from the current phase)
 ```
 
-Read `.vbw-planning/PHASES.md` to extract the current phase name and issue list. If multiple issues are in flight (status In Progress / Building), recommend `/linear-status` instead so the user can pick.
+Read `.vbw-planning/PHASES.md` to extract the current phase name and issue list. If multiple issues are in flight (status In Progress / Building), recommend `pk status` instead so the user sees the full board.
 
 **If anything is missing:**
 
@@ -157,15 +157,15 @@ Run /pipekit-help for a state-aware next-step recommendation.
 
 List every missing artifact with its retrofit suggestion. Do **not** auto-run any retrofit skill — present options and let the user choose.
 
-### Emit `NEXT.md`
+### Emit inline `➜ Next:`
 
-Whether the check passes or fails, write `NEXT.md` at the project root with the recommended next command and a one-line reason (matching the on-screen `➜ Next:`). See `sop/Skills_SOP.md` § NEXT.md convention.
+Whether the check passes or fails, emit an inline `➜ Next:` line in your terminal output with the recommended next command and a one-line reason. Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear once the foundation contract is satisfied.
 
 ---
 
 ## Mode Routing
 
-`/startup` accepts a `--mode={greenfield,brownfield,inherited}` flag. If absent, auto-detect by inspecting project state, then **always confirm with the user** before proceeding (same pattern as tier resolution in `/launch` Step 1.5 — never auto-pick).
+`/startup` accepts a `--mode={greenfield,brownfield,inherited}` flag. If absent, auto-detect by inspecting project state, then **always confirm with the user** before proceeding (same pattern as tier resolution in `/work` — never auto-pick).
 
 ### Auto-detection rules
 
@@ -180,7 +180,7 @@ Evaluate top-down; first match wins:
 
 ### Confirmation prompt
 
-Mirror the wording from `skills/launch/skill.md` Step 1.5:
+Mirror the wording from `skills/work/skill.md` Step 1.5:
 
 ```
 Auto-detected entry mode: {mode}
@@ -275,7 +275,7 @@ Walk through tech stack decisions from `STARTUP.md` Step 2:
 
 This decision determines:
 - Which environments to configure in Step 4
-- Which promotion skills to create in Step 9 (no `/g-promote-beta` needed for two-tier)
+- Which `Ship environments` value to set in `method.config.md` (`dev,main` for two-tier; `dev,beta,main` for three-tier — `pk promote` walks the chain)
 - How Linear status transitions work on merge (see `sop/Git_and_Deployment.md`)
 
 **Output:** Tech stack + git architecture decisions recorded in `method.config.md`
@@ -581,7 +581,7 @@ To tell skeleton vs. populated: check for Linear issue IDs or strategy doc refer
 **Critical reminder:** Do NOT run `/vbw:vibe` as an alternative to `/roadmap-create`. VBW's own output after `/vbw:init` suggests it as a path — but in Pipekit it's a dead end. The Pipekit flow is:
 
 ```
-/vbw:init (skeleton) → /roadmap-create (merges + populates Linear) → /phase-plan → /light-spec → /launch → VBW execution
+/vbw:init (skeleton) → /roadmap-create (merges + populates Linear) → /phase-plan → /light-spec → pk branch → /work (vbw or native backend)
 ```
 
 **Output:** ROADMAP.md populated (merged with VBW's phase structure), Linear board seeded with initiatives, projects, milestones, and issues
@@ -716,4 +716,4 @@ Next steps:
   This applies to `method.config.md`, `CLAUDE.md`, strategy docs, and any file where alternatives were presented. A document should never look like two conflicting decisions are both active.
 - **App code lives in `src/`.** All application code (framework, components, API routes, etc.) goes in a `src/` subdirectory. The project root is reserved for Pipekit files (`method.config.md`, `concept-brief.md`, `project-definition.md`, `Strategy/`, `.vbw-planning/`, `method/`, `.claude/`), config files (`.gitignore`, `.env`, `package.json`, `tsconfig.json`), and scripts. This keeps Pipekit's methodology layer cleanly separated from the application. When initializing a framework (Next.js, Remix, etc.), configure it to use `src/` as the source directory.
 - **Resumable.** The tracker + artifact checks make `/startup` fully resumable across sessions. A new session reads the tracker and picks up exactly where the last one stopped.
-- **Emit `NEXT.md` after every step.** When completing any step (including mid-`/startup` step transitions), overwrite `NEXT.md` at the project root with the next command the user should run and why. See the NEXT.md convention in `sop/Skills_SOP.md`. Inline `➜ Next:` and `NEXT.md` content must match — they're emitted together.
+- **Emit inline `➜ Next:` after every step.** When completing any step (including mid-`/startup` step transitions), emit an inline `➜ Next:` line in your terminal output with the next command the user should run and why. Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear once the foundation contract is satisfied.
