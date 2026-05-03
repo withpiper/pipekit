@@ -644,28 +644,31 @@ Test the feature against the spec's acceptance criteria under real usage conditi
 
 ## Stage 4: Release
 
-**Every step forward is a PR.** No direct merges between long-lived branches.
+**Every step forward is a PR.** No direct merges between long-lived branches. Promotion is owned by `pk promote`, configured per project via `Ship environments` in `method.config.md` (e.g., `dev,main` or `dev,beta,main`).
 
 Your git architecture (chosen during `/startup`) determines the release flow:
 
 **Two-tier** (`dev` → `main`):
 ```
-feature/* → PR to dev → PR to main
+feature/* → pk ship (PR to dev) → pk promote (PR to main)
 ```
-- Promotion skills: `/g-promote-dev`, `/g-promote-main`
-- Merge to main → issues move to Done
+- `pk ship` opens the feature → dev PR (Linear → UAT)
+- After UAT merge of the dev PR, `pk done <ID>` closes the issue (→ Done)
+- `pk promote` opens the dev → main PR
 
 **Three-tier** (`dev` → `beta` → `main`):
 ```
-feature/* → PR to dev → PR to beta → PR to main
+feature/* → pk ship (PR to dev) → pk promote (PR to beta) → pk promote (PR to main)
 ```
-- Promotion skills: `/g-promote-dev`, `/g-promote-beta`, `/g-promote-main`
-- Merge to beta → issues move to UAT
-- Merge to main → issues move to Done
+- `pk ship` opens the feature → dev PR
+- Merge to beta keeps the issue in UAT
+- After main merge, `pk done <ID>` transitions the issue to Done
 
-Each project creates its own promotion skills during `/startup` Phase 9, based on the chosen model.
+**Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
-**CI enforces the pre-deploy gate at every PR.** If types, lint, or tests fail, the merge is blocked.
+- **CI** enforces the pre-deploy gate at every PR. If types, lint, or tests fail, the merge is blocked.
+- **Vercel** deploys preview on PR open and prod on main merge.
+- **GitHub Actions** (Supabase projects only): `db-pr-check.yml` validates migrations on PR open against ephemeral postgres; `db-migrate.yml` applies them on main merge. Lift the workflow pair from rs-vault if your project doesn't have them yet.
 
 ---
 
@@ -1091,33 +1094,67 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Phase Next | `/phase-plan --next` | Archive + plan next phase |
 | Phase Rebalance | `/phase-plan --rebalance` | Adjust current phase |
 
-### Development Pipeline
+### Stage 1: Spec
 
 | Skill | Command | What It Does |
 |-------|---------|-------------|
-| Roadmap Review | `/roadmap-review` | Full health check (Stage 0 gate) |
-| Brainstorm | `/brainstorm` | Feature-level ideation |
+| Roadmap Review | `/roadmap-review` | Full health check (Stage 0 → Stage 1 gate) |
+| Brainstorm | `/brainstorm` | Feature-level ideation (within an existing project) |
 | Light Spec | `/light-spec PROJ-1` | Create spec for an issue |
 | Light Spec Revise | `/light-spec-revise PROJ-1` | Apply Spec Review Agent feedback surgically |
-| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before /launch (file paths, baselines, Linear status). Read-only. |
-| Launch | `/launch PROJ-1` | Validate gates → route → execute |
-| Launch Auto | `/launch PROJ-1 --auto` | Standard tier only: auto-chain Lead → plan-review → Dev → QA → close. Pauses only at the two verdict gates (3 human inputs total). |
-| Launch Batch | `/launch --milestone WP-1` | Launch all ready issues in a WP |
-| Launch Dry Run | `/launch --dry-run PROJ-1` | Check gates without executing |
-| Todo Runner | `/linear-todo-runner` | Batch execute Low-complexity issues |
-| Todo Prep | `/linear-todo-runner --prep` | Generate draft AC for unspecced issues |
+| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before `pk branch` (file paths, baselines, Linear status). Read-only. |
+| Spec Validator | `/spec-validator` | Validate spec completeness |
 
-### Ongoing Operations
+### Stage 2: Plan + Build (the v2 daily loop)
+
+| Command / Skill | Invocation | What It Does |
+|-----------------|------------|-------------|
+| Find next | `pk next` | Phase-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
+| Branch | `pk branch <ID>` | Worktree + feature branch + Linear → In Progress (idempotent) |
+| Work | `/work <ID>` | Plan + execute. Verdict gate before code. Dispatches to `vbw` or `native` backend per `method.config.md`. |
+| Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
+| Plan Review | `/review-plan` | Spawn `plan-reviewer` against `PLAN.md` (vbw backend only) |
+
+### Stage 3: Verify + Ship
+
+| Command / Skill | Invocation | What It Does |
+|-----------------|------------|-------------|
+| Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
+| Ship | `pk ship` | Push, open PR against integration branch, Linear → UAT |
+| Ship + Review | `pk ship --review` | Above + Linear "review-in-flight" comment + reviewer invocation printed |
+| PR Fix | `/pr-fix` | Triage PR review findings (fix / reject / defer); posts Linear summary |
+| PR Security Review | `/pr-security-review` | Antagonistic security review for migrations / RLS / SECURITY DEFINER / auth |
+
+### Stage 4: Release
+
+| Command | Invocation | What It Does |
+|---------|------------|-------------|
+| Done | `pk done <ID>` | Post-merge: cleanup worktree+branch, post commits/diffstat to Linear, → Done |
+| Promote | `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` |
+
+### Stage 5: Doc Loop
 
 | Skill | Command | What It Does |
 |-------|---------|-------------|
+| Strategy Sync | `/strategy-sync` | Update Strategy docs to match shipped code |
+
+### Per session
+
+| Skill | Command | What It Does |
+|-------|---------|-------------|
+| Exit | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md` (last command of every Claude Code session) |
+
+### Ongoing operations
+
+| Command / Skill | Invocation | What It Does |
+|-----------------|------------|-------------|
+| Status | `pk status` | Full unscoped Linear board view |
+| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts |
+| Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
 | Sync Linear | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
-| Linear Status | `/linear-status` | Quick board triage view |
-| Branch | `/branch feature-name` | Create worktree + branch + Linear link |
-| Start Session | `/start-session` | Review progress, capture intentions |
-| End Session | `/end-session` | Changelog, Linear updates |
-| Strategy Sync | `/strategy-sync` | Update docs to match shipped code |
+| Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
+| Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
 | Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
 | Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project |
 | Update + Push | `/pipekit-update --push` | Push improvements back to method repo |
@@ -1140,7 +1177,7 @@ Key skills include a `## Red Flags` section — self-sabotage thoughts that Clau
 | "This doesn't need a Linear issue" | Every idea gets an issue. Issues without tracking get forgotten. |
 | "I'll keep it in Ideas for now" | "Keep" without a trigger condition is how issues die |
 
-Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, `/launch`, `/light-spec`, `/brainstorm`.
+Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, `/work`, `/light-spec`, `/brainstorm`.
 
 ---
 
