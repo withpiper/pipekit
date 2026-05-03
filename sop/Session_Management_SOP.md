@@ -34,7 +34,7 @@ Pipekit's pipeline maps naturally onto session boundaries. Treat each pipeline s
 | `/roadmap-create` | Fresh session | Different context from infrastructure; reads strategy docs anew |
 | `/phase-plan` | Fresh session | Distinct from roadmap creation |
 | `/light-spec` per issue | Fresh session per issue | Each spec is a bounded AI-to-AI contract |
-| `/launch` → VBW execution | VBW manages its own context | Don't try to orchestrate from the main session |
+| `/work` (vbw backend) → vbw-dev execution | VBW manages its own context | Don't try to orchestrate from the main session — let `/work` dispatch and read state on completion |
 | `/strategy-sync` post-ship | Fresh session | Compares codebase to strategy docs, needs clean context |
 
 **Rule of thumb:** when you start a new pipeline step, start a new session. The tracker files (`{folder-name}-startup.md`, `method.config.md`, `.vbw-planning/ROADMAP.md`, `Strategy/`) carry state across sessions — you don't need Claude's memory to carry it.
@@ -110,7 +110,7 @@ For Opus 4.7 running Pipekit work:
 |-----------|-------------|-----------|
 | `/startup` orchestration | `xhigh` (default) | Complex multi-step with decisions and document synthesis |
 | `/light-spec`, `/roadmap-create` | `xhigh` | Intelligence-sensitive AI-to-AI contracts |
-| `/linear-status`, `/phase-plan --status` | `high` | Lookup/summary tasks |
+| `pk status`, `pk next`, `/phase-plan --status` | `high` | Lookup/summary tasks |
 | `/update-method` routine syncs | `medium` | Mechanical, low ambiguity |
 | `/06-linear-todo-runner` worker agents | `xhigh` | Each worker executes a full spec — needs high capability |
 
