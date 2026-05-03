@@ -381,3 +381,56 @@ A spawned Explore agent pre-Piper-migration audit surfaced that the post-v2-cut 
 If you're reading this on Piper: the v2 loop is solid, and the post-cut artifact-cleanup is also done as of 2026-05-03 evening. The pipeline is real, the migration trade-offs are decided, AND the docs/skills no longer leak v1 vocabulary into your project root. Start with § "Pending Piper-side action" step 1 (inventory). If you're reading this on distill or another consumer: the v2 daily loop is what's documented in `RUNBOOK.md`; sync the latest pipekit, run `pk doctor`, then run one full cycle. You're picking up after four productive Nebula sessions (v2.0.0 cut → v2.1.x rapid releases → migration plan → vocabulary scrub series). Don't break the streak.
 
 — Pipekit session, Nebula, 2026-05-03
+
+---
+
+## Session log — Nebula, 2026-05-03 night (post-restart handoff)
+
+> Picking up from this point: read this section first, then RUNBOOK.md, then proceed to "Next move."
+
+### What this session did
+
+1. **Verified the Piper-machine handoff against local repo.** Local was 9 commits behind `origin/main` (PRs #41-#49 plus tag at `v2.1.2`). Pulled cleanly. One ignorable working-tree mod (`RUNBOOK.md` had a 1-char ASCII border corruption — single stray `s` in a flowchart box edge — discarded with `git checkout --`).
+2. **Antagonistic review of PRs #41-#49.** Verdict: good work. Four pushback items raised, three resolved this session, one is a "validate later" note:
+   - **(1) Mechanical lint:** `bash -n` clean on all 7 scripts in `scripts/` + `bin/pk`. `jq empty` clean on every `*.json` in `templates/` and `skills/`. Zero syntax issues.
+   - **(2) PR #43 (`method.md` structural rewrite):** Read the full 109-line diff. False alarm — pure reorganization, no content lost. Every "removed" row reappears elsewhere (Roadmap Review preserved as pre-condition prose, Session log as footnote).
+   - **(3) `/pr-security-review` not battle-tested:** Confirmed. Skill self-description and CHANGELOG are honest; only this handoff's "highly relevant to Piper" framing oversold a same-week skill. No code/doc fix needed — just remember to validate on a real migration PR before pitching it as proven.
+   - **(4) `pk *` graceful degradation when Linear blank:** Probed `cmd_ship`. Verdict: works but noisily. `pk_linear_issue` failure → empty-string fallback → PR opens with `Closes $issue` (no title). `pk_linear_set_state` failures cascade with `|| true` → ship doesn't abort. `pk verify` doesn't touch Linear. `pk next/branch/done` require Linear and fail loud. No silent failures. Acceptable; distill validation will exercise this incidentally.
+3. **Cleanup:** removed the stale `Skills_SOP.md:205` follow-up callout (the script PR #44 referenced as "still pending" was actually fixed by PR #48 — callout was lying about repo state). One-line edit; **uncommitted at handoff time.**
+4. **VBW updated 1.36.0 → 1.36.1.** Standard `/vbw:update` flow. Platform `update` failed with ENOENT (cache nuke removed the dir the update path expected); fell back to uninstall + install, which succeeded. Statusline already correct. **User must restart Claude Code** to pick up the new statusline — that's why this handoff exists.
+
+### Repo state at handoff
+
+- `pipekit/` is on `main` at `6df1598` (post-#49). Tags through `v2.1.2`. **`v2.1.3` still untagged** — the scrub series + version-bump warrants a release cut, but holding off until rs-vault validation is done in case anything surfaces.
+- One uncommitted edit: `sop/Skills_SOP.md` (3-line stale callout removal). Not yet committed; trivial to commit or amend into a doc PR.
+- No stash. No worktrees. Clean tree otherwise.
+- VBW plugin at `1.36.1` in `~/.claude/plugins/cache/vbw-marketplace/vbw/1.36.1/`. Older cache dirs may still be present (inert).
+- **Known harness wart**: SessionEnd hook `~/.claude/hooks/session-end.sh` is referenced in settings but the file doesn't exist — surfaced during `claude plugin install` as a non-fatal warning. Not blocking; file referencing a missing hook script. If it bothers you, either create the file (no-op `#!/bin/sh\nexit 0`) or remove the hook from settings.
+
+### Next move — battle-test rs-vault
+
+User's plan: finish off rs-vault by running through its remaining specced+approved Linear issues using the v2 daily loop. The four pre-tag pushback items are addressed; rs-vault validation is the last gate before tagging `v2.1.3` and moving to distill / Piper migration.
+
+Order of operations for the next session:
+
+1. **Restart confirmed.** User restarted Claude Code post-VBW-update. Verify statusline shows `1.36.1`.
+2. **Locate rs-vault.** rs-vault is the consumer project, not pipekit itself. Confirm path with user (likely `~/Projects/rs-vault`). All the rs-vault commands run from there, not from `~/Projects/pipekit`.
+3. **Read rs-vault state** from the rs-vault repo:
+   - `cat .vbw-planning/PHASES.md` (current phase + progress)
+   - `cat .vbw-planning/linear-map.json | jq .` (project ↔ Linear mapping)
+   - `pk next` (phase-aware: should group remaining issues by status)
+   - `pk doctor` (sanity-check repo against current pipekit version)
+4. **Commit the SOP edit** in pipekit before starting rs-vault work, OR carry it as a known dirty edit. User's call.
+5. **Run the v2 daily loop on each remaining Approved issue:** `pk branch <ID>` → `/work <ID>` → `/verify` → `pk ship --review` → merge → `pk done <ID>`. End the session with `/pk-exit`. Each issue should round-trip cleanly because they're all already specced + approved (per user).
+6. **If anything breaks** during the rs-vault run, that's the v2.1.3 blocker — fix in pipekit, sync to rs-vault, retry. The whole point of finishing rs-vault is to surface anything that survived the scrub.
+7. **After all rs-vault issues ship:** tag `v2.1.3` from pipekit (`git tag v2.1.3 && git push origin v2.1.3`). Update CHANGELOG.md with the scrub series + version-bump as the v2.1.3 entry. Then move to distill validation per § "Pending Piper-side action."
+
+### Things to remember
+
+- The 4-item pushback findings are documented above — don't redo them.
+- rs-vault's `Backend:` was set to `native` last session (per the v2.0 handoff). If you need to test the `vbw` path, use `--backend=vbw` per-invocation.
+- Antagonistic-review overcalls happen (RS-63 had one false-positive Critical). `/pr-fix` verifies before acting; trust the verification, not the label.
+- `pk *` is idempotent against Linear+git ground truth. If something goes sideways: rerun the command. State recovery is "read what's left, do only that."
+- The user is on Nebula (their primary Mac). Git identity: Ethan Rosch <ethanrosch@me.com>. GitHub org for pipekit / rs-vault is `withpiper`.
+
+— Pipekit session, Nebula, 2026-05-03 night

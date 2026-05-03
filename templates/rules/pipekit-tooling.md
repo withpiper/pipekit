@@ -59,3 +59,7 @@ If the gate has drifted from what's actually enforced in CI, that's its own bug 
 ## CLI Commands
 
 Use commands defined in `package.json` scripts, not ad-hoc invocations. If you need to run `tsc --noEmit`, check `package.json` for an existing `check-types` or `typecheck` script first — using the project's alias keeps your invocation consistent with CI.
+
+## Pipekit `pk` CLI
+
+`pk` is a globally-installed CLI binary at `~/.local/bin/pk`, **not** a slash command. When the user types `pk <subcommand>` (e.g. `pk next`, `pk status`, `pk branch RS-69`, `pk ship`, `pk done`, `pk promote`), execute it as a bash command in the current project's working tree. Do **not** search for `/pk-status`, `/pk-next`, or similar slash commands — they don't exist. The `pk` binary reads `method.config.md` and `.vbw-planning/PHASES.md` from the current project.

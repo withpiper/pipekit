@@ -202,8 +202,6 @@ To update: `./scripts/sync-method.sh [tag]`
 
 Pipekit ships `scripts/pipekit-next-step-nudge.sh` — a Stop hook that suggests `/pipekit-help` after a pipeline-relevant skill finishes. The hook is **opt-in** (not registered automatically) and **scoped by behavior** (silent unless the most recent assistant turn invoked a tracked skill).
 
-> **Known follow-up:** the script's hardcoded skill list still references v1 names (`/launch`, etc.) and needs updating to v2 (`/work`, `/verify`, `pk ship`, `pk done`). Tracked separately from this docs PR.
-
 To enable, add this to `.claude/settings.local.json`:
 
 ```json
