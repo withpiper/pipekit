@@ -85,16 +85,15 @@ Every choice here has downstream implications for skills, deployment, and conven
 
 ### 2.3 Stack-Driven Skill Requirements
 
-Your tech stack determines which project-specific skills you need:
+Pipekit v2 covers most of the daily delivery loop via `pk ship` (push + open PR + Linear → UAT) and `pk promote` (dev → main). Vercel preview/prod fires automatically on PR open / main merge. So in v2, the project-specific skill list is much shorter than in v1 — most stacks need none.
 
-| If you use... | You need these skills |
-|---------------|---------------------|
-| Vercel | `g-test-vercel` (push + preview URL), `g-deploy` (verify deployments) |
-| Supabase | `migrate` (idempotent migration workflow) |
-| Any DB | `reset-user` or equivalent test data skill |
-| Monorepo with shared UI | `component` (scaffold shared components) |
-| Multiple environments | `g-promote-dev`, `g-promote-beta`, `g-promote-main` |
-| Single environment (dev + prod only) | Simplified `promote` skill (feature → main) |
+| If you use... | What you need |
+|---------------|---------------|
+| Vercel | Nothing — Vercel hooks handle preview/prod on PR open + main merge. |
+| Supabase | A GitHub Actions migration workflow (`db-migrate.yml` + `db-pr-check.yml`); the rs-vault repo has a working pair you can lift. No Pipekit skill needed. |
+| Any DB with test users | `reset-user` (project-specific skill — clears a user + their data for testing). |
+| Monorepo with shared UI | `component` (project-specific skill — scaffolds a shared component). |
+| Multi-env beyond dev/main | Set `Ship environments: dev,beta,main` in `method.config.md`; `pk promote` walks the chain. |
 
 ---
 
@@ -191,77 +190,31 @@ Configure in `.mcp.json` with `${VAR}` interpolation for secrets.
 
 ## Step 4: Create Project-Specific Skills
 
-These are the skills that can't be portable because they depend on your specific stack, domains, and infrastructure.
+In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *` commands, Vercel hooks, and GitHub Actions. Project-specific skills are limited to things that **truly** depend on your domain, schema, or infrastructure — not generic delivery plumbing.
 
-### 4.1 Required Skills (every project needs these)
+### 4.1 What v2 already gives you (don't rebuild these)
 
-#### `g-promote-dev` — PR feature branch to dev
+| You don't need a skill for... | Because v2 handles it via... |
+|---|---|
+| Open PR feature → dev | `pk ship` |
+| Promote dev → main (or dev → beta → main) | `pk promote` (reads `Ship environments` from `method.config.md`) |
+| Push branch + get Vercel preview | Vercel auto-fires on PR open |
+| Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` (lift from rs-vault) on merge to main |
+| Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
+| Linear status transitions on ship/merge | `pk ship` (→ UAT) and `pk done` (→ Done) |
 
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/g-promote-dev` |
-| **What it does** | Run pre-deploy gate, create PR to `dev`, extract issue refs from commits |
-| **Decisions** | What's your pre-deploy gate command? What's your default PR target branch? |
-| **Template from** | The reference `g-promote-dev` — adapt target branch and gate commands |
-
-#### `g-promote-main` — PR to production
-
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/g-promote-main` |
-| **What it does** | Run pre-deploy gate, create PR to `main`, move Linear issues to Done post-merge |
-| **Decisions** | Do you have a beta stage? If yes, also need `g-promote-beta`. If no, this goes from `dev` → `main`. |
-
-#### `g-test-vercel` — Push branch and get preview URL
-
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/g-test-vercel` |
-| **What it does** | Push current branch, return the Vercel preview URL |
-| **Decisions** | What's your Vercel project name? Do you need to wait for build completion? |
-
-### 4.2 Conditional Skills (depends on your stack)
-
-#### `migrate` — Database migration workflow (if using Supabase/Postgres)
-
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/migrate` |
-| **What it does** | Create migration file, enforce idempotent patterns, lint, test locally |
-| **Decisions** | What are your idempotent rules? (See the reference `patterns.md`) |
-
-#### `g-deploy` — Deployment verification (if complex deploy pipeline)
-
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/g-deploy` or `/g-deploy --check` |
-| **What it does** | Verify deployments succeeded, run smoke tests, check DB migrations applied |
-| **Decisions** | What are your smoke test URLs? Health check endpoint? DB verification queries? |
-
-#### `component` — Scaffold shared component (if monorepo with shared UI)
-
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/component` |
-| **What it does** | Create component dir with .tsx, .test.tsx, index.ts |
-| **Decisions** | Where do shared components live? What's the naming convention? |
-
-#### `reset-user` — Test data reset (if auth/user system)
-
-| Field | Value |
-|-------|-------|
-| **Trigger** | `/reset-user` |
-| **What it does** | Remove a user and their data for testing. DEV ONLY. |
-| **Decisions** | What tables need to be cleaned? What order (FK constraints)? |
-
-### 4.3 Optional Skills (nice to have)
+### 4.2 Skills that are still legitimately project-specific
 
 | Skill | When to build | What it does |
 |-------|--------------|--------------|
-| `seed-data` | When you need repeatable test data | Load fixtures into dev DB |
-| `export-schema` | When sharing schema with others | Generate ERD or TypeScript types from DB |
-| `onboard-user` | When testing user flows | Create a test user with specific roles/permissions |
-| `backup-db` | When data is precious | Snapshot current state before risky operations |
+| `reset-user` | If you have auth + a user system | Removes a user + their FK-related rows for testing. DEV ONLY. |
+| `component` | If you have a monorepo with shared UI | Scaffolds a shared component (`.tsx`, `.test.tsx`, `index.ts`) in your shared package. |
+| `seed-data` | If you need repeatable test data | Loads fixtures into the dev DB. |
+| `export-schema` | If you share schema with non-Pipekit consumers | Generates ERD or TypeScript types from the live DB. |
+| `onboard-user` | If you regularly test multi-role user flows | Creates a test user with specific roles/permissions. |
+| `backup-db` | If data is precious and you do risky ops | Snapshots current state before destructive operations. |
+
+For each one you build: trigger name, one-sentence description, and the project-specific decisions it bakes in (what tables, what conventions, what naming). Keep them small.
 
 ---
 
@@ -325,20 +278,21 @@ Split conventions into focused rule files that auto-load every session:
 
 ## Step 6: Validate the Setup
 
-Before writing any feature code, verify the full pipeline works end-to-end:
+Before writing any feature code, verify the full v2 daily loop works end-to-end:
 
 ```
 [ ] Create a test issue in Linear (e.g., "Add health check endpoint")
-[ ] Run /light-spec on it
-[ ] Run /launch on it (or manually move to Building)
-[ ] Implement the feature
-[ ] Run the pre-deploy gate (types + lint + test)
-[ ] Push and verify preview deployment
-[ ] Create PR with /g-promote-dev
-[ ] Merge and verify dev deployment
-[ ] Promote to production (if ready)
-[ ] Move issue to Done in Linear
-[ ] Run /end-session to log the work
+[ ] /light-spec on it; sign off in Linear (Approved)
+[ ] pk next                     (should surface the issue, phase-aware)
+[ ] pk branch <ID>              (worktree + branch + Linear → In Progress)
+[ ] cd .worktrees/<ID>-<slug> && claude --dangerously-skip-permissions
+[ ] /work <ID>                  (plan + execute; verdict gate before code)
+[ ] /verify                     (pre-deploy gate runs to green)
+[ ] pk ship                     (push, open PR, Linear → UAT; verify preview deploys)
+[ ] Merge PR (squash); verify dev deployment
+[ ] pk done <ID>                (cleanup worktree, post commits to Linear, → Done)
+[ ] pk promote                  (if multi-tier — opens dev → main PR)
+[ ] /pk-exit                    (writes session log to Logs/Sessions/<date>_<HHMM>.md)
 ```
 
 If all steps work, the pipeline is ready. Start building.
@@ -387,14 +341,11 @@ If all steps work, the pipeline is ready. Start building.
 - [ ] method.config.md filled in
 - [ ] Pre-deploy gate passing
 
-### Skills
-- [ ] g-promote-dev created
-- [ ] g-promote-main created
-- [ ] g-promote-beta created (if using beta environment)
-- [ ] g-test-vercel created
-- [ ] migrate created (if using Supabase)
-- [ ] component created (if using monorepo shared UI)
-- [ ] Pipeline validated end-to-end (test issue through full cycle)
+### Skills (v2 — most projects need none beyond what Pipekit ships)
+- [ ] `pk doctor` clean (config + Linear API + worktree dir all OK)
+- [ ] GitHub Actions migration workflows in `.github/workflows/` if using Supabase (db-migrate.yml + db-pr-check.yml)
+- [ ] Project-specific skills built only if they survive the "would v2 not cover this?" test (e.g., `reset-user`, `component`)
+- [ ] Pipeline validated end-to-end (test issue through full cycle per Step 6)
 
 ---
 
@@ -403,8 +354,8 @@ If all steps work, the pipeline is ready. Start building.
 1. **Define:** Write down what you're building and for whom
 2. **Decide:** Pick your stack (framework, DB, deployment, auth)
 3. **Create:** GitHub repo + Vercel project + Supabase project + Linear workspace
-4. **Sync:** `./scripts/sync-method.sh` to pull in portable skills and SOPs
+4. **Sync:** `./scripts/sync-method.sh` to pull in portable skills and SOPs; then `pk init` + `pk doctor`
 5. **Configure:** Fill in `method.config.md`, write `CLAUDE.md`, create `.claude/rules/`
-6. **Build skills:** `g-promote-dev`, `g-promote-main`, `g-test-vercel`, `migrate`
-7. **Validate:** Push a test issue through the full pipeline
+6. **Add infra (if applicable):** GitHub Actions migration workflows for Supabase; project-specific skills only if v2 doesn't cover it
+7. **Validate:** Push a test issue through the full v2 daily loop (Step 6)
 8. **Ship:** Start building features
