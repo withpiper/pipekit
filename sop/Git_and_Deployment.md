@@ -28,8 +28,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion skills:** `/g-promote-dev`, `/g-promote-main`
-**Linear transitions:** merge to `main` → issues move to Done
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR (Linear → UAT). `pk promote` opens the `dev` → `main` PR.
+**Linear transitions:** `pk ship` → UAT; `pk done` (post-`main`-merge) → Done.
 
 ### Three-Tier (dev → beta → main)
 
@@ -50,8 +50,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
-**Promotion skills:** `/g-promote-dev`, `/g-promote-beta`, `/g-promote-main`
-**Linear transitions:** merge to `beta` → issues move to UAT; merge to `main` → issues move to Done
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR. `pk promote` walks the chain (`dev` → `beta`, `beta` → `main`) per `Ship environments` in `method.config.md`.
+**Linear transitions:** `pk ship` → UAT; merge to `beta` keeps issue in UAT; `pk done` (post-`main`-merge) → Done.
 
 ### Branch Naming (both models)
 
@@ -134,70 +134,83 @@ All worktrees share the same git history, remotes, and object store — they're 
 
 ### Creating a Worktree
 
-Use the `/branch` skill for the full workflow (creates worktree + branch + optional Linear link):
+Use `pk branch <ID>` (Linear-issue-based). The worktree + branch + Linear → In Progress transition all happen idempotently.
 
+```bash
+pk branch RS-42        # creates feature/RS-42-<3-word-slug>, worktree at .worktrees/RS-42-<slug>
 ```
-/branch feature-name
-/branch --fix bug-name
-/branch --hotfix urgent-fix
-```
+
+The branch name and slug are derived from the Linear issue title; you don't pick them. For non-Linear work (hotfixes, scratch experiments), use plain `git worktree add` — see Hotfix Procedure below.
 
 ### Managing Worktrees
 
 ```bash
 git worktree list                             # List active worktrees
-git worktree remove ../project-feature-name   # Remove after merge
+pk done <ID>                                  # After PR merge — cleans up worktree+branch, posts to Linear
 ```
 
 ### Rules
 
 - Each branch can only be checked out in **one** worktree at a time
 - Main worktree stays on `dev` or `main`, not feature branches
-- Run dependency install in each new worktree
-- Clean up worktrees after branches are merged
+- Run dependency install in each new worktree (`pk branch` symlinks `.env` / `.env.local` / `.mcp.json`)
+- Use `pk done <ID>` to clean up after merge — it handles worktree removal + Linear transition in one step
 
 ---
 
 ## Workflow: Feature Development to Production
 
-### Step 1: Create Feature Branch
+### Step 1: Branch from Linear
+
+```bash
+pk next                # surfaces the next Approved issue (phase-aware)
+pk branch <ID>         # worktree + branch + Linear → In Progress
+cd .worktrees/<ID>-<slug>
+claude --dangerously-skip-permissions
+```
+
+### Step 2: Plan + Execute
 
 ```
-/branch feature-name
+/work <ID>             # plan-verdict gate, then execute (vbw or native backend per method.config.md)
 ```
 
-### Step 2: Develop
+### Step 3: Verify
 
-Write code on the feature branch. Include database migrations if needed.
-
-### Step 3: Test on Preview
-
-Push branch to get a preview URL. Every push updates the preview automatically.
-
-### Step 4: Open PR to Dev
-
-Run pre-deploy gate, then create PR:
 ```
-/g-promote-dev   (or your project's equivalent)
+/verify                # runs § Pre-Deploy Gate from method.config.md; QA subagent if Require QA review=true
 ```
+
+### Step 4: Open PR to Dev (with optional review)
+
+```
+pk ship                # push, open PR against integration branch from config, Linear → UAT
+pk ship --review       # additionally posts review-in-flight to Linear and prints reviewer invocation
+```
+
+For migrations / RLS / SECURITY DEFINER / auth, use `/pr-security-review` instead of (or alongside) the generic reviewer. After review findings, `/pr-fix` triages.
 
 ### Step 5: Merge to Dev
 
-PR is reviewed, approved, and merged. Feature available on dev.
+PR is reviewed, approved, and merged (squash). Feature available on dev. Vercel preview is automatic; for Supabase projects, GitHub Actions `db-pr-check.yml` validates migrations on PR open and `db-migrate.yml` applies them on `main` merge.
 
-Clean up: `/branch finish` from within the worktree.
+```
+pk done <ID>           # cleanup worktree+branch, post commits/diffstat to Linear, → Done (after main merge)
+```
 
 ### Step 6: Promote to Production
 
-**Two-tier:** PR from `dev` → `main`. After merge, referenced Linear issues move to **Done**.
+```
+pk promote             # opens dev → main (two-tier) or dev → beta → main (three-tier) PR per Ship environments
+```
 
-**Three-tier:** PR from `dev` → `beta` (issues → UAT), then PR from `beta` → `main` (issues → Done).
+After `main` merge, referenced Linear issues move to **Done** (via `pk done`).
 
 See **Batch vs Per-Issue Promotion** below for when to ship one issue at a time vs. accumulate several before promoting.
 
 ### Batch vs Per-Issue Promotion
 
-`/launch --close` and the `/g-promote-*` skills support both patterns. The default for feature-heavy phases is **batch**; the default for hotfixes is **per-issue**. Choose deliberately — different work has different risk profiles.
+`pk ship` and `pk promote` support both patterns: ship one issue at a time, or let several land on dev before promoting. The default for feature-heavy phases is **batch**; the default for hotfixes is **per-issue**. Choose deliberately — different work has different risk profiles.
 
 #### When to per-issue (ship now)
 
@@ -236,18 +249,16 @@ If none of these have triggered, keep accumulating.
 
 #### DB migration timing during accumulation
 
-The migration application moment depends on your project's Supabase setup:
+The migration application moment depends on your project's Supabase setup. v2's canonical pattern is the rs-vault GitHub Actions pair (`db-pr-check.yml` + `db-migrate.yml`), which decouples migration apply from the promotion skill entirely:
 
-| Setup | Migrations apply at | Test on dev preview? |
-|-------|---------------------|----------------------|
-| **Single shared DB** (no dev/prod split) | `/g-promote-main` only — main is the only path that runs `supabase db push` | No — schema doesn't exist on dev preview until main lands |
-| **Single shared DB + `supabase db push` in `/g-promote-dev`** | At each `/g-promote-dev` (forward-mutates shared DB) | Yes — dev preview tests against migrated schema |
-| **Separate dev + prod DBs** (piper pattern) | Each `/g-promote-{dev,beta,main}` runs `supabase db push --project-ref <env-ref>` | Yes — each env has its own DB, no shared mutation |
-| **Supabase branching** (per-PR ephemeral DBs) | At PR open via Vercel-Supabase integration | Yes — each PR has its own DB branch |
+| Setup | Migrations validate at | Migrations apply at | Test on dev preview? |
+|-------|------------------------|---------------------|----------------------|
+| **GitHub Actions (rs-vault pattern, recommended)** | PR open → ephemeral postgres reset (`db-pr-check.yml`) | `main` merge → `db-migrate.yml` runs `supabase db push` | No — schema applies at main merge; dev preview validates against ephemeral postgres |
+| **Separate dev + prod DBs** (piper pattern) | Per-environment GitHub Actions or manual `supabase db push --project-ref <env-ref>` post-merge | Per environment | Yes — each env has its own DB, no shared mutation |
+| **Supabase branching** (per-PR ephemeral DBs) | PR open → Vercel-Supabase integration spins up a branch DB | Per branch DB | Yes — each PR has its own DB branch |
+| **Single shared DB** (no dev/prod split) | Manual or via single GitHub Action on main merge | Main merge only | No — schema doesn't exist on dev preview until main lands |
 
-Read your project's `/g-promote-*` skills to determine which mode you're in. If a project's `/g-promote-dev` doesn't reference `supabase db push` and there's only one Supabase project, you're in **mode 1** — migration-bearing issues block batch promotion to dev (the migration won't apply until main).
-
-When mode 1 is the friction, the fix is project-specific: either add `supabase db push` to `/g-promote-dev` (forward-mutation accepted in pre-ship projects), or stand up separate dev/prod Supabase projects (mode 3).
+Read your project's `.github/workflows/` to determine which mode you're in. Lift the rs-vault workflow pair (`db-migrate.yml` + `db-pr-check.yml`) if you don't have migration CI yet — it requires `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` GitHub secrets and decouples the migration concern from `pk ship` entirely. Pair migration PRs with `/pr-security-review`.
 
 #### Three-tier specifics (dev → beta → main)
 
@@ -262,13 +273,13 @@ Beta is the UAT environment in three-tier. Don't promote partial beta — if RS-
 
 #### Pre-deploy gate at each promotion
 
-Run the pre-deploy gate **before** each `/g-promote-*` step, not just before the first one:
+Run the pre-deploy gate **before** each promotion hop, not just before the first one. `/verify` (or `pk verify`) is the canonical entry point and reads § Pre-Deploy Gate from `method.config.md`:
 
-- Before `/g-promote-dev`: gate must pass on the feature branch
-- Before `/g-promote-beta` (three-tier): gate must pass on dev
-- Before `/g-promote-main`: gate must pass on dev (two-tier) or beta (three-tier)
+- Before `pk ship` (feature → dev): gate must pass on the feature branch (handled inline by `/verify`)
+- Before `pk promote dev → beta` (three-tier): gate must pass on dev tip
+- Before `pk promote dev → main` (two-tier) or `pk promote beta → main` (three-tier): gate must pass on the source branch
 
-The gate at each boundary catches integration-level regressions that wouldn't show on the originating feature branch. Don't skip "because it passed earlier."
+The gate at each boundary catches integration-level regressions that wouldn't show on the originating feature branch. CI also enforces the gate at PR open — don't skip "because it passed earlier."
 
 #### Rollback per tier
 
@@ -288,13 +299,18 @@ After any promotion, verify the deployment (smoke tests, health check).
 
 ## Hotfix Procedure
 
+Hotfixes don't fit `pk branch <ID>` (which is Linear-issue-based and targets `dev`); they branch from `main` and merge back to `main`. Use plain git:
+
 ```bash
-# 1. Create hotfix
-/branch --hotfix describe-the-fix
+# 1. Create hotfix worktree off main
+git worktree add ../<project>-hotfix-<slug> -b hotfix/<slug> main
+cd ../<project>-hotfix-<slug>
 
-# 2. Fix, commit, push, PR to main
+# 2. Fix, commit, push
+git push -u origin hotfix/<slug>
+gh pr create --base main --title "hotfix(<scope>): <desc>" --body "..."
 
-# 3. After merge, cherry-pick back immediately
+# 3. After merge, cherry-pick back to long-lived branches
 # Two-tier:
 git checkout dev && git pull && git cherry-pick <hash> && git push origin dev
 
@@ -303,8 +319,11 @@ git checkout dev && git pull && git cherry-pick <hash> && git push origin dev
 git checkout beta && git pull && git cherry-pick <hash> && git push origin beta
 
 # 4. Clean up
-/branch finish
+cd ../<project>
+git worktree remove ../<project>-hotfix-<slug>
 ```
+
+If the hotfix corresponds to a Linear issue, post the merge commit back to that issue manually — `pk done` is for `pk branch`-created branches.
 
 ---
 
@@ -346,7 +365,7 @@ Migrations are forward-only. To undo: create a new migration that reverses the c
 1. **Every step forward is a PR.** No direct merges between long-lived branches.
 2. **Main is always deployable.** Only merge tested, validated code.
 3. **All PRs target dev** (except hotfixes, which target main).
-4. **Use the promotion skills.** They automate pre-deploy gates and Linear transitions.
+4. **Use `pk ship` and `pk promote`.** They automate pre-deploy gates and Linear transitions; route everything through them so Linear stays in sync.
 5. **Test on preview before opening a PR.**
 6. **Commit often, push when stable.** Small commits are easier to debug.
 7. **Never force push to main.** Use `--force-with-lease` on feature branches only.
