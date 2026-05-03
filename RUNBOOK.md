@@ -47,7 +47,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [2] Branch + worktree                                    │
-  │     ./bin/pk branch <ID>                                 │
+  │     pk branch <ID>                                       │
   │     • creates feature/<ID>-<3-word-slug>                 │
   │     • worktree at .worktrees/<ID>-<slug>                 │
   │     • symlinks .env / .env.local / .mcp.json             │
@@ -79,7 +79,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [4] Verify                                               │
-  │     /verify         (or ./bin/pk verify)                 │
+  │     /verify         (or pk verify)                       │
   │     • runs § Pre-Deploy Gate from method.config.md       │
   │     • if Require QA review=true: spawns QA subagent      │
   │     • returns Pass / Partial / Fail with per-AC table    │
@@ -88,7 +88,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [5] Ship   (still in worktree, still on feature branch)  │
-  │     ./bin/pk ship           (or --env=<env>)             │
+  │     pk ship                 (or --env=<env>)             │
   │     • push (idempotent)                                  │
   │     • gh pr create against integration branch            │
   │     • Linear: Building → UAT (or → In Review)            │
@@ -186,7 +186,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [7] Cleanup                                              │
-  │     ./bin/pk done <ID>                                   │
+  │     pk done <ID>                                         │
   │     • verifies PR merged                                 │
   │     • posts journal highlights to Linear                 │
   │     • Linear: UAT → Done                                 │
@@ -203,7 +203,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [8] Promote dev → main      (separate, batched)          │
-  │     ./bin/pk promote                                     │
+  │     pk promote                                           │
   │     • only runs if Promote to main: true in config       │
   │     • git pull dev, run pre-deploy gate                  │
   │     • opens dev → main PR (squash-merge per ruleset)     │
