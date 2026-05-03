@@ -186,7 +186,7 @@ $ /release-changelog --version v1.5.0 --from v1.4.1
 
 [TODO human: 1-2 sentence narrative lead summarizing the release theme]
 
-**`/spec-preflight` automates empirical pre-flight checks on specs** (closes #9). New skill verifies file paths, line refs, phase-detect baseline, Linear status, and dependency claims against reality. Read-only — never modifies the spec or transitions Linear. Slots between Spec Review Agent and `/launch`.
+**`/spec-preflight` automates empirical pre-flight checks on specs** (closes #9). New skill verifies file paths, line refs, phase-detect baseline, Linear status, and dependency claims against reality. Read-only — never modifies the spec or transitions Linear. Slots between Spec Review Agent and `pk branch`.
 
 **`/release-changelog` generates draft CHANGELOG entry from commits** (closes #10). New skill that parses `type(scope): subject` commits between two refs, buckets by section, and prints a draft entry to stdout. Human edits narrative + migration sections, then commits.
 
@@ -217,6 +217,6 @@ For consuming projects on v1.4.1:
 
 | Skill | Relationship |
 |-------|-------------|
-| `/end-session` | Writes session logs and updates `NEXT.md`. Independent of release work. |
+| `/pk-exit` | Writes the per-session narrative log to `Logs/Sessions/<date>_<HHMM>.md`. Independent of release work — this skill is per-release, `/pk-exit` is per-session. |
 | `/pipekit-update` | Pulls a tagged Pipekit version into a consumer project. The tag has to exist first — `/release-changelog` is part of the workflow that produces the tag. |
 | `/strategy-sync` | Closes the docs loop after a feature ships. Independent of Pipekit's own release flow, but conceptually similar (both convert "what shipped" into "what the doc says"). |
