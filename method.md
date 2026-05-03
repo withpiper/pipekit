@@ -1,8 +1,8 @@
 # Pipekit
 
-**Last updated:** 2026-04-08 *(content predates v2 cut; see banner below)*
+**Last updated:** 2026-05-03 *(rewritten for v2.1.2)*
 
-> ⚠️ **v2 status (current as of v2.1.2):** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This file has had its v1 skill names replaced with v2 equivalents but the section *structure* still mirrors the v1 pipeline; a full structural rewrite is on the v2.1.x backlog. Stage 0 (foundation) and orthogonal skills (`/light-spec`, `/brainstorm`, `/pr-fix`, `/pr-security-review`, etc.) are unchanged in v2.
+> **v2.1.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
 > **NEXT.md is retired.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer. v2 replaces it with `pk next` (reads Linear directly + scopes to the current phase via `PHASES.md` as of v2.1.0). Consuming projects should:
 > - Delete any committed `NEXT.md` (`git rm NEXT.md`)
@@ -37,10 +37,15 @@ When ambiguity is detected, the pipeline sends work backward — not forward. A 
 Stage 0: Foundation (a contract, not a script)
   /concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create → /phase-plan
 
-Stages 1-5: Development Pipeline (repeats per issue, contract-strict)
-  [Roadmap Review] → Light Spec → Agent Review → Human Review →
-  pk next → pk branch → /work → /verify → pk ship → [PR Review] →
-  pk done → pk promote → /pk-exit → [Strategy Sync]
+Development Pipeline (repeats per issue, contract-strict):
+
+  Stage 1: Spec          /light-spec → agent review → human review
+  Stage 2: Plan + Build  pk branch → /work    (→ /review-plan if vbw backend)
+  Stage 3: Verify + Ship /verify → pk ship    (→ /pr-fix | /pr-security-review) → UAT
+  Stage 4: Release       pk done → pk promote
+  Stage 5: Doc Loop      /strategy-sync       (after UAT)
+
+Per session (not per issue): /pk-exit          (last command of every Claude Code session)
 ```
 
 **Stage 0** is the *contract* the development pipeline depends on — a set of artifacts (concept, definition, strategy, config, VBW scaffold, Linear map, phase plan) that must exist before the daily loop is safe to run. It's not a script you run once; it's a pre-condition. *How* those artifacts come to exist depends on the project's entry mode (greenfield, brownfield, inherited — see [Entry Modes](#entry-modes) below). **Stages 1-5** consume the contract and repeat per issue.
@@ -65,24 +70,25 @@ Stage 0 is the foundation contract — a set of artifacts, not a script. The gre
 
 #### Stages 1-5: Development Pipeline
 
-| # | Step | Tool | Input | Output | Gate |
-|---|------|------|-------|--------|------|
-| 0 | **Roadmap Review** | `/roadmap-review` | ROADMAP, Linear state, PHASES.md | Health report: Stage 0 check, gaps, ordering, spec coverage, doc freshness | Stage 0 complete, plan coherent |
-| 1 | **Light Spec** | `/light-spec` + Linear | Feature idea or issue | Structured spec exploring codebase and Strategy docs | — |
-| 2 | **Agent Review** | Linear Spec Review Agent | Light spec | Pass/Revise verdict with readiness score | Spec must be unambiguous and decomposable without guessing |
-| 3 | **Human Review** | You in Linear | Agent-reviewed spec | Approved spec with product decisions locked | Human signs off on scope, decisions, and priority |
-| 4 | **Find next + branch** | `pk next` then `pk branch <ID>` | Approved spec | Worktree + branch created, Linear → In Progress | Spec exists, deps met |
-| 5 | **Plan + execute** | `/work <ID>` (dispatches to `vbw` or `native` per `method.config.md`) | Approved spec from Linear | Code committed against verify/done criteria. Replaces v1's `/launch` + `/vbw:vibe --plan` + `/vbw:vibe --execute` chain. | Verdict gate passes before code is written |
-| 6 | **Plan Review** | `/review-plan` (calls `plan-reviewer` agent) | PLAN.md (vbw backend only) | Validated plan or revision requests | Plan must be executable step-by-step without ambiguity |
-| 7 | **Verify** | `/verify` (or `pk verify`) | Completed work | Pre-deploy gate report (Pass / Partial / Fail) with per-AC table; QA subagent if `Require QA review: true` | All AC satisfied; gate green |
-| 8 | **Ship** | `pk ship [--review]` | Verify-passed worktree | Push, open PR, Linear → UAT. `--review` triggers antagonistic review. | User confirmed verify passed |
-| 8b | **PR review (opt-in)** | `/pr-fix` and/or `/pr-security-review` | PR diff + reviewer findings | Triage-complete; fixed/rejected/deferred summary in Linear | Critical/High findings resolved or explicitly deferred |
-| 9 | **UAT** | You (in browser / Linear) | Built feature | Accepted or rejected | Feature matches spec AC under real usage |
-| 10 | **Done + Promote** | `pk done <ID>` then `pk promote` (multi-tier) | Merged PR | Worktree cleanup, commits posted to Linear, Linear → Done. `pk promote` opens dev → main PR. | PR merged |
-| 11 | **Session log** | `/pk-exit` | Session end | `Logs/Sessions/<date>_<HHMM>.md` narrative | Last command of every Claude session |
-| 12 | **Strategy Sync** | `/strategy-sync` | Shipped features, current Strategy docs | Updated docs reflecting reality | Code is truth; diffs approved before apply |
+| # | Stage | Step | Tool | Output | Gate |
+|---|-------|------|------|--------|------|
+| 1 | 1 | **Light Spec** | `/light-spec` | Structured spec stored in Linear | — |
+| 2 | 1 | **Agent Review** | Spec Review Agent (in Linear) | Pass/Revise verdict with readiness score | Spec is unambiguous + decomposable without guessing |
+| 3 | 1 | **Human Review** | You, in Linear | Approved spec with product decisions locked | Human signs off on scope/decisions/priority |
+| 4 | 2 | **Branch** | `pk next` then `pk branch <ID>` | Worktree + branch created, Linear → In Progress | Spec approved, deps met |
+| 5 | 2 | **Work** | `/work <ID>` (vbw or native backend per `method.config.md`) | Code committed against verify/done criteria | Verdict gate passes before code is written |
+| 5b | 2 | **Plan Review** *(vbw backend, optional)* | `/review-plan` (spawns `plan-reviewer` agent) | Validated `PLAN.md` or revision requests | Plan executable step-by-step without ambiguity |
+| 6 | 3 | **Verify** | `/verify` (or `pk verify`) | Pre-deploy gate report — Pass / Partial / Fail with per-AC table; QA subagent if `Require QA review: true` | Gate green; AC satisfied |
+| 7 | 3 | **Ship** | `pk ship [--review]` | Branch pushed, PR open, Linear → UAT | Verify passed |
+| 7b | 3 | **PR Review** *(opt-in)* | `/pr-fix` and/or `/pr-security-review` | Triage summary in Linear (fixed / rejected / deferred) | Critical/High findings resolved or explicitly deferred |
+| 8 | 3 | **UAT** | You (browser / Linear) | Accepted or rejected against spec AC | Matches spec under real usage |
+| 9 | 4 | **Done** | `pk done <ID>` | Worktree+branch cleaned up; commits + diffstat posted to Linear; → Done | PR merged |
+| 10 | 4 | **Promote** | `pk promote` *(multi-tier projects only)* | Next-tier promotion PR per `Ship environments` (e.g., dev → beta → main) | — |
+| 11 | 5 | **Strategy Sync** | `/strategy-sync` | Updated Strategy docs reflecting reality | Code is truth; diffs human-approved before apply |
 
-**Feedback loops:** Steps 2, 6, 8, and 9 can send work backward. Agent review returns specs for revision. Plan review returns plans for rework. QA returns tasks to dev. UAT returns features to execution. The pipeline is linear by default, corrective when needed.
+**Feedback loops:** steps 2, 5b, 6, and 8 can send work backward. Agent review returns specs for revision. Plan review returns plans for rework. Verify returns tasks to dev. UAT returns features to execution. The pipeline is linear by default, corrective when needed.
+
+**Per session (not per issue):** `/pk-exit` writes the narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Run as the last command of every Claude Code session, regardless of where the issue stands.
 
 **Between phases:** `/phase-plan --next` selects the next batch of issues and promotes them to "Needs Spec." `/roadmap-review` validates before speccing begins.
 
@@ -178,19 +184,19 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 
 ---
 
-## Stage 2: Branch + Plan (Execution Quality Gate)
+## Stage 2: Plan + Build (Execution Quality Gate)
 
-**Steps:** 4–6 (`pk branch` → `/work` plan-verdict → `/review-plan`)
+**Steps:** 4–5b (`pk branch` → `/work` → optional `/review-plan` for vbw backend)
 
 **Tools:** `pk branch`, `/work`, `plan-reviewer` agent (via `/review-plan`)
 
-- `pk branch <ID>` creates the worktree + branch and transitions Linear to In Progress (idempotent)
-- Inside the worktree, `/work <ID>` reads the approved spec from Linear and produces a one-screen plan with a **verdict gate** (`proceed` / `revise: <feedback>` / `abort`) before any code is written
-- Tier inference (Quick / Standard / Heavy) drives which gates apply; the human always confirms tier before `/work` proceeds
-- For `Backend: vbw`, `/work` dispatches `vbw-lead` to generate `PLAN.md` and `vbw-dev` to execute. For `Backend: native`, `/work` plans + executes in the current Claude session (with parallel `Agent` calls for grounding)
-- `/review-plan` (Pipekit skill) spawns the `plan-reviewer` agent against any generated `PLAN.md` — independent stress-test of scope, atomicity, dependencies, success criteria, and risks. Run between vbw-lead's plan and vbw-dev's execution.
+- **`pk branch <ID>`** sets up the worktree + branch and transitions Linear to In Progress. Idempotent — rerun is safe.
+- **`/work <ID>`** does plan + execute in one skill, gated by a **verdict** (`proceed` / `revise: <feedback>` / `abort`) before any code is written. Tier (Quick / Standard / Heavy) is human-confirmed before the verdict step. Backend dispatch is per `method.config.md`:
+  - `Backend: vbw` → `/work` spawns `vbw-lead` (plan) and `vbw-dev` (execute) with `PLAN.md` as the contract.
+  - `Backend: native` → `/work` plans + executes in your current Claude session, using parallel `Agent` calls only for grounding.
+- **`/review-plan`** *(vbw backend, optional)* spawns the `plan-reviewer` agent against `PLAN.md` between `vbw-lead`'s output and `vbw-dev`'s execution — independent stress-test of scope, atomicity, dependencies, success criteria, and risks.
 
-**Output:** Code committed against verify/done criteria (or `PLAN.md` + execution for `vbw` backend)
+**Output:** Code committed against verify/done criteria (or `PLAN.md` + execution for the `vbw` backend)
 
 **Gate:** Plan must be executable step-by-step without ambiguity or rework. No task should require the dev agent to make product decisions.
 
@@ -198,35 +204,42 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 
 ## Stage 3: Verify + Ship (Build Quality Gate)
 
-**Steps:** 7–9 (`/verify` → `pk ship` → UAT)
+**Steps:** 6–8 (`/verify` → `pk ship` → optional PR review → UAT)
 
-**Tools:** `/verify` (or `pk verify`), `pk ship`, optional `/pr-fix` and `/pr-security-review`, Human
+**Tools:** `/verify`, `pk ship`, optional `/pr-fix` and `/pr-security-review`, Human
 
-- `/verify` runs the project's pre-deploy gate from `method.config.md` (types + lint + test). Returns Pass / Partial / Fail with a per-AC table. If `Require QA review: true`, also spawns the QA subagent for goal-backward verification.
-- `pk ship` pushes the feature branch, opens the PR against the integration branch from config, and transitions Linear → UAT (or → In Review)
-- `pk ship --review` additionally posts a Linear comment flagging review-in-flight and prints the antagonistic reviewer invocation. The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — finding cross-cutting concerns the spec didn't think to mention
-- For migrations / RLS / SECURITY DEFINER / auth surface, run `/pr-security-review` instead of (or alongside) the generic reviewer
-- After review findings, `/pr-fix` triages: fixed / rejected / deferred, with a Linear comment summary
-- Human performs UAT against the spec's AC in the running app
+- **`/verify`** runs the pre-deploy gate from `method.config.md` (types + lint + test). Returns Pass / Partial / Fail with a per-AC table. If `Require QA review: true`, also spawns the QA subagent for goal-backward verification.
+- **`pk ship`** pushes the feature branch, opens the PR against the integration branch from config, and transitions Linear → UAT.
+- **`pk ship --review`** posts a Linear comment flagging review-in-flight and prints the antagonistic reviewer invocation. The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention.
+- **`/pr-security-review`** is the right tool for migrations / RLS / SECURITY DEFINER / auth surface (use instead of, or alongside, the generic reviewer).
+- **`/pr-fix`** triages review findings into fixed / rejected / deferred and posts a summary comment to Linear.
+- Human performs **UAT** in the running app (preview URL) against the spec's AC.
 
-**Output:** Shippable feature merged to integration branch
+**Output:** Verified PR open and UAT-accepted in Linear, ready for the human to merge.
 
-**Gate:** Feature must match spec behaviour and pass real usage. All AC checkboxes satisfied.
+**Gate:** Feature matches spec behavior under real usage. All AC checkboxes satisfied. Critical/High review findings resolved or explicitly deferred.
 
 ---
 
 ## Stage 4: Release
 
-**Steps:** 10 (`pk done` → `pk promote`)
+**Steps:** 9–10 (`pk done` → `pk promote`)
 
 Every step forward is a PR. No direct merges between long-lived branches. Promotion is owned by `pk promote`, configured per project via `Ship environments` in `method.config.md` (e.g., `dev,main` or `dev,beta,main`).
 
-- `pk done <ID>` (after PR merge) cleans up the worktree and branch, posts commits + diffstat to Linear, and transitions the issue to Done
-- `pk promote` opens the next-tier promotion PR (dev → beta or beta → main) for multi-tier projects
-- CI enforces pre-deploy gate at each PR; for Supabase projects, the `db-pr-check.yml` workflow validates migrations on PR open and `db-migrate.yml` applies them on merge to main
-- Vercel deploys preview on PR open and prod on merge to main automatically
+**Order of operations** (after Stage 3's UAT passes):
 
-**Output:** Production release
+1. Human merges the PR (squash) once UAT is green.
+2. **`pk done <ID>`** cleans up the worktree + branch, posts commits + diffstat to Linear, and transitions the issue to Done.
+3. **`pk promote`** opens the next-tier promotion PR (dev → beta, beta → main) for multi-tier projects. Skipped for `Promote to main: false`.
+
+**Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
+
+- **CI** enforces the pre-deploy gate at each PR.
+- **Vercel** deploys preview on PR open and prod on main merge.
+- **GitHub Actions** (Supabase projects only): `db-pr-check.yml` validates migrations on PR open against ephemeral postgres; `db-migrate.yml` applies them on main merge. Lift the workflow pair from rs-vault if your project doesn't have them yet.
+
+**Output:** Production release.
 
 **Gate:** CI passes, pre-deploy gate passes, smoke tests pass.
 
