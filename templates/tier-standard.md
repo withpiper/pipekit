@@ -41,4 +41,4 @@ Inside Standard, complexity still routes execution:
 
 ## Close path
 
-`/launch PROJ-XXX --close` → Linear status to UAT. UAT pass → ship via promotion skill. `/strategy-sync` can be run per-issue or batched at end of phase.
+`pk ship` → Linear status to UAT. UAT pass → merge PR → `pk done PROJ-XXX` (cleanup + Linear → Done) → `pk promote` (multi-tier projects). `/strategy-sync` can be run per-issue or batched at end of phase.
