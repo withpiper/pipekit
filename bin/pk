@@ -682,6 +682,21 @@ cmd_ship() {
     echo "PR: $pr_url"
   fi
 
+  # Merge-strategy reminder. Squashing feature → dev collapses dev's commit
+  # identity and causes phantom conflicts on every subsequent dev → main
+  # promote. See sop/Git_and_Deployment.md § Merge Strategy by Hop.
+  case "$target" in
+    dev|beta)
+      echo ""
+      echo "⚑ Merge with: 'Create a merge commit' or 'Rebase and merge'."
+      echo "  Do NOT squash feature → dev (causes phantom-conflict tax on promotes)."
+      ;;
+    main)
+      echo ""
+      echo "⚑ Merge with: 'Squash and merge' (one release commit per promotion)."
+      ;;
+  esac
+
   # Linear: → In Review / UAT (state name varies; try common ones)
   local target_state
   case "$target" in

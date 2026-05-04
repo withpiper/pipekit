@@ -174,8 +174,10 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [6] Merge PR (manual, GitHub UI)                         │
-  │     • feature → dev: merge-commit (history visibility)   │
-  │     • feature → main: squash (single commit per release) │
+  │     • feature → dev: merge-commit or rebase (NOT squash) │
+  │     • dev/beta → main: squash (single release commit)    │
+  │     Squash on feature → dev causes phantom conflicts on  │
+  │     the next promote. Emergency override only.           │
   └──────────────────────────────────────────────────────────┘
        │
        ▼

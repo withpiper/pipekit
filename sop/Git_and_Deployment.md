@@ -75,7 +75,7 @@ Different hops want different strategies. The phantom-conflict trap (observed du
 
 | Hop | Recommended | Also OK | Rationale |
 |---|---|---|---|
-| `feature/*` → `dev` | **Rebase** | Merge-commit | Rebase = linear atomic commits; merge-commit = bubble preserving feature scope. Either works on dev (no phantom-conflict risk; bubbles get absorbed when dev → main squashes). |
+| `feature/*` → `dev` | **Rebase** | Merge-commit | Rebase = linear atomic commits; merge-commit = bubble preserving feature scope. **Do not squash here.** Squashing feature → dev collapses dev's commit identity, and every subsequent `dev → main` promote then sees phantom conflicts (same content, different SHAs and boundaries). Emergency override only when dev tip is broken. |
 | `dev` → `beta` (three-tier) | Rebase or merge-commit | — | Same as feature → dev. |
 | **`dev` → `main`** (two-tier) or `beta` → `main` (three-tier) | **Squash (enforced)** | — | One release commit per promotion. Merge-commits here cause phantom conflicts on subsequent promotes. **Enforced by ruleset, not user discipline.** |
 
