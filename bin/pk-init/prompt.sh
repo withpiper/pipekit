@@ -104,7 +104,7 @@ while IFS= read -r line; do
 done < <(jq -r '
   to_entries
   | map(select(.value.status == "needs_input"))
-  | map(select(.key != "linear_team_id"))
+  | map(select(.key != "linear_team_id" and .key != "linear_team_key"))
   | .[].key
 ' "$STATE")
 

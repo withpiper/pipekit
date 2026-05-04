@@ -120,6 +120,3 @@ while true; do
       ;;
   esac
 done
-
-echo ""
-echo "(step 5 not implemented — prompts for needs_input fields will run before diff)"
