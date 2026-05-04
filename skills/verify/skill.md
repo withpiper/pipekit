@@ -159,19 +159,32 @@ Use Task tool with:
 
 Wait for the subagent to return. Print its verdict block verbatim — no editorializing.
 
-## Step 4 — Hand off
+## Step 4 — Hand off (with auto-ship for the /work rollover path)
 
 Based on verdict, print the next-action:
 
 | Verdict | Next |
 |---|---|
-| Pass (gate only) | `pk ship` |
-| Pass (gate + QA) | `pk ship` |
+| Pass (gate only) | `pk ship` (auto-shipped if `PIPEKIT_AUTO_SHIP=1`; otherwise hint only) |
+| Pass (gate + QA) | `pk ship` (auto-shipped if `PIPEKIT_AUTO_SHIP=1`; otherwise hint only) |
 | Partial | Read the per-AC table. Decide: amend with `/work` (if gap is real), or ship anyway with `git commit --amend` documenting the gap. Then `pk ship`. |
 | Fail (gate) | Fix the failing command, then re-run `/verify` (idempotent). |
 | Fail (QA) | Stop. Either: expand `/work <ID>` to address Unmet ACs; OR `pk delegate <ID> "the spec needs <X>"` to refine spec; OR override consciously with documented decision. |
 
-Do **not** auto-ship on Pass. The user runs `pk ship` when ready.
+### Auto-ship rollover (Pass only, only when invoked by /work)
+
+If the verdict is **Pass** AND the environment variable `PIPEKIT_AUTO_SHIP=1` is set (which `/work`'s Step 7 rollover sets before calling this skill), auto-invoke `pk ship`:
+
+1. Print: `✓ /verify Pass — auto-running pk ship`
+2. Run `pk ship` via bash. Use no flags — `pk ship` reads `Integration branch` from `method.config.md` to pick the destination, which gives `dev` for Piper-style multi-env projects and `main` for single-env projects (correct in both cases).
+3. If `pk ship` succeeds: print its output (PR URL + Linear transition) and exit.
+4. If `pk ship` fails (push rejected, gh CLI error, branch protection): surface the error verbatim and STOP. Do NOT auto-retry — push failures usually mean branch protection, lockfile drift, or remote conflicts that need human eyes.
+
+`--review` (antagonistic review) stays opt-in; the user runs `pk ship --review` separately if they want it.
+
+If `PIPEKIT_AUTO_SHIP` is unset (standalone `/verify` invocation), do NOT auto-ship on Pass. Print the hint and let the user pace.
+
+**Partial / Fail with `PIPEKIT_AUTO_SHIP=1`:** still no auto-ship. Auto-ship is gated on Pass, not on the rollover signal alone. The signal only authorizes the *Pass branch* to ship; failures always pause for human attention.
 
 ## Failure model
 
