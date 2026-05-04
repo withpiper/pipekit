@@ -592,7 +592,7 @@ Based on the tech stack chosen in Step 3, identify which project-specific skills
 
 | If you use... | You need... |
 |---------------|-------------|
-| Vercel | `g-test-vercel`, `g-deploy` |
+| Vercel | `g-test-vercel` |
 | Supabase/Postgres | `migrate` |
 | Any DB | `reset-user` or equivalent |
 | Monorepo with shared UI | `component` |
