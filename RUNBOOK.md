@@ -174,10 +174,14 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   └──────────────────────────────────────────────────────────┘
        │
        ▼
-       /pk-exit                   (writes Logs/Sessions/<date>_<HHMM>.md narrative)
-       /exit                      (close Claude in worktree)
-       cd ~/Projects/<repo>       (back to parent repo)
-       claude --dangerously-skip-permissions
+  ┌──────────────────────────────────────────────────────────┐
+  │ [7] Session close + return to parent repo                │
+  │     /pk-exit       writes Logs/Sessions/<date>_<HHMM>.md │
+  │                    narrative for the worktree session    │
+  │     /exit          close Claude in the worktree          │
+  │     cd ~/Projects/<repo>                                 │
+  │     claude --dangerously-skip-permissions                │
+  └──────────────────────────────────────────────────────────┘
        │
 ┌──────┴──────────────────────────────────────────────────────────┐
 │  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
@@ -185,7 +189,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [7] Cleanup                                              │
+  │ [8] Cleanup                                              │
   │     pk done <ID>                                         │
   │     • verifies PR merged                                 │
   │     • posts journal highlights to Linear                 │
@@ -202,7 +206,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [8] Promote dev → main      (separate, batched)          │
+  │ [9] Promote dev → main      (separate, batched)          │
   │     pk promote                                           │
   │     • only runs if Promote to main: true in config       │
   │     • git pull dev, run pre-deploy gate                  │
