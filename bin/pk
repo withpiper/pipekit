@@ -783,6 +783,40 @@ cmd_done() {
   fi
   pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
 
+  # Migration check — non-blocking. Runs if the merge contains .sql files in
+  # the configured migration dir (method.config.md → "Migration dir").
+  local migration_dir
+  migration_dir=$(pk_config "Migration dir" "supabase/migrations/")
+  if [ -n "$migration_dir" ] && [ -n "$merge_base" ]; then
+    local new_migrations migration_count
+    new_migrations=$(git diff --name-only "${merge_base}..${current}" 2>/dev/null \
+      | grep "^${migration_dir}" | grep "\.sql$" || true)
+    if [ -n "$new_migrations" ]; then
+      migration_count=$(echo "$new_migrations" | wc -l | tr -d ' ')
+      echo "→ ${migration_count} migration(s) in this merge — checking remote..."
+      if command -v supabase &>/dev/null; then
+        local remote_list
+        remote_list=$(supabase migration list 2>/dev/null || true)
+        local all_applied=true
+        while IFS= read -r mfile; do
+          local mname
+          mname=$(basename "$mfile" .sql)
+          if ! echo "$remote_list" | grep -qF "$mname"; then
+            all_applied=false
+            echo "  ⚠ not on remote: $mname"
+          fi
+        done <<< "$new_migrations"
+        if [ "$all_applied" = true ]; then
+          echo "  ✓ all ${migration_count} migration(s) applied to remote"
+        else
+          echo "  → run: supabase db push"
+        fi
+      else
+        echo "  ⚠ supabase CLI not found — verify migrations manually: supabase migration list"
+      fi
+    fi
+  fi
+
   local body="**Shipped — ${issue}**"
   [ -n "$pr_url_done" ] && body="$body
 PR: $pr_url_done"
