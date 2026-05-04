@@ -360,34 +360,30 @@ Do **not** generate plausible-sounding rationale that fits the visible artifact.
 
 When in doubt, default to: *"Let me check the spec and the integration site before I answer."*
 
-## Step 7 — Auto-rollover to /verify
+## Step 7 — Hand off
 
-Once execution exits successfully — all tasks committed, no aborts, no deviation pending user input — auto-invoke `/verify` immediately. Do not prompt; verification is the deterministic next step in the v2 loop, and `/verify` is idempotent and read-only.
-
-**Skip the rollover** if any of the following holds:
-
-- `/work` was interrupted or aborted mid-execution (Ctrl-C, abort verdict, agent failure)
-- A deviation was raised that the user has not yet resolved
-- The user's last intent was an explicit stop (e.g., responding "stop" to a prompt)
-
-Otherwise:
-
-1. Print: `✓ /work complete for <ISSUE-ID> — auto-running /verify`
-2. Set the environment variable `PIPEKIT_AUTO_SHIP=1` for the `/verify` invocation. This signals `/verify` that it was called as part of the auto-flow and should auto-ship on Pass. (Standalone `/verify` calls do not set this var, and so do not auto-ship.)
-3. Invoke `/verify` by calling the Skill tool with `skill="verify"`. Surface its verdict block to the user verbatim.
-4. After `/verify` returns:
-   - If `/verify` Pass: `pk ship` will already have run inside `/verify`'s rollover (Step 4 below). Print the final hand-off line: _"Run `/pk-exit` at the end of the session to write `Logs/Sessions/<date>_<HHMM>.md`."_
-   - If `/verify` Partial / Fail: STOP. The verdict block already showed the per-AC table; do not invoke `pk ship`. Tell the user: _"Address the failures and re-run `/verify` when ready (or `/work --resume` if execution gaps remain)."_
-
-If the rollover is skipped (per the conditions above), fall back to the legacy hand-off:
+Print:
 
 ```
-✓ /work paused for <ISSUE-ID>
+✓ /work complete for <ISSUE-ID>
 
-Resume:
-  /work <ISSUE-ID>          — continue execution
-  /verify                   — run gate manually if you want to inspect first
+Required next:
+  /verify        — pre-deploy gate (required before pk ship)
+
+Then:
+  pk ship        — push, open PR, transition Linear
+
+Run /pk-exit at the end of the session to write Logs/Sessions/<date>_<HHMM>.md.
 ```
+
+**`/verify` is required, not optional.** The only valid reasons to skip it:
+
+- Execution was interrupted or aborted (agent failure, abort verdict, Ctrl-C) — in which case fix the gap first, then run `/verify`
+- The gate explicitly failed during execution and the user is addressing the failure before re-running
+
+Step 6.5 behavioral gaps (e.g. Docker not running, browser not available) are **not** a skip reason — they are surfaced in the hand-off summary for the user to decide whether to resolve before shipping, but they do not block `/verify`.
+
+**Do not** invoke `/verify` or `pk ship` automatically. The user paces.
 
 ## Failure model
 
