@@ -13,7 +13,7 @@ You are a focused work driver. Given a Linear issue ID, you read its spec, plan 
 
 - `/work <ISSUE-ID>` — primary
 - `/work <ISSUE-ID> --deep` — adds spec-validator + plan-review subagent + security-review on completion
-- `/work <ISSUE-ID> --backend=vbw|native` — override the project's default backend for this invocation only
+- `/work <ISSUE-ID> --backend=vbw|native|auto` — override the project's default backend for this invocation only
 - "work on RS-30" / "let's do PIP-123"
 
 ## Required preconditions
@@ -42,29 +42,35 @@ ISSUE=$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)
 
 ## Step 1 — Read configuration
 
-Read these values from `method.config.md` (use `bin/pk pk_config "<Key>" "<default>"` semantics, or grep the rows directly):
+Read these values from `method.config.md` using the `bin/pk pk_config` binary — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline:
 
-| Key | Default |
-|---|---|
-| Backend | `vbw` |
-| Default deep flag | `false` |
-| Require QA review | `false` |
-| Strategy docs path | `Strategy/` |
+```bash
+BACKEND=$(bin/pk pk_config "Backend" "vbw")
+DEEP_FLAG=$(bin/pk pk_config "Default deep flag" "false")
+QA_REVIEW=$(bin/pk pk_config "Require QA review" "false")
+STRATEGY_PATH=$(bin/pk pk_config "Strategy docs path" "Strategy/")
+```
 
 Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
 
 Resolve the effective backend in this order (first match wins):
 
-1. `--backend=vbw` or `--backend=native` passed on the invocation
-2. `Backend` row in `method.config.md`
+1. `--backend=vbw`, `--backend=native`, or `--backend=auto` passed on the invocation
+2. `Backend` row in `method.config.md` (read via `bin/pk pk_config` above)
 3. Default: `vbw`
 
-If `--backend=` is passed with any value other than `vbw` or `native`, refuse: `Unknown backend '<value>'. Valid: vbw, native.`
+If `--backend=` is passed with any value other than `vbw`, `native`, or `auto`, refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.`
 
-Print one line for the user:
+When the resolved backend is `vbw` or `native`, print one line:
 
 ```
 Work: <ISSUE-ID>  ·  Backend: <vbw|native>  ·  Deep: <yes|no>
+```
+
+When the resolved backend is `auto`, print:
+
+```
+Work: <ISSUE-ID>  ·  Backend: auto (routing after plan)  ·  Deep: <yes|no>
 ```
 
 ## Step 2 — Fetch the spec from Linear
@@ -182,6 +188,36 @@ Format (single screen — keep tight):
 **Risks / open questions:**
 - <empty list — if non-empty, the spec is not ready, go back to step 2>
 ```
+
+## Step 3c — Auto-backend routing (only when `Backend: auto`)
+
+Skip this step entirely if the effective backend is `vbw` or `native`.
+
+After the plan is written, evaluate these three signals from the **Files to touch** section:
+
+| Signal | Check |
+|---|---|
+| File count | Count entries in "Files to touch" |
+| Migration present | Any path matches `*/migrations/*` or ends in `.sql` |
+| Unfamiliar package | Any package referenced in the plan is absent from `package.json` (run `node -e "require('./package.json')"` to confirm) |
+
+**Routing decision:**
+
+- If file count ≤ 3 AND no migration AND no unfamiliar package → resolve to `native`
+- Any other combination → resolve to `vbw`
+
+Store the resolved backend as the effective backend for Step 5.
+
+Print one line immediately after the plan (before the verdict prompt):
+
+```
+Routing: <signal summary> → <native|vbw>
+```
+
+Examples:
+- `Routing: 2 files, no migration → native`
+- `Routing: 7 files → vbw`
+- `Routing: migration present → vbw`
 
 ## Step 4 — Verdict gate
 
@@ -361,6 +397,8 @@ Resume:
 | Spec missing required sections, no `--deep` | Warn, ask y/N. |
 | Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
 | Plan revised >3 times | Refuse. Recommend `pk delegate`. |
+| `--backend=` with unknown value | Refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.` |
+| `bin/pk pk_config` binary absent | Warn: `bin/pk not found — cannot read Backend from config. Defaulting to vbw. Run /pipekit-update to fix.` |
 | Subagent returns permission denial | Stop. Print the denial. Do not retry. |
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
 | Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |
