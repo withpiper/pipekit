@@ -37,8 +37,9 @@ These skills work across any project that follows the method. They read `method.
 | `/roadmap-review` | Pre-pipeline health check (Stage 0 gate) | Stage 0 → Stage 1 gate |
 | `/brainstorm` | Feature-level feasibility exploration | Stage 1: Spec |
 | `/brainstorm-review` | Triage untriaged Linear issues | Stage 1: Spec |
-| `/light-spec` | Structured spec generation with agent review | Stage 1: Spec |
-| `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops | Stage 1: Spec |
+| `/light-spec` | Structured spec generation with auto-cycled agent review (Phase 6 invokes `pk spec-cycle` + `/light-spec-revise` internally, max 3 passes) | Stage 1: Spec |
+| `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops. Usually invoked by `/light-spec` Phase 6, can also run standalone. | Stage 1: Spec |
+| `pk spec-cycle <ID>` | Trigger Spec Review Agent v5, poll Linear for verdict, transition to Approved on Pass. Bash-side helper used by `/light-spec`'s cycle — keeps polling out of Claude's context. | Stage 1: Spec |
 | `/spec-preflight` | Empirical pre-flight checks on a specced Linear issue (file paths, line refs, phase-detect baseline, Linear status). Read-only. | Stage 1 → Stage 2 gate |
 | `pk next` | Phase-aware: groups Linear results by status (In Progress / Approved / Needs Spec) | Stage 2: Plan + Build |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) | Stage 2: Plan + Build |

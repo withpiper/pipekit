@@ -171,9 +171,11 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 **Steps:** 1–3 (Light Spec → Agent Review → Human Review)
 **Pre-condition:** Roadmap Review (Step 0) must pass
 
-**Tools:** `/light-spec`, Spec Review Agent, Human
+**Tools:** `/light-spec`, `pk spec-cycle`, `/light-spec-revise`, Spec Review Agent, Human
 
 - `/light-spec` explores the codebase, reads reference material and Strategy docs, and generates a structured spec as an AI→AI contract
+- `/light-spec` Phase 6 then runs the **review cycle** automatically: invokes `pk spec-cycle` (which posts the agent trigger, polls Linear for the verdict, and transitions the issue to **Approved** on Pass), and on Revise auto-invokes `/light-spec-revise` for surgical patches before the next cycle pass
+- The cycle is hard-capped at 3 passes. On passes 2 and 3 the user is prompted `[Y/n/o]` (continue / bail / drop into `/light-spec-revise`'s override path) so a stalemating agent can't drive infinite revision
 - Spec Review Agent enforces planning readiness (Pass/Revise with blocking issues identified)
 - Human validates product decisions, scope, and priority
 - Iteration continues until Agent passes AND Human approves
@@ -418,8 +420,9 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 |-----------------|---------|
 | `/roadmap-review` | Stage 0 gate + health check: completeness, dependencies, spec coverage |
 | `/brainstorm` | Feature-level feasibility exploration (within an existing project) |
-| `/light-spec` | Structured spec generation with agent review |
-| `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detects stalemate loops |
+| `/light-spec` | Structured spec generation with auto-cycled agent review (invokes `pk spec-cycle` and `/light-spec-revise` internally, max 3 passes) |
+| `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detects stalemate loops. Usually invoked by `/light-spec` Phase 6, but can be run standalone. |
+| `pk spec-cycle <ID>` | Post the Spec Review Agent v5 trigger, poll Linear for the verdict, transition state to Approved on Pass. Owns the `@linear` trigger format and polling — Claude doesn't wait. |
 | `/spec-preflight {ISSUE}` | Empirical pre-flight on a specced issue — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. Run between Spec Review Agent and `pk branch`. |
 | `pk next` | Phase-aware: groups Linear results by status with per-group hints |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) |
