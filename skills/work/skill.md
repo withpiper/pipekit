@@ -81,25 +81,17 @@ Validate the description contains either `## Light Spec` or `## Acceptance Crite
 - **Without `--deep`:** print a warning, print the description's first 30 lines, ask: `Continue planning with this vague spec? (y/N)`. Default N.
 - **With `--deep`:** refuse: `Spec missing required sections. Run /light-spec <ID> first, OR pk delegate <ID> "draft a Light Spec for this issue against {project} conventions" to invoke Linear Agent.`
 
-## Step 2.5 — Label the session and terminal
+## Step 2.5 — Label the session
 
-Now that you have `<ISSUE-ID>` and the issue `title`, label the work in two places so the human can find this session at a glance.
+Now that you have `<ISSUE-ID>` and the issue `title`, set the Claude session topic so the human can find this session at a glance:
 
-1. **Claude session topic** — set if the helper script exists:
+```bash
+if [ -x "$HOME/.claude/scripts/set-topic.sh" ]; then
+  "$HOME/.claude/scripts/set-topic.sh" "<ISSUE-ID> — <title>"
+fi
+```
 
-   ```bash
-   if [ -x "$HOME/.claude/scripts/set-topic.sh" ]; then
-     "$HOME/.claude/scripts/set-topic.sh" "<ISSUE-ID> — <title>"
-   fi
-   ```
-
-2. **Terminal / multiplexer tab title** — emit the OSC 0 escape (honored by most terminals, tmux, screen, and CMUX):
-
-   ```bash
-   printf '\033]0;%s\007' "<ISSUE-ID>"
-   ```
-
-Both are best-effort. Skip silently if either fails — never block planning on a labeling failure.
+Best-effort — skip silently if it fails. Never block planning on a labeling failure.
 
 ## Step 3 — Plan
 
