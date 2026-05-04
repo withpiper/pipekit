@@ -83,8 +83,40 @@ DRAFT="$STATE_DIR/method.config.md.draft"
 bash "$HERE/render.sh" "$TEMPLATE" "$STATE" > "$DRAFT"
 echo "Draft:      $DRAFT"
 echo ""
-echo "── render preview (first 40 lines of draft) ──"
-head -40 "$DRAFT"
-echo "..."
+
+# Step 4: diff + confirm.
+echo "── diff (template → draft) ──"
+bash "$HERE/diff.sh" "$TEMPLATE" "$DRAFT"
 echo ""
-echo "(steps 4-6 not implemented — diff, prompt, write come next)"
+
+TARGET="$ROOT/method.config.md"
+echo "Target:     $TARGET"
+echo ""
+
+while true; do
+  printf "Write? [y]es  [e]dit draft in \$EDITOR  [n]o, abort: "
+  read -r choice
+  case "$choice" in
+    y|Y)
+      echo "(step 6 not implemented — would write $DRAFT → $TARGET)"
+      break
+      ;;
+    e|E)
+      "${EDITOR:-vi}" "$DRAFT"
+      echo ""
+      echo "── diff (template → draft, post-edit) ──"
+      bash "$HERE/diff.sh" "$TEMPLATE" "$DRAFT"
+      echo ""
+      ;;
+    n|N|"")
+      echo "Aborted. Draft kept at: $DRAFT"
+      exit 1
+      ;;
+    *)
+      echo "  unknown choice: $choice"
+      ;;
+  esac
+done
+
+echo ""
+echo "(step 5 not implemented — prompts for needs_input fields will run before diff)"
