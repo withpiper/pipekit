@@ -65,6 +65,9 @@ jq -r '
 echo ""
 echo "State file: $STATE"
 
+# Step 5: prompt for needs_input fields. Mutates state.json in place.
+bash "$HERE/prompt.sh" "$STATE"
+
 # Step 3: render draft.
 TEMPLATE="$ROOT/method.config.template.md"
 if [ ! -f "$TEMPLATE" ]; then
