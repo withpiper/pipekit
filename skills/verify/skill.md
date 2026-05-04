@@ -165,15 +165,15 @@ Based on verdict, print the next-action:
 
 | Verdict | Next |
 |---|---|
-| Pass (gate only) | `pk ship` (auto-shipped if `PIPEKIT_AUTO_SHIP=1`; otherwise hint only) |
-| Pass (gate + QA) | `pk ship` (auto-shipped if `PIPEKIT_AUTO_SHIP=1`; otherwise hint only) |
+| Pass (gate only) | `pk ship` (auto-shipped if invoked with `--auto-ship`; otherwise hint only) |
+| Pass (gate + QA) | `pk ship` (auto-shipped if invoked with `--auto-ship`; otherwise hint only) |
 | Partial | Read the per-AC table. Decide: amend with `/work` (if gap is real), or ship anyway with `git commit --amend` documenting the gap. Then `pk ship`. |
 | Fail (gate) | Fix the failing command, then re-run `/verify` (idempotent). |
 | Fail (QA) | Stop. Either: expand `/work <ID>` to address Unmet ACs; OR `pk delegate <ID> "the spec needs <X>"` to refine spec; OR override consciously with documented decision. |
 
-### Auto-ship rollover (Pass only, only when invoked by /work)
+### Auto-ship rollover (Pass only, only when invoked with --auto-ship)
 
-If the verdict is **Pass** AND the environment variable `PIPEKIT_AUTO_SHIP=1` is set (which `/work`'s Step 7 rollover sets before calling this skill), auto-invoke `pk ship`:
+If the verdict is **Pass** AND this skill was invoked with the `--auto-ship` argument (which `/work`'s Step 7 rollover passes via the Skill tool's `args` parameter), auto-invoke `pk ship`:
 
 1. Print: `✓ /verify Pass — auto-running pk ship`
 2. Run `pk ship` via bash. Use no flags — `pk ship` reads `Integration branch` from `method.config.md` to pick the destination, which gives `dev` for Piper-style multi-env projects and `main` for single-env projects (correct in both cases).
@@ -182,9 +182,11 @@ If the verdict is **Pass** AND the environment variable `PIPEKIT_AUTO_SHIP=1` is
 
 `--review` (antagonistic review) stays opt-in; the user runs `pk ship --review` separately if they want it.
 
-If `PIPEKIT_AUTO_SHIP` is unset (standalone `/verify` invocation), do NOT auto-ship on Pass. Print the hint and let the user pace.
+If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocation), do NOT auto-ship on Pass. Print the hint and let the user pace.
 
-**Partial / Fail with `PIPEKIT_AUTO_SHIP=1`:** still no auto-ship. Auto-ship is gated on Pass, not on the rollover signal alone. The signal only authorizes the *Pass branch* to ship; failures always pause for human attention.
+**Why an arg, not an env var:** env vars set in one Bash tool call don't propagate to subsequent Bash calls — each invocation is a fresh subshell. The only reliable cross-skill signal is the Skill tool's `args` parameter.
+
+**Partial / Fail with `--auto-ship`:** still no auto-ship. Auto-ship is gated on Pass, not on the arg alone. The arg only authorizes the *Pass branch* to ship; failures always pause for human attention.
 
 ## Failure model
 
