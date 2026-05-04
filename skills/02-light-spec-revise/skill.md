@@ -181,7 +181,7 @@ Do not proceed to Phase 6/7 until the user chooses.
 
 ### Phase 6 — Act on stalemate / override / manual choices
 
-- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `mcp__linear-server__save_comment` — the body MUST start with the literal text `@linear` (see `/light-spec` Phase 6 for why). Format:
+- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `mcp__linear-server__save_comment` — the body MUST start with the literal text `@linear`. Format:
 
   ```
   mcp__linear-server__save_comment({
@@ -189,6 +189,8 @@ Do not proceed to Phase 6/7 until the user chooses.
     body: "@linear this blocker has been addressed in the description — see the [section name] section where [specific line or text]. Please re-review."
   })
   ```
+
+  Note: this is a targeted nudge, not a full re-review. For a full re-review, exit this skill and run `pk spec-cycle PROJ-XXX` — that's the canonical re-trigger path.
 
 - **Override (option 3)**: append a note to the `## Agent Review` section of the description documenting that the latest verdict is stale. Include:
   - Date of the stale review being overridden.
@@ -246,7 +248,7 @@ Do **not** apply Non-Blocking Improvements silently or in bulk.
 
    Omit sub-sections that had zero entries.
 
-3. Offer to re-trigger the Spec Review Agent. If the user agrees, post via `mcp__linear-server__save_comment` with body starting `@linear` (see `/light-spec` Phase 6 for the full pattern).
+3. Do NOT re-trigger the Spec Review Agent from this skill. Re-triggering is owned by `pk spec-cycle`, which the caller (`/01-light-spec` Phase 6 cycle) invokes after this skill returns. If this skill was run standalone (not via the cycle), tell the user: _"➜ next: pk spec-cycle PROJ-XXX"_.
 
 ### Phase 10 — Next-step output
 

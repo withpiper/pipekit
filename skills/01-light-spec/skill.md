@@ -149,30 +149,63 @@ Before presenting to the user, audit every section:
    - `labels`: add `spec` label
 2. Store the issue ID for reference.
 
-### Phase 6 — Optional: Linear Agent Review
+### Phase 6 — Spec Review Cycle (automated)
 
-Ask the user: _"Want Linear's Spec Review Agent to review this before planning?"_
+Ask the user: _"Run Linear's Spec Review Agent now? (Y/n)"_ — default yes.
 
-If yes, post the trigger comment directly via `mcp__linear-server__save_comment`. The body **must start with the literal text `@linear`** — Linear's server resolves that token into a real mention of the Linear app user (displayName: `linear`, ID `1793645b-7fa5-4c31-8f9b-0c3685a9e185`), which fires the agent. Verified 2026-05-03 on RS-32.
+If they decline, skip to Phase 7. If yes, run the cycle below. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
 
-Tool call:
+**Cycle (max 3 passes):**
 
 ```
-mcp__linear-server__save_comment({
-  issueId: "PROJ-XXX",
-  body: "@linear review this spec using Spec Review Agent (v5).\n\nAssess whether it is safe and ready for VBW planning. Focus on planning readiness, scope clarity, authority/source of truth, edge cases, financial correctness if relevant, and decomposition readiness.\n\nReturn:\n\nVerdict: Pass or Revise\nRecommended Flag: Blocked, Quick Win, Spec: Needed, Spec: Pass, or Spec: Revise\nReadiness Score out of 10\nBlocking Issues\nNon-Blocking Improvements\nFast Path to Pass\nDecomposition Readiness: Yes or No\nFinal Recommendation\n\nThen update the issue description by replacing the existing ## Agent Review section with the new review."
-})
+pass = 1
+loop:
+  bash: pk spec-cycle PROJ-XXX
+  read pk's last "VERDICT: <X>" line and exit code
+
+  case VERDICT:
+    Pass       → done. pk has set the issue state to the configured
+                 "Spec approved state" (default: Approved). Tell the user:
+                   "✓ Spec approved on pass {pass}. ➜ next: pk branch PROJ-XXX"
+                 EXIT.
+
+    Revise     → invoke /02-light-spec-revise PROJ-XXX.
+
+                 Pass-aware confirmation:
+                   - pass == 1: auto-invoke. No prompt.
+                   - pass >= 2: show the agent's blocker count and readiness
+                     score, then prompt: "Continue to /02? [Y/n/o]"
+                       Y → invoke /02
+                       n → exit, leave issue in Specced
+                       o → invoke /02 with override directive (the user wants
+                           to override the agent verdict, not patch the spec)
+
+                 After /02 returns, increment pass and loop.
+
+    Stalemate  → pk's 3-comment guard fired before triggering. Tell the user:
+                   "Agent already reviewed 3x — likely stalemate. Run
+                    /02-light-spec-revise PROJ-XXX with the override path."
+                 EXIT.
+
+    Timeout    → no agent response in 5 min. Tell the user:
+                   "Agent didn't respond. Inspect Linear UI; rerun
+                    /01-light-spec PROJ-XXX when ready."
+                 EXIT.
+
+    Malformed  → tell the user the agent comment couldn't be parsed and
+                 point them at Linear UI. EXIT.
+
+  if pass == 3 and verdict was Revise:
+    Tell the user: "3 passes complete. /02 has the override path if the
+    agent is stuck — rerun /02-light-spec-revise PROJ-XXX."
+    EXIT.
+
+  pass += 1
 ```
 
-Tell the user: _"Trigger posted. The agent usually responds within a minute. Run `/light-spec-revise PROJ-XXX` to apply feedback surgically, or go straight to planning if the verdict is Pass."_
+**Why `pk spec-cycle` and not an inline MCP comment:** centralizes the Linear-agent trigger format in one place (so a Linear product change is one fix, not many), keeps the polling out of Claude's context window, and matches the rest of the `pk` CLI surface.
 
-**What does NOT work** (don't fall back to these):
-
-- URL-form mention (`https://linear.app/<workspace>/profiles/linear`) — renders as a plain hyperlink, no mention chip, agent does not fire.
-- `mcp__linear-server__save_issue` with `delegate: "Linear"` — errors: _"Delegating to Linear requires the Coding Agent to be enabled."_ (Coding Agent ≠ workspace AI skills.)
-- Editing the issue description — the agent does not auto-watch description changes.
-
-**Caveat:** if `@linear` text stops firing the agent in the future, suspect a Linear product change. Re-test both the URL-form and `@linear`-text paths before assuming either is permanently broken, and update this phase + the reference memory accordingly.
+**State preconditions:** `pk spec-cycle` refuses to run if the issue is not in the configured "Spec ready state" (default: `Specced`). Phase 5 of this skill sets that state, so the precondition holds on entry.
 
 ### Phase 7 — VBW Ingestion Pointer
 

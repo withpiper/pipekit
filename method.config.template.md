@@ -151,6 +151,8 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
 | **Linear API key env var** | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
 | **Migration dir** | e.g. `supabase/migrations/` | (none) | `/pr-security-review` (locate migrations to audit) |
+| **Spec ready state** | Linear state name | `Specced` | `pk spec-cycle` (refuses to trigger if issue is in any other state) |
+| **Spec approved state** | Linear state name | `Approved` | `pk spec-cycle` (transitions issue to this state on a Pass verdict) |
 
 ### Example (rs-vault)
 
