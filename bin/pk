@@ -943,14 +943,34 @@ cmd_log() {
   cat "$logs_dir/$latest"
 }
 
+cmd_init_bootstrap() {
+  # Stub: scaffold method.config.md by scouring the repo.
+  # Phases: detect → resolve → prompt → render → diff → write.
+  # Wired in step 2+. For now, just announce intent and exit.
+  local root="$1"
+  echo "── pk init (bootstrap) ──"
+  echo ""
+  echo "method.config.md not found. Bootstrap mode would:"
+  echo "  1. Detect repo, stack, scripts, tiers, strategy docs, vbw, linear"
+  echo "  2. Resolve detections into a proposed config"
+  echo "  3. Prompt only for ambiguous fields"
+  echo "  4. Render proposal from method.config.template.md"
+  echo "  5. Show unified diff and confirm"
+  echo "  6. Write method.config.md"
+  echo ""
+  echo "(detection not implemented yet — manual fallback below)"
+  echo "  cp $root/method.config.template.md $root/method.config.md"
+  echo "  \$EDITOR $root/method.config.md"
+  return 1
+}
+
 cmd_init() {
   local root
   root=$(pk_repo_root) || { echo "ERROR: not in a git repo" >&2; return 1; }
   local cfg="$root/method.config.md"
   if [ ! -f "$cfg" ]; then
-    echo "ERROR: method.config.md missing." >&2
-    echo "  Run sync-method.sh first, or copy method.config.template.md to method.config.md." >&2
-    return 1
+    cmd_init_bootstrap "$root"
+    return $?
   fi
   echo "── pk init ──"
   echo ""
