@@ -64,5 +64,27 @@ jq -r '
 
 echo ""
 echo "State file: $STATE"
+
+# Step 3: render draft.
+TEMPLATE="$ROOT/method.config.template.md"
+if [ ! -f "$TEMPLATE" ]; then
+  PIPEKIT_TEMPLATE="$(dirname "$HERE")/../method.config.template.md"
+  if [ -f "$PIPEKIT_TEMPLATE" ]; then
+    TEMPLATE="$PIPEKIT_TEMPLATE"
+  else
+    echo ""
+    echo "ERROR: method.config.template.md not found in $ROOT or pipekit source." >&2
+    echo "       Run scripts/sync-method.sh from pipekit first, or copy the template manually." >&2
+    exit 1
+  fi
+fi
+
+DRAFT="$STATE_DIR/method.config.md.draft"
+bash "$HERE/render.sh" "$TEMPLATE" "$STATE" > "$DRAFT"
+echo "Draft:      $DRAFT"
 echo ""
-echo "(steps 3-6 not implemented — render, diff, prompt, write come next)"
+echo "── render preview (first 40 lines of draft) ──"
+head -40 "$DRAFT"
+echo "..."
+echo ""
+echo "(steps 4-6 not implemented — diff, prompt, write come next)"

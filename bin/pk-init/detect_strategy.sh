@@ -15,7 +15,7 @@ for d in "docs/strategy" "Strategy" "strategy" "docs/Strategy"; do
 done
 
 if [ ${#found[@]} -gt 0 ]; then
-  arr=$(printf '%s\n' "${found[@]}" | jq -R . | jq -s .)
+  arr=$(printf '%s\n' "${found[@]}" | sort -u | jq -R . | jq -s .)
   emit_detected_array strategy_docs "$arr" "filesystem glob"
 else
   emit_missing strategy_docs "no strategy docs found (expected docs/strategy/*.md or Strategy/*.md)"
