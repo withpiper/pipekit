@@ -15,6 +15,7 @@
 #   pk verify               — light verify (run test cmd from method.config.md)
 #   pk promote              — dev → main batch promote (multi-tier projects)
 #   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
+#   pk spec-cycle <ID>      — trigger Spec Review Agent v5, poll, dispatch on verdict
 #
 # Linear access: GraphQL via $LINEAR_API_KEY (env var name configurable in
 # method.config.md → "Linear API key env var"). If absent, scripts that need
@@ -1057,6 +1058,156 @@ cmd_delegate() {
   pk_linear_comment "$id" "$body"
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# spec-cycle: trigger Linear Spec Review Agent v5, poll for verdict, dispatch
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Exit codes:
+#   0 — verdict parsed (Pass: state transitioned to "Approved" and printed
+#                       Revise: instruction printed for caller to invoke /02)
+#   1 — preflight failure (wrong state, stalemate cap hit, timeout, malformed)
+#   2 — infrastructure failure (Linear API error)
+#
+# stdout (machine-readable last line — callers may parse):
+#   VERDICT: Pass
+#   VERDICT: Revise
+#   VERDICT: Stalemate
+#   VERDICT: Timeout
+#   VERDICT: Malformed
+
+PK_LINEAR_AGENT_DISPLAY_NAME="linear"
+
+pk_linear_comments() {
+  local id="$1"
+  local q='query($id: String!) { issue(id: $id) { comments(orderBy: createdAt) { nodes { id body createdAt user { displayName } } } } }'
+  pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" \
+    | jq -r '.data.issue.comments.nodes // []'
+}
+
+pk_spec_cycle_agent_count() {
+  local id="$1"
+  pk_linear_comments "$id" \
+    | jq --arg name "$PK_LINEAR_AGENT_DISPLAY_NAME" \
+        '[.[] | select(.user.displayName == $name)] | length'
+}
+
+pk_spec_cycle_latest_agent_body_since() {
+  local id="$1" since="$2"
+  pk_linear_comments "$id" \
+    | jq -r --arg name "$PK_LINEAR_AGENT_DISPLAY_NAME" --arg since "$since" '
+        [.[] | select(.user.displayName == $name and .createdAt > $since)]
+        | sort_by(.createdAt) | last // empty | .body // empty
+      '
+}
+
+pk_spec_cycle_trigger_body() {
+  cat <<'EOF'
+@linear review this spec using Spec Review Agent (v5).
+
+Assess whether it is safe and ready for VBW planning. Focus on planning readiness, scope clarity, authority/source of truth, edge cases, financial correctness if relevant, and decomposition readiness.
+
+Return:
+
+Verdict: Pass or Revise
+Recommended Flag: Blocked, Quick Win, Spec: Needed, Spec: Pass, or Spec: Revise
+Readiness Score out of 10
+Blocking Issues
+Non-Blocking Improvements
+Fast Path to Pass
+Decomposition Readiness: Yes or No
+Final Recommendation
+
+Then update the issue description by replacing the existing ## Agent Review section with the new review.
+EOF
+}
+
+cmd_spec_cycle() {
+  local id="${1:-}"
+  if [ -z "$id" ]; then
+    echo "Usage: pk spec-cycle <ISSUE-ID>" >&2
+    echo "  Trigger Spec Review Agent v5, poll for verdict, dispatch." >&2
+    return 1
+  fi
+
+  local ready_state approved_state
+  ready_state=$(pk_config "Spec ready state" "Specced")
+  approved_state=$(pk_config "Spec approved state" "Approved")
+
+  # 1. Validate state.
+  local state_q='query($id: String!) { issue(id: $id) { id state { name } } }'
+  local resp current_state
+  resp=$(pk_linear_gql "$state_q" "$(jq -n --arg id "$id" '{id:$id}')") || return 2
+  current_state=$(echo "$resp" | jq -r '.data.issue.state.name // empty')
+  if [ -z "$current_state" ]; then
+    echo "ERROR: issue $id not found" >&2
+    return 1
+  fi
+  if [ "$current_state" != "$ready_state" ]; then
+    echo "ERROR: $id is in '$current_state', not '$ready_state'." >&2
+    echo "  Run /01-light-spec $id first to publish a spec." >&2
+    return 1
+  fi
+
+  # 2. Stalemate guard.
+  local prior_count
+  prior_count=$(pk_spec_cycle_agent_count "$id")
+  if [ "$prior_count" -ge 3 ]; then
+    echo "STALEMATE: $id has $prior_count prior agent reviews." >&2
+    echo "  Run /02-light-spec-revise $id and use the override path." >&2
+    echo "VERDICT: Stalemate"
+    return 1
+  fi
+
+  # 3. Capture cutoff timestamp and post trigger.
+  local since
+  since=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+  echo "→ posting Spec Review Agent v5 trigger on $id (review #$((prior_count + 1)) of 3)"
+  pk_linear_comment "$id" "$(pk_spec_cycle_trigger_body)" || return 2
+
+  # 4. Poll: 30s × 10 = 5 min cap.
+  local attempts=10 sleep_s=30 i=0 body=""
+  echo "→ polling for verdict (cap 5 min, every ${sleep_s}s)"
+  while [ $i -lt $attempts ]; do
+    sleep $sleep_s
+    body=$(pk_spec_cycle_latest_agent_body_since "$id" "$since")
+    if [ -n "$body" ]; then break; fi
+    i=$((i + 1))
+    printf "."
+  done
+  echo
+  if [ -z "$body" ]; then
+    echo "TIMEOUT: no agent response after 5 min. Check Linear UI." >&2
+    echo "VERDICT: Timeout"
+    return 1
+  fi
+
+  # 5. Parse Verdict line.
+  local verdict
+  verdict=$(echo "$body" | grep -iE '^Verdict:' | head -1 \
+    | sed -E 's/^Verdict:[[:space:]]*//I; s/[[:space:]]+$//')
+  case "$verdict" in
+    Pass|pass|PASS)
+      echo "✓ verdict: Pass"
+      pk_linear_set_state "$id" "$approved_state" || return 2
+      echo
+      echo "  ➜ next: pk branch $id"
+      echo "VERDICT: Pass"
+      ;;
+    Revise|revise|REVISE)
+      echo "✗ verdict: Revise"
+      echo
+      echo "  ➜ next: /02-light-spec-revise $id"
+      echo "VERDICT: Revise"
+      ;;
+    *)
+      echo "WARN: could not parse verdict from agent comment." >&2
+      echo "  Inspect the comment manually on Linear." >&2
+      echo "VERDICT: Malformed"
+      return 1
+      ;;
+  esac
+}
+
 cmd_install() {
   local force=false
   while [ $# -gt 0 ]; do
@@ -1143,6 +1294,7 @@ Subcommands:
   pk verify                       Run the project's pre-deploy gate
   pk promote [--stash|--take-remote]  dev → main batch promote (flags resolve local-edit conflicts with incoming dev)
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
+  pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)
   pk init                         Walkthrough config check + setup hints
   pk install [--force]            Symlink pk onto \$PATH (so 'pk' replaces './bin/pk')
@@ -1288,6 +1440,7 @@ main() {
     verify)   cmd_verify "$@" ;;
     promote)  cmd_promote "$@" ;;
     delegate) cmd_delegate "$@" ;;
+    spec-cycle) cmd_spec_cycle "$@" ;;
     doctor)   cmd_doctor "$@" ;;
     init)     cmd_init "$@" ;;
     install)  cmd_install "$@" ;;
