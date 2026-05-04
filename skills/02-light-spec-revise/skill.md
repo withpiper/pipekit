@@ -20,7 +20,7 @@ Apply **only** the fixes the agent asked for, preserving everything else. Detect
 ## When to Use
 
 - The spec has already been published (via `/light-spec` Phase 5).
-- The Spec Review Agent has posted at least one review comment (via the manual-paste trigger from `/light-spec` Phase 6).
+- The Spec Review Agent has posted at least one review comment (via the MCP trigger from `/light-spec` Phase 6).
 - You want to incorporate that feedback without rewriting the spec from scratch.
 
 ## When NOT to Use
@@ -181,13 +181,14 @@ Do not proceed to Phase 6/7 until the user chooses.
 
 ### Phase 6 — Act on stalemate / override / manual choices
 
-- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Output it for the user to **paste manually in Linear's UI** — do NOT post via `mcp__linear-server__save_comment` (plaintext `@linear` doesn't trigger the agent; see `/light-spec` Phase 6 for the full rationale). Format:
+- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `mcp__linear-server__save_comment` — the body MUST start with the literal text `@linear` (see `/light-spec` Phase 6 for why). Format:
 
-  > Open the Linear issue and paste this as a new comment. Type `@` and pick **Linear** from the picker.
-  >
-  > ```
-  > @linear this blocker has been addressed in the description — see the [section name] section where [specific line or text]. Please re-review.
-  > ```
+  ```
+  mcp__linear-server__save_comment({
+    issueId: "PROJ-XXX",
+    body: "@linear this blocker has been addressed in the description — see the [section name] section where [specific line or text]. Please re-review."
+  })
+  ```
 
 - **Override (option 3)**: append a note to the `## Agent Review` section of the description documenting that the latest verdict is stale. Include:
   - Date of the stale review being overridden.
@@ -245,7 +246,7 @@ Do **not** apply Non-Blocking Improvements silently or in bulk.
 
    Omit sub-sections that had zero entries.
 
-3. Offer to re-trigger the Spec Review Agent using the same manual-paste pattern as `/light-spec` Phase 6. Output the ready-to-paste trigger comment and remind the user: _"Paste in Linear's UI, not via MCP — the mention has to be a structured node for the agent to fire."_
+3. Offer to re-trigger the Spec Review Agent. If the user agrees, post via `mcp__linear-server__save_comment` with body starting `@linear` (see `/light-spec` Phase 6 for the full pattern).
 
 ### Phase 10 — Next-step output
 
@@ -276,7 +277,6 @@ The skill MUST NEVER:
 - Rewrite sections the agent did not flag.
 - Delete user commentary from the `## Agent Review` section.
 - Apply Non-Blocking Improvements without explicit per-item user approval.
-- Post `@linear` trigger comments via `mcp__linear-server__save_comment` (the MCP cannot create structured mention nodes; see `/light-spec` Phase 6).
 - Proceed past Phase 5 without user choice.
 
 ## Related Skills
