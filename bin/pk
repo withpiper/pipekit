@@ -1133,16 +1133,18 @@ pk_spec_cycle_trigger_body() {
 
 Assess whether it is safe and ready for VBW planning. Focus on planning readiness, scope clarity, authority/source of truth, edge cases, financial correctness if relevant, and decomposition readiness.
 
-Return:
+**REQUIRED: Your response must begin with exactly one of these two lines — nothing before it, no extra words:**
+Verdict: Pass
+Verdict: Revise
 
-Verdict: Pass or Revise
+Then continue with:
 Recommended Flag: Blocked, Quick Win, Spec: Needed, Spec: Pass, or Spec: Revise
-Readiness Score out of 10
-Blocking Issues
-Non-Blocking Improvements
-Fast Path to Pass
+Readiness Score: <N>/10
+Blocking Issues: <list or "None">
+Non-Blocking Improvements: <list or "None">
+Fast Path to Pass: <1-2 sentences or "N/A">
 Decomposition Readiness: Yes or No
-Final Recommendation
+Final Recommendation: <1-2 sentences>
 
 Then update the issue description by replacing the existing ## Agent Review section with the new review.
 EOF
