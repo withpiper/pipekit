@@ -143,7 +143,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 
 | Key | Value | Default | Used by |
 |-----|-------|---------|---------|
-| **Backend** | `vbw` \| `native` | `vbw` | `/work` — chooses agent dispatch path |
+| **Backend** | `vbw` \| `native` \| `auto` | `vbw` | `/work` — chooses agent dispatch path. `auto` routes per plan complexity: ≤3 files + no migration → native, otherwise → vbw |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` (auto-spawns QA subagent if `true`) |
@@ -168,7 +168,7 @@ Ship environments: main
 ### Example (Piper)
 
 ```
-Backend: vbw
+Backend: auto
 Integration branch: dev
 Promote to main: true
 Require QA review: true
