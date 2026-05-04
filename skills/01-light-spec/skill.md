@@ -151,9 +151,9 @@ Before presenting to the user, audit every section:
 
 ### Phase 6 — Spec Review Cycle (automated)
 
-Ask the user: _"Run Linear's Spec Review Agent now? (Y/n)"_ — default yes.
+Enter the cycle automatically once Phase 5 publishes. Do **not** prompt the user before pass 1 — the cycle is the whole point of `/01-light-spec`. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
 
-If they decline, skip to Phase 7. If yes, run the cycle below. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
+The user can opt out only by interrupting (Ctrl-C). Confirmation prompts appear on passes 2 and 3 inside the loop below — that is the designed bail-out point.
 
 **Cycle (max 3 passes):**
 
