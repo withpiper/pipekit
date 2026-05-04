@@ -943,14 +943,41 @@ cmd_log() {
   cat "$logs_dir/$latest"
 }
 
+cmd_init_bootstrap() {
+  # Scaffold or update method.config.md via the pk-init pipeline:
+  # detect → prompt → render → review → confirm → write.
+  local root="$1"
+  shift
+  local main_sh
+  main_sh="$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/pk-init/main.sh"
+  if [ ! -x "$main_sh" ]; then
+    echo "ERROR: pk-init/main.sh not found at $main_sh" >&2
+    return 1
+  fi
+  exec "$main_sh" "$root" "$@"
+}
+
 cmd_init() {
   local root
   root=$(pk_repo_root) || { echo "ERROR: not in a git repo" >&2; return 1; }
   local cfg="$root/method.config.md"
+
+  # --update: re-run detection against existing config.
+  for arg in "$@"; do
+    if [ "$arg" = "--update" ]; then
+      if [ ! -f "$cfg" ]; then
+        echo "ERROR: --update requires existing method.config.md (none found)." >&2
+        echo "       Run 'pk init' (no flag) to bootstrap first." >&2
+        return 1
+      fi
+      cmd_init_bootstrap "$root" --update
+      return $?
+    fi
+  done
+
   if [ ! -f "$cfg" ]; then
-    echo "ERROR: method.config.md missing." >&2
-    echo "  Run sync-method.sh first, or copy method.config.template.md to method.config.md." >&2
-    return 1
+    cmd_init_bootstrap "$root"
+    return $?
   fi
   echo "── pk init ──"
   echo ""
