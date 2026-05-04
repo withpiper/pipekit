@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
-# pk-init/main.sh — bootstrap orchestrator (step 2: detect-only).
+# pk-init/main.sh — bootstrap orchestrator.
 #
-# Phases (this file grows over steps 2-6):
-#   2. Detect → state.json + dump      ← we are here
-#   3. Resolve + render
-#   4. Diff + confirm
-#   5. Prompt for needs_input
-#   6. Write
+# Flow: detect → prompt → render → review → confirm → write.
+#
+# Modes:
+#   bootstrap (default): when method.config.md is missing. Renders draft from
+#                        method.config.template.md.
+#   --update:            when method.config.md exists. Re-runs detection,
+#                        renders against the existing config as baseline, and
+#                        lets the user merge in detection improvements.
 set -euo pipefail
 
-ROOT="${1:?usage: main.sh <repo_root>}"
+ROOT=""
+MODE="bootstrap"
+for arg in "$@"; do
+  case "$arg" in
+    --update) MODE="update" ;;
+    --*) echo "unknown flag: $arg" >&2; exit 2 ;;
+    *) [ -z "$ROOT" ] && ROOT="$arg" ;;
+  esac
+done
+[ -n "$ROOT" ] || { echo "usage: main.sh <repo_root> [--update]" >&2; exit 2; }
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-# Per-run state dir; survives the run for inspection if --keep-state.
 STATE_DIR="${TMPDIR:-/tmp}/pk-init-$$"
 mkdir -p "$STATE_DIR"
 STATE="$STATE_DIR/state.json"
@@ -29,10 +40,9 @@ DETECTORS=(
 )
 
 echo "── pk init: detect ──"
-echo "(state dir: $STATE_DIR)"
+echo "(state dir: $STATE_DIR  mode: $MODE)"
 echo ""
 
-# Run each detector; collect fragments.
 fragments=()
 for d in "${DETECTORS[@]}"; do
   frag="$STATE_DIR/${d%.sh}.json"
@@ -40,14 +50,13 @@ for d in "${DETECTORS[@]}"; do
     fragments+=("$frag")
   else
     echo "  ✗ $d failed (see $STATE_DIR/${d%.sh}.err)" >&2
-    fragments+=("$frag")  # may be partial/empty; tolerated
+    fragments+=("$frag")
   fi
 done
 
-# Merge.
 jq -s 'add // {}' "${fragments[@]}" > "$STATE"
 
-# Pretty-print summary.
+# Initial scan summary (compact one-liner per field).
 echo "Detected fields:"
 jq -r '
   to_entries
@@ -65,50 +74,72 @@ jq -r '
 echo ""
 echo "State file: $STATE"
 
-# Step 5: prompt for needs_input fields. Mutates state.json in place.
+# Prompt for needs_input fields. Mutates state.json in place.
 bash "$HERE/prompt.sh" "$STATE"
 
-# Step 3: render draft.
-TEMPLATE="$ROOT/method.config.template.md"
-if [ ! -f "$TEMPLATE" ]; then
-  PIPEKIT_TEMPLATE="$(dirname "$HERE")/../method.config.template.md"
-  if [ -f "$PIPEKIT_TEMPLATE" ]; then
-    TEMPLATE="$PIPEKIT_TEMPLATE"
-  else
-    echo ""
-    echo "ERROR: method.config.template.md not found in $ROOT or pipekit source." >&2
-    echo "       Run scripts/sync-method.sh from pipekit first, or copy the template manually." >&2
+# Locate template (bootstrap) or existing config (update) as baseline.
+TARGET="$ROOT/method.config.md"
+if [ "$MODE" = "update" ]; then
+  if [ ! -f "$TARGET" ]; then
+    echo "ERROR: --update requires existing method.config.md at $TARGET" >&2
     exit 1
+  fi
+  BASELINE="$TARGET"
+else
+  BASELINE="$ROOT/method.config.template.md"
+  if [ ! -f "$BASELINE" ]; then
+    PIPEKIT_TEMPLATE="$(dirname "$HERE")/../method.config.template.md"
+    if [ -f "$PIPEKIT_TEMPLATE" ]; then
+      BASELINE="$PIPEKIT_TEMPLATE"
+    else
+      echo ""
+      echo "ERROR: method.config.template.md not found in $ROOT or pipekit source." >&2
+      echo "       Run scripts/sync-method.sh from pipekit first, or copy the template manually." >&2
+      exit 1
+    fi
   fi
 fi
 
 DRAFT="$STATE_DIR/method.config.md.draft"
-bash "$HERE/render.sh" "$TEMPLATE" "$STATE" > "$DRAFT"
-echo "Draft:      $DRAFT"
+bash "$HERE/render.sh" "$BASELINE" "$STATE" > "$DRAFT"
 echo ""
+echo "Draft:    $DRAFT"
+echo "Target:   $TARGET"
 
-# Step 4: diff + confirm.
-echo "── diff (template → draft) ──"
-bash "$HERE/diff.sh" "$TEMPLATE" "$DRAFT"
-echo ""
-
-TARGET="$ROOT/method.config.md"
-echo "Target:     $TARGET"
+# Review table (high-level summary).
+bash "$HERE/summary.sh" "$STATE"
 echo ""
 
 while true; do
-  printf "Write? [y]es  [e]dit draft in \$EDITOR  [n]o, abort: "
+  printf "Write? [y]es  [d]iff (full)  [e]dit draft in \$EDITOR  [n]o, abort: "
   read -r choice
   case "$choice" in
     y|Y)
-      echo "(step 6 not implemented — would write $DRAFT → $TARGET)"
+      if [ -e "$TARGET" ] && [ "$MODE" != "update" ]; then
+        echo "ERROR: $TARGET already exists. Use 'pk init --update' to merge." >&2
+        exit 1
+      fi
+      cp "$DRAFT" "$TARGET"
+      bytes=$(wc -c < "$TARGET" | tr -d ' ')
+      echo ""
+      echo "✓ Wrote $bytes bytes → $TARGET"
+      if [ "$MODE" = "bootstrap" ]; then
+        echo ""
+        echo "Next: pk init   (post-config health check)"
+      fi
       break
+      ;;
+    d|D)
+      echo ""
+      echo "── diff (baseline → draft) ──"
+      bash "$HERE/diff.sh" "$BASELINE" "$DRAFT"
+      echo ""
       ;;
     e|E)
       "${EDITOR:-vi}" "$DRAFT"
       echo ""
-      echo "── diff (template → draft, post-edit) ──"
-      bash "$HERE/diff.sh" "$TEMPLATE" "$DRAFT"
+      echo "── diff (baseline → draft, post-edit) ──"
+      bash "$HERE/diff.sh" "$BASELINE" "$DRAFT"
       echo ""
       ;;
     n|N|"")
