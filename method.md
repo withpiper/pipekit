@@ -211,6 +211,7 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 **Tools:** `/verify`, `pk ship`, optional `/pr-fix` and `/pr-security-review`, Human
 
 - **`/verify`** runs the pre-deploy gate from `method.config.md` (types + lint + test). Returns Pass / Partial / Fail with a per-AC table. If `Require QA review: true`, also spawns the QA subagent for goal-backward verification.
+- **Auto-rollover**: `/work` auto-invokes `/verify` on successful completion (no prompt). On Pass, `/verify` auto-invokes `pk ship` (gated by the `PIPEKIT_AUTO_SHIP=1` env var that `/work` sets — standalone `/verify` calls do not auto-ship). On Partial / Fail, the rollover stops with the per-AC table; the user fixes and re-runs. Aborts inside `/work` skip the rollover entirely.
 - **`pk ship`** pushes the feature branch, opens the PR against the integration branch from config, and transitions Linear → UAT.
 - **`pk ship --review`** posts a Linear comment flagging review-in-flight and prints the antagonistic reviewer invocation. The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention.
 - **`/pr-security-review`** is the right tool for migrations / RLS / SECURITY DEFINER / auth surface (use instead of, or alongside, the generic reviewer).

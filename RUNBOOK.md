@@ -74,8 +74,9 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │     • atomic commits, gate-aware                         │
   │     • --deep adds spec-validator + plan-review +         │
   │       security-review subagents                          │
+  │     • on clean exit → auto-invokes [4] /verify           │
   └──────────────────────────────────────────────────────────┘
-       │
+       │ (auto on /work success; aborts skip the rollover)
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [4] Verify                                               │
@@ -83,8 +84,11 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │     • runs § Pre-Deploy Gate from method.config.md       │
   │     • if Require QA review=true: spawns QA subagent      │
   │     • returns Pass / Partial / Fail with per-AC table    │
+  │     • on Pass + auto-flow → auto-invokes [5] pk ship     │
+  │     • on Partial/Fail → STOP (user fixes and reruns)     │
   └──────────────────────────────────────────────────────────┘
-       │
+       │ (auto on Pass when invoked by /work; standalone
+       │  /verify just prints the hint)
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [5] Ship   (still in worktree, still on feature branch)  │
@@ -92,6 +96,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │     • push (idempotent)                                  │
   │     • gh pr create against integration branch            │
   │     • Linear: Building → UAT (or → In Review)            │
+  │     • on push/gh failure → STOP, surface error, no retry │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
