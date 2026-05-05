@@ -343,6 +343,33 @@ For integration changes — if the spec promised "X will replace Y" or "this upd
 - **Grep the integration site** to verify the swap landed. Example: if the spec says "wire `<NewComponent>` into `<page.tsx>`", grep for both `<NewComponent>` (should be present) and `<OldComponent>` (should be absent).
 - **Don't ship if the predecessor's promised handoff is still un-integrated.** That's the RS-64 miss in concrete form.
 
+### Self-reference grep — RUN THESE EXACTLY (do not paraphrase)
+
+Before printing the hand-off, run **all three** of the following commands and surface every match in the hand-off summary. Do not skip, summarize, or "trust" the spec instead. Predecessors leave placeholder branches that the spec cannot enumerate; the only reliable way to find them is to grep your own ticket ID in the codebase.
+
+```bash
+# 1. Every reference to the current ticket — placeholders, TODOs, scaffolded handoffs
+git grep -nE '<ISSUE-ID>' -- 'src/' ':(exclude)*.test.*' ':(exclude)*.md'
+
+# 2. Placeholder-shape strings — coming soon, NOT_IMPLEMENTED, 501, awaiting, TODO
+git grep -nE '501|NOT_IMPLEMENTED|coming soon|placeholder|awaiting|TODO' -- 'src/' ':(exclude)*.test.*'
+
+# 3. Every reference to predecessor ticket IDs called out in the spec body
+git grep -nE '<PREDECESSOR-IDS>' -- 'src/' ':(exclude)*.test.*'
+```
+
+(Substitute `<ISSUE-ID>` with the current ticket ID, e.g. `RS-29`; substitute `<PREDECESSOR-IDS>` with any ticket IDs the spec body references in `<issue id=…>` blocks or "RS-NN will replace…" prose. Adjust the path scope from `src/` to whatever the project's source root is — read it from `method.config.md` if needed.)
+
+**Rule: if any match exists *outside* the file you just edited, you have not completed the integration. Do not declare complete.** Either:
+1. Make the change to remove the placeholder/integration site, or
+2. Surface the match explicitly in the hand-off summary as a known un-integrated site, name *why* it's intentional to leave it, and let the user decide.
+
+Why this is mandatory: RS-29 (rs-vault, 2026-05-05) shipped a working JPG export route, all 763 tests passing, full pre-deploy gate green, Vercel preview returning valid bytes — but the report builder UI still had a hardcoded `if (res.status === 501) /* show "coming soon (RS-29)" */` branch from RS-27. The placeholder hint literally said "until RS-29 ships" and `/work` missed it because Step 6.5 was prose, not a command. A single `git grep -n RS-29 src/` would have surfaced the integration site in 30 seconds.
+
+### Pinned-broken-behavior tests
+
+Tests whose names contain the *current* ticket's ID — especially predecessor tests that asserted the placeholder behavior was correct — are **almost always known-edit targets**, not bystanders. A green test for a placeholder is a TODO disguised as a check. When grep #1 above surfaces test names, do not read "the test passes" as confirmation; read it as "the test pins the world before this ticket shipped, and ought to be updated to assert the new behavior."
+
 If something fails this self-check, **surface it in the hand-off summary** — don't paper over. The user paces; they decide whether to ship-with-known-gap or revise.
 
 ### Anti-rationalization guard
