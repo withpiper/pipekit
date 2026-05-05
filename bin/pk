@@ -793,7 +793,11 @@ cmd_done() {
   local merge_base commits diffstat pr_url_done
   merge_base=$(git merge-base "$current" "$(pk_integration_branch)" 2>/dev/null || echo "")
   if [ -n "$merge_base" ]; then
-    commits=$(git log "${merge_base}..${current}" --pretty=format:'- %h %s' 2>/dev/null | head -20)
+    # Use awk instead of `head -20` — awk reads the full stream so git log
+    # never gets SIGPIPE. Under `set -o pipefail`, head's early-exit kills
+    # git log mid-stream and the pipeline returns 141, silently aborting
+    # cmd_done with no output (RS-80 in rs-vault, 2026-05-05).
+    commits=$(git log "${merge_base}..${current}" --pretty=format:'- %h %s' 2>/dev/null | awk 'NR<=20')
     diffstat=$(git diff --shortstat "${merge_base}..${current}" 2>/dev/null | sed 's/^[[:space:]]*//')
   fi
   pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
