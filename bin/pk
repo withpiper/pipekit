@@ -878,7 +878,26 @@ cmd_verify() {
     return 1
   fi
   echo "Running pre-deploy gate..."
-  echo "$cmd" | bash
+  echo "$cmd" | bash || return $?
+
+  # Optional: self-reference check (catches RS-29-style integration misses
+  # where the gate is green but a predecessor's placeholder still references
+  # the current ticket in an un-touched file). Opt-in via:
+  #   | **Self-reference check** | `enabled` |
+  # in method.config.md. The script lives in pipekit and gets synced.
+  local sr_flag root sr_script
+  sr_flag=$(pk_config "Self-reference check" "disabled")
+  if [ "$sr_flag" = "enabled" ]; then
+    root=$(pk_repo_root)
+    sr_script="$root/scripts/check-no-self-references.sh"
+    if [ -x "$sr_script" ]; then
+      echo ""
+      bash "$sr_script" || return $?
+    else
+      echo "  ⓘ Self-reference check enabled but script not found at $sr_script" >&2
+      echo "    Run scripts/sync-method.sh from pipekit to install it." >&2
+    fi
+  fi
 }
 
 cmd_promote() {
