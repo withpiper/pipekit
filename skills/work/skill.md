@@ -368,8 +368,9 @@ Once execution exits successfully — all tasks committed, no aborts, no deviati
 
 - `/work` was interrupted or aborted mid-execution (Ctrl-C, abort verdict, agent failure)
 - A deviation was raised that the user has not yet resolved
-- The user's last intent was an explicit stop (e.g., responding "stop" to a prompt)
-- A Step 6.5 behavioral gap was surfaced that the user clearly wants to resolve before verification (e.g. "let me check this manually first")
+- The user's last intent was an explicit stop — a stop signal **the user typed**, not one the agent self-issued. Examples: "stop", "let me check this manually first", "hold on", "wait", "pause", or any `--no-rollover` flag on the original `/work` invocation.
+
+**Do NOT skip** just because Step 6.5 surfaced behavioral or visual gaps. `/verify` is idempotent and read-only — running it does not prevent later human/browser checks. The Step 6.5 gap list is *advisory output*, not a pause signal. Pre-emptively skipping `/verify` because the agent feels cautious adds a manual step against the user's expectation of the v2 loop. If the user wants to pause, they will tell you; the rule is "user-driven stop, not agent-driven stop."
 
 Otherwise:
 
