@@ -18,25 +18,45 @@ You are a focused work driver. Given a Linear issue ID, you read its spec, plan 
 
 ## Required preconditions
 
-1. You are inside a worktree on a feature branch (not `dev`, not `main`, not `beta`, not `master`). Check with `git branch --show-current`. If on an integration branch, refuse with: `Run pk branch <ID> first to create the worktree.`
-2. The issue ID is passed as an argument or inferred from the current branch name (regex `[A-Z]+-[0-9]+`).
+1. Either (a) you are inside a worktree on a feature branch (not `dev`, `main`, `beta`, or `master`), OR (b) `<ISSUE-ID>` is passed as an argument so `/work` can auto-branch into a fresh worktree.
+2. If neither (a) nor (b) holds, refuse.
 3. `method.config.md` is readable in the repo root.
 
-## Step 0 — Verify preconditions
+## Step 0 — Verify or create the worktree
 
-Run:
+`/work` auto-branches when invoked from an integration branch with an explicit `<ISSUE-ID>` — creating worktree + branch via `pk branch` and `cd`-ing into it before continuing. This removes the manual `pk branch` step that v2.0–v2.2 required.
 
 ```bash
 CURRENT=$(git branch --show-current)
+
 case "$CURRENT" in
-  dev|main|master|beta) echo "ERROR: /work must run on a feature branch. Run 'pk branch <ID>' first." >&2; exit 1 ;;
+  dev|main|master|beta)
+    # Integration branch — auto-branch path.
+    if [ -z "$1" ]; then
+      echo "ERROR: /work invoked from integration branch '$CURRENT' with no <ISSUE-ID>." >&2
+      echo "Pass an ID (e.g. /work RS-123) or run 'pk branch <ID>' yourself first." >&2
+      exit 1
+    fi
+    ISSUE="$1"
+    echo "→ Auto-branching: pk branch $ISSUE"
+    pk branch "$ISSUE" || { echo "ERROR: pk branch failed for $ISSUE" >&2; exit 1; }
+    # pk branch creates the worktree and prints its path on the last line.
+    # Resolve and cd into it so the rest of /work runs in the right place.
+    WORKTREE=$(git worktree list --porcelain | awk -v id="$ISSUE" '
+      /^worktree / { wt=$2 }
+      /^branch / && index($0, id) { print wt; exit }
+    ')
+    [ -z "$WORKTREE" ] && { echo "ERROR: could not locate worktree for $ISSUE" >&2; exit 1; }
+    cd "$WORKTREE" || exit 1
+    CURRENT=$(git branch --show-current)
+    ;;
 esac
 ```
 
-If `<ISSUE-ID>` not passed, extract from `$CURRENT`:
+If `<ISSUE-ID>` not passed and `$CURRENT` is a feature branch, extract from `$CURRENT`:
 
 ```bash
-ISSUE=$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)
+ISSUE=${ISSUE:-$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)}
 [ -z "$ISSUE" ] && { echo "ERROR: no issue ID in branch name and none provided." >&2; exit 1; }
 ```
 
@@ -79,7 +99,7 @@ Use the Linear MCP tool `mcp__linear-server__get_issue` with the issue ID. Captu
 
 - `title`
 - `description` (the spec body)
-- `state.name` (must be `In Progress` or `Building`; if `Approved`, refuse — the user forgot `pk branch`)
+- `state.name` (expected: `In Progress` or `Building`. `Approved` is also fine — Step 0's auto-branch will have transitioned it. If `Backlog`/`Todo` and Step 0 did not just auto-branch, refuse.)
 - `labels`
 
 Validate the description contains either `## Light Spec` or `## Acceptance Criteria`. If neither:
