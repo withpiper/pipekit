@@ -49,6 +49,7 @@ These skills work across any project that follows the method. They read `method.
 | `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
 | `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary | Stage 3: Verify + Ship |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
+| `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
 | `pk done <ID>` | Post-merge cleanup: worktree+branch, commits to Linear, → Done | Stage 4: Release |
 | `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` | Stage 4: Release |
 | `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |

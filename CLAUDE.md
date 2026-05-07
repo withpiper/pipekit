@@ -102,6 +102,7 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 | `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status, dependencies against reality. Read-only. |
 | `/pr-fix` | Precision PR review across 4 dimensions with confidence-gated findings, interactive discussion, and targeted remediation. |
 | `/pr-security-review` | Security-focused antagonistic PR review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, auth, and Server Actions on privileged tables. |
+| `/pk-bug` | Bug pipeline — intake, reproduce, regression-test-first, fix, ship, postmortem. Wraps `/work` and `pk ship` with discipline gates. |
 | `/pipekit-help` | Reads project state, recommends the next pipeline step. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what was actually built. |
 | `/release-changelog` | Generates draft CHANGELOG entry from git commits between tags. |
