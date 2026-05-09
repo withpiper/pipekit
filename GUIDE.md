@@ -985,10 +985,10 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 | Source (method repo) | Destination (project) |
 |---------------------|----------------------|
 | `skills/*/` | `.claude/skills/*/` |
-| `sop/` | `method/sop/` |
-| `templates/` | `method/templates/` |
-| `method.md` | `method/method.md` |
-| `STARTUP.md` | `method/STARTUP.md` |
+| `sop/` | `pipekit/sop/` |
+| `templates/` | `pipekit/templates/` |
+| `method.md` | `pipekit/method.md` |
+| `STARTUP.md` | `pipekit/STARTUP.md` |
 
 ### What Never Gets Synced
 
@@ -1183,7 +1183,7 @@ Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-crea
 
 ## Portable Rule Templates
 
-The method includes rule templates in `templates/rules/` that consuming projects sync into their `.claude/rules/` directory. These are auto-loaded every session by Claude Code under the **hub-and-spoke model** (CLAUDE.md hub → rules/ auto-loaded → method/sop/ demand-loaded).
+The method includes rule templates in `templates/rules/` that consuming projects sync into their `.claude/rules/` directory. These are auto-loaded every session by Claude Code under the **hub-and-spoke model** (CLAUDE.md hub → rules/ auto-loaded → pipekit/sop/ demand-loaded).
 
 Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames. Three canonical topic files ship from Pipekit:
 

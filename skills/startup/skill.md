@@ -535,7 +535,7 @@ Write `Strategy/DesignDirection.md` with their answers. This doc is read by deve
 
 ### Step 6 — Method Sync
 
-**Check:** Does `method/` directory exist? Are skills in `.claude/skills/`?
+**Check:** Does `pipekit/` directory exist? Are skills in `.claude/skills/`?
 - If yes: _"Method already synced. Re-sync or skip?"_
 - If no: Copy and run sync script
 
@@ -618,7 +618,7 @@ Verify these exist. If missing, re-run `bash scripts/sync-method.sh` or copy fro
 If `CLAUDE.md` does not exist at the project root, copy it from `templates/CLAUDE.md.template` and fill in placeholders with values from `method.config.md`:
 
 ```bash
-cp method/templates/CLAUDE.md.template CLAUDE.md
+cp pipekit/templates/CLAUDE.md.template CLAUDE.md
 ```
 
 Then fill in:
@@ -714,6 +714,6 @@ Next steps:
   2. Remove the unchosen option's configuration blocks (environment tables, promotion skills, workflow details, etc.) so they don't look active.
   3. If the unchosen option has reference value, move it to a collapsed section at the bottom: `<!-- Not chosen: three-tier --> ... <!-- /Not chosen -->` — but only if it adds value. When in doubt, remove it entirely.
   This applies to `method.config.md`, `CLAUDE.md`, strategy docs, and any file where alternatives were presented. A document should never look like two conflicting decisions are both active.
-- **App code lives in `src/`.** All application code (framework, components, API routes, etc.) goes in a `src/` subdirectory. The project root is reserved for Pipekit files (`method.config.md`, `concept-brief.md`, `project-definition.md`, `Strategy/`, `.vbw-planning/`, `method/`, `.claude/`), config files (`.gitignore`, `.env`, `package.json`, `tsconfig.json`), and scripts. This keeps Pipekit's methodology layer cleanly separated from the application. When initializing a framework (Next.js, Remix, etc.), configure it to use `src/` as the source directory.
+- **App code lives in `src/`.** All application code (framework, components, API routes, etc.) goes in a `src/` subdirectory. The project root is reserved for Pipekit files (`method.config.md`, `concept-brief.md`, `project-definition.md`, `Strategy/`, `.vbw-planning/`, `pipekit/`, `.claude/`), config files (`.gitignore`, `.env`, `package.json`, `tsconfig.json`), and scripts. This keeps Pipekit's methodology layer cleanly separated from the application. When initializing a framework (Next.js, Remix, etc.), configure it to use `src/` as the source directory.
 - **Resumable.** The tracker + artifact checks make `/startup` fully resumable across sessions. A new session reads the tracker and picks up exactly where the last one stopped.
 - **Emit inline `➜ Next:` after every step.** When completing any step (including mid-`/startup` step transitions), emit an inline `➜ Next:` line in your terminal output with the next command the user should run and why. Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear once the foundation contract is satisfied.

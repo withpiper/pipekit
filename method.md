@@ -528,7 +528,7 @@ Pipekit syncs upstream content via `scripts/sync-method.sh`, which overwrites `s
 .claude/overrides/
   skills/<name>/skill.md        # full-file replacement for a synced skill
   sop/<file>.md                 # full-file replacement for a synced SOP
-  method.md.patch               # unified diff applied to method/method.md
+  method.md.patch               # unified diff applied to pipekit/method.md
   MANIFEST.md                   # human-curated list (what + why)
   .upstream-snapshot/           # managed by sync; do not edit
 ```

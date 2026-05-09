@@ -7,7 +7,7 @@ Files in this directory are **auto-loaded into every Claude Code session** via t
 ```
 CLAUDE.md            — project hub + routing pointers (~200 lines)
   .claude/rules/*    — auto-loaded enforceable constraints (per-topic files)
-  method/sop/*       — demand-loaded deep reference (SQL templates, walkthroughs)
+  pipekit/sop/*       — demand-loaded deep reference (SQL templates, walkthroughs)
 ```
 
 CLAUDE.md points to rules for "how do I build correctly here?" Rules point to SOPs for "how do I do this specific complex thing?"
@@ -22,7 +22,7 @@ CLAUDE.md points to rules for "how do I build correctly here?" Rules point to SO
 ## What does NOT go in rules/
 
 - Feature-specific documentation — that's SOPs or inline docs
-- Historical context or decision logs — that's `method/decisions/` ADRs
+- Historical context or decision logs — that's `pipekit/decisions/` ADRs
 - Tutorial-style guides — that's SOPs
 - Anything longer than ~100 lines — split by topic
 
