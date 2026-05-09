@@ -665,7 +665,7 @@ feature/* → pk ship (PR to dev) → pk promote beta (PR to beta) → pk promot
 - `pk ship` opens the feature → dev PR (Linear → UAT)
 - `pk promote beta` opens dev → beta and transitions the issue → Released
 - `pk promote main` opens beta → main and transitions the issue → Done
-- After main merge, `pk done <ID>` transitions the issue to Done
+- `pk done <ID>` (whenever; cleanup-only, no state change)
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
@@ -783,7 +783,7 @@ If you want time-boxed sprints with capacity tracking, map phases to Linear Cycl
 
 ### Phase State Tracking
 
-Phases are tracked in `.vbw-planning/PHASES.md`, not in Linear. Linear tracks individual issue status (Needs Spec, Building, UAT, Done). PHASES.md tracks which issues belong to which phase and the phase's overall progress.
+Phases are tracked in `.vbw-planning/PHASES.md`, not in Linear. Linear tracks individual issue status (Needs Spec, Building, UAT, Released, Done). PHASES.md tracks which issues belong to which phase and the phase's overall progress.
 
 ---
 

@@ -28,8 +28,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR (Linear → UAT). `pk promote` opens the `dev` → `main` PR.
-**Linear transitions:** `pk ship` → UAT; `pk done` (post-`main`-merge) → Done.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR (Linear → UAT). `pk promote main` (or `pk promote` with no arg, since only one hop exists) opens the `dev` → `main` PR.
+**Linear transitions:** `pk ship` → UAT; `pk promote main` → Done (optimistic, at PR-open). `pk done` is cleanup-only — it does NOT transition state.
 
 ### Three-Tier (dev → beta → main)
 
@@ -50,8 +50,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR. `pk promote` walks the chain (`dev` → `beta`, `beta` → `main`) per `Ship environments` in `method.config.md`.
-**Linear transitions:** `pk ship` → UAT; merge to `beta` keeps issue in UAT; `pk done` (post-`main`-merge) → Done.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR. `pk promote <env>` walks the chain one hop per invocation (`pk promote beta`, then `pk promote main` after the beta merge) per `Ship environments` in `method.config.md`.
+**Linear transitions:** `pk ship` → UAT; `pk promote beta` → Released; `pk promote main` → Done. All transitions optimistic at PR-open. `pk done` is cleanup-only — it does NOT transition state.
 
 ### Branch Naming (both models)
 
@@ -197,16 +197,17 @@ For migrations / RLS / SECURITY DEFINER / auth, use `/pr-security-review` instea
 PR is reviewed, approved, and merged (rebase or merge-commit per § Merge Strategy by Hop). Feature available on dev. Vercel preview is automatic; for Supabase projects, GitHub Actions `db-pr-check.yml` validates migrations on PR open and `db-migrate.yml` applies them on `main` merge.
 
 ```
-pk done <ID>           # cleanup worktree+branch, post commits/diffstat to Linear, → Done (after main merge)
+pk done <ID>           # cleanup worktree+branch, post commits/diffstat to Linear (no state change)
 ```
 
 ### Step 6: Promote to Production
 
 ```
-pk promote             # opens dev → main (two-tier) or dev → beta → main (three-tier) PR per Ship environments
+# Two-tier:   pk promote main   (or pk promote with no arg — auto-picks the only hop)
+# Three-tier: pk promote beta   (then pk promote main after that PR merges)
 ```
 
-After `main` merge, referenced Linear issues move to **Done** (via `pk done`).
+`pk promote <env>` walks one hop along `Ship environments` per invocation. State transitions fire optimistically at PR-open: matching issues → **Released** for intermediate hops, → **Done** for the final hop.
 
 See **Batch vs Per-Issue Promotion** below for when to ship one issue at a time vs. accumulate several before promoting.
 
@@ -278,8 +279,8 @@ Beta is the UAT environment in three-tier. Don't promote partial beta — if RS-
 Run the pre-deploy gate **before** each promotion hop, not just before the first one. `/verify` (or `pk verify`) is the canonical entry point and reads § Pre-Deploy Gate from `method.config.md`:
 
 - Before `pk ship` (feature → dev): gate must pass on the feature branch (handled inline by `/verify`)
-- Before `pk promote dev → beta` (three-tier): gate must pass on dev tip
-- Before `pk promote dev → main` (two-tier) or `pk promote beta → main` (three-tier): gate must pass on the source branch
+- Before `pk promote beta` (three-tier, dev → beta): gate must pass on dev tip
+- Before `pk promote main` (two-tier dev → main, or three-tier beta → main): gate must pass on the source branch
 
 The gate at each boundary catches integration-level regressions that wouldn't show on the originating feature branch. CI also enforces the gate at PR open — don't skip "because it passed earlier."
 

@@ -42,7 +42,7 @@ Development Pipeline (repeats per issue, contract-strict):
   Stage 1: Spec          /light-spec → agent review → human review
   Stage 2: Plan + Build  pk branch → /work    (→ /review-plan if vbw backend)
   Stage 3: Verify + Ship /verify → pk ship    (→ /pr-fix | /pr-security-review) → UAT
-  Stage 4: Release       pk done → pk promote
+  Stage 4: Release       pk promote <env> → pk done   (promote walks one hop per call; pk done is cleanup)
   Stage 5: Doc Loop      /strategy-sync       (after UAT)
 
 Per session (not per issue): /pk-exit          (last command of every Claude Code session)
@@ -233,8 +233,8 @@ Every step forward is a PR. No direct merges between long-lived branches. Promot
 **Order of operations** (after Stage 3's UAT passes):
 
 1. Human merges the PR (rebase or merge-commit; see `sop/Git_and_Deployment.md` § Merge Strategy by Hop) once UAT is green.
-2. **`pk done <ID>`** cleans up the worktree + branch, posts commits + diffstat to Linear, and transitions the issue to Done.
-3. **`pk promote`** opens the next-tier promotion PR (dev → beta, beta → main) for multi-tier projects. Skipped for `Promote to main: false`.
+2. **`pk done <ID>`** cleans up the worktree + branch and posts commits + diffstat to Linear. **Cleanup-only** — it does NOT transition state.
+3. **`pk promote <env>`** opens the next-tier promotion PR (one hop per invocation: `pk promote beta`, then `pk promote main`). Transitions matching issues optimistically at PR-open: → **Released** for intermediate hops, → **Done** for the final hop. 2-tier projects: `pk promote` with no arg picks the only hop. Skipped entirely for `Promote to main: false`.
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 

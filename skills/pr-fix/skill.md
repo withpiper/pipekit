@@ -331,7 +331,7 @@ git push
 
 ### 6.6 Post Linear comment (visibility)
 
-After fixes are pushed, post a Linear comment on the PR's linked issue summarizing the triage. This closes the mid-loop visibility gap — Linear sees `In Progress → UAT → Done` today, but the *what happened with this review* context lives only on the PR.
+After fixes are pushed, post a Linear comment on the PR's linked issue summarizing the triage. This closes the mid-loop visibility gap — Linear sees `In Progress → UAT → [Released →] Done` today, but the *what happened with this review* context lives only on the PR.
 
 Identify the Linear issue from:
 - The PR title's `<TEAM>-<N>:` prefix (e.g. `RS-73: …`), OR

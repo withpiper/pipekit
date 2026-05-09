@@ -105,7 +105,7 @@ Analyzes project completion status and recommends moving the next batch of issue
 #### Workflow Status Ladder
 
 ```
-Future Phases → On Deck → Needs Spec → Specced → Approved → In Progress → Building → UAT → Done
+Future Phases → On Deck → Needs Spec → Specced → Approved → In Progress → Building → UAT → [Released →] Done
 ```
 
 State IDs are stored in `linear-map.json` under `states.*`. Always read from there — never hardcode.

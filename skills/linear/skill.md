@@ -77,7 +77,10 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
    - For **production** (merged to `main`): verify `vercel --prod` deployment succeeds.
    - For **hotfixes** (merged to `main`): immediately cherry-pick back to both `dev` and `beta`.
    - **Post a comment** confirming deployment target.
-3. **Move to Done** using `mcp__linear-server__save_issue` with `stateId: {Done state ID from method.config.md}`.
+3. **Transition state per environment.** Under v2.3.0, state maps 1:1 to environment:
+   - **2-tier project** (`Ship environments: dev,main`): on `main` merge → move to **Done** (`stateId: {Done state ID}`).
+   - **3-tier project** (`Ship environments: dev,beta,main`): on `beta` merge → move to **Released** (`stateId: {Released state ID}`); on `main` merge → move to **Done**.
+   - The recommended path is `pk promote <env>` which sets state at PR-open time. This manual step only applies if you opened the promote PR by hand without `pk promote`.
 
 ---
 
