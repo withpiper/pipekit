@@ -174,10 +174,10 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        ▼
   ┌──────────────────────────────────────────────────────────┐
   │ [6] Merge PR (manual, GitHub UI)                         │
-  │     • feature → dev: merge-commit or rebase (NOT squash) │
-  │     • dev/beta → main: squash (single release commit)    │
-  │     Squash on feature → dev causes phantom conflicts on  │
-  │     the next promote. Emergency override only.           │
+  │     • feature → dev: rebase or merge-commit              │
+  │     • dev/beta → main: merge-commit (anchor per promote) │
+  │     Squash is disabled repo-wide (v2.2.0+) — caused      │
+  │     phantom conflicts on every subsequent dev → main.    │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -217,7 +217,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │     pk promote                                           │
   │     • only runs if Promote to main: true in config       │
   │     • git pull dev, run pre-deploy gate                  │
-  │     • opens dev → main PR (squash-merge per ruleset)     │
+  │     • opens dev → main PR (merge-commit per ruleset)     │
   └──────────────────────────────────────────────────────────┘
 ```
 

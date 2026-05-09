@@ -289,7 +289,7 @@ Before writing any feature code, verify the full v2 daily loop works end-to-end:
 [ ] /work <ID>                  (plan + execute; verdict gate before code)
 [ ] /verify                     (pre-deploy gate runs to green)
 [ ] pk ship                     (push, open PR, Linear → UAT; verify preview deploys)
-[ ] Merge PR (squash); verify dev deployment
+[ ] Merge PR (rebase or merge-commit); verify dev deployment
 [ ] pk done <ID>                (cleanup worktree, post commits to Linear, → Done)
 [ ] pk promote                  (if multi-tier — opens dev → main PR)
 [ ] /pk-exit                    (writes session log to Logs/Sessions/<date>_<HHMM>.md)
