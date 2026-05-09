@@ -234,7 +234,7 @@ pipekit/
 
 **Synced from Pipekit** (updated when you re-run `sync-method.sh`):
 - `.claude/skills/` — portable skills
-- `method/` — SOPs, templates, methodology docs
+- `pipekit/` — SOPs, templates, methodology docs
 
 **Stays in your project** (never overwritten):
 - `concept-brief.md` — project concept

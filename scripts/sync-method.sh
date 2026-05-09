@@ -8,13 +8,13 @@
 #   ./scripts/sync-method.sh --dry-run    # Show what would change
 #
 # What it syncs:
-#   method/sop/        <- SOPs (Code Quality, Git, Linear, Skills, VBW)
-#   method/templates/  <- Spec and review templates
-#   method/method.md   <- The methodology overview
+#   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills, VBW)
+#   pipekit/templates/  <- Spec and review templates
+#   pipekit/method.md   <- The methodology overview
 #   .claude/skills/    <- Portable skills (won't touch project-specific ones)
 #
 # What it does NOT touch:
-#   method/decisions/       <- Project-specific ADRs
+#   pipekit/decisions/       <- Project-specific ADRs
 #   .claude/rules/          <- Project coding conventions
 #   .claude/skills/{local}  <- Project-specific skills
 #   .vbw-planning/          <- Project state
@@ -36,7 +36,7 @@ METHOD_REPO="${METHOD_REPO:-https://github.com/withpiper/pipekit.git}"
 DRY_RUN=false
 REF="main"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CHANGELOG="$PROJECT_ROOT/method/.sync-changelog.md"
+CHANGELOG="$PROJECT_ROOT/pipekit/.sync-changelog.md"
 
 # Parse flags without mutating $@ — the self-update guard below re-execs with
 # "$@", and a shift here would silently drop --dry-run across the re-exec.
@@ -101,7 +101,7 @@ snapshot_dir() {
 }
 
 snapshot_dir "$PROJECT_ROOT/.claude/skills" "skills"
-snapshot_dir "$PROJECT_ROOT/method" "method"
+snapshot_dir "$PROJECT_ROOT/pipekit" "method"
 
 # Track changes
 CHANGES=0
@@ -171,12 +171,12 @@ sync_file() {
 # --- Sync method docs ---
 echo ""
 echo "Method docs:"
-mkdir -p "$PROJECT_ROOT/method"
-sync_dir "$TEMP/sop" "$PROJECT_ROOT/method/sop" "sop/"
-sync_dir "$TEMP/templates" "$PROJECT_ROOT/method/templates" "templates/"
-sync_file "$TEMP/method.md" "$PROJECT_ROOT/method/method.md" "method.md"
-sync_file "$TEMP/GUIDE.md" "$PROJECT_ROOT/method/GUIDE.md" "GUIDE.md"
-sync_file "$TEMP/STARTUP.md" "$PROJECT_ROOT/method/STARTUP.md" "STARTUP.md"
+mkdir -p "$PROJECT_ROOT/pipekit"
+sync_dir "$TEMP/sop" "$PROJECT_ROOT/pipekit/sop" "sop/"
+sync_dir "$TEMP/templates" "$PROJECT_ROOT/pipekit/templates" "templates/"
+sync_file "$TEMP/method.md" "$PROJECT_ROOT/pipekit/method.md" "method.md"
+sync_file "$TEMP/GUIDE.md" "$PROJECT_ROOT/pipekit/GUIDE.md" "GUIDE.md"
+sync_file "$TEMP/STARTUP.md" "$PROJECT_ROOT/pipekit/STARTUP.md" "STARTUP.md"
 
 # --- Sync Pipekit hook scripts (VBW lifecycle integration) ---
 echo ""
@@ -206,8 +206,8 @@ fi
 
 # --- Sync v2 templates ---
 if [ -d "$TEMP/templates/v2" ]; then
-  mkdir -p "$PROJECT_ROOT/method/templates/v2"
-  sync_dir "$TEMP/templates/v2" "$PROJECT_ROOT/method/templates/v2" "templates/v2/"
+  mkdir -p "$PROJECT_ROOT/pipekit/templates/v2"
+  sync_dir "$TEMP/templates/v2" "$PROJECT_ROOT/pipekit/templates/v2" "templates/v2/"
 fi
 
 # --- Sync canonical .claude/rules/ files ---
@@ -296,7 +296,7 @@ if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
       # Only flag it if it has no project-specific marker
       if [ -f "$existing_skill_dir/skill.md" ]; then
         # Check if this was a portable skill (existed in a previous sync)
-        if grep -q "^  SYNCED skill: $existing_skill" "$PROJECT_ROOT/method/.sync-changelog.md" 2>/dev/null || \
+        if grep -q "^  SYNCED skill: $existing_skill" "$PROJECT_ROOT/pipekit/.sync-changelog.md" 2>/dev/null || \
            echo "$PORTABLE_SKILLS" | grep -qv "$existing_skill"; then
           REMOVED_SKILLS="$REMOVED_SKILLS $existing_skill"
         fi
@@ -423,7 +423,7 @@ if [ -d "$OVERRIDES_DIR" ]; then
   # SOP overrides: .claude/overrides/sop/<file>.md
   if [ -d "$OVERRIDES_DIR/sop" ]; then
     while IFS= read -r -d '' override_file; do
-      target="$PROJECT_ROOT/method/sop/$(basename "$override_file")"
+      target="$PROJECT_ROOT/pipekit/sop/$(basename "$override_file")"
       apply_override "$override_file" "$target" "sop/$(basename "$override_file")"
     done < <(find "$OVERRIDES_DIR/sop" -type f -name '*.md' -print0 2>/dev/null)
   fi
@@ -432,7 +432,7 @@ if [ -d "$OVERRIDES_DIR" ]; then
   if [ -f "$OVERRIDES_DIR/method.md.patch" ]; then
     apply_patch_override \
       "$OVERRIDES_DIR/method.md.patch" \
-      "$PROJECT_ROOT/method/method.md" \
+      "$PROJECT_ROOT/pipekit/method.md" \
       "method.md.patch"
   fi
 
@@ -456,7 +456,7 @@ fi
 if ! $DRY_RUN; then
   # Compare method files
   for f in method.md GUIDE.md STARTUP.md; do
-    dst="$PROJECT_ROOT/method/$f"
+    dst="$PROJECT_ROOT/pipekit/$f"
     if [ -f "$dst" ]; then
       old_hash=$(grep "$dst" "$SNAP/method.md5" 2>/dev/null | awk '{print $1}' || true)
       new_hash=$(md5sum "$dst" 2>/dev/null | awk '{print $1}')
@@ -560,7 +560,7 @@ CHLOG
   fi
 
   echo ""
-  echo "Changelog written to: method/.sync-changelog.md"
+  echo "Changelog written to: pipekit/.sync-changelog.md"
 fi
 
 # Clean up snapshot
@@ -581,7 +581,7 @@ else
   fi
   echo ""
   echo "Next steps:"
-  echo "  1. Review method/.sync-changelog.md for what changed"
+  echo "  1. Review pipekit/.sync-changelog.md for what changed"
   echo "  2. Run /pipekit-update reconciliation (restart Claude Code first)"
   echo "  3. Commit the synced files"
 fi

@@ -220,7 +220,7 @@ Tell the user how to proceed:
 
 ## Light Spec Template
 
-Read the canonical template from `templates/light_spec_template.md` in the method repo (or `method/templates/light_spec_template.md` in consuming projects). Use that template structure for all specs.
+Read the canonical template from `templates/light_spec_template.md` in the method repo (or `pipekit/templates/light_spec_template.md` in consuming projects). Use that template structure for all specs.
 
 ---
 

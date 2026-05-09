@@ -17,7 +17,7 @@
 #
 # Context detection:
 #   - In the method repo: checks skills, templates, SOPs, method.md, GUIDE.md
-#   - In a consuming project: checks CLAUDE.md, .claude/rules/, method/ docs
+#   - In a consuming project: checks CLAUDE.md, .claude/rules/, pipekit/ docs
 
 set -euo pipefail
 
@@ -257,7 +257,7 @@ check_paths() {
         if echo "$path" | grep -qE '^\.(claude|vbw-planning)/'; then
           continue
         fi
-        if echo "$path" | grep -qE '^(method/|Strategy/|Security/|src/|src_poc/|packages/|Logs/|rules/)'; then
+        if echo "$path" | grep -qE '^(pipekit/|Strategy/|Security/|src/|src_poc/|packages/|Logs/|rules/)'; then
           continue
         fi
         if echo "$path" | grep -qE '^concept-brief\.md$|^project-definition\.md$|^method\.config\.md$'; then

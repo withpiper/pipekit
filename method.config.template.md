@@ -123,7 +123,7 @@ Tiers shape which gates apply to an issue. `/work` infers the tier from issue la
 | **Standard** | Yes (default) | Normal feature work | — | — |
 | **Heavy** | No (opt-in) | Multi-phase, security-sensitive, cross-strategy-doc | — | Security review, mandatory `/strategy-sync` before close |
 
-Per-tier templates live at `method/templates/tier-{quick,standard,heavy}.md`.
+Per-tier templates live at `pipekit/templates/tier-{quick,standard,heavy}.md`.
 
 To disable a tier in this project, remove its row above. Removing **Standard** is not allowed — it is the fallback.
 

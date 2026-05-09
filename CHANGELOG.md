@@ -6,6 +6,40 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.2.0 — 2026-05-09
+
+> Folder rename: `method/` → `pipekit/` for the synced canonical content. Breaking change for consumers.
+
+### What changed
+
+- **Sync target folder renamed `method/` → `pipekit/`.** All consumer-side synced content (`sop/`, `templates/`, `method.md`, `GUIDE.md`, `STARTUP.md`, `.sync-changelog.md`) now lands under `pipekit/` instead of `method/`. This Pipekit source repo's layout is unchanged — only the destination path on the consumer side moves.
+- **Updated:** `scripts/sync-method.sh` (sync targets, snapshot path, override target paths), `scripts/drift-check.sh` (path filter regex), and all skill docs and templates that reference consumer-side paths (`pipekit-update`, `00-roadmap-review`, `01-light-spec`, `startup`, `templates/overrides-manifest.template.md`, `templates/rules/README.md`, `GUIDE.md`, `README.md`, `method.config.template.md`, `method.md`).
+- **Unchanged:** `method.config.md` filename (still at consumer repo root), Pipekit source layout (`sop/`, `templates/`, `method.md` at root of this repo), all override paths under `.claude/overrides/`, `bin/pk`, all skills and agents.
+
+### Why
+
+`method/` was generic and confusing — both Pipekit and consumer projects used "method" interchangeably, with no signal about ownership. Renaming the synced folder to `pipekit/` makes ownership immediately legible: `pipekit/` is upstream content (don't hand-edit; gets overwritten on sync). Pairs cleanly with whatever the consumer chooses to name its own engineering workspace folder (e.g., `engineering/` for piper, `local/` for rs-vault).
+
+The rename also eliminates a long-standing collision risk for consumers with a pre-existing `method/` folder (notably Piper, which had Piper-flavored v1 method docs there from the era when Pipekit was extracted from Piper). Sync now writes to a fresh `pipekit/` and leaves any pre-existing `method/` alone for manual dissolution.
+
+### Migration (consuming projects)
+
+After `./scripts/sync-method.sh v2.2.0`:
+
+```
+# Sync creates pipekit/ alongside any existing method/.
+# 1. Verify pipekit/ has the canonical content (sop/, templates/, method.md, etc.).
+# 2. Move any project-specific content out of method/ to its appropriate home
+#    (engineering/, .claude/overrides/, Strategy/_decisions/, etc.).
+# 3. Re-point references in CLAUDE.md, skills, and docs from method/* to pipekit/*.
+# 4. rm -rf method/ once empty.
+# 5. method.config.md filename unchanged — no action needed there.
+```
+
+For consumers with extensive `method/` customization, see `engineering/Pipekit-Migration-Plan.md` (Piper's worked example) for a phased dissolution approach.
+
+---
+
 ## v2.1.2 — 2026-05-03
 
 > Session-log redesign: bash Stop hook retired, narrative `/pk-exit` skill restored.

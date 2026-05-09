@@ -6,7 +6,7 @@
 
 - `.claude/overrides/skills/<name>/skill.md` — full-file replacement for a synced skill
 - `.claude/overrides/sop/<file>.md` — full-file replacement for a synced SOP
-- `.claude/overrides/method.md.patch` — unified diff applied to `method/method.md`
+- `.claude/overrides/method.md.patch` — unified diff applied to `pipekit/method.md`
 
 Overrides are applied automatically by `scripts/sync-method.sh` after the upstream sync. The script saves the upstream version it replaced under `.claude/overrides/.upstream-snapshot/` so the next sync can detect upstream drift.
 

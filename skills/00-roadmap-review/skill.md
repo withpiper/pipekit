@@ -94,7 +94,7 @@ For each issue in the active and upcoming stages:
 ### Phase 4 — Dependency Validation
 
 1. Read light specs for issues that have them — extract dependency contracts (e.g., "PROJ-8 is a hard blocker for PROJ-7")
-2. Read the WP dependency graph from `method/sop/Linear SOP.md` (Dependency Graph section)
+2. Read the WP dependency graph from `pipekit/sop/Linear SOP.md` (Dependency Graph section)
 3. For each declared dependency:
    - Fetch the issue via `mcp__linear-server__get_issue` with `includeRelations: true`
    - Check that `blockedBy`/`blocks` relations exist in Linear

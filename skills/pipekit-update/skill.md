@@ -61,9 +61,9 @@ If `method.config.md` doesn't exist, warn: _"No method.config.md found. Run `/st
 
 ### Phase 3 — Changelog
 
-The sync script writes a changelog to `method/.sync-changelog.md` that captures what changed. **Read this file first** — it's the source of truth for what needs reconciliation.
+The sync script writes a changelog to `pipekit/.sync-changelog.md` that captures what changed. **Read this file first** — it's the source of truth for what needs reconciliation.
 
-1. **Read `method/.sync-changelog.md`** — it contains:
+1. **Read `pipekit/.sync-changelog.md`** — it contains:
    - New skills added (with descriptions from their `skill.md`)
    - Updated skills (content changed)
    - Possibly removed/renamed skills
@@ -91,7 +91,7 @@ The sync script writes a changelog to `method/.sync-changelog.md` that captures 
 - New field: `{field name}` in method.config.md — needs a value
 ```
 
-If `method/.sync-changelog.md` doesn't exist (e.g., older sync script), fall back to `git diff` on the synced paths.
+If `pipekit/.sync-changelog.md` doesn't exist (e.g., older sync script), fall back to `git diff` on the synced paths.
 
 ### Phase 4 — Reconcile
 
@@ -185,10 +185,10 @@ If a local clone exists:
    - Copy the updated skill to `~/Projects/pipekit/skills/`
    - Stage the changes in the method repo
 4. Also check for changes to:
-   - `method/sop/` → `~/Projects/pipekit/sop/`
-   - `method/templates/` → `~/Projects/pipekit/templates/`
-   - `method/method.md` → `~/Projects/pipekit/method.md`
-   - `method/STARTUP.md` → `~/Projects/pipekit/STARTUP.md`
+   - `pipekit/sop/` → `~/Projects/pipekit/sop/`
+   - `pipekit/templates/` → `~/Projects/pipekit/templates/`
+   - `pipekit/method.md` → `~/Projects/pipekit/method.md`
+   - `pipekit/STARTUP.md` → `~/Projects/pipekit/STARTUP.md`
 5. After all changes are staged, offer to commit and push:
    ```
    {N} files updated in pipekit.
@@ -204,11 +204,11 @@ If a local clone exists:
 | Source (GitHub) | Destination (this project) | Notes |
 |-----------------|---------------------------|-------|
 | `skills/*/` | `.claude/skills/*/` | Only portable skills — won't delete project-specific skills |
-| `sop/` | `method/sop/` | Full replace |
-| `templates/` | `method/templates/` | Full replace |
-| `method.md` | `method/method.md` | Full replace |
-| `GUIDE.md` | `method/GUIDE.md` | Full replace |
-| `STARTUP.md` | `method/STARTUP.md` | Full replace |
+| `sop/` | `pipekit/sop/` | Full replace |
+| `templates/` | `pipekit/templates/` | Full replace |
+| `method.md` | `pipekit/method.md` | Full replace |
+| `GUIDE.md` | `pipekit/GUIDE.md` | Full replace |
+| `STARTUP.md` | `pipekit/STARTUP.md` | Full replace |
 
 ## What Never Gets Synced
 
