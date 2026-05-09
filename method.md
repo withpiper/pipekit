@@ -232,7 +232,7 @@ Every step forward is a PR. No direct merges between long-lived branches. Promot
 
 **Order of operations** (after Stage 3's UAT passes):
 
-1. Human merges the PR (squash) once UAT is green.
+1. Human merges the PR (rebase or merge-commit; see `sop/Git_and_Deployment.md` § Merge Strategy by Hop) once UAT is green.
 2. **`pk done <ID>`** cleans up the worktree + branch, posts commits + diffstat to Linear, and transitions the issue to Done.
 3. **`pk promote`** opens the next-tier promotion PR (dev → beta, beta → main) for multi-tier projects. Skipped for `Promote to main: false`.
 

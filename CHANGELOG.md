@@ -8,35 +8,64 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ## v2.2.0 — 2026-05-09
 
-> Folder rename: `method/` → `pipekit/` for the synced canonical content. Breaking change for consumers.
+> Two paired changes: **synced-folder rename** (`method/` → `pipekit/`) and **squash retirement** (merge-commit-only on `main`, squash disabled repo-wide). Breaking changes for consumers — see Migration section.
 
-### What changed
+### What changed — folder rename
 
 - **Sync target folder renamed `method/` → `pipekit/`.** All consumer-side synced content (`sop/`, `templates/`, `method.md`, `GUIDE.md`, `STARTUP.md`, `.sync-changelog.md`) now lands under `pipekit/` instead of `method/`. This Pipekit source repo's layout is unchanged — only the destination path on the consumer side moves.
 - **Updated:** `scripts/sync-method.sh` (sync targets, snapshot path, override target paths), `scripts/drift-check.sh` (path filter regex), and all skill docs and templates that reference consumer-side paths (`pipekit-update`, `00-roadmap-review`, `01-light-spec`, `startup`, `templates/overrides-manifest.template.md`, `templates/rules/README.md`, `GUIDE.md`, `README.md`, `method.config.template.md`, `method.md`).
 - **Unchanged:** `method.config.md` filename (still at consumer repo root), Pipekit source layout (`sop/`, `templates/`, `method.md` at root of this repo), all override paths under `.claude/overrides/`, `bin/pk`, all skills and agents.
 
-### Why
+### What changed — merge strategy
+
+- **`scripts/pipekit-configure-repo.sh` rewritten** — repo-level `allow_squash_merge=false`; new `pipekit-main-merge-only` ruleset enforces `allowed_merge_methods=["merge"]` on PRs targeting main. The legacy `pipekit-main-squash-only` ruleset is auto-deleted on re-run.
+- **`sop/Git_and_Deployment.md` § Merge Strategy by Hop** — table rewritten. Squash row removed; merge-commit is the enforced strategy for dev → main. Rebase or merge-commit are both fine for feature → dev.
+- **`bin/pk` reminders updated** — `pk ship` no longer tells you to squash on main; `pk promote` PR body and prompt updated to "Create a merge commit."
+- **`RUNBOOK.md`, `method.md`, `STARTUP.md`, `GUIDE.md`** — all "squash" references updated to reflect the new policy.
+
+### Why — folder rename
 
 `method/` was generic and confusing — both Pipekit and consumer projects used "method" interchangeably, with no signal about ownership. Renaming the synced folder to `pipekit/` makes ownership immediately legible: `pipekit/` is upstream content (don't hand-edit; gets overwritten on sync). Pairs cleanly with whatever the consumer chooses to name its own engineering workspace folder (e.g., `engineering/` for piper, `local/` for rs-vault).
 
 The rename also eliminates a long-standing collision risk for consumers with a pre-existing `method/` folder (notably Piper, which had Piper-flavored v1 method docs there from the era when Pipekit was extracted from Piper). Sync now writes to a fresh `pipekit/` and leaves any pre-existing `method/` alone for manual dissolution.
 
+### Why — merge strategy
+
+v1.7.0 banned merge-commits everywhere. v1.8.0.6 reversed: rebase/merge for feature → dev, squash for dev → main. **Both schemes hit phantom conflicts in production.** Piper's `nebula-piper-migration-handoff.md:282` documents the v1.8.0.6 failure ("GitHub squash ruleset breaks parent linking. Every promote re-conflicts on files added on both sides"); rs-vault hit the identical trap on PR #173 / #175 in May 2026.
+
+The misdiagnosis: prior versions believed "merge-commits on main cause phantom conflicts." Squash on main causes them — by collapsing N atomic dev commits into one orphan commit on main, the next promote's merge-base finds two divergent histories that both modified the same files relative to the common ancestor. Merge-commits prevent the divergence: dev's atomic commits flow onto main with stable SHAs.
+
+The cleanup-via-squash use case (collapse messy WIP commits) doesn't apply: Pipekit's discipline rules already enforce "one atomic change per commit," and vbw-dev makes atomic commits per task. Squash was throwing away useful bisect/blame information for an aesthetic linear-history preference. `git log main --first-parent` gives the squash-equivalent view (one entry per merged PR) without the cost.
+
+### What this fixes
+
+- **Phantom conflicts on `pk promote`** — gone. Same SHAs flow feature → dev → main.
+- **`git bisect` and `git blame` on main** — newly useful. Today main is a series of squash-mega-commits attributed to whoever clicked the merge button.
+- **`git branch -d` after `pk done`** — would now succeed (latent improvement; `pk done` still uses `-D` for safety).
+
 ### Migration (consuming projects)
 
 After `./scripts/sync-method.sh v2.2.0`:
 
-```
-# Sync creates pipekit/ alongside any existing method/.
-# 1. Verify pipekit/ has the canonical content (sop/, templates/, method.md, etc.).
-# 2. Move any project-specific content out of method/ to its appropriate home
-#    (engineering/, .claude/overrides/, Strategy/_decisions/, etc.).
-# 3. Re-point references in CLAUDE.md, skills, and docs from method/* to pipekit/*.
-# 4. rm -rf method/ once empty.
-# 5. method.config.md filename unchanged — no action needed there.
+```bash
+# 1. Folder rename — sync creates pipekit/ alongside any existing method/.
+#    - Verify pipekit/ has the canonical content (sop/, templates/, method.md, etc.).
+#    - Move any project-specific content out of method/ to its appropriate home
+#      (engineering/, .claude/overrides/, Strategy/_decisions/, etc.).
+#    - Re-point references in CLAUDE.md, skills, and docs from method/* to pipekit/*.
+#    - rm -rf method/ once empty.
+#    - method.config.md filename unchanged — no action needed there.
+
+# 2. Merge strategy — re-run the configure script. It will:
+#    - Set allow_squash_merge=false at the repo level
+#    - Delete the legacy pipekit-main-squash-only ruleset
+#    - Create the new pipekit-main-merge-only ruleset
+bash scripts/pipekit-configure-repo.sh
 ```
 
-For consumers with extensive `method/` customization, see `engineering/Pipekit-Migration-Plan.md` (Piper's worked example) for a phased dissolution approach.
+If you have an open dev → main PR that's hitting a phantom conflict from the prior squash policy, resolve it once with a merge-commit (or close + reopen as a no-ff merge); subsequent promotes will be clean.
+
+For consumers with extensive `method/` customization, see Piper's worked example at `engineering/Pipekit-Migration-Plan.md` for a phased dissolution approach.
 
 ---
 

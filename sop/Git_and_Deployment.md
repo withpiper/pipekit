@@ -69,27 +69,29 @@ dev  (active development)
 | `beta` (three-tier only) | Protected. Requires PR + CI passing. No direct merges. |
 | `dev` | Default branch for PRs. CI runs on all PRs targeting dev. |
 
-### Merge Strategy by Hop (v1.8.0.6+)
+### Merge Strategy by Hop (v2.2.0+)
 
-Different hops want different strategies. The phantom-conflict trap (observed during v1.7.0 / v1.8.0 work) only happens when the **dev → main** hop uses a merge commit. Other hops can use whatever fits the project's history-readability preferences.
+**Squash is disabled. Atomic commits flow feature → dev → main with stable SHAs.** Pipekit discipline already enforces one atomic change per commit, so the cleanup-via-squash use case doesn't apply. `git log main --first-parent` gives the squash-equivalent view (one entry per merged PR) without losing the underlying commits.
 
 | Hop | Recommended | Also OK | Rationale |
 |---|---|---|---|
-| `feature/*` → `dev` | **Rebase** | Merge-commit | Rebase = linear atomic commits; merge-commit = bubble preserving feature scope. **Do not squash here.** Squashing feature → dev collapses dev's commit identity, and every subsequent `dev → main` promote then sees phantom conflicts (same content, different SHAs and boundaries). Emergency override only when dev tip is broken. |
-| `dev` → `beta` (three-tier) | Rebase or merge-commit | — | Same as feature → dev. |
-| **`dev` → `main`** (two-tier) or `beta` → `main` (three-tier) | **Squash (enforced)** | — | One release commit per promotion. Merge-commits here cause phantom conflicts on subsequent promotes. **Enforced by ruleset, not user discipline.** |
+| `feature/*` → `dev` | **Rebase** | Merge-commit | Rebase preserves atomic commits linearly; merge-commit preserves them under a feature bubble. Either keeps SHAs intact for downstream promotes. **Squash is disabled repo-wide.** |
+| `dev` → `beta` (three-tier) | Merge-commit | — | One anchor commit per promote (`git log --first-parent`, `git revert -m 1`). |
+| **`dev` → `main`** (two-tier) or `beta` → `main` (three-tier) | **Merge-commit (enforced)** | — | Same anchor rationale. **Enforced by ruleset, not user discipline.** |
 
-#### Enforcement model (v1.8.0.6+): Rulesets, not repo flags
+#### Why no squash anywhere (v2.2.0 reversal)
 
-Earlier (v1.7.0–v1.8.0.5) Pipekit recommended disallowing merge-commits at the repo level (`allow_merge_commit=false`). That's machine-safe but blunt — it bans merge bubbles on dev too, which some users prefer for feature-branch readability.
+v1.7.0 banned merge-commits everywhere. v1.8.0.6 reversed: rebase/merge for feature → dev, squash for dev → main. **Both schemes hit phantom conflicts in production** — Piper's `nebula-piper-migration-handoff.md` documents the v1.8.0.6 failure, and rs-vault hit the same trap.
 
-v1.8.0.6 switches to **per-branch enforcement via GitHub Rulesets**:
+The misdiagnosis: v1.7.0–v2.1.x believed "merge-commits on main cause phantom conflicts." Squash on main causes them — by collapsing N atomic dev commits into one orphan commit on main, the next promote's merge-base sees divergent histories touching the same files. Merge-commits prevent the divergence by keeping SHAs stable across the promote boundary.
 
-- Repo level: all three merge methods enabled (rebase, squash, merge-commit).
-- A `pipekit-main-squash-only` ruleset enforces squash-only on `main` specifically.
-- Other branches (dev, beta, feature/*) inherit the repo-level flexibility.
+#### Enforcement model (v2.2.0+)
 
-Result: GitHub UI's "Merge pull request" dropdown shows all options on feature → dev PRs but only "Squash and merge" on PRs targeting main. Mistakes impossible.
+- **Repo level:** rebase + merge-commit allowed; **squash disabled** (`allow_squash_merge=false`).
+- **`pipekit-main-merge-only` ruleset:** enforces merge-commit-only on PRs targeting `main` (no rebase or squash).
+- The legacy `pipekit-main-squash-only` ruleset is auto-deleted on re-run of `pipekit-configure-repo.sh`.
+
+Result: GitHub UI's "Merge pull request" dropdown shows Rebase + Merge on feature → dev PRs, and only "Create a merge commit" on PRs targeting main. Mistakes impossible.
 
 **One-shot configure** (idempotent — safe to re-run on any consuming repo):
 
@@ -192,7 +194,7 @@ For migrations / RLS / SECURITY DEFINER / auth, use `/pr-security-review` instea
 
 ### Step 5: Merge to Dev
 
-PR is reviewed, approved, and merged (squash). Feature available on dev. Vercel preview is automatic; for Supabase projects, GitHub Actions `db-pr-check.yml` validates migrations on PR open and `db-migrate.yml` applies them on `main` merge.
+PR is reviewed, approved, and merged (rebase or merge-commit per § Merge Strategy by Hop). Feature available on dev. Vercel preview is automatic; for Supabase projects, GitHub Actions `db-pr-check.yml` validates migrations on PR open and `db-migrate.yml` applies them on `main` merge.
 
 ```
 pk done <ID>           # cleanup worktree+branch, post commits/diffstat to Linear, → Done (after main merge)

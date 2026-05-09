@@ -2,20 +2,30 @@
 # pipekit-configure-repo.sh
 #
 # Configure a GitHub repo with Pipekit's recommended merge strategy
-# (v1.8.0.6+):
+# (v2.2.0+):
 #
-#   - Repo level: rebase, squash, AND merge-commits all allowed
-#       → gives you flexibility on feature → dev (rebase or merge-commit, your choice)
-#   - main branch: squash-only enforced via GitHub Ruleset
-#       → prevents accidental merge-commits to main (the phantom-conflict trap)
+#   - Repo level: rebase + merge-commit allowed; squash DISABLED
+#       → squash creates orphan SHAs that diverge dev and main, causing
+#         phantom conflicts on every subsequent dev → main promote
+#   - main branch: merge-commit-only enforced via GitHub Ruleset
+#       → guarantees a single anchor commit per promote (revert -m 1, log
+#         --first-parent) and prevents accidental rebase or squash
 #   - delete_branch_on_merge: true (auto-delete remote branches)
 #
-# Why Rulesets instead of just disallowing merge_commit globally?
-# Earlier (v1.7.0–v1.8.0.5) we disallowed merge_commit at the repo level. That
-# prevented the phantom-conflict trap on main, but also banned merge bubbles
-# on dev — which some users prefer for feature-branch readability in
-# GitKraken / git-log. Rulesets let us be precise: main = squash-only,
-# dev/everything-else = your choice.
+# Why no squash anywhere?
+# v1.7.0–v2.1.x oscillated on this. v1.7.0 banned merge-commits everywhere
+# (caused phantom conflicts via a different topology). v1.8.0.6 split the
+# rules: rebase/merge for feature → dev, squash for dev → main. Both Piper
+# and rs-vault hit phantom conflicts under v1.8.0.6 — squash on dev → main
+# is the cause, not the cure. Squash collapses N atomic dev commits into
+# one orphan commit on main; the next promote's merge-base sees divergent
+# histories touching the same files and fails.
+#
+# v2.2.0 eliminates squash entirely. Atomic commits flow feature → dev →
+# main with stable SHAs. Pipekit discipline already enforces "one atomic
+# change per commit," so the cleanup-via-squash use case doesn't apply.
+# `git log main --first-parent` gives the squash-equivalent view (one
+# entry per promote) without losing the underlying commits for bisect/blame.
 #
 # Usage:
 #   bash scripts/pipekit-configure-repo.sh <org>/<repo>
@@ -35,13 +45,14 @@ if [ -z "$REPO" ]; then
   fi
 fi
 
-RULESET_NAME="pipekit-main-squash-only"
+RULESET_NAME="pipekit-main-merge-only"
+LEGACY_RULESET_NAME="pipekit-main-squash-only"
 
 echo "Repo: $REPO"
 echo
 
 # ---------------------------------------------------------------------------
-# Step 1: repo-level merge settings — allow rebase, squash, AND merge-commits
+# Step 1: repo-level merge settings — disallow squash globally
 # ---------------------------------------------------------------------------
 
 echo "Step 1 — Repo-level merge settings"
@@ -56,11 +67,11 @@ gh api "repos/$REPO" --jq '{
 }'
 echo
 
-echo "Applying: merge=on, squash=on, rebase=on, auto-delete=on..."
+echo "Applying: merge=on, squash=OFF, rebase=on, auto-delete=on..."
 gh api "repos/$REPO" --method PATCH \
   -f delete_branch_on_merge=true \
   -f allow_merge_commit=true \
-  -f allow_squash_merge=true \
+  -F allow_squash_merge=false \
   -f allow_rebase_merge=true \
   --jq '{
     delete_branch_on_merge,
@@ -72,13 +83,20 @@ gh api "repos/$REPO" --method PATCH \
 echo
 
 # ---------------------------------------------------------------------------
-# Step 2: main-branch ruleset — squash-only on PRs targeting main
+# Step 2: main-branch ruleset — merge-commit-only on PRs targeting main
 # ---------------------------------------------------------------------------
 
 echo "Step 2 — Main-branch ruleset ($RULESET_NAME)"
 echo
 
-# Check for existing ruleset by name
+# Migrate legacy v1.8.0.6+ ruleset if present (squash-only → merge-only).
+LEGACY_ID=$(gh api "repos/$REPO/rulesets" --jq ".[] | select(.name == \"$LEGACY_RULESET_NAME\") | .id" 2>/dev/null || echo "")
+if [ -n "$LEGACY_ID" ]; then
+  echo "Found legacy ruleset '$LEGACY_RULESET_NAME' (id=$LEGACY_ID) — deleting (will be replaced)..."
+  gh api "repos/$REPO/rulesets/$LEGACY_ID" --method DELETE >/dev/null
+fi
+
+# Check for existing v2.2.0+ ruleset by name
 EXISTING_ID=$(gh api "repos/$REPO/rulesets" --jq ".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null || echo "")
 
 RULESET_BODY=$(cat <<JSON
@@ -101,7 +119,7 @@ RULESET_BODY=$(cat <<JSON
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_review_thread_resolution": false,
-        "allowed_merge_methods": ["squash"]
+        "allowed_merge_methods": ["merge"]
       }
     }
   ]
@@ -126,5 +144,6 @@ fi
 echo
 echo "Done. Effective merge policy:"
 echo "  feature → dev      → Rebase OR Merge commit (your choice in the GitHub UI)"
-echo "  dev → main         → Squash (enforced by ruleset; UI dropdown will show only Squash)"
+echo "  dev → main         → Merge commit (enforced by ruleset; UI dropdown will show only Merge)"
+echo "  Squash             → Disabled repo-wide (causes phantom conflicts on promote)"
 echo "  Auto-delete remote branches on merge → enabled."
