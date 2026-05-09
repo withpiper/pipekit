@@ -68,8 +68,8 @@ Best for: solo dev, small teams, projects where preview URLs replace a staging e
 | Preview | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote` opens the `dev` → `main` PR.
-**Linear transitions:** `pk ship` → UAT (or In Review); merge to `main` (via `pk promote` PR) → `pk done` posts to Linear and the issue moves to Done.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote main` (or `pk promote` with no arg) opens the `dev` → `main` PR.
+**Linear transitions:** `pk ship` → UAT; `pk promote main` → Done (optimistic, at PR-open). `pk done` is cleanup-only — it does NOT transition state.
 
 ### Three-Tier (dev → beta → main)
 
@@ -83,8 +83,8 @@ Best for: teams with QA, projects needing a stable UAT environment, regulated in
 | Preview | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote` walks `dev` → `beta` and `beta` → `main` per `Ship environments` in the V2 block below.
-**Linear transitions:** `pk ship` → UAT (or In Review); merge to `beta` → issues stay in UAT; merge to `main` (via `pk promote` PR) → issues move to Done.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote <env>` walks one hop per invocation (`pk promote beta` then `pk promote main`) per `Ship environments` in the V2 block below.
+**Linear transitions:** `pk ship` → UAT; `pk promote beta` → Released; `pk promote main` → Done. All transitions optimistic at PR-open. `pk done` is cleanup-only — it does NOT transition state.
 
 ### Environments
 

@@ -245,8 +245,8 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID>` | `./bin/pk done <ID>` | parent, dev | writes Linear (Done) + removes worktree + posts journal highlights |
-| 8 | Promote | `pk promote [--stash\|--take-remote]` | `./bin/pk promote [--stash\|--take-remote]` | parent, dev | dev → main batch (v2.0 added flag) |
+| 7 | Cleanup | `pk done <ID>` | `./bin/pk done <ID>` | parent, dev | removes worktree + posts journal highlights to Linear (no state transition; v2.3.0) |
+| 8 | Promote | `pk promote <env> [--stash\|--take-remote]` | `./bin/pk promote <env> [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → Released or → Done (v2.3.0) |
 | meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
 | meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
 | meta | Install | `pk install` | `./bin/pk install` | repo root | symlinks pk onto $PATH (v2.0) |

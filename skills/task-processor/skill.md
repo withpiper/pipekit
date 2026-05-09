@@ -51,9 +51,10 @@ Ask which task to work on.
 - Create a worktree for the work (`pk branch <ID>` for Linear-issue-based work, or `git worktree add` directly for non-Linear work)
 - Execute actions based on issue description + spec (if any)
 - Validate against success criteria
-- When done, ask user: move to **Done** or **UAT**?
-  - Done: `stateId: {Done state ID from method.config.md}`
-  - UAT: `stateId: {UAT state ID from method.config.md}`
+- When done, ask user: move to **Done**, **Released**, or **UAT**?
+  - Done: `stateId: {Done state ID from method.config.md}` (live in production)
+  - Released: `stateId: {Released state ID from method.config.md}` (3-tier projects: merged to staging/beta, awaiting prod)
+  - UAT: `stateId: {UAT state ID from method.config.md}` (merged to integration/dev, awaiting acceptance)
 - Ask if user wants another task
 
 ### 4. Final Summary

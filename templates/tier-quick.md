@@ -42,4 +42,4 @@
 
 ## Close path
 
-`pk ship` → Linear status to UAT. UAT pass → merge PR → `pk done PROJ-XXX` (cleanup + Linear → Done) → `pk promote` (multi-tier projects).
+`pk ship` → Linear → UAT. UAT pass → merge PR → `pk done PROJ-XXX` (cleanup only; no state change) → `pk promote <env>` walks the chain (→ Released for intermediate hops, → Done for the final hop; 2-tier: `pk promote` with no arg).
