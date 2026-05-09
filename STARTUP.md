@@ -197,11 +197,11 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *`
 | You don't need a skill for... | Because v2 handles it via... |
 |---|---|
 | Open PR feature → dev | `pk ship` |
-| Promote dev → main (or dev → beta → main) | `pk promote` (reads `Ship environments` from `method.config.md`) |
+| Promote one hop along Ship environments | `pk promote <env>` (e.g. `pk promote beta`, `pk promote main`); transitions issues → Released or → Done by chain position |
 | Push branch + get Vercel preview | Vercel auto-fires on PR open |
 | Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` (lift from rs-vault) on merge to main |
 | Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
-| Linear status transitions on ship/merge | `pk ship` (→ UAT) and `pk done` (→ Done) |
+| Linear status transitions | `pk ship` (→ UAT), `pk promote <env>` (→ Released or → Done by hop position). `pk done` is cleanup-only. |
 
 ### 4.2 Skills that are still legitimately project-specific
 
@@ -290,8 +290,8 @@ Before writing any feature code, verify the full v2 daily loop works end-to-end:
 [ ] /verify                     (pre-deploy gate runs to green)
 [ ] pk ship                     (push, open PR, Linear → UAT; verify preview deploys)
 [ ] Merge PR (rebase or merge-commit); verify dev deployment
-[ ] pk done <ID>                (cleanup worktree, post commits to Linear, → Done)
-[ ] pk promote                  (if multi-tier — opens dev → main PR)
+[ ] pk done <ID>                (cleanup worktree + branch; no state change)
+[ ] pk promote <env>            (one hop per call; → Released for intermediate, → Done for final)
 [ ] /pk-exit                    (writes session log to Logs/Sessions/<date>_<HHMM>.md)
 ```
 

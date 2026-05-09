@@ -1,4 +1,4 @@
-# Pipekit Runbook (v2.1.2)
+# Pipekit Runbook (v2.3.0)
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -196,12 +196,12 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [8] Cleanup                                              │
+  │ [8] Cleanup (no state change)                            │
   │     pk done <ID>                                         │
   │     • verifies PR merged                                 │
   │     • posts journal highlights to Linear                 │
-  │     • Linear: UAT → Done                                 │
   │     • removes worktree, deletes local branch             │
+  │     • does NOT transition Linear state — promote does    │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -213,11 +213,15 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [9] Promote dev → main      (separate, batched)          │
-  │     pk promote                                           │
-  │     • only runs if Promote to main: true in config       │
-  │     • git pull dev, run pre-deploy gate                  │
-  │     • opens dev → main PR (merge-commit per ruleset)     │
+  │ [9] Promote — one hop per invocation                     │
+  │     pk promote <env>                                     │
+  │     • walks Ship environments (e.g. dev,beta,main)       │
+  │     • opens source → target PR per hop                   │
+  │     • transitions issues optimistically at PR-open:      │
+  │         intermediate hop  →  Released                    │
+  │         final hop         →  Done                        │
+  │     • 2-tier projects: pk promote (no arg) picks the     │
+  │       only hop; sets state directly to Done              │
   └──────────────────────────────────────────────────────────┘
 ```
 

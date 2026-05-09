@@ -1,8 +1,8 @@
 # Pipekit
 
-**Last updated:** 2026-05-03 *(rewritten for v2.1.2)*
+**Last updated:** 2026-05-09 *(updated for v2.3.0 — Released state + 3-tier-aware pk promote)*
 
-> **v2.1.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
+> **v2.3.0 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
 > **NEXT.md is retired.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer. v2 replaces it with `pk next` (reads Linear directly + scopes to the current phase via `PHASES.md` as of v2.1.0). Consuming projects should:
 > - Delete any committed `NEXT.md` (`git rm NEXT.md`)
@@ -81,9 +81,9 @@ Stage 0 is the foundation contract — a set of artifacts, not a script. The gre
 | 6 | 3 | **Verify** | `/verify` (or `pk verify`) | Pre-deploy gate report — Pass / Partial / Fail with per-AC table; QA subagent if `Require QA review: true` | Gate green; AC satisfied |
 | 7 | 3 | **Ship** | `pk ship [--review]` | Branch pushed, PR open, Linear → UAT | Verify passed |
 | 7b | 3 | **PR Review** *(opt-in)* | `/pr-fix` and/or `/pr-security-review` | Triage summary in Linear (fixed / rejected / deferred) | Critical/High findings resolved or explicitly deferred |
-| 8 | 3 | **UAT** | You (browser / Linear) | Accepted or rejected against spec AC | Matches spec under real usage |
-| 9 | 4 | **Done** | `pk done <ID>` | Worktree+branch cleaned up; commits + diffstat posted to Linear; → Done | PR merged |
-| 10 | 4 | **Promote** | `pk promote` *(multi-tier projects only)* | Next-tier promotion PR per `Ship environments` (e.g., dev → beta → main) | — |
+| 8 | 3 | **UAT** | You (browser / Linear) | Accepted or rejected against spec AC. State stays UAT through any `pk promote` intermediate hops. | Matches spec under real usage |
+| 9 | 4 | **Cleanup** | `pk done <ID>` | Worktree + branch cleaned up; commits + diffstat posted to Linear. **No state transition** (cleanup-only as of v2.3.0). | PR merged |
+| 10 | 4 | **Promote** | `pk promote <env>` *(multi-tier projects only)* | One-hop promotion PR per `Ship environments`. Transitions matching issues optimistically: → **Released** for intermediate hops (e.g. `pk promote beta`), → **Done** for the final hop (e.g. `pk promote main`). | — |
 | 11 | 5 | **Strategy Sync** | `/strategy-sync` | Updated Strategy docs reflecting reality | Code is truth; diffs human-approved before apply |
 
 **Feedback loops:** steps 2, 5b, 6, and 8 can send work backward. Agent review returns specs for revision. Plan review returns plans for rework. Verify returns tasks to dev. UAT returns features to execution. The pipeline is linear by default, corrective when needed.
@@ -355,7 +355,7 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 2. **Pipekit owns the visibility layer.** Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and project config are Pipekit's. VBW does not write to these. (v2 retired the `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear.)
 3. **Initial merge happens once** — at `/roadmap-create`. Strategy-derived requirements are added **into** VBW's existing phase structure. VBW's phases, goals, and success criteria are preserved verbatim.
 4. **After the merge, the split is one-way.** Pipekit reads VBW state (plan progress, execution state) to update Linear. VBW does not read Linear — its source of truth is its own files.
-5. **Pipekit owns gates; VBW owns build.** `pk branch` opens Linear → In Progress; `/work` (with `Backend: vbw`) dispatches `vbw-lead` and `vbw-dev`; `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT; `pk done` (post-merge) → Done. The plan-review gate (Pipekit's value-add over raw VBW) lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent at `model: opus` between `vbw-lead`'s plan and `vbw-dev`'s execution.
+5. **Pipekit owns gates; VBW owns build.** `pk branch` opens Linear → In Progress; `/work` (with `Backend: vbw`) dispatches `vbw-lead` and `vbw-dev`; `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT; `pk promote <env>` walks `Ship environments` one hop at a time and transitions issues → Released (intermediate) or → Done (final); `pk done` cleans up the worktree (no state transition). The plan-review gate (Pipekit's value-add over raw VBW) lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent at `model: opus` between `vbw-lead`'s plan and `vbw-dev`'s execution.
 
    **Pipekit's VBW-steering surface:**
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Not a VBW agent; Pipekit-shipped.
@@ -432,8 +432,8 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. |
 | `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth |
-| `pk done <ID>` | After PR merge: cleanup worktree+branch, post commits to Linear, → Done |
-| `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` |
+| `pk done <ID>` | After PR merge: cleanup worktree+branch, post commits to Linear. Cleanup-only — does NOT transition Linear state. |
+| `pk promote <env>` | One-hop promotion along `Ship environments`. Transitions matching issues → Released (intermediate hops) or → Done (final hop). 2-tier projects: `pk promote` with no arg auto-picks the only hop. |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Last command of every Claude session. |
 | `pk status` | Full unscoped Linear board view |
 | `/pipekit-help` | Read project state, recommend the next pipeline step. |

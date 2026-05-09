@@ -50,8 +50,8 @@ These skills work across any project that follows the method. They read `method.
 | `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary | Stage 3: Verify + Ship |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
-| `pk done <ID>` | Post-merge cleanup: worktree+branch, commits to Linear, → Done | Stage 4: Release |
-| `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` | Stage 4: Release |
+| `pk done <ID>` | Post-merge cleanup: worktree+branch, commits to Linear. Cleanup-only — no state transition. | Stage 4: Release |
+| `pk promote <env>` | One hop along `Ship environments`. Transitions matching issues → Released (intermediate) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
 | `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md` | Per session |
 | `pk status` | Full unscoped Linear board view | Anytime |
