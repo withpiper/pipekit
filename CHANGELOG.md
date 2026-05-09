@@ -6,6 +6,24 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.2.1 — 2026-05-09
+
+> Patch: stop wiping project-local agents on sync.
+
+### What changed
+
+- **`scripts/sync-method.sh` agents sync** — replaced `sync_dir --delete` with per-file `sync_file` over upstream agent files. Project-local agents in `.claude/agents/` (e.g., `code-reviewer.md`, `supabase-reviewer.md`, `{library}-pitfalls.md`) now persist across syncs.
+
+### Why
+
+Surfaced during Piper's v2 canary (PR #235): `rsync --delete` on `.claude/agents/` would have deleted 8 Piper-local agents because upstream pipekit ships only `plan-reviewer.md`. Patched manually in PR #235 by restoring from HEAD; this is the permanent fix. Mirrors the canonical-rules pattern (`README.md`, `pipekit-*.md`), which uses `sync_file` for the same reason — consumers extend `.claude/rules/` and `.claude/agents/` with project-specific files that must survive sync.
+
+### Migration
+
+None. Re-run `./scripts/sync-method.sh v2.2.1` and project-local agents are preserved.
+
+---
+
 ## v2.2.0 — 2026-05-09
 
 > Two paired changes: **synced-folder rename** (`method/` → `pipekit/`) and **squash retirement** (merge-commit-only on `main`, squash disabled repo-wide). Breaking changes for consumers — see Migration section.
