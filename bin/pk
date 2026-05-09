@@ -10,10 +10,11 @@
 #   pk next                 — what should I do now? (Linear + git → next command)
 #   pk status               — quick triage of in-flight + UAT + Approved
 #   pk branch <ID>          — create worktree+branch, Linear → In Progress
-#   pk ship [--env=<env>]   — push, gh pr create, Linear → In Review
-#   pk done                 — verify PR merged, cleanup worktree+branch, Linear → Done
+#   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
+#   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
 #   pk verify               — light verify (run test cmd from method.config.md)
-#   pk promote              — dev → main batch promote (multi-tier projects)
+#   pk promote <env>        — promote one hop along Ship environments; transitions
+#                             matching issues → Released (intermediate) or Done (final)
 #   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
 #   pk spec-cycle <ID>      — trigger Spec Review Agent v5, poll, dispatch on verdict
 #
@@ -27,7 +28,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.2.2"
+PK_VERSION="2.3.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -865,8 +866,9 @@ $commits"
   fi
   pk_linear_comment "$issue" "$body" || true
 
-  # Linear → Done
-  pk_linear_set_state "$issue" "Done" || true
+  # No state transition here — `pk done` is cleanup-only as of v2.3.0.
+  # State movement is owned by `pk ship` (→ UAT) and `pk promote` (→ Released
+  # / → Done). A worktree closing does not mean the issue is shipped.
 
   # Cleanup must run from parent
   if [ "$wt_path" != "" ] && [ "$root" != "$wt_path" ]; then
@@ -927,13 +929,18 @@ cmd_verify() {
   fi
 }
 
+# Walks `Ship environments` one hop per invocation. Target arg is the
+# destination env. State transitions fire optimistically at PR-open time
+# (matches `pk ship`). Position-based state mapping: last hop → Done,
+# any non-last → Released.
 cmd_promote() {
-  local stash=false take_remote=false
+  local stash=false take_remote=false target=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --stash)       stash=true;       shift ;;
       --take-remote) take_remote=true; shift ;;
-      *) echo "pk promote: unknown arg $1" >&2; return 2 ;;
+      --*)           echo "pk promote: unknown arg $1" >&2; return 2 ;;
+      *)             target="$1";      shift ;;
     esac
   done
   if $stash && $take_remote; then
@@ -947,31 +954,60 @@ cmd_promote() {
     echo "Promote to main is disabled in method.config.md (single-tier project)."
     return 0
   fi
-  local integration
-  integration=$(pk_integration_branch)
-  if [ "$integration" = "main" ]; then
-    echo "Integration branch is already main — nothing to promote."
-    return 0
+
+  # Resolve Ship environments chain. Trim whitespace per element.
+  local ship_envs envs_arr=()
+  ship_envs=$(pk_config "Ship environments" "dev,main")
+  IFS=',' read -ra envs_arr <<< "$ship_envs"
+  local i
+  for i in "${!envs_arr[@]}"; do
+    envs_arr[$i]=$(echo "${envs_arr[$i]}" | tr -d ' ')
+  done
+  if [ ${#envs_arr[@]} -lt 2 ]; then
+    echo "ERROR: 'Ship environments' must list at least two envs (e.g. dev,main)." >&2
+    return 2
   fi
-  echo "Promote $integration → main"
-  echo "  1. Sync $integration"
-  git checkout "$integration"
+
+  # Resolve target. With no arg + 2-tier chain → auto-pick the only hop.
+  # Otherwise require an explicit target to avoid accidental skip-ahead.
+  if [ -z "$target" ]; then
+    if [ ${#envs_arr[@]} -eq 2 ]; then
+      target="${envs_arr[1]}"
+    else
+      echo "ERROR: Ship environments has multiple hops. Specify target:" >&2
+      echo "  pk promote <env>   (valid: ${envs_arr[*]:1})" >&2
+      return 2
+    fi
+  fi
+
+  local target_idx=-1
+  for i in "${!envs_arr[@]}"; do
+    [ "${envs_arr[$i]}" = "$target" ] && target_idx=$i && break
+  done
+  if [ "$target_idx" -lt 1 ]; then
+    echo "ERROR: '$target' is not a valid promote target in Ship environments." >&2
+    echo "  Valid targets: ${envs_arr[*]:1}" >&2
+    return 2
+  fi
+
+  local source="${envs_arr[$((target_idx - 1))]}"
+  echo "Promote $source → $target"
+  echo "  1. Sync $source"
+  git checkout "$source"
 
   # Conflict-pattern guard: local edits to tracked files can block the
-  # ff-only pull when incoming commits touch the same paths. Surface the
-  # situation explicitly with two recoverable options.
-  local dirty
+  # ff-only pull when incoming commits touch the same paths.
+  local dirty stash_made=false
   dirty=$(git status --porcelain | grep -E '^( M|M | A|A )' || true)
-  local stash_made=false
   if [ -n "$dirty" ]; then
     if $take_remote; then
       echo "  → --take-remote: discarding local edits to tracked files:"
       echo "$dirty" | sed 's/^/      /'
-      git fetch origin "$integration" --quiet
+      git fetch origin "$source" --quiet
       while IFS= read -r line; do
         local path
         path=$(echo "$line" | awk '{print $2}')
-        [ -n "$path" ] && git checkout "origin/$integration" -- "$path"
+        [ -n "$path" ] && git checkout "origin/$source" -- "$path"
       done <<< "$dirty"
     elif $stash; then
       echo "  → --stash: stashing local edits before pull"
@@ -983,8 +1019,8 @@ cmd_promote() {
       echo "$dirty" | sed 's/^/    /' >&2
       echo "" >&2
       echo "Options:" >&2
-      echo "  pk promote --stash         stash these edits before pull, pop after PR opens" >&2
-      echo "  pk promote --take-remote   discard local edits in favor of incoming dev" >&2
+      echo "  pk promote $target --stash         stash before pull, pop after PR opens" >&2
+      echo "  pk promote $target --take-remote   discard local edits in favor of incoming $source" >&2
       echo "  (or) commit / stash / discard manually, then rerun pk promote" >&2
       return 1
     fi
@@ -995,22 +1031,64 @@ cmd_promote() {
     $stash_made && echo "  Note: your edits are stashed (git stash list)." >&2
     return 1
   fi
+
   echo "  2. Run pre-deploy gate"
   if ! cmd_verify; then
     $stash_made && echo "  Note: your edits are stashed (git stash list — run 'git stash pop' to restore)." >&2
     return 1
   fi
-  echo "  3. Open promote PR"
+
+  git fetch origin "$target" --quiet 2>/dev/null || true
+  local commits_ahead
+  commits_ahead=$(git log "origin/$target..origin/$source" --oneline 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$commits_ahead" = "0" ]; then
+    echo "  Nothing to promote — $source is not ahead of $target."
+    return 0
+  fi
+
+  echo "  3. Open promote PR ($source → $target, $commits_ahead commits)"
   local date promote_url
   date=$(date +%Y-%m-%d)
-  promote_url=$(pk_gh_pr_create --base main --head "$integration" \
-    --title "Promote $integration → main ($date)" \
-    --body "Batch promote. Merge-commit per ruleset (one anchor commit on main per promote).") || return 1
+  promote_url=$(pk_gh_pr_create --base "$target" --head "$source" \
+    --title "Promote $source → $target ($date)" \
+    --body "Batch promote. Merge-commit per ruleset (one anchor commit on $target per promote).") || return 1
   echo "PR: $promote_url"
+
+  # Position-based state mapping: last env in chain → Done, else → Released.
+  local target_state
+  if [ "$target_idx" -eq $((${#envs_arr[@]} - 1)) ]; then
+    target_state="Done"
+  else
+    target_state="Released"
+  fi
+
+  local issue_prefix
+  issue_prefix=$(pk_config "Issue prefix" "")
+  if [ -n "$issue_prefix" ]; then
+    local issue_ids
+    issue_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
+      | grep -oE "${issue_prefix}-[0-9]+" | sort -u)
+    if [ -n "$issue_ids" ]; then
+      local id_count
+      id_count=$(echo "$issue_ids" | wc -l | tr -d ' ')
+      echo "  4. Transitioning $id_count issue(s) → $target_state"
+      while IFS= read -r issue_id; do
+        if ! pk_linear_set_state "$issue_id" "$target_state" 2>/dev/null; then
+          if [ "$target_state" = "Released" ]; then
+            echo "    Linear: $issue_id — Released state not configured. Add it via Linear UI + method.config.md, then re-run." >&2
+          else
+            echo "    Linear: $issue_id — transition to $target_state failed. Check state name + permissions." >&2
+          fi
+        fi
+      done <<< "$issue_ids"
+    fi
+  fi
+
   if $stash_made; then
     echo ""
     echo "Note: your local edits are stashed. Run 'git stash pop' after the promote PR is merged."
   fi
+  echo ""
   echo "Open the PR in browser and merge with 'Create a merge commit'."
 }
 
@@ -1413,10 +1491,10 @@ Subcommands:
   pk next                         What should I do now?
   pk status                       Quick triage of the Linear board + worktrees
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
-  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → In Review/UAT (optional antagonistic review)
-  pk done                         Verify PR merged, cleanup, Linear → Done
+  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review)
+  pk done                         Verify PR merged, cleanup worktree+branch (no Linear state change)
   pk verify                       Run the project's pre-deploy gate
-  pk promote [--stash|--take-remote]  dev → main batch promote (flags resolve local-edit conflicts with incoming dev)
+  pk promote <env> [--stash|--take-remote]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)

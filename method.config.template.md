@@ -38,6 +38,7 @@ Skills use these IDs to transition issues. Get them from Linear API or the Linea
 | Building | `` |
 | In Progress | `` |
 | UAT | `` |
+| Released | `` |
 | Done | `` |
 | Canceled | `` |
 | Duplicate | `` |
