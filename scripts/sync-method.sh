@@ -10,7 +10,10 @@
 # What it syncs:
 #   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills, VBW)
 #   pipekit/templates/  <- Spec and review templates
-#   pipekit/method.md   <- The methodology overview
+#   pipekit/method.md   <- The deeper methodology overview
+#   pipekit/RUNBOOK.md  <- The one-page operational doc (v2.3.1+)
+#   pipekit/GUIDE.md    <- The full instruction manual
+#   pipekit/STARTUP.md  <- The bootstrap reference
 #   .claude/skills/    <- Portable skills (won't touch project-specific ones)
 #
 # What it does NOT touch:
@@ -175,6 +178,7 @@ mkdir -p "$PROJECT_ROOT/pipekit"
 sync_dir "$TEMP/sop" "$PROJECT_ROOT/pipekit/sop" "sop/"
 sync_dir "$TEMP/templates" "$PROJECT_ROOT/pipekit/templates" "templates/"
 sync_file "$TEMP/method.md" "$PROJECT_ROOT/pipekit/method.md" "method.md"
+sync_file "$TEMP/RUNBOOK.md" "$PROJECT_ROOT/pipekit/RUNBOOK.md" "RUNBOOK.md"
 sync_file "$TEMP/GUIDE.md" "$PROJECT_ROOT/pipekit/GUIDE.md" "GUIDE.md"
 sync_file "$TEMP/STARTUP.md" "$PROJECT_ROOT/pipekit/STARTUP.md" "STARTUP.md"
 
@@ -463,7 +467,7 @@ fi
 # --- Post-sync: generate changelog ---
 if ! $DRY_RUN; then
   # Compare method files
-  for f in method.md GUIDE.md STARTUP.md; do
+  for f in method.md RUNBOOK.md GUIDE.md STARTUP.md; do
     dst="$PROJECT_ROOT/pipekit/$f"
     if [ -f "$dst" ]; then
       old_hash=$(grep "$dst" "$SNAP/method.md5" 2>/dev/null | awk '{print $1}' || true)
