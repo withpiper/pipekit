@@ -9,7 +9,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.1.2                (or latest tag)
+1. ./scripts/sync-method.sh v2.3.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -95,7 +95,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │     pk ship                 (or --env=<env>)             │
   │     • push (idempotent)                                  │
   │     • gh pr create against integration branch            │
-  │     • Linear: Building → UAT (or → In Review)            │
+  │     • Linear → UAT (→ In Review for non-standard envs)   │
   │     • on push/gh failure → STOP, surface error, no retry │
   └──────────────────────────────────────────────────────────┘
        │
@@ -265,7 +265,8 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` enabled |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` runs QA subagent |
 | **Default deep flag** | `true` \| `false` | `false` | `/work` always uses `--deep` |
-| **Ship environments** | comma list | `dev,main` | `pk ship --env=<name>` |
+| **Ship environments** | comma list | `dev,main` | `pk ship --env=<name>`; `pk promote <env>` walks the chain |
+| **Worktree prefix** | path (trailing `-` or `/`) | `${root}/.worktrees/` | `pk branch` worktree location (v2.2.2+) |
 | **Linear API key env var** | name | `LINEAR_API_KEY` | `pk` Linear access |
 
 Secret resolution priority: **`.env.local` > `.env` > process env**.
