@@ -67,10 +67,12 @@ Labels = Cross-cutting metadata        <- Filterable on everything
 ### Pipeline
 
 ```
-Planned:   Triage -> Ideas -> Future Phases -> On Deck -> Needs Spec -> Specced -> Approved -> Building -> UAT -> Done
-Ad-hoc:    Triage -> In Progress -> UAT -> Done                                                              -> Canceled
-                                                                                                             -> Duplicate
+Planned:   Triage -> Ideas -> Future Phases -> On Deck -> Needs Spec -> Specced -> Approved -> Building -> UAT -> Released -> Done
+Ad-hoc:    Triage -> In Progress -> UAT -> Released -> Done                                                                -> Canceled
+                                                                                                                            -> Duplicate
 ```
+
+**Released** is meaningful only on 3-tier projects (`Ship environments: dev,beta,main`). On 2-tier projects (`Ship environments: dev,main`), state goes UAT → Done directly via the single `pk promote main` hop, and Released is unused.
 
 ### Principle
 
@@ -91,8 +93,9 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
 | **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
 | **Building** | started | VBW | Steps 4-7 | VBW planning + execution + QA. Current-phase execution queue only. |
-| **UAT** | started | You | Step 8 | Code complete, QA passed. Your turn to accept or reject. |
-| **Done** | completed | -- | Step 9 | Shipped and verified. |
+| **UAT** | started | You | Step 8 | Code merged to integration env (`dev`). Your turn to accept or reject. |
+| **Released** | started | You | Step 8.5 | Code merged to staging env (`beta`). Pre-prod validation. 3-tier projects only. |
+| **Done** | completed | -- | Step 9 | Code merged to production env (`main`). Live. |
 | **Canceled** | canceled | -- | -- | Won't do. |
 | **Duplicate** | canceled | -- | -- | Merged into another issue. |
 
@@ -109,7 +112,9 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | Specced | Approved | You approve scope, decisions, priority | You |
 | Approved | Building | Phase batch is ready for execution | You (or VBW pickup) |
 | Building | UAT | VBW QA passes | VBW QA agent |
-| UAT | Done | You accept + ship | You + promotion skill |
+| UAT | Released | `pk promote beta` (3-tier projects) | You + `pk promote` |
+| UAT | Done | `pk promote main` (2-tier projects, single hop) | You + `pk promote` |
+| Released | Done | `pk promote main` (3-tier projects) | You + `pk promote` |
 | UAT | Building | You reject — needs rework | You |
 | Triage | In Progress | Hotfix or quick fix — you're handling it manually | You |
 | In Progress | UAT | Manual fix ready for acceptance testing | You |
@@ -119,10 +124,12 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 
 | Lane | Path | Managed By |
 |---|---|---|
-| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → Done | VBW |
-| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → Done | VBW (enters the phase) |
-| **Hotfix** | Triage → In Progress → UAT → Done | You (manual fix) |
+| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → [Released →] Done | VBW |
+| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → [Released →] Done | VBW (enters the phase) |
+| **Hotfix** | Triage → In Progress → UAT → [Released →] Done | You (manual fix) |
 | **Quick fix** | Triage → In Progress → Done | You (no UAT needed) |
+
+`[Released →]` is only present on 3-tier projects.
 
 **Building** = VBW owns it. Phase-batched, trigger rules apply. Never put ad-hoc work here.
 **In Progress** = You're doing it by hand, outside the phase. VBW ignores these.
