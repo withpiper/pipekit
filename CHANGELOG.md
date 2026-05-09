@@ -6,6 +6,73 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.3.0 — 2026-05-09
+
+> State machine maps 1:1 to environment. New `Released` Linear state for 3-tier projects. `pk promote` walks `Ship environments` one hop per call. `pk done` is cleanup-only.
+
+### What changed
+
+- **`bin/pk` cmd_promote rewritten** (PR #76) — `pk promote <env>` walks `Ship environments` one hop per invocation. Validates target against the chain, derives source from chain position, opens source→target PR, transitions matching issues optimistically at PR-open time. Position-based state mapping: last env in chain → **Done**, any non-final → **Released**. 2-tier backwards-compat: `pk promote` with no arg auto-picks the only hop. Preserves `--stash` / `--take-remote` conflict handling.
+- **`bin/pk` cmd_done strip-down** (PR #76) — removed the `pk_linear_set_state ... "Done"` call. `pk done` is now **pure cleanup**: removes worktree, deletes branch, posts commits + diffstat to Linear. State movement is owned entirely by `pk ship` (→ UAT) and `pk promote` (→ Released / → Done). A worktree closing does not mean the issue is shipped.
+- **`bin/pk` v2.2.2 fixes folded in** (PR #75) — `pk verify` parser rewrite (awk section-extractor; removes gate-must-be-last constraint and the silent 10-command truncation cap); `pk doctor` Linear error surfacing (parses `userPresentableMessage` / `.message` from GraphQL responses; falls through to truncated body snippet; distinct "no response" branch for network failures); `pk branch` honors `Worktree prefix` from `method.config.md` (defaults to `${root}/.worktrees/`; trailing char in prefix value controls join style).
+- **Help text + headers** — `bin/pk` header comment block, `cmd_help` table, and inline `pk` echo strings all updated to reflect new transitions and the `pk promote <env>` target-arg form.
+- **`method.config.template.md`** — Released row added to Workflow State IDs table. Two-tier and three-tier release-flow sections rewritten with new transition semantics. (PR #76 + #78.)
+- **`sop/Linear_SOP.md`** — pipeline diagrams (Planned + Ad-hoc), state-meaning table, key transitions, and fast-track paths updated to include Released. Explicit note: `pk done` is cleanup-only and does NOT transition state. (PR #76.)
+- **`sop/Git_and_Deployment.md`** — Step 5/6 docs use `pk promote <env>` (primary). Linear-transitions lines for both 2-tier and 3-tier rewritten. Pre-deploy gate sub-section updated. (PR #78.)
+- **`sop/Skills_SOP.md`** — `pk done` and `pk promote` rows updated. (PR #77.)
+- **Constitutional docs aligned** — `method.md`, `RUNBOOK.md`, `GUIDE.md`, `STARTUP.md`: version stamps bumped from v2.1.2 → v2.3.0; pipeline tables, flowcharts, and walkthroughs reflect Released state and the new pk done / pk promote semantics. (PRs #77, #78, #79.)
+- **Templates** (`templates/tier-{quick,standard,heavy}.md`) — close-path lines rewritten to reflect cleanup-only `pk done` and target-arg `pk promote <env>`. (PR #78.)
+- **Skills updated** — `skills/linear/skill.md` (Phase 4 step 3 documents 2-tier vs 3-tier transitions); `skills/sync-linear/skill.md` (workflow status ladder includes Released); `skills/task-processor/skill.md` (adds Released as a state option); `skills/pr-fix/skill.md` (visibility-gap description includes Released). (PR #78.)
+- **`PK_VERSION` 2.1.3 → 2.2.2 → 2.3.0** — caught a pre-existing version drift (PR #75) and bumped through to current.
+
+### Why
+
+The v1 → v2 daily loop validated end-to-end on Piper (May 2026 migration), but two structural problems surfaced during the canary:
+
+1. **`pk done` was 3-tier-blind** — it transitioned issues to Done unconditionally on merge to the integration branch (e.g. `dev`). For 3-tier projects (Piper, any team-with-QA project), this lied about issue status: the code was still on `dev`, awaiting beta and main promotions. Workaround was a manual revert to UAT after every `pk done`. Filed as Loop-Notes finding #6.
+2. **`pk promote` was hardcoded single-hop** — opened `--base main --head $integration` directly, skipping any intermediate environments. For 3-tier projects, `pk promote` was effectively a no-op for `dev → beta` and a misuse risk for `dev → main`. Filed as Loop-Notes finding #8.
+
+Both problems share a root cause: the v2 design hadn't fully committed to "state tracks WHERE in the pipeline." With state mapped 1:1 to environment (UAT = on dev, Released = on beta, Done = on main), Linear's state always reflects reality. No more "Done then revert" pingpong on intermediate hops. `pk done`'s pre-v2.3.0 state-transition responsibility evaporates — state movement belongs entirely to `pk ship` (the one transition into the deploy chain) and `pk promote` (each subsequent hop).
+
+This is the load-bearing simplification: `cmd_done` shrinks, `cmd_promote` carries all promotion-state logic, and the contract becomes legible — "the command's invocation is the trigger; state moves at PR-open optimistically; `pk done` is just cleanup."
+
+### What this fixes
+
+- **3-tier `pk done` lying about status** — gone. State stays UAT through any number of intermediate hops; `pk promote main` is the only command that can mark Done.
+- **3-tier `pk promote` skipping environments** — gone. `pk promote <env>` walks one hop, validates against `Ship environments`, refuses skip-ahead.
+- **State-machine ambiguity** — Linear's state and the deploy reality now diverge only when a promote PR is closed without merging (rare, recoverable by manual state revert).
+- **Project portability** — position-based state mapping (last hop → Done, else → Released) means projects can use any env names, not just `dev,beta,main`. `develop,staging,production` works identically.
+
+### What this breaks
+
+**Backwards-compat preserved for 2-tier projects.** `pk promote` with no arg still works there — auto-picks the only hop in `Ship environments`, transitions directly to Done. Released is unused on 2-tier.
+
+**3-tier projects must:**
+1. Add a **Released** Linear state (type: `started`) between UAT and Done. Capture the state UUID.
+2. Add the UUID to `method.config.md` Workflow State IDs.
+3. Switch from `pk promote` (no arg) to explicit `pk promote <env>` invocations.
+
+If a 3-tier project syncs v2.3.0 before adding Released, intermediate `pk promote <env>` calls fail-soft per issue: "Released state not configured — add it via Linear UI + method.config.md, then re-run." Final-hop promotes (`pk promote main` → Done) continue working unchanged.
+
+### Migration
+
+Per consuming project:
+1. Add `Released` state via Linear UI (type `started`, position between UAT and Done). Capture state UUID.
+2. Update `method.config.md` Workflow State IDs table — add `| Released | <uuid> |` row.
+3. Run `./scripts/sync-method.sh v2.3.0`.
+4. (3-tier only) Update consumer-side SOPs that reference `/g-promote-*` or single-hop `pk promote` to use `pk promote <env>` form.
+5. First canary: `pk promote beta` on the next real Linear issue.
+
+### Cross-references
+
+- PR #75: v2.2.2 — `pk verify` / `pk doctor` / `pk branch` fixes
+- PR #76: v2.3.0 — `cmd_promote` rewrite + `cmd_done` strip + Released state
+- PR #77: docs alignment pass 1 (constitutional docs + Skills_SOP)
+- PR #78: docs alignment pass 2 (Git_and_Deployment + templates + skills)
+- PR #79: RUNBOOK final-mile alignment
+
+---
+
 ## v2.2.1 — 2026-05-09
 
 > Patch: stop wiping project-local agents on sync.
