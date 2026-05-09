@@ -6,6 +6,27 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.3.1 — 2026-05-09
+
+> Patch: `RUNBOOK.md` is now synced into consumer projects.
+
+### What changed
+
+- **`scripts/sync-method.sh`** — adds `RUNBOOK.md` to the synced doc set alongside `method.md`, `GUIDE.md`, and `STARTUP.md`. Three edits: header comment listing what syncs, `sync_file` invocation, and the post-sync changelog comparison loop. Consumer projects now get `pipekit/RUNBOOK.md` populated and kept up-to-date on each sync.
+- **`PK_VERSION`** 2.3.0 → 2.3.1.
+
+### Why
+
+`RUNBOOK.md` exists in pipekit's main repo as the one-page operational doc — the canonical daily-loop flowchart. Until v2.3.1 it was never synced, so consumer projects had `pipekit/method.md` (deep methodology, ~700 lines) and `pipekit/GUIDE.md` (full manual, ~1200 lines) but no one-pager for daily reference. Surfaced during Piper's v2.3.0 sync canary (PR #242 on piper).
+
+`method.md` line 5 self-describes the relationship: "RUNBOOK is the canonical one-page operational doc; this document is the deeper methodology." Both have distinct, non-overlapping roles. Adding RUNBOOK to the sync gives consumers the daily-use surface.
+
+### Migration
+
+None. Re-run `./scripts/sync-method.sh v2.3.1` and `pipekit/RUNBOOK.md` lands in your project's `pipekit/` folder.
+
+---
+
 ## v2.3.0 — 2026-05-09
 
 > State machine maps 1:1 to environment. New `Released` Linear state for 3-tier projects. `pk promote` walks `Ship environments` one hop per call. `pk done` is cleanup-only.
