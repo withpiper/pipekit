@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**Last updated:** 2026-05-03 *(rewritten for v2.1.2)*
+**Last updated:** 2026-05-09 *(updated for v2.3.0 — Released state + 3-tier-aware pk promote)*
 
 ---
 
@@ -115,11 +115,13 @@ STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
     table
 
   Stage 4: Release
-    pk done <ID> ──→ pk promote
-         │                │
-     Worktree         dev → main (or
-     cleanup +        dev → beta → main)
-     Linear → Done    PR
+    pk promote <env> ──→ pk done <ID>
+         │                    │
+     One hop per          Worktree
+     invocation;          cleanup
+     transitions          (no state
+     issues to            change)
+     Released or Done
 
   Stage 5: Doc Loop
     /strategy-sync (after UAT)
@@ -653,15 +655,16 @@ Your git architecture (chosen during `/startup`) determines the release flow:
 feature/* → pk ship (PR to dev) → pk promote (PR to main)
 ```
 - `pk ship` opens the feature → dev PR (Linear → UAT)
-- After UAT merge of the dev PR, `pk done <ID>` closes the issue (→ Done)
-- `pk promote` opens the dev → main PR
+- `pk done <ID>` cleans up the worktree (no state change)
+- `pk promote main` (or `pk promote` with no arg, since only one hop) opens the dev → main PR and transitions the issue → Done
 
 **Three-tier** (`dev` → `beta` → `main`):
 ```
-feature/* → pk ship (PR to dev) → pk promote (PR to beta) → pk promote (PR to main)
+feature/* → pk ship (PR to dev) → pk promote beta (PR to beta) → pk promote main (PR to main)
 ```
-- `pk ship` opens the feature → dev PR
-- Merge to beta keeps the issue in UAT
+- `pk ship` opens the feature → dev PR (Linear → UAT)
+- `pk promote beta` opens dev → beta and transitions the issue → Released
+- `pk promote main` opens beta → main and transitions the issue → Done
 - After main merge, `pk done <ID>` transitions the issue to Done
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
@@ -844,14 +847,16 @@ Initiative = Stage              "What stage does this ship in?"
 
 ```
 Planned path:
-  Triage → Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → Done
+  Triage → Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → [Released →] Done
 
 Ad-hoc path:
-  Triage → In Progress → UAT → Done
+  Triage → In Progress → UAT → [Released →] Done
 
 Terminal:
   → Canceled | Duplicate
 ```
+
+`[Released →]` is present only on 3-tier projects (`Ship environments: dev,beta,main`). State maps 1:1 to environment: UAT (on dev), Released (on beta), Done (on main).
 
 **Key distinction:**
 - **Building** = VBW owns it. Phase-batched, planned work.
@@ -1129,8 +1134,8 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 
 | Command | Invocation | What It Does |
 |---------|------------|-------------|
-| Done | `pk done <ID>` | Post-merge: cleanup worktree+branch, post commits/diffstat to Linear, → Done |
-| Promote | `pk promote` | Multi-tier: open dev → main (or dev → beta → main) PR per `Ship environments` |
+| Cleanup | `pk done <ID>` | Post-merge: cleanup worktree+branch, post commits/diffstat to Linear. **No state transition** (cleanup-only as of v2.3.0). |
+| Promote | `pk promote <env>` | One-hop along `Ship environments`. Transitions matching issues → Released (intermediate) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. |
 
 ### Stage 5: Doc Loop
 
