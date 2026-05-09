@@ -236,11 +236,19 @@ if [ -d "$TEMP/templates/rules" ]; then
 fi
 
 # --- Sync Pipekit agents (subagents spawned by Pipekit skills) ---
+# Per-file copy (sync_file, not sync_dir --delete) so project-local agents
+# like code-reviewer, supabase-reviewer, or {library}-pitfalls helpers persist
+# across syncs. Mirrors the canonical-rules pattern above. Upstream agents
+# are enumerated by what's present in the source tree.
 if [ -d "$TEMP/agents" ]; then
   echo ""
   echo "Agents:"
   mkdir -p "$PROJECT_ROOT/.claude/agents"
-  sync_dir "$TEMP/agents" "$PROJECT_ROOT/.claude/agents" "agents/"
+  for agent_src in "$TEMP/agents"/*.md; do
+    [ -f "$agent_src" ] || continue
+    name=$(basename "$agent_src")
+    sync_file "$agent_src" "$PROJECT_ROOT/.claude/agents/$name" ".claude/agents/$name"
+  done
 fi
 
 # --- Sync portable skills ---
