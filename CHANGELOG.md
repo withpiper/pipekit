@@ -6,6 +6,48 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.3.2 — 2026-05-12
+
+> Patch: closes the v2.3.1 canary cascade. `pk_config` reads the actual code-block config format; `pk config` subcommand exposed; `/verify` skill stops self-terminating; `pk done` no longer destroys its own CWD.
+
+### What changed
+
+- **`bin/pk` `pk_config` parser** — accepts plain `Key: Value` inside fenced code blocks (the format every consumer actually uses, per `method.config.template.md` lines 162-180) in addition to the legacy markdown-table form. Code-block matched first; table is the fallback. Restores correct values for `Backend`, `Integration branch`, `Ship environments`, `Require QA review`, and every other V2 key.
+- **`bin/pk config <key>` subcommand** — added. Plain-value output for `$(pk config K)` substitution. No-arg form dumps all known V2 keys + resolved values. `pk cfg` is an alias. Skills now have one place to read config.
+- **`bin/pk` sourceability** — bottom-of-file `main "$@"` guarded with `[ "${BASH_SOURCE[0]}" = "${0}" ]` so test harnesses can `source bin/pk` to exercise helpers directly.
+- **`scripts/test-pk-config.sh`** (new) — fixture-based bash harness. Asserts `pk_config` against code-block style (Piper, rs-vault), legacy markdown-table, missing-key + default, and malformed blank-value. 14 assertions; run with `bash scripts/test-pk-config.sh`.
+- **`skills/verify/skill.md`** — Step 0 + Step 3b replace the markdown-table `grep` for Integration branch with `pk config "Integration branch"` (one source of truth). Step 2's awk gate-extractor no longer self-terminates: the start regex uses `next` so the end pattern only evaluates on subsequent lines, restoring the bash block extraction that v2.3.1 silently broke.
+- **`bin/pk` `cmd_done` worktree refusal** — prefix-matches CWD against the worktree path via `pwd -P`, refusing for *any* nesting level (subdirs included), and runs before posting Linear comments or computing diffs so refused runs leave no side effects.
+- **`PK_VERSION`** 2.3.1 → 2.3.2.
+
+### Why
+
+The v2.3.1 canary (WIT-280 in Piper, closed 2026-05-12) surfaced 19 findings. One root cause — `pk_config` matched only markdown-table rows, never the `Key: Value` code-block format documented in `method.config.template.md` — silently returned defaults for every V2 key in every consumer project. `pk promote beta` refused with "not a valid target" because `Ship environments` read as the default `dev,main` instead of Piper's `dev,beta,main`. `Backend: auto` read as `vbw`. `Require QA review: true` read as `false`. `pk ship` and `pk branch` accidentally kept working because `pk_integration_branch` had a separate fallback chain.
+
+Three downstream findings rode the same parser blind spot: `/verify` Step 0's Integration-branch grep (#3) and Step 2's awk gate-extractor (#4) — the awk used `/^## Pre-Deploy Gate/,/^## /` which self-terminated on its own start line, emitting an empty gate. And `pk done`'s late, exact-match CWD check (#13/#14) destroyed the running Claude session's working directory when called from inside the worktree's subdirectories.
+
+This patch closes the cascade plus adds a test harness so the silent-default class of bug cannot recur unnoticed.
+
+### Migration
+
+None. Re-run `./scripts/sync-method.sh v2.3.2` in consumer projects. After sync:
+
+- `pk version` returns `2.3.2`
+- `pk config Backend` returns the actual configured value (e.g. `auto`) in projects that use the code-block V2-key format
+- `pk promote <env>` works for any project with a multi-env `Ship environments` chain
+- `pk done` from inside the worktree (or any subdirectory of it) refuses with a clear error instead of destroying the CWD
+
+### What this fixes (loop-notes references)
+
+- **#15** `pk_config` parser blind to code-block format → fixed
+- **#2** No `pk config` subcommand → added (with `cfg` alias)
+- **#3** `/verify` Step 0 Integration-branch parser → routed through `pk config`
+- **#4** `/verify` Step 2 awk self-terminates on start line → corrected (`next` after start match)
+- **#13** `pk done` exact-match CWD check skipped subdirs → prefix-match via `pwd -P`
+- **#14** `pk done` side-effect ordering destroyed CWD partway through cleanup → refusal moved above side effects
+
+---
+
 ## v2.3.1 — 2026-05-09
 
 > Patch: `RUNBOOK.md` is now synced into consumer projects.

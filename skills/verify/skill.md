@@ -31,7 +31,7 @@ ISSUE="${1:-}"
 [ -z "$ISSUE" ] && { echo "ERROR: pass an issue ID or run on a feature branch." >&2; exit 1; }
 
 # Need at least one commit ahead of integration
-INTEGRATION=$(grep -oE 'Integration branch.*\| `[^`]+`' method.config.md | grep -oE '`[^`]+`' | tr -d '`' || echo "dev")
+INTEGRATION=$(pk config "Integration branch" "dev")
 COMMITS_AHEAD=$(git rev-list --count "origin/$INTEGRATION..HEAD" 2>/dev/null || echo 0)
 [ "$COMMITS_AHEAD" = "0" ] && { echo "ERROR: no commits ahead of $INTEGRATION — nothing to verify." >&2; exit 1; }
 ```
@@ -62,8 +62,12 @@ Extract the bash block from the config's § Pre-Deploy Gate section. Execute eac
 Implementation:
 
 ```bash
-# Read the bash block between ```bash and ``` after the "## Pre-Deploy Gate" heading
-awk '/^## Pre-Deploy Gate/,/^## /' method.config.md | awk '/^```bash/,/^```$/' | grep -v '^```' > /tmp/pk-gate.sh
+# Read the bash block between ```bash and ``` after the "## Pre-Deploy Gate" heading.
+# The leading awk uses `next` after matching the start line so the end-pattern
+# check (/^## /) does not also match the start line and self-terminate the range.
+awk '/^## Pre-Deploy Gate[[:space:]]*$/{flag=1; next} /^## /{flag=0} flag' method.config.md \
+  | awk '/^```bash/,/^```$/' \
+  | grep -v '^```' > /tmp/pk-gate.sh
 chmod +x /tmp/pk-gate.sh
 bash /tmp/pk-gate.sh
 GATE_RC=$?
@@ -99,7 +103,7 @@ Use Linear MCP `mcp__linear-server__get_issue` with `<ISSUE-ID>`. Capture the fu
 ### Step 3b — Compute the diff
 
 ```bash
-INTEGRATION=$(grep -oE 'Integration branch.*\| `[^`]+`' method.config.md | grep -oE '`[^`]+`' | tr -d '`' || echo "dev")
+INTEGRATION=$(pk config "Integration branch" "dev")
 git diff --stat "origin/$INTEGRATION...HEAD"
 git diff "origin/$INTEGRATION...HEAD"
 ```

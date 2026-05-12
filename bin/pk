@@ -13,6 +13,7 @@
 #   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
 #   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
 #   pk verify               — light verify (run test cmd from method.config.md)
+#   pk config [<key>]       — read a V2 key from method.config.md (or dump all)
 #   pk promote <env>        — promote one hop along Ship environments; transitions
 #                             matching issues → Released (intermediate) or Done (final)
 #   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
@@ -28,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.3.1"
+PK_VERSION="2.3.2"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -40,29 +41,70 @@ pk_config_path() {
   echo "$root/method.config.md"
 }
 
-# Read a value from method.config.md by row label. Looks for table rows like:
-#   | **Backend** | `native` | ... |
-# Prints the first backticked or pipe-delimited value after the label.
+# Read a value from method.config.md by label. Accepts two formats:
+#
+#   1) Plain Key: Value lines inside any fenced code block (current style,
+#      used by Piper, rs-vault, and the consumer-facing examples in
+#      method.config.template.md):
+#
+#        ```
+#        Backend: auto
+#        Ship environments: dev,beta,main
+#        ```
+#
+#   2) Legacy markdown-table rows (still rendered for documentation):
+#
+#        | **Backend** | `native` | ... |
+#
+# Code-block form is tried first since that is what consumers actually set.
+# Falls back to the table form, then to the supplied default.
 pk_config() {
   local label="$1"
   local default="${2:-}"
   local path
   path=$(pk_config_path) || { echo "$default"; return 0; }
   [ -f "$path" ] || { echo "$default"; return 0; }
-  local line
-  line=$(grep -E "^\| \*\*${label}\*\*" "$path" 2>/dev/null | head -1 || true)
-  if [ -z "$line" ]; then
-    echo "$default"
+
+  # Form 1: `Key: Value` inside a fenced code block.
+  local value
+  value=$(awk -v label="$label" '
+    /^```/        { in_fence = !in_fence; next }
+    !in_fence     { next }
+    {
+      # Strip leading whitespace.
+      sub(/^[[:space:]]+/, "")
+      # Match "Label:" at start of line (case-sensitive, exact label).
+      pos = index($0, ":")
+      if (pos == 0) next
+      key = substr($0, 1, pos - 1)
+      if (key != label) next
+      val = substr($0, pos + 1)
+      # Trim whitespace + surrounding backticks (some configs quote values).
+      sub(/^[[:space:]]+/, "", val)
+      sub(/[[:space:]]+$/, "", val)
+      gsub(/`/, "", val)
+      print val
+      exit
+    }
+  ' "$path" 2>/dev/null || true)
+
+  if [ -n "$value" ]; then
+    echo "$value"
     return 0
   fi
-  # Extract second column. Strip pipes, backticks, asterisks; trim.
-  local value
-  value=$(echo "$line" | awk -F'|' '{print $3}' | sed 's/`//g; s/\*\*//g; s/^ *//; s/ *$//')
-  if [ -z "$value" ]; then
-    echo "$default"
-  else
-    echo "$value"
+
+  # Form 2: legacy markdown-table row `| **Label** | value | ... |`.
+  local line
+  line=$(grep -E "^\| \*\*${label}\*\*" "$path" 2>/dev/null | head -1 || true)
+  if [ -n "$line" ]; then
+    value=$(echo "$line" | awk -F'|' '{print $3}' | sed 's/`//g; s/\*\*//g; s/^ *//; s/ *$//')
+    if [ -n "$value" ]; then
+      echo "$value"
+      return 0
+    fi
   fi
+
+  echo "$default"
 }
 
 # Resolve integration branch with fallback chain.
@@ -805,6 +847,29 @@ cmd_done() {
     $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
   ')
 
+  # Refuse early if CWD is inside the worktree we are about to remove.
+  # Loop-notes #13: previously checked only `pwd == wt_path` (exact match);
+  # a session inside a subdir (skills/, scripts/) would slip past, then
+  # `git worktree remove --force` would destroy the session's CWD. We also
+  # move this check above the Linear comment + diff calc so we don't post
+  # "Shipped" notes for a run that's about to refuse.
+  if [ -n "$wt_path" ] && [ "$root" != "$wt_path" ]; then
+    local pwd_real wt_real
+    pwd_real=$(cd "$(pwd)" 2>/dev/null && pwd -P) || pwd_real=$(pwd)
+    wt_real=$(cd "$wt_path" 2>/dev/null && pwd -P) || wt_real="$wt_path"
+    case "$pwd_real/" in
+      "$wt_real"/*)
+        echo "ERROR: pk done must run from the parent repo, not inside the worktree it removes." >&2
+        echo "  worktree: $wt_path" >&2
+        echo "  cwd:      $pwd_real" >&2
+        echo "  Exit this session and rerun from the parent:" >&2
+        echo "    exit && cd $root && claude" >&2
+        echo "    pk done ${id:-$issue}" >&2
+        return 1
+        ;;
+    esac
+  fi
+
   # Build the Linear close comment from git directly (v2.1.2+).
   # Per-branch journals were retired — git log is the source of truth.
   local merge_base commits diffstat pr_url_done
@@ -869,17 +934,6 @@ $commits"
   # No state transition here — `pk done` is cleanup-only as of v2.3.0.
   # State movement is owned by `pk ship` (→ UAT) and `pk promote` (→ Released
   # / → Done). A worktree closing does not mean the issue is shipped.
-
-  # Cleanup must run from parent
-  if [ "$wt_path" != "" ] && [ "$root" != "$wt_path" ]; then
-    if [ "$(pwd)" = "$wt_path" ]; then
-      echo ""
-      echo "You're inside the worktree. Exit and rerun from parent:"
-      echo "  exit && cd $root && claude"
-      echo "  pk done"
-      return 1
-    fi
-  fi
 
   echo "Removing worktree..."
   if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
@@ -1494,6 +1548,7 @@ Subcommands:
   pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review)
   pk done                         Verify PR merged, cleanup worktree+branch (no Linear state change)
   pk verify                       Run the project's pre-deploy gate
+  pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
   pk promote <env> [--stash|--take-remote]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
@@ -1626,6 +1681,38 @@ cmd_version() {
   echo "pk $PK_VERSION"
 }
 
+# pk config <key> [default]   → print value (suitable for $() substitution)
+# pk config                   → dump every known V2 key + its resolved value
+cmd_config() {
+  if [ $# -ge 1 ]; then
+    pk_config "$1" "${2:-}"
+    return 0
+  fi
+  local path
+  path=$(pk_config_path) || { echo "ERROR: not in a git repo." >&2; return 1; }
+  if [ ! -f "$path" ]; then
+    echo "ERROR: $path not found." >&2
+    return 1
+  fi
+  local key
+  for key in \
+    "Backend" \
+    "Integration branch" \
+    "Promote to main" \
+    "Require QA review" \
+    "Default deep flag" \
+    "Ship environments" \
+    "Linear API key env var" \
+    "Migration dir" \
+    "Spec ready state" \
+    "Spec approved state" \
+    "Self-reference check" \
+    "Source root" \
+    "Worktree prefix"; do
+    printf '%-24s %s\n' "$key:" "$(pk_config "$key" "")"
+  done
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1649,6 +1736,7 @@ main() {
     ship)     cmd_ship "$@" ;;
     done)     cmd_done "$@" ;;
     verify)   cmd_verify "$@" ;;
+    config|cfg) cmd_config "$@" ;;
     promote)  cmd_promote "$@" ;;
     delegate) cmd_delegate "$@" ;;
     spec-cycle) cmd_spec_cycle "$@" ;;
@@ -1662,4 +1750,7 @@ main() {
   esac
 }
 
-main "$@"
+# Skip main when sourced (lets tests exercise helpers like pk_config directly).
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  main "$@"
+fi
