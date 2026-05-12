@@ -13,6 +13,7 @@
 #   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
 #   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
 #   pk verify               — light verify (run test cmd from method.config.md)
+#   pk config [<key>]       — read a V2 key from method.config.md (or dump all)
 #   pk promote <env>        — promote one hop along Ship environments; transitions
 #                             matching issues → Released (intermediate) or Done (final)
 #   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
@@ -1535,6 +1536,7 @@ Subcommands:
   pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review)
   pk done                         Verify PR merged, cleanup worktree+branch (no Linear state change)
   pk verify                       Run the project's pre-deploy gate
+  pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
   pk promote <env> [--stash|--take-remote]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
@@ -1667,6 +1669,38 @@ cmd_version() {
   echo "pk $PK_VERSION"
 }
 
+# pk config <key> [default]   → print value (suitable for $() substitution)
+# pk config                   → dump every known V2 key + its resolved value
+cmd_config() {
+  if [ $# -ge 1 ]; then
+    pk_config "$1" "${2:-}"
+    return 0
+  fi
+  local path
+  path=$(pk_config_path) || { echo "ERROR: not in a git repo." >&2; return 1; }
+  if [ ! -f "$path" ]; then
+    echo "ERROR: $path not found." >&2
+    return 1
+  fi
+  local key
+  for key in \
+    "Backend" \
+    "Integration branch" \
+    "Promote to main" \
+    "Require QA review" \
+    "Default deep flag" \
+    "Ship environments" \
+    "Linear API key env var" \
+    "Migration dir" \
+    "Spec ready state" \
+    "Spec approved state" \
+    "Self-reference check" \
+    "Source root" \
+    "Worktree prefix"; do
+    printf '%-24s %s\n' "$key:" "$(pk_config "$key" "")"
+  done
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1690,6 +1724,7 @@ main() {
     ship)     cmd_ship "$@" ;;
     done)     cmd_done "$@" ;;
     verify)   cmd_verify "$@" ;;
+    config|cfg) cmd_config "$@" ;;
     promote)  cmd_promote "$@" ;;
     delegate) cmd_delegate "$@" ;;
     spec-cycle) cmd_spec_cycle "$@" ;;
