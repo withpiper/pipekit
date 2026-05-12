@@ -1662,4 +1662,7 @@ main() {
   esac
 }
 
-main "$@"
+# Skip main when sourced (lets tests exercise helpers like pk_config directly).
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  main "$@"
+fi
