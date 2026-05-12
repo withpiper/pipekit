@@ -847,6 +847,29 @@ cmd_done() {
     $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
   ')
 
+  # Refuse early if CWD is inside the worktree we are about to remove.
+  # Loop-notes #13: previously checked only `pwd == wt_path` (exact match);
+  # a session inside a subdir (skills/, scripts/) would slip past, then
+  # `git worktree remove --force` would destroy the session's CWD. We also
+  # move this check above the Linear comment + diff calc so we don't post
+  # "Shipped" notes for a run that's about to refuse.
+  if [ -n "$wt_path" ] && [ "$root" != "$wt_path" ]; then
+    local pwd_real wt_real
+    pwd_real=$(cd "$(pwd)" 2>/dev/null && pwd -P) || pwd_real=$(pwd)
+    wt_real=$(cd "$wt_path" 2>/dev/null && pwd -P) || wt_real="$wt_path"
+    case "$pwd_real/" in
+      "$wt_real"/*)
+        echo "ERROR: pk done must run from the parent repo, not inside the worktree it removes." >&2
+        echo "  worktree: $wt_path" >&2
+        echo "  cwd:      $pwd_real" >&2
+        echo "  Exit this session and rerun from the parent:" >&2
+        echo "    exit && cd $root && claude" >&2
+        echo "    pk done ${id:-$issue}" >&2
+        return 1
+        ;;
+    esac
+  fi
+
   # Build the Linear close comment from git directly (v2.1.2+).
   # Per-branch journals were retired — git log is the source of truth.
   local merge_base commits diffstat pr_url_done
@@ -911,17 +934,6 @@ $commits"
   # No state transition here — `pk done` is cleanup-only as of v2.3.0.
   # State movement is owned by `pk ship` (→ UAT) and `pk promote` (→ Released
   # / → Done). A worktree closing does not mean the issue is shipped.
-
-  # Cleanup must run from parent
-  if [ "$wt_path" != "" ] && [ "$root" != "$wt_path" ]; then
-    if [ "$(pwd)" = "$wt_path" ]; then
-      echo ""
-      echo "You're inside the worktree. Exit and rerun from parent:"
-      echo "  exit && cd $root && claude"
-      echo "  pk done"
-      return 1
-    fi
-  fi
 
   echo "Removing worktree..."
   if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
