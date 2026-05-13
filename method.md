@@ -204,9 +204,9 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 
 ---
 
-## Stage 3: Verify + Ship (Build Quality Gate)
+## Stage 3: Verify + Ship + UAT (Build Quality Gate)
 
-**Steps:** 6–8 (`/verify` → `pk ship` → optional PR review → UAT)
+**Steps:** 6–8 (`/verify` → `pk ship` → optional PR review → **interactive UAT**)
 
 **Tools:** `/verify`, `pk ship`, optional `/pr-fix` and `/pr-security-review`, Human
 
@@ -216,11 +216,11 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 - **`pk ship --review`** posts a Linear comment flagging review-in-flight and prints the antagonistic reviewer invocation. The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention.
 - **`/pr-security-review`** is the right tool for migrations / RLS / SECURITY DEFINER / auth surface (use instead of, or alongside, the generic reviewer).
 - **`/pr-fix`** triages review findings into fixed / rejected / deferred and posts a summary comment to Linear.
-- Human performs **UAT** in the running app (preview URL) against the spec's AC.
+- **Interactive UAT (the gate).** Human exercises the feature in the running app (Vercel preview URL on the PR, or `dev.<project>` after merge — project-specific) against the spec's AC. This is **the** Stage 3 gate, not a doc artifact: `pk done` and `pk promote` MUST NOT run until UAT signs off AND the PR is merged. v2.4.2 surfaced the cost of an implicit UAT: the WIT-451 canary's worker session auto-ran `pk done` mid-test and wiped the worktree before the human finished. **Treat UAT as a deliberate human step. Do not chain past it from inside `/work`, `/verify`, `/pk-exit`, or any other session-automating skill.**
 
 **Output:** Verified PR open and UAT-accepted in Linear, ready for the human to merge.
 
-**Gate:** Feature matches spec behavior under real usage. All AC checkboxes satisfied. Critical/High review findings resolved or explicitly deferred.
+**Gate:** Feature matches spec behavior under real usage. All AC checkboxes satisfied. Critical/High review findings resolved or explicitly deferred. **Human UAT verdict recorded** (Linear comment, PR comment, or session-log note — pick one; the point is an audit trail).
 
 ---
 
@@ -230,11 +230,11 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 
 Every step forward is a PR. No direct merges between long-lived branches. Promotion is owned by `pk promote`, configured per project via `Ship environments` in `method.config.md` (e.g., `dev,main` or `dev,beta,main`).
 
-**Order of operations** (after Stage 3's UAT passes):
+**Order of operations** (after Stage 3's UAT passes AND the PR merges — both required):
 
 1. Human merges the PR (rebase or merge-commit; see `sop/Git_and_Deployment.md` § Merge Strategy by Hop) once UAT is green.
-2. **`pk done <ID>`** cleans up the worktree + branch and posts commits + diffstat to Linear. **Cleanup-only** — it does NOT transition state.
-3. **`pk promote <env>`** opens the next-tier promotion PR (one hop per invocation: `pk promote beta`, then `pk promote main`). Transitions matching issues optimistically at PR-open: → **Released** for intermediate hops, → **Done** for the final hop. 2-tier projects: `pk promote` with no arg picks the only hop. Skipped entirely for `Promote to main: false`.
+2. **`pk done <ID>`** cleans up the worktree + branch and posts commits + diffstat to Linear. **Cleanup-only** — it does NOT transition state. **Deliberate human step** — must NOT be auto-invoked by `/work`, `/verify`, `/pk-exit`, or any session-automation skill. The worker session that built the feature has no signal for "human UAT is complete" and will wipe the worktree mid-test if it auto-fires (WIT-451 canary 2026-05-13 — surfaced this gap).
+3. **`pk promote <env>`** opens the next-tier promotion PR (one hop per invocation: `pk promote beta`, then `pk promote main`). Transitions matching issues optimistically at PR-open: → **Released** for intermediate hops, → **Done** for the final hop. 2-tier projects: `pk promote` with no arg picks the only hop. Skipped entirely for `Promote to main: false`. **Deliberate human step**, same rationale as `pk done`.
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
