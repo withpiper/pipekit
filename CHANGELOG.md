@@ -6,6 +6,49 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.3.3 — 2026-05-13
+
+> Patch: `pk promote` correctness. Refuses when the target branch is missing on origin instead of exiting 128 silently; respects the Linear workflow ladder instead of force-transitioning every bundled WIT to the env's mapped state.
+
+### What changed
+
+- **`bin/pk` `cmd_promote` missing-target guard** — runs `git ls-remote --exit-code origin refs/heads/$target` after target validation. On miss, refuses with an actionable error containing the exact `gh api -X POST repos/<owner>/<repo>/git/refs` recovery command (owner/repo derived from the origin URL). New `--bootstrap` flag auto-recreates the branch at `origin/<source>` tip via `gh api`.
+- **`bin/pk` `pk_state_rank`** (new helper) — ranks Linear workflow states along the canonical ladder (`Triage` < `Ideas` < `Future Phases` < `On Deck` < `Needs Spec` < `Specced` < `Approved` < `Building` < `In Progress` < `UAT` < `Released` < `Done`). Unknown states return 0 (preserves current behavior for projects with custom workflows); `Canceled` / `Duplicate` outrank `Done` (never promote forward).
+- **`bin/pk` `pk_linear_set_state` ladder gate** — opt-in `mode="advance"` argument. When set, refuses backward transitions (logs "already at <state> (skip backward transition)") and refuses Approved-or-earlier → Released/Done leap-frogs (logs a loud warning to stderr; commits made it into a promote bundle without UAT verification).
+- **`bin/pk` `cmd_promote` issue-loop** — passes `"advance"` mode to `pk_linear_set_state`. Bundled WITs only move forward along the ladder; the audit trail stays monotonic across cycles.
+- **`scripts/test-pk-promote.sh`** (new) — fixture-based bash harness. Asserts pairwise ladder ordering, unknown-state fallback, terminal-off-ladder behavior, `git ls-remote --exit-code` semantics, and owner/repo extraction from both https and ssh origin URLs. 25 assertions; run with `bash scripts/test-pk-promote.sh`.
+- **`PK_VERSION`** 2.3.2 → 2.3.3.
+
+### Why
+
+The v2.3.1 recovery Gate 3 canary (WIT-348, closed 2026-05-13) surfaced 8 new findings. Two were direct regressions of the promote chain that v2.3.2 was supposed to stabilize:
+
+- **#25** — `pk promote beta` exited 128 with zero diagnostic output when `origin/beta` was missing. Root cause: `git fetch origin beta --quiet || true` swallowed the "couldn't find remote ref" message and masked the non-zero exit; the downstream `git log origin/beta..origin/dev` then exited 128 on the unknown revision. Without `bash -x`, the failure mode is essentially undebuggable. (The branch went missing because GitHub's repo-level auto-delete-on-merge removed it when a previous beta→main PR merged — handoff finding #26, fixed Piper-side via branch protection.)
+- **#28** — `pk promote beta` force-transitioned every WIT mentioned in commit messages to the env's mapped state, regardless of current Linear state. In the canary, this pulled 3 already-Done WITs backward to Released and leap-frogged 1 Approved WIT straight to Released, skipping Building/In Progress/UAT entirely. Audit-trail integrity loss compounds per cycle — the next `pk promote main` would have force-moved the Released WITs back to Done, producing a "shipped → unreleased → shipped" lifecycle on three issues that never actually un-shipped.
+
+Both regressions fired on the first real canary use. v2.3.2 happened to have `origin/beta` bootstrapped, so #25 (a direct regression of canary 3's loop-note #16) was deprioritized as parallel-track; v2.3.3 folds it in.
+
+### Migration
+
+None. Re-run `./scripts/sync-method.sh v2.3.3` in consumer projects. After sync:
+
+- `pk version` returns `2.3.3`
+- `pk promote <env>` refuses loudly when the target branch is missing on origin (instead of exiting 128 silently)
+- `pk promote <env> --bootstrap` recreates the missing target branch at the source tip via `gh api`
+- `pk promote <env>` only transitions Linear issues forward along the workflow ladder; backward and leap-frog attempts log and skip without mutating Linear state
+- `bash scripts/test-pk-promote.sh` exits 0 (25 assertions)
+
+### What this fixes (loop-notes references)
+
+- **#25** `pk promote` silent exit 128 on missing target branch → fixed (`git ls-remote` guard + `--bootstrap` flag)
+- **#28** `pk promote` force-transitions bundled WITs ignoring Linear state → fixed (ladder gate in `pk_linear_set_state` via opt-in `mode="advance"`)
+
+### Deferred to a future patch
+
+The Gate 3 canary also flagged `/spec-preflight` capability gaps (#20 managed-Supabase GUC probe, #21 canonical `Strategy/` cross-check, #22 test-runner/tooling availability, #24 migration data-shape probe) and three Piper-side infra items (#23 dev migration CI, #26 branch protection, #27 SessionStart `gh auth` hook). The `/spec-preflight` Phase 3.6 capability-probing extension lands in a separate Pipekit PR; the Piper-side items are tracked downstream.
+
+---
+
 ## v2.3.2 — 2026-05-12
 
 > Patch: closes the v2.3.1 canary cascade. `pk_config` reads the actual code-block config format; `pk config` subcommand exposed; `/verify` skill stops self-terminating; `pk done` no longer destroys its own CWD.
