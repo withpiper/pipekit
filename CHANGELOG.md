@@ -6,6 +6,46 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.4.1 — 2026-05-13
+
+> Patch: `/linear-todo-runner` creates real worktrees explicitly. Closes the empirically-observed "Agent isolation:`worktree` parameter is a no-op" failure mode where 4 parallel agents collapsed into one shared checkout and trampled each other's uncommitted work via branch switches.
+
+### What changed
+
+- **`skills/06-linear-todo-runner/skill.md` Phase 3 worktree creation** — the orchestrator now runs `git worktree add <path> -b <branch> <BASE>` before each Agent spawn. Worktree path is interpolated into the worker prompt as a concrete value (the Agent tool exposes no `cwd` parameter).
+- **Worker first-action verification** — the spawned worker must `cd <WORKTREE_PATH>` then run a 4-way check (`pwd`, `git rev-parse --show-toplevel`, `git rev-parse --abbrev-ref HEAD`, `git worktree list`). Any mismatch halts the worker before any edits and reports the actual output — prompt-level `cd` + verification is now the actual containment mechanism, not optional.
+- **Preflight against path/branch collision** — refuses to start a worker if `WORKTREE_PATH` or `BRANCH_NAME` already exist; logs the collision in a Linear comment, moves the issue back to Approved, continues with the next queue item. Eliminates the "blended diff" failure mode where re-runs trampled prior partial work.
+- **Phase 4 cleanup asymmetry** — on success, `git worktree remove <path>` clears the worktree (with `--force` documented for cases where the worker leaves untracked files); the branch stays for PR creation. On failure, both the worktree and the branch are preserved for forensic inspection; the user cleans up after triage.
+- **Worker prompt template** — outer fence now uses 4 backticks so the inner `` ```bash `` verification block nests cleanly. Worktree path and branch name passed as concrete values, not placeholders.
+- **Prerequisites + Related Skills sections updated** — explicitly document that `isolation: "worktree"` is a no-op on current harnesses; runner uses sibling `../<repo>-<id>` worktree paths, distinct from `pk branch`'s in-repo `.worktrees/<ID>-<slug>/` pattern, so the two coexist without fighting over paths.
+- **`PK_VERSION`** 2.4.0 → 2.4.1.
+
+### Why
+
+Empirically observed on 2026-05-13 while running `/linear-todo-runner` against rs-vault: 4 parallel agents spawned with `isolation: "worktree"` collapsed into one shared checkout. Sibling branch switches inside that shared checkout silently discarded each other's uncommitted work — the workers produced a "blended diff" where each agent's final state contained fragments of every sibling's work overlaid by the last branch switch.
+
+Root cause: the Agent tool's `isolation: "worktree"` parameter is accepted but does not honor on current harnesses — there's no actual worktree provisioned, just the shared parent cwd that the workers race over. The Agent tool also exposes no `cwd` parameter, so neither path of "containment" the original skill assumed actually exists. The fix moves containment to the orchestrator's pre-spawn `git worktree add` plus a worker prompt that fails loudly when verification doesn't match.
+
+### Migration
+
+None. Re-run `./scripts/sync-method.sh v2.4.1` in consumer projects. After sync:
+
+- `pk version` returns `2.4.1`
+- `/linear-todo-runner` creates real worktrees via `git worktree add` before each agent spawn
+- Workers refuse to proceed if the 4-way first-action verification doesn't match — preventing the silent-corruption failure mode
+- Failed worker runs preserve both the worktree and the branch for forensic inspection (`git worktree remove <path>` and `git branch -D <branch>` are the manual cleanup once triaged); successful runs clean up the worktree but keep the branch for PR creation
+- Preflight collision refusal protects against re-running the same queue across leftover worktrees from prior failed runs
+
+### What this fixes (empirical findings)
+
+- **2026-05-13 rs-vault 4-agent collapse** — Agent tool `isolation: "worktree"` parameter is a no-op → orchestrator now creates real worktrees explicitly and the worker verifies before any edits. Memory entry "Agent isolation:'worktree' broken" anchors this in cross-session context.
+
+### Related notes
+
+If you cannot run `git worktree add` from the orchestrator (e.g., the orchestrator's repo state is non-trivial), the skill now documents `--max-agents 1` (sequential) as the safe fallback. Sequential is slower but immune to the parallel-collapse failure mode.
+
+---
+
 ## v2.4.0 — 2026-05-13
 
 > Minor: `/spec-preflight` Phase 3.6 — project signal probing. Closes the "environmental blindness" class of bug surfaced by the WIT-348 Gate 3 canary. Four new probes: canonical-doc cross-check, platform capability, tooling availability, migration data shape.

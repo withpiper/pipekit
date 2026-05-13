@@ -32,6 +32,7 @@ This skill is invoked when the user says:
 - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` should be set to `"1"` in `.claude/settings.json` under `env`
 - Linear MCP server should be connected (`mcp__linear-server__*` tools available)
 - Issues need `## Acceptance Criteria` in their description (issues without AC are skipped)
+- The orchestrator creates one real `git worktree add` per agent before spawning. Do NOT rely on the Agent tool's `isolation: "worktree"` parameter — empirically a no-op on current harnesses, which collapses all "parallel" agents into the same checkout and causes sibling branch switches to silently discard each other's uncommitted work. If you cannot run `git worktree add` from the orchestrator, run the queue with `--max-agents 1` (sequential) instead.
 
 ## Linear State IDs
 
@@ -154,28 +155,42 @@ For each issue at the front of the queue (up to max-agents):
 
 **Subagent mandate for this skill:** spawn parallel worktree agents even though Opus 4.7 defaults to fewer subagents. The whole point of `/linear-todo-runner` is fanning out independent work across isolated worktrees. A single-session sequential loop would defeat the purpose. Spawn up to `max-agents` in the same turn when the dependency graph permits; don't serialize them.
 
+**Worktree isolation is the orchestrator's job, not the Agent tool's.** Each agent gets a real `git worktree add` before it spawns, and is told via its prompt to `cd` into that worktree as its first action and verify (`pwd` + `git rev-parse --show-toplevel`) before any edits. The Agent tool itself currently exposes no working-directory parameter — `isolation: "worktree"` is a no-op on current harnesses (see Prerequisites), and there is no `cwd` parameter. The prompt-level `cd` + verification is the actual containment mechanism, so it is NOT optional.
+
 For each issue that passes the AC gate (up to max-agents concurrently):
 
 1. **Move issue to Building** via `mcp__linear-server__save_issue` with `stateId: {Building state ID from method.config.md}`
-2. **Post a Linear comment**: `"Runner: spawning agent in isolated worktree."`
-3. **Spawn a worker agent** using the `Agent` tool with `isolation: "worktree"` and `run_in_background: true`:
+2. **Compute identifiers:**
+   - `BASE` = current checked-out branch in the orchestrator's repo (`git rev-parse --abbrev-ref HEAD`). All worker branches fork from this.
+   - `BRANCH_NAME` = `feature/<issue-id-lowercase>-<slugified-title>` (e.g., `feature/proj-88-ag-grid-enterprise`). Use the project's existing branch-naming convention from `method.config.md` if specified.
+   - `REPO_BASENAME` = `basename` of the orchestrator's repo root.
+   - `WORKTREE_PATH` = `../<REPO_BASENAME>-<issue-id-lowercase>` (sibling to the main checkout, NOT inside `.worktrees/` — keeps the parallel runner separate from `pk branch`'s interactive trees).
+3. **Preflight:** if `<WORKTREE_PATH>` already exists OR `<BRANCH_NAME>` already exists, FAIL LOUDLY for this issue — skip it, log the collision, move the issue back to Approved, post a Linear comment with the conflict. Do NOT reuse existing paths or branches; that's how today's blended diffs happen.
+4. **Create the worktree:**
+   ```bash
+   git worktree add <WORKTREE_PATH> -b <BRANCH_NAME> <BASE>
+   ```
+   If this fails (e.g., dirty index, lock contention), skip the issue, move it back to Approved, post the git error in a Linear comment, and continue with the next queue item. Do NOT spawn an agent without a worktree.
+5. **Verify the worktree:** run `git worktree list` and confirm `<WORKTREE_PATH>` appears with the expected branch. If not, treat as Step 4 failure.
+6. **Post a Linear comment**: `"Runner: spawning agent in worktree {WORKTREE_PATH} on branch {BRANCH_NAME}."`
+7. **Spawn a worker agent** using the `Agent` tool with `run_in_background: true`. The Agent tool does NOT support a `cwd` parameter and `isolation: "worktree"` is a no-op — DO NOT pass either. Instead, the worker prompt's first instruction must be `cd <WORKTREE_PATH>` followed by `pwd` and `git rev-parse --show-toplevel` verification (see Worker Agent Prompt Template). Pass `<WORKTREE_PATH>` and `<BRANCH_NAME>` as concrete values inside the prompt — do not leave placeholders:
 
 ```
 Agent(
   description: "PROJ-XXX: {issue title}",
-  isolation: "worktree",
   run_in_background: true,
   mode: "bypassPermissions",
-  prompt: <see Worker Agent Prompt below>
+  prompt: <Worker Agent Prompt Template with WORKTREE_PATH and BRANCH_NAME interpolated>
 )
 ```
 
-4. **Track the agent** in an internal slot table:
+8. **Track the agent** in an internal slot table:
    - Slot number (1-4)
    - Issue identifier (PROJ-XXX)
    - Agent ID/name
    - Status: `spawned` → `running` → `done` / `failed`
-   - Worktree branch name
+   - Worker branch name (`BRANCH_NAME`)
+   - Worktree path (`WORKTREE_PATH`) — needed by Phase 4 cleanup
 
 ### Phase 4 — Rolling Refill
 
@@ -183,15 +198,17 @@ When any background agent completes:
 
 **On success (agent reports all AC met + pre-deploy gate passed):**
 1. Move issue to "UAT" via `mcp__linear-server__save_issue` with `stateId: {UAT state ID from method.config.md}`
-2. Post a Linear comment with: branch name, commit summary, pre-deploy gate results
+2. Post a Linear comment with: branch name, worktree path, commit summary, pre-deploy gate results
 3. Log the branch for PR creation
-4. **Write pipeline state file:** resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)` and write `$STATE_DIR/pipeline-state/<issue-id>.json` per `sop/Skills_SOP.md` § Pipeline state file with `stage: "linear-todo-runner"`, `verdict: "Pass"`, `cwd`, `timestamp`. Path is out-of-repo so no hook block; write should always succeed.
+4. **Clean up the worktree:** run `git worktree remove <WORKTREE_PATH>` from the orchestrator's repo. The branch stays — it has the committed work and needs to remain for PR creation. If `git worktree remove` reports the worktree is dirty (the worker committed but left untracked files), use `git worktree remove --force <WORKTREE_PATH>` and note it in the dashboard. Do NOT delete the branch.
+5. **Write pipeline state file:** resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)` and write `$STATE_DIR/pipeline-state/<issue-id>.json` per `sop/Skills_SOP.md` § Pipeline state file with `stage: "linear-todo-runner"`, `verdict: "Pass"`, `cwd`, `timestamp`. Path is out-of-repo so no hook block; write should always succeed.
 
 **On failure (agent reports errors or AC not met):**
 1. Move issue back to "Approved" via `mcp__linear-server__save_issue` with `stateId: {Approved state ID from method.config.md}`
-2. Post a Linear comment with the failure reason and any partial progress
-3. Log as failed
-4. **Write pipeline state file:** `$STATE_DIR/pipeline-state/<issue-id>.json` (with `STATE_DIR` resolved as above) with `stage: "linear-todo-runner"`, `verdict: "Fail"`, `cwd`, `timestamp`. The Linear comment from step 2 captures the diagnosis; the next-action recommendation is rendered by `/pipekit-help` against the failed-state record, not pre-baked into the file.
+2. Post a Linear comment with the failure reason, any partial progress, AND the preserved worktree path (so the user can `cd` into it for inspection)
+3. **Do NOT remove the worktree on failure.** It may contain uncommitted diagnostic state from the worker. Leave both the worktree and the branch in place — the user cleans up manually after triage (`git worktree remove <path>` and `git branch -D <branch>` once they're done).
+4. Log as failed
+5. **Write pipeline state file:** `$STATE_DIR/pipeline-state/<issue-id>.json` (with `STATE_DIR` resolved as above) with `stage: "linear-todo-runner"`, `verdict: "Fail"`, `cwd`, `timestamp`. The Linear comment from step 2 captures the diagnosis; the next-action recommendation is rendered by `/pipekit-help` against the failed-state record, not pre-baked into the file.
 
 **Then refill:**
 1. Re-evaluate the queue — check if any previously-blocked issues are now unblocked (their blockers may have just completed)
@@ -243,10 +260,28 @@ Next steps:
 
 ## Worker Agent Prompt Template
 
-Each spawned worker receives a self-contained prompt:
+Each spawned worker receives a self-contained prompt (outer fence uses 4 backticks so the inner ```bash verification block nests correctly):
 
+````
+You are implementing a Linear issue inside a dedicated git worktree. You share a filesystem with sibling agents, but you DO NOT share a working directory — every shell command you run MUST run inside your own worktree, or you will trample other agents' uncommitted work.
+
+## Worktree (READ THIS FIRST — non-negotiable)
+- **Worktree path:** {WORKTREE_PATH}
+- **Branch:** {BRANCH_NAME}
+
+Your FIRST action, before any reads, edits, or other shell commands, is:
+
+```bash
+cd {WORKTREE_PATH}
+pwd                                    # must print {WORKTREE_PATH}
+git rev-parse --show-toplevel          # must also print {WORKTREE_PATH}
+git rev-parse --abbrev-ref HEAD        # must print {BRANCH_NAME}
+git worktree list                      # confirm {WORKTREE_PATH} appears
 ```
-You are implementing a Linear issue. Read CLAUDE.md and method.config.md for project context.
+
+If ANY of those four checks does not match exactly, STOP. Do not run any further commands, do not edit any files, and report the mismatch in your final summary with the actual output you saw. A mismatch means the orchestrator's worktree setup is broken and continuing will corrupt sibling agents' work.
+
+After verification, every subsequent Bash command in this task — including `git`, `pnpm`, file inspection, and pre-deploy gate runs — must execute from {WORKTREE_PATH}. Never `cd` out of it. Never use absolute paths into another worktree. If you need a path, build it relative to {WORKTREE_PATH}.
 
 ## Issue
 - **Identifier:** PROJ-{XXX}
@@ -272,7 +307,8 @@ You are implementing a Linear issue. Read CLAUDE.md and method.config.md for pro
    If any fail, fix them before reporting done.
 5. Report your results:
    - Which acceptance criteria are met (checklist)
-   - Branch name and commit hashes
+   - Worktree path and branch name (echo back what was given to you)
+   - Commit hashes
    - Pre-deploy gate results (pass/fail for each)
    - Any issues or decisions you made
 
@@ -290,7 +326,7 @@ The orchestrator will surface the denial for manual resolution. A single
 denial is not a transient error — it indicates a project-policy mismatch
 (typically a hook protecting a canonical file like .claude/rules/*) that
 the user must resolve before the work can continue.
-```
+````
 
 ---
 
@@ -321,7 +357,7 @@ Set `blocked_by` relations in Linear to enforce the correct execution order.
 - **`/linear PROJ-XXX`** — Full end-to-end lifecycle for one issue. Use for failed issues that need manual attention.
 - **`pk status`** / **`pk next`** — Quick board view. Run before the runner to see what's queued.
 - **`/sync-linear`** — Sync VBW ↔ Linear. Run after the runner to update VBW state.
-- **`pk branch`** — The runner uses `isolation: "worktree"` (Claude Code temporary worktrees), not `pk branch`'s `.worktrees/<ID>-<slug>/` pattern. Use `pk branch` for hands-on single-issue work; the runner is for parallel batch automation.
+- **`pk branch`** — The runner creates its own sibling worktrees at `../<repo>-<id>` via explicit `git worktree add` (one per worker), distinct from `pk branch`'s in-repo `.worktrees/<ID>-<slug>/` pattern for interactive single-issue work. The two coexist: use `pk branch` hands-on, use the runner for parallel batches. (Prior versions of this skill claimed to use the Agent tool's `isolation: "worktree"` parameter; that parameter is a no-op on current harnesses, which is why we now create worktrees explicitly.)
 
 ---
 
