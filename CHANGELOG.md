@@ -6,6 +6,55 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.4.0 — 2026-05-13
+
+> Minor: `/spec-preflight` Phase 3.6 — project signal probing. Closes the "environmental blindness" class of bug surfaced by the WIT-348 Gate 3 canary. Four new probes: canonical-doc cross-check, platform capability, tooling availability, migration data shape.
+
+### What changed
+
+- **`skills/spec-preflight/skill.md`** — new Step 3.6 ("Project signal probes") between Steps 3 and 4. Steps 1–3 verify claims the spec explicitly makes; Step 3.6 probes claims the spec implies by referencing a tool, proposing a platform-specific mechanism, drafting a migration, or anchoring to a non-canonical source. Four probes:
+  - **3.6a — Canonical-doc cross-check (#21)** — when the spec body references POC and `Strategy docs path` resolves to an existing dir, surfaces Strategy docs + section hints for cross-check. `⚠` warning (ambiguous; human decides).
+  - **3.6b — Platform capability (#20)** — detects GUC patterns (`ALTER DATABASE`, `current_setting`, `app.X`). Hard-fails on managed-supabase (the postgres role lacks `SET DATABASE` privilege even as DB owner). Reads new `Platform` V2 key.
+  - **3.6c — Tooling availability (#22)** — detects test runner / quality tool names in ACs (Playwright, Cypress, Jest, Vitest, Storybook, Lighthouse, ESLint, Prettier, MSW, Testing Library). Greps repo-root + workspace `package.json` files for the corresponding package names. Hard-fails when AC requires a tool that isn't in `dependencies` or `devDependencies`. Auto-downgrades to warning when the same AC text acknowledges the gap ("to be added", "follow-up", "next phase").
+  - **3.6d — Migration data shape (#24)** — scans cited migration SQL for new `CHECK`, `NOT NULL`, type-narrowing, and column renames. Builds inverse-predicate `SELECT COUNT(*)` queries. Executes against the parent project via any bound `mcp__supabase-*__execute_sql` tool (read-only); otherwise surfaces the query templates. `⚠` warning with the violator counts (or templates).
+- **`skills/spec-preflight/skill.md` `--accept` flag** — downgrade Phase 3.6 hard-fails (`✗`) to warnings (`⚠`) for accepted-risk cases. Findings still appear; only the blocking verdict softens. Phase 1–3 hard-fails remain blocking (`--accept` does not bypass empirical claim divergence).
+- **`skills/spec-preflight/skill.md` verdict block** — now sectioned: "Empirical claims (Phase 1–3)" and "Project signal probes (Phase 3.6)". New output examples include the WIT-348 canary pattern (Strategy cross-check + Playwright tooling miss + migration data-shape probes firing simultaneously).
+- **`method.config.template.md`** — new `Platform` V2 key (values: `managed-supabase`, `self-hosted-postgres`, `none`; default `none`). `Migration dir` "Used by" column extended to call out `/spec-preflight` Probe 3.6d.
+- **`PK_VERSION`** 2.3.3 → 2.4.0.
+
+### Why
+
+The v2.3.x recovery established that Pipekit had two distinct classes of "trust but never verify" bug. v2.3.2 fixed parser blindness (`pk_config` returned defaults silently); v2.3.3 fixed promote-chain blindness (target branch and Linear ladder). v2.4.0 fixes the remaining class: environmental blindness — the spec is internally coherent and passes the Spec Review Agent, but it references tooling that isn't installed, a platform mechanism the deployment doesn't support, or a column model that contradicts the project's canonical Strategy docs. Every downstream gate (plan-reviewer, `/verify`, QA subagent) reads the spec body as ground truth; none of them re-check spec-vs-reality at the surroundings layer. The Gate 3 canary surfaced all four probe gaps in a single WIT (WIT-348):
+
+- **#21 (Strategy cross-check)** — spec claimed 5 lifecycle date fields with "parity with POC" framing. Strategy/Doc1 §3.1 + Strategy/Doc2 §3.2.3 define **6** fields with engagement-default scoping. Without the canonical-doc probe, `/light-spec` and every downstream gate would have shipped the wrong column set.
+- **#22 (Tooling)** — an AC required Playwright; `@playwright/test` was not in `package.json`. The AC was unsatisfiable as written; the `/work` agent had to invent a Vitest substitution mid-execution.
+- **#20 (Platform)** — WIT-450's prod-safety mechanism used `ALTER DATABASE postgres SET app.is_prod`; managed Supabase blocked the write with `42501: permission denied` at deploy-time, forcing a redesign to a sentinel-table pattern. The capability mismatch was knowable from the platform fact alone.
+- **#24 (Migration data shape)** — per-PR branch DBs run with `with_data: false`, so the migration's chronological `CHECK` constraint passed CI three times. At apply-time against populated piper-dev, 1 row violated `show_end_date <= onsite_end_date` because `end_date → show_end_date` and `wrap_date → onsite_end_date` reversed the natural project-closure ordering.
+
+All four are "the project has the answer; the toolchain didn't apply it." Phase 3.6 puts the probes at the earliest gate (`/spec-preflight`) so the spec author resolves divergence once, before downstream agents lock in.
+
+### Migration
+
+Optional. Re-run `./scripts/sync-method.sh v2.4.0` in consumer projects to pick up the updated `spec-preflight` skill and template. After sync:
+
+- `pk version` returns `2.4.0`
+- `/spec-preflight PROJ-XXX` emits a Phase 3.6 section in the verdict block. Probes that don't match the spec content render as `n/a` — projects with no GUC patterns / no Strategy dir / no migrations see the same flow they had pre-v2.4.0 plus four `n/a` lines.
+- Optional `Platform: managed-supabase` (or `self-hosted-postgres`) in `method.config.md` enables hard-fails on platform-incompatible GUC designs. Leave blank for projects without DB or with non-Postgres backends.
+- `/spec-preflight PROJ-XXX --accept` downgrades Phase 3.6 hard-fails to warnings (for tooling intentionally absent / to be bootstrapped later). Phase 1–3 hard-fails remain blocking.
+
+### What this fixes (loop-notes references)
+
+- **#20** Managed-Supabase blocks GUC parameter writes → Probe 3.6b refuses GUC-based prod-safety designs at spec time (reads `Platform` config key)
+- **#21** `/spec-preflight` doesn't cross-check `Strategy/*` canonical docs → Probe 3.6a surfaces Strategy docs + section hints when spec references POC
+- **#22** `/spec-preflight` doesn't probe test-runner / tooling availability → Probe 3.6c grep `package.json` for every tool mentioned in an AC; hard-fails when absent
+- **#24** Per-PR branch DBs lack production data; migrations pass CI then fail at apply-time → Probe 3.6d scans migration SQL for CHECK/NOT NULL/rename/narrowing, builds inverse-predicate SELECT COUNT(*) queries, runs them via Supabase MCP when bound
+
+### Deferred to future patches
+
+Piper-side infra items (#23 dev migration CI, #26 branch protection, #27 SessionStart `gh auth` hook) are tracked downstream in the Piper repo — they are project-specific operational hardening, not Pipekit upstream changes.
+
+---
+
 ## v2.3.3 — 2026-05-13
 
 > Patch: `pk promote` correctness. Refuses when the target branch is missing on origin instead of exiting 128 silently; respects the Linear workflow ladder instead of force-transitioning every bundled WIT to the env's mapped state.

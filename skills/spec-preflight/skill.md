@@ -14,6 +14,7 @@ Read `method.config.md` for project context (Linear team prefix, state IDs, proj
 ## Triggers
 
 - `/spec-preflight PROJ-XXX` — verify a single specced issue
+- `/spec-preflight PROJ-XXX --accept` — downgrade Phase 3.6 hard-fails (`✗`) to warnings (`⚠`). Use for accepted-risk cases (e.g., tooling intentionally absent, to be bootstrapped later). The findings still appear in the report; only the blocking verdict softens.
 - "pre-flight PROJ-XXX" / "verify spec PROJ-XXX"
 
 ## When to use
@@ -41,6 +42,10 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 | `phase-detect.sh` output | Bash via the v1.4.1 lookup chain (see Step 3) | Confirm stated VBW baseline is current |
 | Linear status (re-fetched) | `mcp__linear-server__get_issue` | Compare current status against spec body's claim |
 | Each `blocked_by` issue | `mcp__linear-server__get_issue` | Confirm dependency claims of "Done" |
+| `Strategy docs path` (from `method.config.md`) | `Glob` + `Read` | Probe 3.6a — canonical-doc cross-check (#21) |
+| `Platform` (from `method.config.md`) | none — heuristic match against spec body | Probe 3.6b — platform-capability check (#20) |
+| `package.json` + lockfile (root + workspace pkgs) | `Read` + `Grep` | Probe 3.6c — tooling availability (#22) |
+| Migration files cited in spec | `Read` (and optionally a Supabase MCP `execute_sql` for read-only `SELECT COUNT(*)` violator counts) | Probe 3.6d — migration data-shape (#24) |
 
 ## Algorithm
 
@@ -129,6 +134,128 @@ For each `blocked_by` identifier (from `relations` and from any narrative claims
 
 If the Linear MCP server times out or is unavailable on any individual fetch: record that specific dependency as `unverified — Linear API timeout` and continue. Do not fail the whole verdict on infrastructure flake. (See Graceful Degradation below.)
 
+### Step 3.6 — Project signal probes
+
+Steps 1–3 verify claims the spec **explicitly makes** (this file exists, that line resolves, this WIT is Done). Step 3.6 probes claims the spec **implies** — by referencing a tool, by proposing a platform-specific mechanism, by drafting a migration, or by anchoring to a non-canonical source. These are the "environmental blindness" gaps the v2.3.x recovery surfaced; without them, downstream agents read a spec that's internally consistent but reality-divergent.
+
+Each probe runs independently. A miss in one does not skip the others. Findings render as a separate category-block under the verdict. Where a probe needs `method.config.md` keys, fall through gracefully if the key is unset.
+
+#### 3.6a — Canonical-doc cross-check (handoff #21)
+
+**Trigger:** the spec body contains any of `POC`, `parity with POC`, `POC pattern`, `the POC` (case-insensitive) AND `method.config.md`'s `Strategy docs path` resolves to an existing directory.
+
+**Probe:**
+1. Read `Strategy docs path` from `method.config.md` (default: `Strategy/`).
+2. `Glob` `<path>/*.md` and `<path>/**/*.md`. Capture the file list.
+3. For each Strategy doc, scan the first 200 lines (section index) for headings that overlap concept words from the spec body. Concept words: nouns appearing in the spec's §Goal, §Acceptance Criteria headings, or italicized key terms.
+
+**Emit (always `⚠` — ambiguous; the human decides whether topic overlap is load-bearing):**
+
+```
+⚠ Canonical docs: Strategy at <path> contains <N> doc(s); spec body references POC.
+    Cross-check spec claims against:
+      - Strategy/<doc1>.md (sections: ...)
+      - Strategy/<doc2>.md (sections: ...)
+    Strategy is canonical for this project; POC may diverge.
+```
+
+If `Strategy docs path` is unset OR the directory is empty: record `n/a — no Strategy docs configured`. Do not warn — projects without Strategy docs are valid.
+
+#### 3.6b — Platform capability (handoff #20)
+
+**Trigger:** the spec body contains any of `ALTER DATABASE`, `SET app\.`, `current_setting\(`, `pg_db_role_setting`, `GUC`, or other Postgres custom-parameter patterns.
+
+**Probe:** (only runs when the trigger fires — if no GUC pattern appears in the spec, this probe renders as `✓ n/a`)
+
+1. Read `Platform` from `method.config.md`. Recognized values: `managed-supabase`, `self-hosted-postgres`, `none`. Default: unset (treated as "unconfigured").
+2. If `Platform: managed-supabase`: managed Supabase blocks the `postgres` role from `ALTER DATABASE … SET <custom>` even when role-owns the DB (verified empirically during WIT-450, handoff #20). Emit `✗` (hard fail) with the known-blocker note.
+3. If `Platform: self-hosted-postgres`: emit `⚠` reminder to confirm the role has `ALTER DATABASE` privilege on the target DB.
+4. If `Platform` unset or `none`: emit `⚠ Platform key not configured — GUC capability unverified for this deployment` and continue. Spec author should set `Platform` so the next preflight gives a definitive answer.
+
+**Emit (`✗` for managed-supabase, `⚠` otherwise):**
+
+```
+✗ Platform capability: spec proposes GUC-based mechanism (ALTER DATABASE … SET app.X);
+    Platform=managed-supabase blocks this — postgres role lacks SET DATABASE privilege
+    even as db owner (handoff #20, verified at WIT-450 against piper-prod + piper-dev).
+    Redesign with a sentinel-table pattern OR change Platform if the deployment moved.
+```
+
+#### 3.6c — Tooling availability (handoff #22)
+
+**Trigger:** an Acceptance Criterion line mentions any known test runner / quality tool / framework name. Detection list (extend as projects evolve):
+
+| Tool | Package(s) to grep for |
+|------|----------------------|
+| Playwright | `@playwright/test`, `playwright` |
+| Cypress | `cypress` |
+| Jest | `jest` |
+| Vitest | `vitest` |
+| Storybook | `@storybook/`, `storybook` |
+| Lighthouse | `lighthouse`, `lighthouse-ci`, `@lhci/cli` |
+| ESLint | `eslint` |
+| Prettier | `prettier` |
+| MSW | `msw` |
+| Testing Library | `@testing-library/` |
+
+**Probe:**
+1. Locate `package.json` files: repo root + every workspace `package.json` discoverable via `Glob` `**/package.json` (skip `node_modules/`).
+2. For each tool detected in an AC, `Grep` the combined package.json set for the package names listed above (check both `dependencies` and `devDependencies`).
+3. Also check the lockfile (`pnpm-lock.yaml` / `package-lock.json` / `yarn.lock`) — a package in the lockfile but not `package.json` means it's a transitive dep, not directly callable. Treat as absent.
+
+**Emit (`✗` hard fail — high-confidence blocker, downgradeable to `⚠` with `--accept`):**
+
+```
+✗ Tooling availability: AC #5 requires Playwright but @playwright/test not in
+    package.json (dependencies or devDependencies). The AC is unsatisfiable as
+    written. Either:
+      a) bootstrap @playwright/test (separate WIT first), or
+      b) rewrite AC against an existing test runner (Vitest is configured).
+```
+
+If the AC mentions a tool but the same AC also says "to be added" / "follow-up" / "next phase": downgrade to `⚠` automatically — the spec author already acknowledged the gap.
+
+#### 3.6d — Migration data shape (handoff #24)
+
+**Trigger:** the spec body cites a migration path under `Migration dir` (from `method.config.md`), OR proposes a migration with `CHECK`, `NOT NULL`, type narrowing (`varchar(255)` → `varchar(64)`), or column rename language.
+
+**Probe:**
+1. `Read` each cited migration file (or the spec's inline SQL block).
+2. Scan for:
+   - `ALTER TABLE … ADD CONSTRAINT … CHECK \(`
+   - `ALTER TABLE … ALTER COLUMN … SET NOT NULL`
+   - `ALTER TABLE … RENAME COLUMN`
+   - Type-narrowing `ALTER COLUMN … TYPE`
+3. For each constraint, build the inverse predicate as a `SELECT COUNT(*)` query. Example: `CHECK (show_end_date <= onsite_end_date)` becomes `SELECT COUNT(*) FROM <table> WHERE NOT (show_end_date <= onsite_end_date);`.
+4. **If a Supabase MCP is bound** (any `mcp__supabase-*__execute_sql` tool available in this session): run the query against the parent project (read-only `SELECT` — safe even on prod-tier). Emit the count.
+5. **If no MCP is bound**: emit the query template for the user to run manually.
+
+**Emit (`⚠` — surface for review; the spec author decides whether 0 violators is required or whether to add a backfill):**
+
+```
+⚠ Migration data shape: 2 new constraint(s) on populated columns.
+    Run violator counts against parent project before merging:
+
+      -- CHECK (show_end_date <= onsite_end_date)
+      SELECT COUNT(*) FROM projects WHERE NOT (show_end_date <= onsite_end_date);
+      -- count via piper-dev MCP: 1 violator
+
+      -- NOT NULL on projects.production_start
+      SELECT COUNT(*) FROM projects WHERE production_start IS NULL;
+      -- count via piper-dev MCP: 0 violators
+
+    Decide per row: backfill, default, or block migration until data is consistent.
+```
+
+This is the same shape gap as WIT-384's per-PR branch DBs running `with_data: false` — schema-only validation passes, data-incompatibility fails at apply-time against the populated parent. The probe shifts that discovery left, to spec-time.
+
+#### When `--accept` is in effect
+
+If the skill was invoked with `--accept`:
+- Phase 3.6 hard-fails (`✗`) downgrade to warnings (`⚠`).
+- A banner line appears above the verdict: `--accept: Phase 3.6 hard-fails downgraded to warnings.`
+- Steps 1–3 hard-fails are unaffected (file-presence / line-ref / dependency failures remain blocking — `--accept` does not bypass empirical claim divergence).
+
 ### Step 4 — Render verdict
 
 Print a single block to stdout. Use checkmarks (`✓`), warning markers (`⚠`), and failure markers (`✗`) so humans can scan it fast. Format:
@@ -136,11 +263,18 @@ Print a single block to stdout. Use checkmarks (`✓`), warning markers (`⚠`),
 ```
 Pre-flight checks for PROJ-XXX ({tier} tier):
 
+  ─ Empirical claims (Phase 1–3)
   ✓ File paths: {n_pass}/{n_total} exist
   ✓ Line refs: {n_pass}/{n_total} resolve
   ⚠ phase-detect baseline: spec says {field}={stated}, actual={observed}
   ✓ Linear status: {state} (matches spec)
   ✓ Dependencies: {n_done}/{n_total} Done
+
+  ─ Project signal probes (Phase 3.6)
+  {emoji} Canonical docs: {message or n/a}
+  {emoji} Platform capability: {message or n/a}
+  {emoji} Tooling availability: {message or n/a}
+  {emoji} Migration data shape: {message or n/a}
 
 Verdict: {PASS | REVISE} — {one-line reason if REVISE}
 {action hint if REVISE}
@@ -148,10 +282,11 @@ Verdict: {PASS | REVISE} — {one-line reason if REVISE}
 
 Verdict rules:
 
-- **PASS** — every category is `✓` or `n/a` (no claims of that type) or graceful-degradation `⚠ unverified` for phase-detect / Linear API. The user can proceed to `pk branch <ID>` without manual gut-checking.
-- **REVISE** — at least one real divergence: missing file, unresolved line, phase-detect mismatch, status mismatch, or non-Done dependency. The user updates the spec (or resolves the blocker) before `pk branch`.
+- **PASS** — every category is `✓` or `n/a` (no claims of that type) or graceful-degradation `⚠ unverified` for phase-detect / Linear API. Phase 3.6 may emit `⚠` (warnings) and still PASS — warnings inform but don't block.
+- **REVISE** — at least one real divergence in Phases 1–3 (missing file, unresolved line, phase-detect mismatch, status mismatch, non-Done dependency) OR a Phase 3.6 hard-fail (`✗`: managed-Supabase GUC pattern; tooling absent from `package.json`). The user updates the spec (or resolves the blocker) before `pk branch`.
+- **REVISE (downgraded with `--accept`)** — Phase 3.6 hard-fails alone don't force REVISE when `--accept` is in effect; they appear as warnings. Phase 1–3 hard-fails are never downgradeable.
 
-When emitting REVISE, point at *where* in the spec the divergence sits — by AC number, by section heading, or by the claim text — so the human can edit surgically rather than re-reading the whole spec.
+When emitting REVISE, point at *where* in the spec the divergence sits — by AC number, by section heading, by file path, or by the migration constraint — so the human can edit surgically rather than re-reading the whole spec.
 
 ### Step 5 — Stop
 
@@ -169,6 +304,10 @@ These rules are explicit so the skill stays useful when infrastructure is partia
 | Linear MCP timeout fetching a blocker | Record that dependency as `⚠ unverified`. Verdict is PASS-eligible if all other categories pass. |
 | File doesn't exist | Real divergence. Record `✗`. Triggers REVISE. Not graceful — file-presence is verifiable without infrastructure. |
 | Line range past EOF | Same as above — `✗`, REVISE. |
+| `Strategy docs path` unset / dir empty | Canonical-docs probe records `n/a`. Not a warning — projects without Strategy docs are valid. |
+| `Platform` key unset | Platform-capability probe records `⚠ Platform key not configured — capability unverified` only if the spec body triggered the probe (GUC pattern detected). |
+| No `package.json` discoverable | Tooling-availability probe records `⚠ no package.json found — tooling claims unverified`. Verdict PASS-eligible. |
+| No Supabase MCP bound | Migration-data-shape probe emits query templates for manual run. No `⚠` from this alone — surfacing the query is the deliverable. |
 
 Graceful degradation never *upgrades* the verdict (a `⚠` cannot become `✓`); it just keeps a single failure mode from blocking the rest of the report.
 
@@ -179,43 +318,99 @@ PASS verdict:
 ```
 Pre-flight checks for RS-87 (Standard tier):
 
+  ─ Empirical claims (Phase 1–3)
   ✓ File paths: 4/4 exist
   ✓ Line refs: 2/2 resolve
   ✓ phase-detect baseline: phase_count=1 (matches spec)
   ✓ Linear status: Approved (matches spec)
   ✓ Dependencies: 2/2 Done
 
+  ─ Project signal probes (Phase 3.6)
+  ✓ Canonical docs: n/a — no Strategy docs configured
+  ✓ Platform capability: n/a — no GUC pattern in spec
+  ✓ Tooling availability: 1/1 verified (Vitest in package.json)
+  ✓ Migration data shape: n/a — no migration cited
+
 Verdict: PASS — spec is empirically current. Proceed to pk branch RS-87.
 ```
 
-REVISE with a real divergence:
+REVISE with a Phase 1–3 divergence:
 
 ```
 Pre-flight checks for RS-51 (Standard tier):
 
+  ─ Empirical claims (Phase 1–3)
   ✓ File paths: 5/5 exist
   ✓ Line refs: 3/3 resolve
   ⚠ phase-detect baseline: spec says phase_count=0, actual=1
   ✓ Linear status: Approved (matches spec)
   ✓ Dependencies: 2/2 Done
 
+  ─ Project signal probes (Phase 3.6)
+  ✓ Canonical docs: n/a — no Strategy docs configured
+  ✓ Platform capability: n/a
+  ✓ Tooling availability: n/a — no test runner in ACs
+  ✓ Migration data shape: n/a
+
 Verdict: REVISE — phase-detect baseline divergence at AC #1.
 Update the spec's "currently returns phase_count=0" line before pk branch.
 ```
 
-REVISE with infrastructure degradation plus a real divergence:
+REVISE with the WIT-348 canary pattern (#21 + #22):
 
 ```
-Pre-flight checks for RS-92 (Quick tier):
+Pre-flight checks for WIT-348 (Standard tier):
 
-  ✗ File paths: 2/3 exist (missing: src/lib/old-auth.ts)
-  ✓ Line refs: 1/1 resolve
-  ⚠ VBW state unverified — phase-detect.sh unavailable
-  ✓ Linear status: Approved (matches spec)
-  ⚠ Dependencies: 1/2 verified — RS-89 Linear API timeout
+  ─ Empirical claims (Phase 1–3)
+  ⚠ File paths: 4/6 exist (renamed: projects.js → database/projects.js,
+                            budget-edit-main.js → pages/budget-edit-main.js)
+  ✓ Line refs: 2/2 resolve
+  ✓ phase-detect baseline: matches spec
+  ✓ Linear status: Specced (matches spec)
+  ✓ Dependencies: 1/1 Done
 
-Verdict: REVISE — src/lib/old-auth.ts cited in §Technical Context no longer exists.
-Likely renamed during recent refactor; update the spec path before pk branch.
+  ─ Project signal probes (Phase 3.6)
+  ⚠ Canonical docs: Strategy at Strategy/ contains 2 doc(s); spec body references POC.
+      Cross-check spec claims against:
+        - Strategy/Doc1_ConceptualOverview.md §3.1 (project lifecycle dates)
+        - Strategy/Doc2_TechnicalSpec.md §3.2.3 (six date fields, engagement defaults)
+      Strategy defines 6 lifecycle date fields; spec claims 5. Reconcile before approval.
+  ✓ Platform capability: n/a — no GUC pattern in spec
+  ✗ Tooling availability: AC #5 requires Playwright but @playwright/test not in
+      package.json. Either bootstrap (separate WIT) or rewrite against Vitest.
+  ⚠ Migration data shape: 5 chronological CHECK constraint(s) on projects (populated).
+      Run violator counts via piper-dev MCP before merging:
+        SELECT COUNT(*) FROM projects WHERE NOT (show_end_date <= onsite_end_date);
+        SELECT COUNT(*) FROM projects WHERE NOT (project_start_date <= production_start);
+        -- (3 more)
+
+Verdict: REVISE
+  - File path renames (2): update §Technical Context paths.
+  - Canonical-doc divergence: spec claims 5 fields, Strategy says 6. Reconcile §Goal + ACs.
+  - Tooling absent: AC #5 Playwright requirement unsatisfiable until bootstrap WIT lands.
+  - Migration data shape: 5 CHECKs on populated table — run violator counts first.
+```
+
+REVISE downgraded with `--accept`:
+
+```
+--accept: Phase 3.6 hard-fails downgraded to warnings.
+
+Pre-flight checks for WIT-348 (Standard tier):
+
+  ─ Empirical claims (Phase 1–3)
+  ✓ File paths: 6/6 exist
+  ✓ Line refs: 2/2 resolve
+  ✓ phase-detect baseline: matches spec
+  ✓ Linear status: Specced (matches spec)
+  ✓ Dependencies: 1/1 Done
+
+  ─ Project signal probes (Phase 3.6)
+  ⚠ Canonical docs: ...
+  ⚠ Tooling availability: AC #5 Playwright absent (--accept: hard-fail downgraded)
+  ⚠ Migration data shape: ...
+
+Verdict: PASS (with --accept warnings) — proceed knowing the listed gaps are accepted-risk.
 ```
 
 ## Rules of Engagement
