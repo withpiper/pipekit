@@ -159,8 +159,9 @@ Each probe runs independently. A miss in one does not skip the others. Findings 
 1. Read `Strategy docs path` from `method.config.md` (default: `Strategy/`).
 2. `Glob` `<path>/*.md` and `<path>/**/*.md`. Capture the file list.
 3. For each Strategy doc, scan the first 200 lines (section index) for headings that overlap concept words from the spec body. Concept words: nouns appearing in the spec's §Goal, §Acceptance Criteria headings, or italicized key terms.
+4. **Strategy-citation check (v2.4.2):** scan the spec body for inline citations of any Strategy doc — patterns like `Strategy/Doc<N>`, `Strategy/Doc<N>_<name>.md`, `Strategy/Doc<N> §<section>`, or an `Authority hierarchy` table that names a Strategy file as the authority for a concern. If the spec body cites ≥1 Strategy doc inline, treat the cross-check as **performed** (the spec author already did the work the probe is asking for) and downgrade the emit to `✓ Canonical docs: Strategy cited inline at <doc>:<section>` instead of `⚠`.
 
-**Emit (always `⚠` — ambiguous; the human decides whether topic overlap is load-bearing):**
+**Emit (default `⚠` — ambiguous; the human decides whether topic overlap is load-bearing):**
 
 ```
 ⚠ Canonical docs: Strategy at <path> contains <N> doc(s); spec body references POC.
@@ -170,7 +171,16 @@ Each probe runs independently. A miss in one does not skip the others. Findings 
     Strategy is canonical for this project; POC may diverge.
 ```
 
+**Emit when Strategy is cited inline in the spec body (v2.4.2 downgrade):**
+
+```
+✓ Canonical docs: spec body cites Strategy inline (<list of cited docs+sections>);
+    cross-check performed in-spec. No further action.
+```
+
 If `Strategy docs path` is unset OR the directory is empty: record `n/a — no Strategy docs configured`. Do not warn — projects without Strategy docs are valid.
+
+Why the downgrade was added: WIT-451's revised spec body cited Strategy/Doc6 §2.1, Strategy/Doc6 §3.3 line 86, and Strategy/Doc2 §3.3.1 throughout — and had an explicit "Authority hierarchy" table naming Strategy as the canonical source for the 5-action button set, conversation surface, and line-item canonical fields. v2.4.0's probe still emitted `⚠ Cross-check spec claims against Strategy` because the trigger ("POC mentioned + Strategy/ exists") fired blindly. The downgrade keeps the probe useful for specs that haven't done the cross-check while letting fully-cited specs pass cleanly.
 
 #### 3.6b — Platform capability (handoff #20)
 
