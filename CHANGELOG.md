@@ -6,6 +6,28 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.4.3.1 — 2026-05-13
+
+> Patch: doc reconciliation for v2.4.3. The v2.4.3 code shipped with `method.md` and `RUNBOOK.md` still describing only the v2.4.2 *prose* UAT gate — neither mentioned that the binary now refuses with `exit 1`. Closes the doc lag.
+
+### What changed
+
+- **`method.md` Stage 3 (line 219)** — Interactive UAT paragraph appended: "v2.4.3 added code-level enforcement as a belt-and-braces backstop: `pk done` and `pk promote` now refuse with `exit 1` when Linear state is `UAT` (or any bundled issue is in `UAT` for `pk promote`). Pass `--confirmed` once UAT is signed off to bypass."
+- **`method.md` Stage 4 (lines 236-237)** — `pk done <ID>` and `pk promote <env>` step descriptions updated with the `[--confirmed]` flag and the UAT-refusal clause.
+- **`method.md` Tooling table (lines 435-436)** — `pk done <ID> [--confirmed]` and `pk promote <env> [--confirmed]` rows updated.
+- **`RUNBOOK.md` `[5e]` box** — extra line: "v2.4.3+ enforces this in code: pk done / pk promote refuse with exit 1 when Linear state is UAT. Pass --confirmed once UAT is signed off to bypass."
+- **`PK_VERSION`** 2.4.3 → 2.4.3.1.
+
+### Why
+
+v2.4.3's code-level UAT refusal is the load-bearing change of the day, but the prose docs still implied "this is a discipline rule, not enforced." Users (and AI sessions) reading `method.md` would think the gate is advisory when it now exits 1. Doc rot starts within hours of the code shipping; closing it the same night while the context is fresh.
+
+### Migration
+
+None. Re-run `/pipekit-update v2.4.3.1` in consumer projects (or in the Pipekit clone itself — same command, auto-detects mode).
+
+---
+
 ## v2.4.3 — 2026-05-13
 
 > Patch: code-level enforcement of the v2.4.2 UAT-gate doc, plus a `pk install` lag fix surfaced when the v2.3.3 state-ladder gate failed to fire because the user's installed `pk` was at v2.3.2. Five fixes, one bundled PR.

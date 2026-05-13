@@ -216,7 +216,7 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 - **`pk ship --review`** posts a Linear comment flagging review-in-flight and prints the antagonistic reviewer invocation. The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention.
 - **`/pr-security-review`** is the right tool for migrations / RLS / SECURITY DEFINER / auth surface (use instead of, or alongside, the generic reviewer).
 - **`/pr-fix`** triages review findings into fixed / rejected / deferred and posts a summary comment to Linear.
-- **Interactive UAT (the gate).** Human exercises the feature in the running app (Vercel preview URL on the PR, or `dev.<project>` after merge — project-specific) against the spec's AC. This is **the** Stage 3 gate, not a doc artifact: `pk done` and `pk promote` MUST NOT run until UAT signs off AND the PR is merged. v2.4.2 surfaced the cost of an implicit UAT: the WIT-451 canary's worker session auto-ran `pk done` mid-test and wiped the worktree before the human finished. **Treat UAT as a deliberate human step. Do not chain past it from inside `/work`, `/verify`, `/pk-exit`, or any other session-automating skill.**
+- **Interactive UAT (the gate).** Human exercises the feature in the running app (Vercel preview URL on the PR, or `dev.<project>` after merge — project-specific) against the spec's AC. This is **the** Stage 3 gate, not a doc artifact: `pk done` and `pk promote` MUST NOT run until UAT signs off AND the PR is merged. v2.4.2 surfaced the cost of an implicit UAT: the WIT-451 canary's worker session auto-ran `pk done` mid-test and wiped the worktree before the human finished. **Treat UAT as a deliberate human step. Do not chain past it from inside `/work`, `/verify`, `/pk-exit`, or any other session-automating skill.** v2.4.3 added code-level enforcement as a belt-and-braces backstop: `pk done` and `pk promote` now refuse with `exit 1` when Linear state is `UAT` (or any bundled issue is in `UAT` for `pk promote`). Pass `--confirmed` once UAT is signed off to bypass.
 
 **Output:** Verified PR open and UAT-accepted in Linear, ready for the human to merge.
 
@@ -233,8 +233,8 @@ Every step forward is a PR. No direct merges between long-lived branches. Promot
 **Order of operations** (after Stage 3's UAT passes AND the PR merges — both required):
 
 1. Human merges the PR (rebase or merge-commit; see `sop/Git_and_Deployment.md` § Merge Strategy by Hop) once UAT is green.
-2. **`pk done <ID>`** cleans up the worktree + branch and posts commits + diffstat to Linear. **Cleanup-only** — it does NOT transition state. **Deliberate human step** — must NOT be auto-invoked by `/work`, `/verify`, `/pk-exit`, or any session-automation skill. The worker session that built the feature has no signal for "human UAT is complete" and will wipe the worktree mid-test if it auto-fires (WIT-451 canary 2026-05-13 — surfaced this gap).
-3. **`pk promote <env>`** opens the next-tier promotion PR (one hop per invocation: `pk promote beta`, then `pk promote main`). Transitions matching issues optimistically at PR-open: → **Released** for intermediate hops, → **Done** for the final hop. 2-tier projects: `pk promote` with no arg picks the only hop. Skipped entirely for `Promote to main: false`. **Deliberate human step**, same rationale as `pk done`.
+2. **`pk done <ID> [--confirmed]`** cleans up the worktree + branch and posts commits + diffstat to Linear. **Cleanup-only** — it does NOT transition state. **Deliberate human step** — must NOT be auto-invoked by `/work`, `/verify`, `/pk-exit`, or any session-automation skill. The worker session that built the feature has no signal for "human UAT is complete" and will wipe the worktree mid-test if it auto-fires (WIT-451 canary 2026-05-13 — surfaced this gap). v2.4.3+: refuses with `exit 1` if Linear state is `UAT`; pass `--confirmed` once UAT is signed off.
+3. **`pk promote <env> [--confirmed]`** opens the next-tier promotion PR (one hop per invocation: `pk promote beta`, then `pk promote main`). Transitions matching issues optimistically at PR-open: → **Released** for intermediate hops, → **Done** for the final hop. 2-tier projects: `pk promote` with no arg picks the only hop. Skipped entirely for `Promote to main: false`. **Deliberate human step**, same rationale as `pk done`. v2.4.3+: refuses with `exit 1` if any bundled issue is in `UAT`; pass `--confirmed` to override.
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
@@ -432,8 +432,8 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. |
 | `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth |
-| `pk done <ID>` | After PR merge: cleanup worktree+branch, post commits to Linear. Cleanup-only — does NOT transition Linear state. |
-| `pk promote <env>` | One-hop promotion along `Ship environments`. Transitions matching issues → Released (intermediate hops) or → Done (final hop). 2-tier projects: `pk promote` with no arg auto-picks the only hop. |
+| `pk done <ID> [--confirmed]` | After PR merge: cleanup worktree+branch, post commits to Linear. Cleanup-only — does NOT transition Linear state. v2.4.3+: refuses if Linear state is `UAT`; `--confirmed` bypasses. |
+| `pk promote <env> [--confirmed]` | One-hop promotion along `Ship environments`. Transitions matching issues → Released (intermediate hops) or → Done (final hop). 2-tier projects: `pk promote` with no arg auto-picks the only hop. v2.4.3+: refuses if any bundled issue is in `UAT`; `--confirmed` bypasses. |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Last command of every Claude session. |
 | `pk status` | Full unscoped Linear board view |
 | `/pipekit-help` | Read project state, recommend the next pipeline step. |

@@ -188,6 +188,10 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
   │      past this step. Surfaced 2026-05-13 (WIT-451):      │
   │      the worker session auto-fired pk done before UAT    │
   │      completed and wiped the worktree mid-test.          │
+  │                                                          │
+  │      v2.4.3+ enforces this in code: pk done / pk promote │
+  │      refuse with exit 1 when Linear state is UAT. Pass   │
+  │      --confirmed once UAT is signed off to bypass.       │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
