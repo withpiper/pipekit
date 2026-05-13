@@ -390,6 +390,23 @@ Why this is mandatory: RS-29 (rs-vault, 2026-05-05) shipped a working JPG export
 
 Tests whose names contain the *current* ticket's ID — especially predecessor tests that asserted the placeholder behavior was correct — are **almost always known-edit targets**, not bystanders. A green test for a placeholder is a TODO disguised as a check. When grep #1 above surfaces test names, do not read "the test passes" as confirmation; read it as "the test pins the world before this ticket shipped, and ought to be updated to assert the new behavior."
 
+### Risk-fallback follow-up filing — MANDATORY when a Risk-fallback was invoked
+
+If you used a documented Risk-fallback (`R<N>: Mitigation` clause from the spec body) during this run — i.e. you shipped the documented "if X is too hard, do Y instead" path — you MUST file the deferred work as a new Linear WIT before declaring complete. Do not bundle it into the hand-off summary as a "partial AC" footnote and hope the user files it later; they won't, and the follow-up rots.
+
+For each invoked fallback:
+
+1. Identify the AC the fallback covers and the deferred scope (the "proper" implementation the fallback is standing in for).
+2. Call `mcp__claude_ai_Linear__save_issue` to file a new WIT, scoped tightly to closing the fallback:
+   - **Title:** `<short noun phrase> — closes <ISSUE-ID> R<N> fallback`
+   - **State:** `Approved` (the design decisions are inherited from the original spec; the new WIT is execution-only)
+   - **Description:** Cite the parent ISSUE-ID + the specific R<N> clause + the AC numbers the fallback covers + the deferred scope spelled out
+   - **Project / Milestone:** Match the parent issue
+3. Reference the new WIT-ID in the hand-off summary.
+4. Update the original spec body (if you have permission to edit it post-implementation) to mark the AC as "partial per R<N>; full coverage tracked in <NEW-WIT-ID>".
+
+Why mandatory: WIT-451 canary 2026-05-13 shipped via the R4 documented fallback (NOTE editable only via Edit modal, not inline). The session correctly used the fallback but only filed 2 follow-up WITs and missed the dual-field inline editor; that one was caught later in triage. If R-fallback follow-ups had been automatic, the canary closeout would have been one round faster.
+
 If something fails this self-check, **surface it in the hand-off summary** — don't paper over. The user paces; they decide whether to ship-with-known-gap or revise.
 
 ### Anti-rationalization guard
@@ -472,6 +489,8 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 - No session log write (`/pk-exit` owns the session log).
 - No Linear status writes during work (`pk branch` set In Progress; `pk ship` will set UAT).
 - No `/end-session` invocation.
+- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge AND interactive UAT — neither of which `/work` has signal for. The WIT-451 canary 2026-05-13 surfaced this: a worker session auto-ran `pk done` before the human finished UAT and wiped the worktree mid-test. Stage 3's UAT gate is non-skippable from inside this skill. If you complete an auto-rollover successfully, the hand-off line ends at `/pk-exit`, never at `pk done`.
+- **No `pk promote` invocation, ever.** Same rationale — promotion is a Stage 4 human step that runs from the parent repo after the user has signed off on UAT and merged. A worker session has no business advancing the workflow past its own scope.
 
 ## Comparison with v1
 

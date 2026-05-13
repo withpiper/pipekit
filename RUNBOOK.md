@@ -173,6 +173,25 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
+  │ [5e] Interactive UAT  (THE Stage 3 gate — non-skippable) │
+  │                                                          │
+  │      Human exercises the feature in the running app:     │
+  │      • Vercel PR preview URL (pre-merge), OR             │
+  │      • dev.<project> domain (post-merge to dev)          │
+  │                                                          │
+  │      Walk through every AC. Record the verdict —         │
+  │      Linear comment, PR comment, or session-log note     │
+  │      — so there's an audit trail.                        │
+  │                                                          │
+  │      Do NOT proceed to [6] / [8] / [9] until UAT signs   │
+  │      off. /work, /verify, /pk-exit must NOT auto-chain   │
+  │      past this step. Surfaced 2026-05-13 (WIT-451):      │
+  │      the worker session auto-fired pk done before UAT    │
+  │      completed and wiped the worktree mid-test.          │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
   │ [6] Merge PR (manual, GitHub UI)                         │
   │     • feature → dev: rebase or merge-commit              │
   │     • dev/beta → main: merge-commit (anchor per promote) │

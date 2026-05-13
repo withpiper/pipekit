@@ -85,6 +85,17 @@ For each path, prefer `Read` (cheaper than Glob for known paths). On `ENOENT`, f
 
 A missing file is a real divergence (fail-loud), not infrastructure noise.
 
+**Exception — explicit-NEW markers.** Before flagging a missing file as `✗`, check whether the surrounding spec text marks the path as a NEW file the implementation will create. Treat any of the following as an explicit-NEW marker on the line of the path, on the same line, on the line before, or in a section header within 5 lines above:
+
+- `NEW` (bold, plain, or in parentheses): `**NEW**`, `(NEW)`, `, NEW`
+- `(new)` / `(new file)`
+- "**Files to create**" or "**New files**" section heading that contains the path
+- `NEW: <path>` prefix
+
+When an explicit-NEW marker is present, record the path as `🆕 expected-new` instead of `✗ missing` — the spec is asserting this file will be created, not that it exists. The Phase 1–3 verdict treats `🆕 expected-new` as `✓` for the file-paths category. The pre-existing files in the same list still get verified normally; only the NEW-marked paths get the downgrade.
+
+Why: WIT-348 and WIT-451 (both Pipekit v2.4.x canary subjects) listed NEW components explicitly in their specs (`line-item-actions.tsx`, `line-item-edit-dialog.tsx`, `move-line-item-dialog.tsx`), each clearly annotated NEW in the Technical Context section. v2.4.0's preflight emitted `✗` for all of them, which over-stated the divergence and forced manual exception-noting in the verdict. v2.4.2 collapses that noise.
+
 #### 3b — Line citations
 
 For each `<file>:N` or `<file>:N-M`, call `Read` with `offset: N` and `limit: M-N+1` (or `1` for a single line). Record:
@@ -148,8 +159,9 @@ Each probe runs independently. A miss in one does not skip the others. Findings 
 1. Read `Strategy docs path` from `method.config.md` (default: `Strategy/`).
 2. `Glob` `<path>/*.md` and `<path>/**/*.md`. Capture the file list.
 3. For each Strategy doc, scan the first 200 lines (section index) for headings that overlap concept words from the spec body. Concept words: nouns appearing in the spec's §Goal, §Acceptance Criteria headings, or italicized key terms.
+4. **Strategy-citation check (v2.4.2):** scan the spec body for inline citations of any Strategy doc — patterns like `Strategy/Doc<N>`, `Strategy/Doc<N>_<name>.md`, `Strategy/Doc<N> §<section>`, or an `Authority hierarchy` table that names a Strategy file as the authority for a concern. If the spec body cites ≥1 Strategy doc inline, treat the cross-check as **performed** (the spec author already did the work the probe is asking for) and downgrade the emit to `✓ Canonical docs: Strategy cited inline at <doc>:<section>` instead of `⚠`.
 
-**Emit (always `⚠` — ambiguous; the human decides whether topic overlap is load-bearing):**
+**Emit (default `⚠` — ambiguous; the human decides whether topic overlap is load-bearing):**
 
 ```
 ⚠ Canonical docs: Strategy at <path> contains <N> doc(s); spec body references POC.
@@ -159,7 +171,16 @@ Each probe runs independently. A miss in one does not skip the others. Findings 
     Strategy is canonical for this project; POC may diverge.
 ```
 
+**Emit when Strategy is cited inline in the spec body (v2.4.2 downgrade):**
+
+```
+✓ Canonical docs: spec body cites Strategy inline (<list of cited docs+sections>);
+    cross-check performed in-spec. No further action.
+```
+
 If `Strategy docs path` is unset OR the directory is empty: record `n/a — no Strategy docs configured`. Do not warn — projects without Strategy docs are valid.
+
+Why the downgrade was added: WIT-451's revised spec body cited Strategy/Doc6 §2.1, Strategy/Doc6 §3.3 line 86, and Strategy/Doc2 §3.3.1 throughout — and had an explicit "Authority hierarchy" table naming Strategy as the canonical source for the 5-action button set, conversation surface, and line-item canonical fields. v2.4.0's probe still emitted `⚠ Cross-check spec claims against Strategy` because the trigger ("POC mentioned + Strategy/ exists") fired blindly. The downgrade keeps the probe useful for specs that haven't done the cross-check while letting fully-cited specs pass cleanly.
 
 #### 3.6b — Platform capability (handoff #20)
 

@@ -6,6 +6,60 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.4.2 — 2026-05-13
+
+> Patch: daily-loop discipline polish. Five doc-only fixes from the WIT-451 canary that ran today against Piper. Closes the "implicit UAT gate" and "auto-cascade past UAT" failure modes, plus two `/spec-preflight` Phase 3.6 false-positive reductions and a `/work` rule that auto-files follow-up WITs when a documented Risk-fallback is invoked.
+
+### What changed
+
+- **`method.md` Stage 3 + Stage 4** — Stage 3 renamed "Verify + Ship + UAT" so the UAT step is named, not implied. Adds the gate-clause: `pk done` and `pk promote` MUST NOT run until UAT signs off AND the PR merges. Stage 4 reframes both as "Deliberate human step — must NOT be auto-invoked by `/work`, `/verify`, `/pk-exit`, or any session-automation skill." Both anchor on the WIT-451 canary 2026-05-13 ("the worker session auto-fired `pk done` mid-test and wiped the worktree").
+- **`RUNBOOK.md` flowchart** — new explicit `[5e] Interactive UAT` box between PR review and merge, with the no-auto-chain rule inline so future readers don't need to re-derive it from `method.md`.
+- **`skills/work/skill.md` "What this skill does NOT do"** — adds two explicit bullets: "No `pk done` invocation, ever" and "No `pk promote` invocation, ever." Names the WIT-451 canary as the anchor incident. Tightens what the worker session is allowed to do at completion.
+- **`skills/pk-exit/skill.md`** — new "What this skill does NOT do" section with the same two bullets + "No Linear state writes." Closes the secondary path the worker session could have used to chain past UAT.
+- **`skills/work/skill.md` Step 6.5 Risk-fallback follow-up filing** — MANDATORY clause when a documented `R<N>: Mitigation` clause was invoked during implementation. Worker now must (1) identify the deferred scope, (2) `mcp__claude_ai_Linear__save_issue` to file the follow-up WIT in Approved state, (3) reference the new WIT-ID in the hand-off, (4) update parent spec's AC to mark as "partial per R<N>; tracked in <NEW-WIT-ID>". Closes WIT-451's R4 follow-up-rot pattern (dual-field inline NOTE editor only got filed in triage, not at ship time).
+- **`skills/spec-preflight/skill.md` Step 3a explicit-NEW marker** — file-paths probe now recognizes `**NEW**`, `(NEW)`, `, NEW`, `(new file)`, "Files to create" section heading, `NEW: <path>` prefix. NEW-marked paths record as `🆕 expected-new` instead of `✗ missing`. Verdict category treats them as `✓`. Eliminates the over-statement false positive on every WIT that legitimately introduces files (WIT-348, WIT-451 each hit this 2-3 times).
+- **`skills/spec-preflight/skill.md` Probe 3.6a Strategy-citation downgrade** — Canonical-doc cross-check now scans for inline Strategy citations (`Strategy/Doc<N>`, `Strategy/Doc<N> §<section>`, or an "Authority hierarchy" table naming a Strategy file). If ≥1 inline citation, downgrades `⚠ Cross-check Strategy` → `✓ Canonical docs: cross-check performed in-spec`. Probe still emits `⚠` when POC is mentioned but no inline Strategy citation exists. WIT-451's revised spec was the canonical example that motivated this — fully cited, still drew `⚠`.
+- **`PK_VERSION`** 2.4.1 → 2.4.2.
+
+### Why
+
+The WIT-451 canary 2026-05-13 against Piper ran the full v2 daily loop end-to-end and surfaced three procedural gaps. Listed from highest impact down:
+
+1. **No interactive UAT gate.** Stage 3's "Human performs UAT" line was prose-only. The worker session shipped PR #265, auto-merged on green CI, then auto-fired `pk done` and `pk promote beta` in the same ~60-second window while the user was still in the middle of UAT on `dev.withpiper.ai`. The worktree got wiped mid-test. Stage 3 now names UAT as the gate, names `pk done` and `pk promote` as deliberate human steps, and explicitly forbids `/work` and `/pk-exit` from chaining past them.
+2. **Worker sessions auto-firing `pk done` / `pk promote`.** Symptom of (1). Both skills now carry explicit "no pk done, ever / no pk promote, ever" bullets that name the anchor incident.
+3. **Risk-fallback follow-up rot.** WIT-451's spec documented R4 ("if the dual-field inline cell editor proves brittle, fall back to NOTE-via-modal-only"). The worker correctly invoked the fallback but only filed 2 follow-up WITs, missing the dual-field editor — that one got caught later in triage and became WIT-454. Step 6.5 of `/work` now makes the follow-up filing mandatory when an `R<N>: Mitigation` clause is invoked.
+
+Two adjacent Phase 3.6 probe-polish items also surfaced:
+
+4. **NEW-file false positives.** WIT-348 (3 NEW files) and WIT-451 (3 NEW files) each drew `⚠ File paths: N/M exist (missing: ...)` warnings on paths the spec explicitly marked NEW. Verdict noise that erodes signal.
+5. **Strategy-citation false positives on Probe 3.6a.** WIT-451's revised spec cited Strategy/Doc6 §2.1, §3.3, and Doc2 §3.3.1 throughout, with an explicit Authority hierarchy table — and the probe still emitted `⚠ Cross-check spec claims against Strategy` because the trigger fired blindly. Downgrade closes the false positive.
+
+All five are docs-only, low-blast-radius. A deeper code-level guard for (1) and (2) — `pk done` refuses when Linear state is `UAT` and a `--confirmed` flag isn't passed — is deliberately deferred to v2.4.3, after the doc gate has run in practice.
+
+### Migration
+
+None. Re-run `./scripts/sync-method.sh v2.4.2` in consumer projects. After sync:
+
+- `pk version` returns `2.4.2`
+- `method.md` Stage 3 / Stage 4 + `RUNBOOK.md` flowchart reflect the named UAT gate
+- `/work` and `/pk-exit` carry explicit "no pk done / no pk promote" bullets
+- `/spec-preflight` Phase 1 + Probe 3.6a emit fewer false positives on real specs
+
+### What this fixes (canary findings)
+
+- **WIT-451 canary finding "implicit UAT gate"** → method.md Stage 3 + Stage 4 + RUNBOOK.md [5e]
+- **WIT-451 canary finding "worker session auto-fired pk done / pk promote"** → /work + /pk-exit "does NOT do" sections
+- **WIT-451 canary finding "R-fallback follow-up filed only at triage time"** → /work Step 6.5 mandatory clause
+- **WIT-451 + WIT-348 finding "NEW-file false positives"** → /spec-preflight Step 3a
+- **WIT-451 finding "Strategy cited inline but probe still warned"** → /spec-preflight Probe 3.6a downgrade
+
+### Deferred to v2.4.3
+
+- Code-level guard in `bin/pk cmd_done`: refuse when Linear state is `UAT` unless `--confirmed` flag passed. Belt-and-suspenders with the v2.4.2 doc gate.
+- Same for `cmd_promote` when source-branch issues are still in UAT.
+
+---
+
 ## v2.4.1 — 2026-05-13
 
 > Patch: `/linear-todo-runner` creates real worktrees explicitly. Closes the empirically-observed "Agent isolation:`worktree` parameter is a no-op" failure mode where 4 parallel agents collapsed into one shared checkout and trampled each other's uncommitted work via branch switches.
