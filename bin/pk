@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.3.2"
+PK_VERSION="2.3.3"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -288,10 +288,43 @@ pk_linear_issues_in_state() {
     | jq -r '.data.issues.nodes // []'
 }
 
+# Rank a Linear workflow state along the canonical forward ladder.
+# Higher rank = further along the lifecycle. Unknown states return 0
+# (treated as "before everything" so a callsite using --advance will
+# always allow the transition — preserves current behavior for projects
+# with custom workflows). Terminal-but-off-ladder states (Canceled,
+# Duplicate) return a sentinel rank that never matches a target.
+pk_state_rank() {
+  case "$1" in
+    'Triage')        echo 1 ;;
+    'Ideas')         echo 2 ;;
+    'Future Phases') echo 3 ;;
+    'On Deck')       echo 4 ;;
+    'Needs Spec')    echo 5 ;;
+    'Specced')       echo 6 ;;
+    'Approved')      echo 7 ;;
+    'Building')      echo 8 ;;
+    'In Progress')   echo 9 ;;
+    'UAT')           echo 10 ;;
+    'Released')      echo 11 ;;
+    'Done')          echo 12 ;;
+    'Canceled')      echo 99 ;;
+    'Duplicate')     echo 99 ;;
+    *)               echo 0 ;;
+  esac
+}
+
 # Update issue state by identifier + state name.
+#
+# Modes:
+#   (default)   idempotent set — skip if already in target, otherwise mutate
+#   "advance"   ladder-gated: only mutate when target rank > current rank;
+#               refuse Approved-or-earlier → Released/Done leap-frogs with
+#               a warning (these imply commits shipped without verification).
 pk_linear_set_state() {
   local id="$1"
   local state_name="$2"
+  local mode="${3:-}"
   # Filter workflowStates by team NAME (reliable — pk_team_name reads
   # method.config.md robustly). Earlier versions used team.id.eq with
   # pk_team_id, but Team ID may be empty in many configs and the filter
@@ -325,6 +358,31 @@ pk_linear_set_state() {
   if [ "$current_state" = "$state_name" ]; then
     echo "  Linear: $id already in '$state_name' (skip)"
     return 0
+  fi
+  # Ladder gate (opt-in via mode="advance"): forward-only along the canonical
+  # workflow. Prevents promote bundles from pulling Done WITs backward and
+  # from leap-frogging Approved WITs past the verification states.
+  if [ "$mode" = "advance" ] && [ -n "$current_state" ]; then
+    local rank_current rank_target rank_approved
+    rank_current=$(pk_state_rank "$current_state")
+    rank_target=$(pk_state_rank "$state_name")
+    rank_approved=$(pk_state_rank "Approved")
+    # Unknown current OR target → fall through to mutate (preserve current
+    # behavior for projects with custom workflow states off the canonical ladder).
+    if [ "$rank_current" -gt 0 ] && [ "$rank_target" -gt 0 ]; then
+      if [ "$rank_target" -lt "$rank_current" ]; then
+        echo "  Linear: $id already at '$current_state' (target was '$state_name') — skip backward transition"
+        return 0
+      fi
+      # Leap-frog: current is Approved-or-earlier AND target is Released/Done.
+      # The WIT's commits made it into a promote bundle without UAT/In Progress —
+      # surface it loudly and refuse the transition.
+      if [ "$rank_current" -le "$rank_approved" ] && [ "$rank_target" -ge "$(pk_state_rank Released)" ]; then
+        echo "  Linear: $id at '$current_state' — refusing leap-frog to '$state_name'." >&2
+        echo "    Commits shipped without Building/In Progress/UAT. Review manually before transitioning." >&2
+        return 0
+      fi
+    fi
   fi
   local mutation='mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: {stateId: $state}) { success } }'
   pk_linear_gql "$mutation" "$(jq -n --arg id "$issue_uuid" --arg state "$state_id" '{id:$id, state:$state}')" >/dev/null
@@ -988,11 +1046,12 @@ cmd_verify() {
 # (matches `pk ship`). Position-based state mapping: last hop → Done,
 # any non-last → Released.
 cmd_promote() {
-  local stash=false take_remote=false target=""
+  local stash=false take_remote=false bootstrap=false target=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --stash)       stash=true;       shift ;;
       --take-remote) take_remote=true; shift ;;
+      --bootstrap)   bootstrap=true;   shift ;;
       --*)           echo "pk promote: unknown arg $1" >&2; return 2 ;;
       *)             target="$1";      shift ;;
     esac
@@ -1045,6 +1104,55 @@ cmd_promote() {
   fi
 
   local source="${envs_arr[$((target_idx - 1))]}"
+
+  # Guard against missing target branch on origin. GitHub's repo-level
+  # "auto-delete head branches" will silently remove long-lived release
+  # branches (e.g. beta) when a beta→main PR merges, and the previous
+  # behavior was for the downstream `git log origin/$target..origin/$source`
+  # to exit 128 with --quiet swallowing the diagnostic. Refuse loudly here.
+  if ! git ls-remote --exit-code origin "refs/heads/$target" >/dev/null 2>&1; then
+    if $bootstrap; then
+      echo "  → --bootstrap: creating origin/$target at origin/$source tip"
+      git fetch origin "$source" --quiet
+      local origin_url owner_repo source_sha
+      origin_url=$(git remote get-url origin)
+      owner_repo=$(echo "$origin_url" | sed -E 's#\.git$##' | sed -E 's#^.*github\.com[:/]##')
+      source_sha=$(git rev-parse "origin/$source")
+      if ! gh api -X POST "repos/$owner_repo/git/refs" \
+        -f ref="refs/heads/$target" -f sha="$source_sha" >/dev/null; then
+        echo "ERROR: --bootstrap failed to create origin/$target via gh api." >&2
+        echo "  Verify gh auth (gh auth status) and write permission on $owner_repo." >&2
+        return 1
+      fi
+      echo "  → origin/$target created at $source_sha"
+    else
+      local origin_url owner_repo
+      origin_url=$(git remote get-url origin 2>/dev/null || echo "")
+      owner_repo=$(echo "$origin_url" | sed -E 's#\.git$##' | sed -E 's#^.*github\.com[:/]##')
+      echo "ERROR: origin/$target does not exist." >&2
+      echo "" >&2
+      echo "  The remote branch '$target' is missing. This usually means GitHub's" >&2
+      echo "  'auto-delete head branches' setting removed it after a previous" >&2
+      echo "  promote PR merged. Recreate it from origin/$source:" >&2
+      echo "" >&2
+      if [ -n "$owner_repo" ]; then
+        echo "    gh api -X POST repos/$owner_repo/git/refs \\" >&2
+        echo "      -f ref=refs/heads/$target \\" >&2
+        echo "      -f sha=\$(git rev-parse origin/$source)" >&2
+      else
+        echo "    gh api -X POST repos/<owner>/<repo>/git/refs \\" >&2
+        echo "      -f ref=refs/heads/$target \\" >&2
+        echo "      -f sha=\$(git rev-parse origin/$source)" >&2
+      fi
+      echo "" >&2
+      echo "  Or rerun with --bootstrap to auto-create it:" >&2
+      echo "    pk promote $target --bootstrap" >&2
+      echo "" >&2
+      echo "  Long-term fix: protect '$target' against deletion (see Pipekit handoff #26)." >&2
+      return 1
+    fi
+  fi
+
   echo "Promote $source → $target"
   echo "  1. Sync $source"
   git checkout "$source"
@@ -1127,7 +1235,7 @@ cmd_promote() {
       id_count=$(echo "$issue_ids" | wc -l | tr -d ' ')
       echo "  4. Transitioning $id_count issue(s) → $target_state"
       while IFS= read -r issue_id; do
-        if ! pk_linear_set_state "$issue_id" "$target_state" 2>/dev/null; then
+        if ! pk_linear_set_state "$issue_id" "$target_state" "advance"; then
           if [ "$target_state" = "Released" ]; then
             echo "    Linear: $issue_id — Released state not configured. Add it via Linear UI + method.config.md, then re-run." >&2
           else
