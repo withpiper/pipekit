@@ -6,6 +6,55 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## v2.4.3 — 2026-05-13
+
+> Patch: code-level enforcement of the v2.4.2 UAT-gate doc, plus a `pk install` lag fix surfaced when the v2.3.3 state-ladder gate failed to fire because the user's installed `pk` was at v2.3.2. Five fixes, one bundled PR.
+
+### What changed
+
+- **`bin/pk cmd_done`** — refuses with `exit 1` when the issue is in Linear state `UAT` unless `--confirmed` is passed. v2.4.2's doc gate told future sessions not to chain `pk done` past UAT; this is the belt-and-braces. Doc gates rely on the model reading prose; code gates rely on `exit 1` and don't lie. Anchor: WIT-451 worker session 2026-05-13, where auto-merge → auto `pk done` wiped the worktree mid-UAT.
+- **`bin/pk cmd_promote`** — same shape, narrower trigger: refuses when any bundled issue (scanned from `git log <target>..<source>`) is in `UAT`. Released / Done bundles still pass through (re-promote is fine). Approved-or-earlier is already caught by the v2.3.3 ladder leap-frog refusal in `pk_linear_set_state`, so no double-emit. `--confirmed` opt-out.
+- **`bin/pk pk_linear_get_state`** — new helper: fetches the current workflow-state name for a Linear issue by identifier. Returns empty string on lookup failure so callers can treat absence as "don't know" rather than aborting. Used by both UAT refusals above.
+- **`bin/pk cmd_install`** — `--force` now always re-links, even when the existing target already points at `$src`. Previously the `existing == src` short-circuit returned 0 before `--force` was evaluated, so `pk install --force` was a silent no-op against valid symlinks (anchor: Pendragon 2026-05-13). Reports `Re-linked: …` instead of `Installed: …` when the re-link was forced. Adjacent design question — should `pk install` default to symlinking the global `~/Projects/pipekit/bin/pk` clone instead of the calling project's `bin/pk`? — left for a future cycle; not in scope for v2.4.3.
+- **`scripts/sync-method.sh`** — after each sync, compares the synced `bin/pk` content against `~/.local/bin/pk` and `/usr/local/bin/pk` via `cmp -s` (follows symlinks). If they differ, warns with the `pk install --force` remediation. New `--auto-install` flag invokes `pk install --force` automatically post-sync for unattended sync paths (CI, batch scripts). Closes the lag-bug anchor: PR #270 ran the v2.3.3 state-ladder gate code path… except it didn't, because `~/.local/bin/pk` was at `pk 2.3.2` while the synced `bin/pk` was 2.4.2. WIT-275 got falsely transitioned Approved → Done and had to be reverted manually.
+- **`sop/Git_and_Deployment.md` § Hotfix Procedure**  — new sub-section "When the explicit beta cherry-pick is needed (three-tier)". The standard three-tier hotfix flow files three branches (`hotfix/*-main`, `*-cherrypick-dev`, `*-cherrypick-beta`), but the explicit beta cherry-pick is redundant when a `dev → beta` promote is imminent — the dev cherry-pick sweeps to beta via the next promote. Filing it anyway leaves an orphan branch. Anchor: WIT-455, 2026-05-13 — `hotfix/margin-cherrypick-beta` orphaned because the dev cherry-pick swept to beta via PR #268 the same day.
+- **`scripts/test-pk-v2.4.3.sh`** — new test harness covering: `pk install --force` re-links a valid symlink, `pk_linear_get_state` helper presence, `cmd_done` / `cmd_promote` `--confirmed` arg parsing, and end-to-end UAT-refusal trigger + bypass via a stubbed `pk_linear_get_state`. 9 assertions, network-free (Linear lookups stubbed inside subshells).
+- **`bin/pk cmd_help`** — adds `--confirmed` to the `pk done` and `pk promote` synopsis lines.
+- **`skills/pipekit-update/skill.md`** — new Phase 0 auto-detects upstream vs downstream mode by `git remote get-url origin` + sentinel files (`method.md` + `CHANGELOG.md` + `bin/pk`). Upstream mode (running inside the Pipekit repo itself) does `git fetch --tags && git checkout <tag>` + `pk install --force`; downstream mode keeps the existing `sync-method.sh` flow. Same `/pipekit-update v2.4.3` command works on both: a machine where `~/.local/bin/pk` symlinks to a consumer project's `bin/pk` AND a machine where it symlinks to the Pipekit clone itself. `--push` refuses in upstream mode (incoherent). Closes the multi-machine update divergence — every machine runs the same incantation.
+- **`PK_VERSION`** 2.4.2 → 2.4.3.
+
+### Why
+
+The v2.4.2 doc gate (Stage 3 + RUNBOOK [5e] + `/work`/`pk-exit` "does NOT do") is the right gate for normal use, but the empirical failure mode is an LLM session auto-chaining past prose. Doc gates rely on the model reading and respecting natural language; code gates rely on `exit 1`. Belt-and-braces. The same week the v2.4.2 doc gate landed, the v2.3.3 state-ladder gate (a code gate that DID exist) silently bypassed itself because the user's installed `pk` was old — surfacing the lag-bug that `sync-method.sh` now warns on. Both classes of failure now have explicit code-level guards.
+
+### Migration
+
+None for consumers. Re-run `./scripts/sync-method.sh v2.4.3` in consumer projects. After sync:
+
+- `pk version` returns `2.4.3`
+- `pk done <ID>` refuses with a clear message when the issue is in UAT — pass `--confirmed` once UAT is signed off
+- `pk promote <env>` refuses when any bundled issue is in UAT — pass `--confirmed` to override
+- `pk install --force` always re-links, even on valid symlinks (no more silent no-op)
+- `./scripts/sync-method.sh` warns when `~/.local/bin/pk` differs from the synced `bin/pk`; add `--auto-install` for unattended sync
+
+### What this fixes (anchor incidents from 2026-05-13)
+
+- **WIT-451 worker auto-firing `pk done` mid-UAT** → `cmd_done` UAT refusal
+- **Same root, narrower** → `cmd_promote` UAT refusal on bundled issues
+- **PR #270 / WIT-275 false transition: state-ladder gate didn't fire because installed `pk` was v2.3.2** → `sync-method.sh` install-lag warning + `--auto-install`
+- **Pendragon `pk install --force` silent no-op** → `cmd_install` force/symlink fix
+- **WIT-455 orphaned `hotfix/margin-cherrypick-beta` branch** → `sop/Git_and_Deployment.md` hotfix nuance
+
+### Tests
+
+```
+bash scripts/test-pk-promote.sh   # 25 assertions (v2.3.3 ladder + missing-target guard)
+bash scripts/test-pk-config.sh    # 14 assertions (pk_config parsing)
+bash scripts/test-pk-v2.4.3.sh    #  9 assertions (v2.4.3 additions)
+```
+
+---
+
 ## v2.4.2 — 2026-05-13
 
 > Patch: daily-loop discipline polish. Five doc-only fixes from the WIT-451 canary that ran today against Piper. Closes the "implicit UAT gate" and "auto-cascade past UAT" failure modes, plus two `/spec-preflight` Phase 3.6 false-positive reductions and a `/work` rule that auto-files follow-up WITs when a documented Risk-fallback is invoked.

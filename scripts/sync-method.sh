@@ -6,6 +6,9 @@
 #   ./scripts/sync-method.sh              # Sync from main
 #   ./scripts/sync-method.sh v1.0         # Sync from a specific tag/branch
 #   ./scripts/sync-method.sh --dry-run    # Show what would change
+#   ./scripts/sync-method.sh --auto-install   # After sync, auto-run pk install --force
+#                                             # (no prompt) so the global pk stays in
+#                                             # lockstep with the synced bin/pk.
 #
 # What it syncs:
 #   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills, VBW)
@@ -37,6 +40,7 @@ set -euo pipefail
 
 METHOD_REPO="${METHOD_REPO:-https://github.com/withpiper/pipekit.git}"
 DRY_RUN=false
+AUTO_INSTALL=false
 REF="main"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHANGELOG="$PROJECT_ROOT/pipekit/.sync-changelog.md"
@@ -46,6 +50,7 @@ CHANGELOG="$PROJECT_ROOT/pipekit/.sync-changelog.md"
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
+    --auto-install) AUTO_INSTALL=true ;;
     -*) echo "WARN: unknown flag: $arg" >&2 ;;
     *) REF="$arg" ;;
   esac
@@ -577,6 +582,39 @@ fi
 
 # Clean up snapshot
 rm -rf "$SNAP"
+
+# --- v2.4.3: install-lag check ---
+# When the synced bin/pk differs from the globally-installed pk on PATH,
+# warn (or auto-install with --auto-install). Closes the lag-bug anchor:
+# Pendragon 2026-05-13, where ~/.local/bin/pk was at pk 2.3.2 but the
+# synced bin/pk was 2.4.2, silently bypassing the v2.3.3 state-ladder
+# gate. cmp -s follows symlinks, so symlinked installs that already point
+# at the synced file produce no warning.
+if ! $DRY_RUN && [ -f "$PROJECT_ROOT/bin/pk" ]; then
+  install_lag=""
+  for installed in "$HOME/.local/bin/pk" "/usr/local/bin/pk"; do
+    if [ -e "$installed" ] && ! cmp -s "$installed" "$PROJECT_ROOT/bin/pk" 2>/dev/null; then
+      install_lag="$installed"
+      break
+    fi
+  done
+  if [ -n "$install_lag" ]; then
+    echo ""
+    if $AUTO_INSTALL; then
+      echo "→ --auto-install: refreshing $install_lag from synced bin/pk"
+      if bash "$PROJECT_ROOT/bin/pk" install --force; then
+        :
+      else
+        echo "  ⚠ pk install --force reported non-zero — re-run manually:"
+        echo "    bash $PROJECT_ROOT/bin/pk install --force"
+      fi
+    else
+      echo "⚠ Installed pk ($install_lag) differs from synced bin/pk."
+      echo "  Run 'pk install --force' from this repo to refresh the global command,"
+      echo "  or re-run sync-method.sh with --auto-install for unattended sync."
+    fi
+  fi
+fi
 
 # --- Summary ---
 echo ""

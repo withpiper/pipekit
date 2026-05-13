@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.4.2"
+PK_VERSION="2.4.3"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -312,6 +312,17 @@ pk_state_rank() {
     'Duplicate')     echo 99 ;;
     *)               echo 0 ;;
   esac
+}
+
+# Fetch the current workflow-state name for a Linear issue by identifier.
+# Empty string on lookup failure (network, missing issue, missing API key) so
+# callers can treat absence as "don't know" without aborting. Used by the
+# UAT-state code refusals in cmd_done / cmd_promote (v2.4.3).
+pk_linear_get_state() {
+  local id="$1"
+  local issue_q='query($id: String!) { issue(id: $id) { state { name } } }'
+  pk_linear_gql "$issue_q" "$(jq -n --arg id "$id" '{id:$id}')" 2>/dev/null \
+    | jq -r '.data.issue.state.name // empty' 2>/dev/null
 }
 
 # Update issue state by identifier + state name.
@@ -863,7 +874,15 @@ Reviewer subagent invocation printed in pk output. Findings will land as a PR re
 }
 
 cmd_done() {
-  local id="${1:-}"
+  local confirmed=false id=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --confirmed) confirmed=true; shift ;;
+      --*)         echo "pk done: unknown arg $1" >&2; return 2 ;;
+      *)           id="$1"; shift ;;
+    esac
+  done
+
   local current
   local issue
   if [ -n "$id" ]; then
@@ -884,6 +903,23 @@ cmd_done() {
     issue=$(pk_branch_issue_id)
     if [ -z "$issue" ]; then
       echo "ERROR: pass <ISSUE-ID> or run from a feature branch (e.g. pk done RS-60)" >&2
+      return 1
+    fi
+  fi
+
+  # UAT-state code refusal (v2.4.3) — belt-and-braces for v2.4.2's doc gate.
+  # The empirical failure: a worker session auto-merged PR #265 on green CI
+  # and immediately chained `pk done`, wiping the worktree while the user
+  # was still doing interactive UAT on dev. Doc gates rely on the model
+  # reading prose; this gate is exit-1 and doesn't lie. --confirmed bypasses.
+  if ! $confirmed; then
+    local current_state
+    current_state=$(pk_linear_get_state "$issue" 2>/dev/null || echo "")
+    if [ "$current_state" = "UAT" ]; then
+      echo "ERROR: $issue is still in 'UAT'." >&2
+      echo "  Complete interactive UAT and merge the PR first." >&2
+      echo "  Re-run with --confirmed once UAT is signed off:" >&2
+      echo "    pk done $issue --confirmed" >&2
       return 1
     fi
   fi
@@ -1046,12 +1082,13 @@ cmd_verify() {
 # (matches `pk ship`). Position-based state mapping: last hop → Done,
 # any non-last → Released.
 cmd_promote() {
-  local stash=false take_remote=false bootstrap=false target=""
+  local stash=false take_remote=false bootstrap=false confirmed=false target=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --stash)       stash=true;       shift ;;
       --take-remote) take_remote=true; shift ;;
       --bootstrap)   bootstrap=true;   shift ;;
+      --confirmed)   confirmed=true;   shift ;;
       --*)           echo "pk promote: unknown arg $1" >&2; return 2 ;;
       *)             target="$1";      shift ;;
     esac
@@ -1208,6 +1245,39 @@ cmd_promote() {
     return 0
   fi
 
+  # UAT-state code refusal (v2.4.3) — belt-and-braces for v2.4.2's doc gate.
+  # Bundled issues still in 'UAT' mean the user hasn't signed off yet;
+  # opening the promote PR jumps that gate. Only refuses on UAT — Released
+  # / Done are fine (re-promote bundles), and Approved-or-earlier is already
+  # caught by the v2.3.3 ladder leap-frog refusal in pk_linear_set_state
+  # (so we don't double-emit here). --confirmed bypasses.
+  local issue_prefix
+  issue_prefix=$(pk_config "Issue prefix" "")
+  if ! $confirmed && [ -n "$issue_prefix" ]; then
+    local bundled_ids
+    bundled_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
+      | grep -oE "${issue_prefix}-[0-9]+" | sort -u)
+    if [ -n "$bundled_ids" ]; then
+      local uat_ids=""
+      while IFS= read -r bid; do
+        [ -z "$bid" ] && continue
+        local bstate
+        bstate=$(pk_linear_get_state "$bid" 2>/dev/null || echo "")
+        if [ "$bstate" = "UAT" ]; then
+          uat_ids="${uat_ids:+$uat_ids }$bid"
+        fi
+      done <<< "$bundled_ids"
+      if [ -n "$uat_ids" ]; then
+        echo "ERROR: bundled issue(s) still in 'UAT': $uat_ids" >&2
+        echo "  Complete interactive UAT and merge the feature PR(s) first." >&2
+        echo "  Re-run with --confirmed once UAT is signed off:" >&2
+        echo "    pk promote $target --confirmed" >&2
+        $stash_made && echo "  Note: your edits are stashed (git stash list)." >&2
+        return 1
+      fi
+    fi
+  fi
+
   echo "  3. Open promote PR ($source → $target, $commits_ahead commits)"
   local date promote_url
   date=$(date +%Y-%m-%d)
@@ -1224,8 +1294,6 @@ cmd_promote() {
     target_state="Released"
   fi
 
-  local issue_prefix
-  issue_prefix=$(pk_config "Issue prefix" "")
   if [ -n "$issue_prefix" ]; then
     local issue_ids
     issue_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
@@ -1620,11 +1688,16 @@ cmd_install() {
   if [ -L "$target" ] || [ -e "$target" ]; then
     local existing
     existing=$(readlink "$target" 2>/dev/null || echo "$target")
-    if [ "$existing" = "$src" ]; then
+    # v2.4.3: --force always re-links, even when the existing target already
+    # points at $src. Previously the "already installed" check returned 0
+    # before --force was evaluated, so `pk install --force` was a silent no-op
+    # against valid symlinks. Anchor: Pendragon 2026-05-13, where rerunning
+    # --force to refresh a stale lockstep did nothing.
+    if [ "$existing" = "$src" ] && ! $force; then
       echo "Already installed: $target → $src"
       return 0
     fi
-    if ! $force; then
+    if [ "$existing" != "$src" ] && ! $force; then
       echo "ERROR: $target exists and points elsewhere ($existing)." >&2
       echo "  Use 'pk install --force' to overwrite." >&2
       return 1
@@ -1633,7 +1706,11 @@ cmd_install() {
   fi
 
   ln -s "$src" "$target"
-  echo "Installed: $target → $src"
+  if $force && [ -n "${existing:-}" ] && [ "$existing" = "$src" ]; then
+    echo "Re-linked: $target → $src (--force)"
+  else
+    echo "Installed: $target → $src"
+  fi
 
   case ":$PATH:" in
     *:"$target_dir":*) ;;
@@ -1654,10 +1731,10 @@ Subcommands:
   pk status                       Quick triage of the Linear board + worktrees
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
   pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review)
-  pk done                         Verify PR merged, cleanup worktree+branch (no Linear state change)
+  pk done [<ID>] [--confirmed]    Verify PR merged, cleanup worktree+branch (no Linear state change). Refuses if issue is in UAT — pass --confirmed once UAT is signed off.
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote <env> [--stash|--take-remote]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source.
+  pk promote <env> [--stash|--take-remote] [--confirmed]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT — pass --confirmed to override.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)

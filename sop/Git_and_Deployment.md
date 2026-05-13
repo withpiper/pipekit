@@ -317,7 +317,7 @@ gh pr create --base main --title "hotfix(<scope>): <desc>" --body "..."
 # Two-tier:
 git checkout dev && git pull && git cherry-pick <hash> && git push origin dev
 
-# Three-tier (also cherry-pick to beta):
+# Three-tier (see § When the explicit beta cherry-pick is needed below):
 git checkout dev && git pull && git cherry-pick <hash> && git push origin dev
 git checkout beta && git pull && git cherry-pick <hash> && git push origin beta
 
@@ -327,6 +327,19 @@ git worktree remove ../<project>-hotfix-<slug>
 ```
 
 If the hotfix corresponds to a Linear issue, post the merge commit back to that issue manually — `pk done` is for `pk branch`-created branches.
+
+### When the explicit beta cherry-pick is needed (three-tier)
+
+The standard three-tier flow files three branches: `hotfix/*-main`, `*-cherrypick-dev`, and `*-cherrypick-beta`. But if a `dev → beta` promote is imminent within one cycle of the hotfix landing on dev, the explicit beta cherry-pick is **redundant** — the dev cherry-pick will sweep onto beta automatically via the next `pk promote beta`.
+
+**File the explicit beta cherry-pick only when:**
+
+- Production is bleeding from the bug and beta needs the fix **before** the next scheduled `dev → beta` promote.
+- The next `dev → beta` promote is unscheduled or blocked (feature freeze, awaiting unrelated UAT, marketing hold).
+
+**Otherwise:** skip the beta cherry-pick branch. The dev cherry-pick will land on beta naturally on the next promote. Filing it anyway produces an orphan branch that needs manual cleanup (anchor: WIT-455, 2026-05-13 — `hotfix/margin-cherrypick-beta` orphaned because the dev cherry-pick swept to beta via PR #268 the same day).
+
+If you're unsure, ask: "Will the next `dev → beta` promote happen within ~24h of this hotfix landing on dev?" If yes, skip beta cherry-pick. If no or unknown, file it.
 
 ---
 

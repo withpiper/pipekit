@@ -26,6 +26,90 @@ You are a method sync coordinator. Your job is to pull the latest Pipekit conten
 
 ## Execution Steps
 
+### Phase 0 — Detect Mode (upstream vs downstream)
+
+The same `/pipekit-update v<tag>` command works in two places:
+
+- **Downstream** (consuming project, e.g. piper, rs-vault) — sync FROM Pipekit's GitHub release.
+- **Upstream** (the Pipekit repo itself, e.g. `~/Projects/pipekit`) — `git pull` + checkout the tag locally.
+
+Auto-detect:
+
+```bash
+origin_url=$(git remote get-url origin 2>/dev/null || echo "")
+mode="downstream"
+# Pipekit's canonical origins: withpiper/pipekit or any pipekit-shaped fork.
+# Also require a sentinel (method.md + CHANGELOG.md at root) to avoid false
+# positives in consuming projects that happen to have "pipekit" in a URL.
+if echo "$origin_url" | grep -qE '[:/](withpiper|ethan-piper|Ethros19)/pipekit(\.git)?$' \
+   && [ -f method.md ] && [ -f CHANGELOG.md ] && [ -f bin/pk ]; then
+  mode="upstream"
+fi
+echo "Mode: $mode"
+```
+
+Tell the user which mode was detected before proceeding. If detection is wrong (rare — a fork with a non-canonical name), the user can override by running the underlying command directly (`git pull` for upstream, `./scripts/sync-method.sh <tag>` for downstream).
+
+- **Downstream mode** → continue to Phase 1.
+- **Upstream mode** → jump to Phase U.
+
+### Phase U — Upstream Update (Pipekit repo itself)
+
+You're inside the Pipekit clone. The equivalent of "sync from GitHub" is "checkout the tag locally."
+
+**U1. Refuse if working tree is dirty.** The checkout would either fail or stash work. Print the dirty paths and exit:
+
+```bash
+if [ -n "$(git status --porcelain)" ]; then
+  echo "ERROR: working tree is dirty. Commit or stash before updating." >&2
+  git status --short
+  return 1
+fi
+```
+
+**U2. Fetch tags + main:**
+
+```bash
+git fetch --tags --quiet origin
+git fetch --quiet origin main
+```
+
+**U3. Checkout target.** If a tag arg was passed (e.g. `v2.4.3`), check it out. Else fast-forward `main`:
+
+```bash
+if [ -n "$tag_arg" ]; then
+  git checkout "$tag_arg"
+else
+  git checkout main
+  git pull --ff-only origin main
+fi
+```
+
+**U4. Refresh the global `pk` install.** Idempotent — for symlinked installs this just re-links (v2.4.3+ `--force` is no-op-safe); for copied installs this overwrites the stale copy. Closes the install-lag bug class on the upstream side (anchor: Pendragon 2026-05-13, `~/.local/bin/pk` at v2.3.2 while the repo was at v2.4.2):
+
+```bash
+bash ./bin/pk install --force
+```
+
+**U5. Show the CHANGELOG entry for the newly-checked-out ref:**
+
+```bash
+# Grab the entry for the current tag (or "main" → top entry).
+awk -v tag="${tag_arg:-}" '
+  /^## v/ {
+    if (printing) exit
+    if (tag == "" || index($0, tag)) printing = 1
+  }
+  printing { print }
+' CHANGELOG.md | head -60
+```
+
+**U6. Done.** Skip Phases 3-4 — you ARE the source of truth, so there's no `.sync-changelog.md` and no project-config reconciliation. Verify with:
+
+```bash
+pk version   # should match the tag (or main HEAD)
+```
+
 ### Phase 1 — Ensure Sync Script Exists
 
 Check if `scripts/sync-method.sh` exists in the current project.
@@ -166,7 +250,17 @@ Restart Claude Code to load updated skills.
 
 ### Phase 5 — Push Improvements Back (--push only)
 
-When invoked with `--push`, this mode captures improvements made to portable skills *in the current project* and pushes them back to the method repo.
+**Refuse in upstream mode.** If Phase 0 detected `mode=upstream`, `--push` is incoherent — you ARE the method repo, there's nowhere to push improvements TO. Print and exit:
+
+```bash
+if [ "$mode" = "upstream" ]; then
+  echo "ERROR: --push is for downstream projects pushing improvements back to Pipekit."
+  echo "  You're already inside the Pipekit repo. Use git directly (commit + git push)."
+  return 1
+fi
+```
+
+When invoked with `--push` from a downstream project, this mode captures improvements made to portable skills *in the current project* and pushes them back to the method repo.
 
 **Requires a local clone** at `~/Projects/pipekit/` (or wherever `METHOD_REPO_LOCAL` points). If no local clone exists, explain:
 
