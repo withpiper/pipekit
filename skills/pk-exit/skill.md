@@ -91,3 +91,9 @@ If the session was pure execution with no decisions, write "—".>
 - The v1 `/end-session` skill (now archived) was the prior art. This skill restores its core function (narrative session log) without the v1 baggage (NEXT.md updates, branch-status orchestration — those moved to `pk next` / `pk done`).
 - The bash Stop hook was retired because: (a) Stop fires on every assistant turn, producing duplicate commit-list entries; (b) bash can't write narrative; (c) `pk done` doesn't need a journal cache — it reads `git log` directly.
 - This skill writes one file per session. It does not update Linear (that's `pk done`'s job at issue-close) and does not update PHASES.md (that's `phase-plan`'s job).
+
+## What this skill does NOT do
+
+- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge AND interactive UAT (the Stage 3 gate). `/pk-exit` writes the session log and stops — it does not chain into cleanup. The WIT-451 canary 2026-05-13 surfaced the cost of auto-chaining: a worker session ran `pk done` before the human finished UAT and wiped the worktree mid-test. If the user wants cleanup, they run `pk done <ID>` themselves from the parent repo after merge.
+- **No `pk promote` invocation, ever.** Same rationale. Promotion is a Stage 4 human step.
+- **No Linear state writes.** Comments and state transitions belong to `pk branch`, `pk ship`, `pk done`, and `pk promote` — each at its own deliberate human step.

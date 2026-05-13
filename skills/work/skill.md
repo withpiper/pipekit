@@ -472,6 +472,8 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 - No session log write (`/pk-exit` owns the session log).
 - No Linear status writes during work (`pk branch` set In Progress; `pk ship` will set UAT).
 - No `/end-session` invocation.
+- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge AND interactive UAT — neither of which `/work` has signal for. The WIT-451 canary 2026-05-13 surfaced this: a worker session auto-ran `pk done` before the human finished UAT and wiped the worktree mid-test. Stage 3's UAT gate is non-skippable from inside this skill. If you complete an auto-rollover successfully, the hand-off line ends at `/pk-exit`, never at `pk done`.
+- **No `pk promote` invocation, ever.** Same rationale — promotion is a Stage 4 human step that runs from the parent repo after the user has signed off on UAT and merged. A worker session has no business advancing the workflow past its own scope.
 
 ## Comparison with v1
 
