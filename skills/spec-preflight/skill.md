@@ -85,6 +85,17 @@ For each path, prefer `Read` (cheaper than Glob for known paths). On `ENOENT`, f
 
 A missing file is a real divergence (fail-loud), not infrastructure noise.
 
+**Exception — explicit-NEW markers.** Before flagging a missing file as `✗`, check whether the surrounding spec text marks the path as a NEW file the implementation will create. Treat any of the following as an explicit-NEW marker on the line of the path, on the same line, on the line before, or in a section header within 5 lines above:
+
+- `NEW` (bold, plain, or in parentheses): `**NEW**`, `(NEW)`, `, NEW`
+- `(new)` / `(new file)`
+- "**Files to create**" or "**New files**" section heading that contains the path
+- `NEW: <path>` prefix
+
+When an explicit-NEW marker is present, record the path as `🆕 expected-new` instead of `✗ missing` — the spec is asserting this file will be created, not that it exists. The Phase 1–3 verdict treats `🆕 expected-new` as `✓` for the file-paths category. The pre-existing files in the same list still get verified normally; only the NEW-marked paths get the downgrade.
+
+Why: WIT-348 and WIT-451 (both Pipekit v2.4.x canary subjects) listed NEW components explicitly in their specs (`line-item-actions.tsx`, `line-item-edit-dialog.tsx`, `move-line-item-dialog.tsx`), each clearly annotated NEW in the Technical Context section. v2.4.0's preflight emitted `✗` for all of them, which over-stated the divergence and forced manual exception-noting in the verdict. v2.4.2 collapses that noise.
+
 #### 3b — Line citations
 
 For each `<file>:N` or `<file>:N-M`, call `Read` with `offset: N` and `limit: M-N+1` (or `1` for a single line). Record:
