@@ -1,5 +1,7 @@
 # Project Startup Guide
 
+**v2.3.0** — Last updated: 2026-05-09  *(state-machine alignment — Released state + 3-tier pk promote)*
+
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
 A walkthrough for bootstrapping a new project using Pipekit. Covers goal definition, tech stack decisions, environment setup, and skill creation.

@@ -1,5 +1,7 @@
 # Method Configuration
 
+**v2.4.0** — Last updated: 2026-05-13  *(Phase 3.6 project signal probes; latest template revision)*
+
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
 ## Project

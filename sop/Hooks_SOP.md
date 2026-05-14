@@ -2,7 +2,7 @@
 
 > Claude Code hooks are shell commands the harness runs on lifecycle events (prompt submit, tool use, session start, etc.). They belong in the **CI / Hooks** layer of Pipekit's [three-layer enforcement model](Skills_SOP.md#how-skills-work) — hard enforcement that runs without Claude's cooperation.
 
-**Last updated:** 2026-04-21
+**v1.1.0** — Last updated: 2026-04-21  *(check-context hook removal)*
 
 ---
 

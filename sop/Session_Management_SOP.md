@@ -2,7 +2,7 @@
 
 > How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.7 and adapted for Pipekit's pipeline.
 
-**Last updated:** 2026-04-17
+**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `/pk-exit` as explicit session bookend in the session pattern table)*
 
 ---
 
@@ -36,6 +36,7 @@ Pipekit's pipeline maps naturally onto session boundaries. Treat each pipeline s
 | `/light-spec` per issue | Fresh session per issue | Each spec is a bounded AI-to-AI contract |
 | `/work` (vbw backend) → vbw-dev execution | VBW manages its own context | Don't try to orchestrate from the main session — let `/work` dispatch and read state on completion |
 | `/strategy-sync` post-ship | Fresh session | Compares codebase to strategy docs, needs clean context |
+| **End of any session** | **`/pk-exit`** | **Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Run manually as the final command of every Claude Code session regardless of where the current issue stands. Per-session, not per-issue — never auto-chained from `/work` or `/verify`.** |
 
 **Rule of thumb:** when you start a new pipeline step, start a new session. The tracker files (`{folder-name}-startup.md`, `method.config.md`, `.vbw-planning/ROADMAP.md`, `Strategy/`) carry state across sessions — you don't need Claude's memory to carry it.
 

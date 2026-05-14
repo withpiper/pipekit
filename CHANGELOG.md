@@ -6,6 +6,78 @@ Pin to a specific version: `./scripts/sync-method.sh v1.8.2`.
 
 ---
 
+## Release Checklist
+
+Every `chore(release): vX.Y.Z` PR must complete the following before merging to `main`:
+
+- [ ] Bump `PK_VERSION` in `bin/pk`.
+- [ ] Add a new `## vX.Y.Z — YYYY-MM-DD` section to `CHANGELOG.md` (this file).
+- [ ] **Stamp every doc you actually edited in this release.** Don't bump stamps on untouched docs — the version gap between an older stamp and the current release is the drift signal we keep them for. The stamped doc set lives in the table below. If you add a new top-level doc or SOP, stamp it and add it to that table.
+- [ ] If `method.md` / `RUNBOOK.md` / `GUIDE.md` were edited, also bump their stamps to `vX.Y.Z` with today's date (these three are the "constitutional" docs — they describe current behavior and should always carry the latest version).
+- [ ] Update `RUNBOOK.md` line 14 (`./scripts/sync-method.sh vX.Y.Z` example) to the new tag.
+- [ ] PR title contains `vX.Y.Z` so the `auto-tag-release` workflow can tag the merge commit (see `.github/workflows/auto-tag-release.yml`).
+- [ ] Skip-check: leave historical `vX.Y.Z` references in prose alone (e.g., "as of v2.3.0" describes when a behavior shipped — that's intentional, not drift).
+
+### Stamped docs (maintained list)
+
+Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` line right after its H1. The stamp's `vX.Y.Z` is the release **the doc is calibrated to**, not the release we last touched typography in. When a release modifies a doc, bump its stamp to the new version + today's date. Otherwise, leave it alone so the gap surfaces drift.
+
+| Doc | Role |
+|-----|------|
+| `method.md` | Constitutional — deep methodology |
+| `RUNBOOK.md` | Constitutional — one-page daily flow |
+| `GUIDE.md` | Constitutional — full instruction manual |
+| `README.md` | Public-facing repo intro |
+| `CLAUDE.md` | Guidance for Claude Code sessions in this repo |
+| `STARTUP.md` | Project bootstrap reference |
+| `VBW_COMMANDS.md` | VBW `/vbw:help` snapshot |
+| `method.config.template.md` | Project-config template |
+| `sop/Code_Quality.md` | SOP — coding conventions |
+| `sop/Git_and_Deployment.md` | SOP — branches, merges, release flow |
+| `sop/Hooks_SOP.md` | SOP — Claude Code hooks |
+| `sop/Linear_SOP.md` | SOP — Linear model, states, labels |
+| `sop/Session_Management_SOP.md` | SOP — Claude Code session hygiene |
+| `sop/Skills_SOP.md` | SOP — skill anatomy, sync, overrides |
+
+Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
+
+Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
+
+---
+
+## v2.4.3.2 — 2026-05-14
+
+> **Doc-polish release.** No code behavior changes. Brings every constitutional doc + SOP into alignment with the v2.4.3 code gate, establishes a stamped-docs inventory + release checklist, and closes drift that accumulated across v2.4.0 through v2.4.3.1.
+
+### What changed
+
+**Stamped-docs inventory (new).** Every top-level doc and SOP now carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` line right after its H1. The version on each stamp is the release the doc is **calibrated to** — when a release modifies a doc, bump its stamp; otherwise leave it alone so the gap between stamped version and current release surfaces drift. 14 docs are covered; the maintained list lives in the Release Checklist section above.
+
+**Release Checklist (new).** Top of `CHANGELOG.md` now carries a checklist that every `chore(release): vX.Y.Z` PR must complete before merging — bump `PK_VERSION`, add CHANGELOG entry, stamp edited docs, update RUNBOOK sync example, ensure PR title carries `vX.Y.Z` for the auto-tag workflow. The root cause this closes: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific lines without touching the "Last updated" line.
+
+**Content polish across 10 docs.**
+
+- **`method.md`, `RUNBOOK.md`, `GUIDE.md`** — `--confirmed` flag now appears on every `pk done` / `pk promote` row in the daily-loop tables and cheat sheets. `Backend: auto` listed alongside `vbw` / `native` in the config table. Three-layer enforcement model (CLAUDE.md / CI+hooks / skills) called out in method.md Overview. `/strategy-from-code` deferral reworded — was "deferred to v1.4.0" (a version that already shipped 2026-04-27 without the skill); now "deferred; originally promised for v1.4.0 but never built."
+- **`CLAUDE.md`** — daily-loop sequence shows the full v2.4.3 chain with `[--confirmed]` modifiers and `pk promote`; `/pk-exit` flagged as manual-invocation-only (never auto-chained from another skill); `Backend: auto` listed; `sop/` list expanded to include all seven SOPs.
+- **`README.md`** — `pk done` / `pk promote` rows updated; `/pk-exit` per-session emphasis; versioning example refreshed from `v1.0` to `v2.4.3.2`.
+- **`sop/Code_Quality.md`** — stack-agnostic note (was implicitly TypeScript-only); `/verify` named as canonical pre-deploy gate runner.
+- **`sop/Git_and_Deployment.md`** — Release Flow now explicitly describes optimistic state transitions at PR-open, the merge as source-of-truth anchor, and the v2.4.3 `--confirmed` gate semantics.
+- **`sop/Linear_SOP.md`** — UAT row + transitions reference `--confirmed`; 2-tier clarification that Released state is unused.
+- **`sop/Session_Management_SOP.md`** — `/pk-exit` added as explicit session bookend in the session pattern table.
+- **`sop/Skills_SOP.md`** — skill-author guidance now says "Dispatch heavy work through `/work`" (which routes to vbw/native/auto backends) rather than "Use VBW agents directly"; `/pipekit-help` usage hint added.
+
+**`PK_VERSION`** 2.4.3.1 → 2.4.3.2.
+
+### Why
+
+The methodology is correct; the docs were lagging. Stamping every doc with its calibration version makes drift legible (you can see a doc is "v2 minor releases behind current" at a glance), and the checklist forces future releases to keep the stamps honest. Cutting v2.4.3.2 instead of leaving the polish on main without a tag lets Piper and other consumers `./scripts/sync-method.sh v2.4.3.2` to pin a known-good doc set.
+
+### Migration
+
+None. Re-run `/pipekit-update` or `./scripts/sync-method.sh v2.4.3.2` in consumer projects. Consumers already on v2.4.3 / v2.4.3.1 see only doc changes (no behavior changes).
+
+---
+
 ## v2.4.3.1 — 2026-05-13
 
 > Patch: doc reconciliation for v2.4.3. The v2.4.3 code shipped with `method.md` and `RUNBOOK.md` still describing only the v2.4.2 *prose* UAT gate — neither mentioned that the binary now refuses with `exit 1`. Closes the doc lag.

@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `--confirmed` flag, `Backend: auto`, `/pk-exit` manual-invocation discipline)*
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What This Repo Is
@@ -19,7 +21,7 @@ Stage 0: Foundation (a contract — see Entry Modes)
   /concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create → /phase-plan
 
 Stages 1-5: Development — the v2 daily loop (repeats per issue)
-  pk next → pk branch → /work → /verify → pk ship → [PR review] → pk done → /pk-exit
+  pk next → pk branch → /work → /verify → pk ship → [PR review + UAT] → pk done [--confirmed] → pk promote [--confirmed] → /pk-exit
 ```
 
 Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a script. Three entry modes satisfy the contract: greenfield (full chain), brownfield (skip /concept and /define), inherited (verify and proceed). `/startup` auto-detects mode and confirms with the user. The v2 daily loop replaces v1's `/branch → /launch → /verify → /launch --close` chain — see `RUNBOOK.md` for the one-page flowchart. Full Entry Modes table in `method.md`.
@@ -30,7 +32,7 @@ Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a 
 - `method.config.template.md` — Template for project-specific config (Linear IDs, strategy docs, environments, pre-deploy gate)
 - `STARTUP.md` — Reference guide for project bootstrap (use `/startup` for the interactive flow)
 - `RUNBOOK.md` — Per-issue practical walkthrough (the loop you run most often)
-- `sop/` — Standard operating procedures (Git, Code Quality, Linear, Skills, VBW)
+- `sop/` — Standard operating procedures (Code Quality, Git + Deployment, Hooks, Linear, Session Management, Skills, VBW)
 - `templates/` — Concept brief, project definition, strategy doc, and spec templates
 - `templates/strategy/` — Templates for each strategy doc type (conceptual overview, technical architecture, etc.)
 - `skills/` — Portable Claude Code skills (synced into consuming projects as `.claude/skills/`)
@@ -86,12 +88,12 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 |---------|---------|
 | `pk next` | Phase-aware: reads `## Current Phase:` from `PHASES.md`, queries Linear, groups by status (In Progress / Approved / Needs Spec) with per-group hints. Replaces v1's `cat NEXT.md`. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
-| `/work <ID>` | Plan + execute in-session. Dispatches to `Backend: vbw` (full vbw-lead/dev/qa pipeline) or `Backend: native` (in-context Claude with parallel Agent grounding) per `method.config.md`. Per-invocation override via `--backend=`. |
+| `/work <ID>` | Plan + execute in-session. Dispatches to `Backend: vbw` (full vbw-lead/dev/qa pipeline), `Backend: native` (in-context Claude with parallel Agent grounding), or `Backend: auto` (routes per plan complexity — ≤3 files + no migration → native, otherwise → vbw) per `method.config.md`. Per-invocation override via `--backend=`. |
 | `/verify` | Pre-deploy gate. |
 | `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` invokes the antagonistic reviewer. |
-| `pk done <ID>` | Verify merged, cleanup worktree+branch, post commits to Linear. |
-| `pk promote` | dev → main batch promote (multi-tier projects). |
-| `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Last command of every Claude session. |
+| `pk done <ID> [--confirmed]` | Verify merged, cleanup worktree+branch, post commits to Linear. Cleanup-only — no state transition. **v2.4.3+**: exits 1 if Linear is still `UAT`; pass `--confirmed` once UAT is signed off to bypass. |
+| `pk promote <env> [--confirmed]` | One hop along `Ship environments` (multi-tier projects). Optimistic state transition at PR-open → `Released` (intermediate) or `Done` (final hop). **v2.4.3+**: exits 1 if any bundled issue is still `UAT`; pass `--confirmed` to bypass. |
+| `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. **Run manually as the last command of every Claude Code session** — never auto-chained from `/work`, `/verify`, or any other skill. |
 
 **Orthogonal skills (unchanged in v2):**
 

@@ -1,5 +1,7 @@
 # VBW Commands Reference
 
+**v2.1.2** — Last updated: 2026-05-03  *(v1 vocabulary retired in SOPs + this file)*  •  External: VBW v1.35.1 snapshot
+
 Output of `/vbw:help` (VBW v1.35.1) — included here for context on how Pipekit wraps VBW.
 
 Regenerate this file from the current installed VBW version with:

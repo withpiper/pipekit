@@ -1,5 +1,7 @@
 # Pipekit
 
+**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `--confirmed` flag in daily-loop table, `/pk-exit` per-session discipline, versioning example refresh)*
+
 A structured AI-assisted software delivery system. Wraps [VBW](https://github.com/dnakov/claude-code-vbw) in a visibility and project management layer — from idea to production with quality gates at every stage.
 
 ## What This Is (and Isn't)
@@ -58,9 +60,9 @@ Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pi
 | 7 | **Verify** | **`/verify`** | **Pre-deploy gate (types + lint + test).** |
 | 8 | Ship | `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` triggers antagonistic review. |
 | 9 | UAT | (Linear UI / browser) | You test the built feature |
-| 10 | Done | `pk done <ID>` | Verify merged, cleanup worktree, post commits to Linear |
-| 11 | Promote | `pk promote` | (Multi-tier projects) dev → main batch promote |
-| 12 | Session log | `/pk-exit` | Narrative log to `Logs/Sessions/<date>_<HHMM>.md` (last command of every Claude session) |
+| 10 | Done | `pk done <ID> [--confirmed]` | Verify merged, cleanup worktree, post commits to Linear. Cleanup-only — no state transition. **v2.4.3+**: refuses with `exit 1` if Linear is still `UAT`; pass `--confirmed` once UAT is signed off. |
+| 11 | Promote | `pk promote <env> [--confirmed]` | (Multi-tier projects) one hop along `Ship environments` → `Released` or `Done`. **v2.4.3+**: refuses if any bundled issue is still `UAT`. |
+| 12 | Session log | `/pk-exit` | Narrative log to `Logs/Sessions/<date>_<HHMM>.md`. **Per-session, not per-issue** — run manually as the last command of every Claude Code session regardless of where the current issue stands. Never auto-chained from another skill. |
 | 13 | Strategy Sync | `/strategy-sync` | Update docs to match what was built (post-ship) |
 
 ## Entry Modes
@@ -73,7 +75,7 @@ Pipekit projects enter the dev pipeline through one of three modes — pick the 
 | **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
 | **Inherited** | New contributor joining a Pipekit project | None — verify foundation, jump to dev pipeline | All of Stage 0 |
 
-`/startup` auto-detects the mode and confirms with you before proceeding. `/strategy-from-code` (auto-audit for brownfield) is deferred to v1.4.0; brownfield currently routes through `/strategy-create` with a manual-edit note.
+`/startup` auto-detects the mode and confirms with you before proceeding. `/strategy-from-code` (auto-audit for brownfield) is deferred — brownfield currently routes through `/strategy-create` with a manual-edit note. The skill was originally promised for v1.4.0 but hasn't shipped; track in the brainstorm/Linear backlog if you need it.
 
 ## Getting Started
 
@@ -259,11 +261,13 @@ pipekit/
 
 ## Versioning
 
-Tag releases when stable: `git tag v1.0`. Projects can pin to a version:
+Tag releases when stable. Projects can pin to a specific version:
 
 ```bash
-./scripts/sync-method.sh v1.0
+./scripts/sync-method.sh v2.4.3.1   # or any tag listed in CHANGELOG.md
 ```
+
+Versioning is semver-ish — minor bumps for new capability, patch for fixes/docs only. Tags are created automatically on merge to `main` via `.github/workflows/auto-tag-release.yml` when the PR title contains a `vX.Y.Z` token.
 
 ## Origin
 

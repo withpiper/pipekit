@@ -1,4 +1,6 @@
-# Pipekit Runbook (v2.3.0)
+# Pipekit Runbook
+
+**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — `--confirmed` flag on `pk done`/`pk promote` cheat-sheet rows; `Backend: auto` in config table)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -9,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.3.0                (or latest tag)
+1. ./scripts/sync-method.sh v2.4.3.2               (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -268,8 +270,8 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID>` | `./bin/pk done <ID>` | parent, dev | removes worktree + posts journal highlights to Linear (no state transition; v2.3.0) |
-| 8 | Promote | `pk promote <env> [--stash\|--take-remote]` | `./bin/pk promote <env> [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → Released or → Done (v2.3.0) |
+| 7 | Cleanup | `pk done <ID> [--confirmed]` | `./bin/pk done <ID> [--confirmed]` | parent, dev | removes worktree + posts journal highlights to Linear (no state transition; v2.3.0). **v2.4.3+**: refuses with `exit 1` if Linear state is `UAT`; pass `--confirmed` after UAT sign-off (Linear comment, PR comment, or session-log note recording the accept verdict). |
+| 8 | Promote | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → Released or → Done (v2.3.0). **v2.4.3+**: refuses if any bundled issue is still in `UAT`; pass `--confirmed` after UAT sign-off. |
 | meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
 | meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
 | meta | Install | `pk install` | `./bin/pk install` | repo root | symlinks pk onto $PATH (v2.0) |
@@ -283,7 +285,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 | Key | Values | Default | Used by |
 |---|---|---|---|
-| **Backend** | `vbw` \| `native` | `vbw` | `/work` agent dispatch |
+| **Backend** | `vbw` \| `native` \| `auto` | `vbw` | `/work` agent dispatch (`auto` routes per plan complexity — ≤3 files + no migration → native, otherwise → vbw) |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` PR base |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` enabled |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` runs QA subagent |

@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**Last updated:** 2026-04-08
+**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — UAT row + transitions reference `--confirmed`, 2-tier Released clarification)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -72,7 +72,7 @@ Ad-hoc:    Triage -> In Progress -> UAT -> Released -> Done                     
                                                                                                                             -> Duplicate
 ```
 
-**Released** is meaningful only on 3-tier projects (`Ship environments: dev,beta,main`). On 2-tier projects (`Ship environments: dev,main`), state goes UAT → Done directly via the single `pk promote main` hop, and Released is unused.
+**Released** is meaningful only on 3-tier projects (`Ship environments: dev,beta,main`). On 2-tier projects (`Ship environments: dev,main`), state goes UAT → Done directly via the single `pk promote main` hop, and Released is unused — there's no need to configure a Released state ID in `method.config.md` for 2-tier projects.
 
 ### Principle
 
@@ -93,7 +93,7 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
 | **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
 | **Building** | started | VBW | Steps 4-7 | VBW planning + execution + QA. Current-phase execution queue only. |
-| **UAT** | started | You | Step 8 | Code merged to integration env (`dev`). Your turn to accept or reject. |
+| **UAT** | started | You | Step 8 | Code merged to integration env (`dev`). Your turn to accept or reject. **v2.4.3+**: `pk done` and `pk promote` exit 1 while an issue is in this state — pass `--confirmed` once UAT is signed off to bypass. |
 | **Released** | started | You | Step 8.5 | Code merged to staging env (`beta`). Pre-prod validation. 3-tier projects only. |
 | **Done** | completed | -- | Step 9 | Code merged to production env (`main`). Live. |
 | **Canceled** | canceled | -- | -- | Won't do. |
@@ -112,9 +112,9 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | Specced | Approved | You approve scope, decisions, priority | You |
 | Approved | Building | Phase batch is ready for execution | You (or VBW pickup) |
 | Building | UAT | VBW QA passes | VBW QA agent |
-| UAT | Released | `pk promote beta` (3-tier projects) | You + `pk promote` |
-| UAT | Done | `pk promote main` (2-tier projects, single hop) | You + `pk promote` |
-| Released | Done | `pk promote main` (3-tier projects) | You + `pk promote` |
+| UAT | Released | `pk promote beta --confirmed` (3-tier projects, after UAT sign-off) | You + `pk promote` |
+| UAT | Done | `pk promote main --confirmed` (2-tier projects, single hop after UAT sign-off) | You + `pk promote` |
+| Released | Done | `pk promote main` (3-tier projects; no `--confirmed` needed past UAT) | You + `pk promote` |
 | UAT | Building | You reject — needs rework | You |
 | Triage | In Progress | Hotfix or quick fix — you're handling it manually | You |
 | In Progress | UAT | Manual fix ready for acceptance testing | You |
