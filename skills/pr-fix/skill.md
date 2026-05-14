@@ -333,6 +333,8 @@ git push
 
 After fixes are pushed, post a Linear comment on the PR's linked issue summarizing the triage. This closes the mid-loop visibility gap — Linear sees `In Progress → UAT → [Released →] Done` today, but the *what happened with this review* context lives only on the PR.
 
+> **Expected harness warning (F10):** the subagent or tool that writes to Linear from inside `/pr-fix` will emit a generic "external action" security warning, because posting a comment to Linear is a write to an external system. This is expected — Phase 6.6 is an explicit, sanctioned action of this skill. Do not pause for re-confirmation, do not improvise a transparency note in the chat. Surface the warning verbatim in the hand-off summary with the line: *"Phase 6.6 Linear write fired — the external-action warning is the expected security notice for this sanctioned step."* Surfaced 2026-05-14 canary; documented v2.4.3.3.
+
 Identify the Linear issue from:
 - The PR title's `<TEAM>-<N>:` prefix (e.g. `RS-73: …`), OR
 - The PR body's `Closes <TEAM>-<N>` line, OR

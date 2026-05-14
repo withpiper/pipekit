@@ -62,13 +62,13 @@ ISSUE=${ISSUE:-$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)}
 
 ## Step 1 — Read configuration
 
-Read these values from `method.config.md` using the `bin/pk pk_config` binary — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline:
+Read these values from `method.config.md` using `pk config <key> [default]` — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline. (`pk_config` is the internal shell function inside `bin/pk`; the subcommand exposed to skill bodies is `pk config`. Using `bin/pk pk_config` would exit 1 with "Unknown subcommand: pk_config" — surfaced 2026-05-14 canary, fixed v2.4.3.3.)
 
 ```bash
-BACKEND=$(bin/pk pk_config "Backend" "vbw")
-DEEP_FLAG=$(bin/pk pk_config "Default deep flag" "false")
-QA_REVIEW=$(bin/pk pk_config "Require QA review" "false")
-STRATEGY_PATH=$(bin/pk pk_config "Strategy docs path" "Strategy/")
+BACKEND=$(pk config "Backend" "vbw")
+DEEP_FLAG=$(pk config "Default deep flag" "false")
+QA_REVIEW=$(pk config "Require QA review" "false")
+STRATEGY_PATH=$(pk config "Strategy docs path" "Strategy/")
 ```
 
 Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
@@ -76,7 +76,7 @@ Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
 Resolve the effective backend in this order (first match wins):
 
 1. `--backend=vbw`, `--backend=native`, or `--backend=auto` passed on the invocation
-2. `Backend` row in `method.config.md` (read via `bin/pk pk_config` above)
+2. `Backend` row in `method.config.md` (read via `pk config` above)
 3. Default: `vbw`
 
 If `--backend=` is passed with any value other than `vbw`, `native`, or `auto`, refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.`
@@ -266,6 +266,12 @@ Recommendation: pk delegate <ISSUE-ID> "the plan keeps revising on <area>. Refin
 ```
 
 ## Step 5 — Execute
+
+### Test command discipline (applies to every execute path)
+
+If the spec's Acceptance Criteria names a specific test command verbatim — e.g., `pnpm turbo run test --filter=@piper/web` — **use that command verbatim before improvising.** Spec-stated commands are pre-tested and known to work; ad-hoc invocations (`pnpm vitest run <path>`, `pnpm <pkg> test <abs-path>`, etc.) routinely cost two-to-three retries while you re-discover package-script naming, monorepo path conventions, and filter syntax. Surfaced 2026-05-14 canary (F7); fixed v2.4.3.3.
+
+If the AC doesn't name a test command, fall back to the project's § Pre-Deploy Gate in `method.config.md`.
 
 ### vbw backend
 
@@ -501,7 +507,7 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
 | Plan revised >3 times | Refuse. Recommend `pk delegate`. |
 | `--backend=` with unknown value | Refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.` |
-| `bin/pk pk_config` binary absent | Warn: `bin/pk not found — cannot read Backend from config. Defaulting to vbw. Run /pipekit-update to fix.` |
+| `pk` (or `bin/pk`) binary absent | Warn: `pk not found — cannot read Backend from config. Defaulting to vbw. Run /pipekit-update to fix.` |
 | Subagent returns permission denial | Stop. Print the denial. Do not retry. |
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
 | Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |

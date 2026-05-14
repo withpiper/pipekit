@@ -1,6 +1,6 @@
 ---
 name: pk-exit
-description: Write the session log to Logs/Sessions/<date>_<HHMM>.md before /exit. Captures narrative — what shipped, decisions, lessons, outstanding work. Run as the last command of every Claude session in a Pipekit project.
+description: Write the session log to Logs/Sessions/<date>_<HHMM>.md before /exit. Captures narrative — what shipped, decisions, lessons, outstanding work. Run as the last command of every Claude session in a Pipekit project. For worker sessions in a worktree, run /pk-exit before `pk done` (pk done cleans up the worktree this session lives in, so the log must be written first).
 ---
 
 # /pk-exit Skill

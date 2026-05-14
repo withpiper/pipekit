@@ -753,7 +753,31 @@ cmd_branch() {
   pk_linear_set_state "$id" "In Progress" || true
 
   echo ""
-  echo "Done. To enter:"
+  echo "Done."
+
+  # Fresh-worktree dependency hint (F8 — surfaced 2026-05-14 canary against
+  # Piper WIT-456). Worktrees inherit tracked files but not gitignored ones
+  # like node_modules/. First test invocation otherwise triggers a multi-
+  # minute pnpm install while the worker session tries to figure out what's
+  # wrong. Hint here so the human installs deps before running /work.
+  if [ -f "$wt_path/package.json" ] && [ ! -d "$wt_path/node_modules" ]; then
+    local pkg_install=""
+    if [ -f "$wt_path/pnpm-lock.yaml" ]; then
+      pkg_install="pnpm install"
+    elif [ -f "$wt_path/yarn.lock" ]; then
+      pkg_install="yarn install"
+    elif [ -f "$wt_path/package-lock.json" ]; then
+      pkg_install="npm install"
+    fi
+    if [ -n "$pkg_install" ]; then
+      echo ""
+      echo "⚠️  Fresh worktree — install deps before first test:"
+      echo "     (cd $wt_path && $pkg_install)"
+    fi
+  fi
+
+  echo ""
+  echo "To enter:"
   echo "  cd $wt_path && claude --dangerously-skip-permissions"
 }
 
@@ -1731,7 +1755,7 @@ Subcommands:
   pk status                       Quick triage of the Linear board + worktrees
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
   pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review)
-  pk done [<ID>] [--confirmed]    Verify PR merged, cleanup worktree+branch (no Linear state change). Refuses if issue is in UAT — pass --confirmed once UAT is signed off.
+  pk done [<ID>] [--confirmed]    Verify PR merged, cleanup worktree+branch (no Linear state change). Refuses if issue is in UAT — pass --confirmed once UAT is signed off. Run from parent repo (not worktree); run /pk-exit inside the worktree session first.
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
   pk promote <env> [--stash|--take-remote] [--confirmed]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT — pass --confirmed to override.
