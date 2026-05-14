@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**Last updated:** 2026-04-08
+**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `--confirmed` flag in Release Flow, optimistic state-transition rationale)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---
@@ -110,9 +110,12 @@ This sets repo-level merge flags AND creates/updates the ruleset. The script liv
 **Two-tier flow:** `feature/*` → PR to `dev` → PR to `main`
 **Three-tier flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 
-Each project defines its own promotion skills. After merge, issues transition in Linear:
-- Merge to beta → issues move to **UAT**
-- Merge to main → issues move to **Done**
+Each project defines its own promotion skills. State transitions fire optimistically at **PR-open**, not at merge — the merge itself is the source-of-truth anchor (`pk done` is cleanup-only as of v2.3.0). After `pk ship` and after each `pk promote`, issues transition in Linear:
+- `pk ship` → issues move to **UAT**
+- `pk promote beta` (three-tier) → issues move to **Released**
+- `pk promote main` (final hop, either tier) → issues move to **Done**
+
+**v2.4.3+ UAT gate:** `pk done <ID>` and `pk promote <env>` refuse with `exit 1` when the relevant issue (or any bundled issue, for `pk promote`) is in `UAT`. Pass `--confirmed` after UAT is signed off (Linear comment, PR comment, or session-log note recording the accept verdict) to bypass. This is a belt-and-braces backstop: the discipline rule was "don't advance past UAT without sign-off," and v2.4.3 added code-level enforcement so the binary can't be hand-waved through.
 
 **Hotfix flow:** `hotfix/*` → PR to `main` → cherry-pick back to `dev` and `beta`
 

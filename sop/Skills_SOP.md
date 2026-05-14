@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**Last updated:** 2026-04-08
+**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `/work` dispatch over direct vbw-agent calls; `/pipekit-help` usage hint)*
 
 ---
 
@@ -98,15 +98,15 @@ description: One-line description of what the skill does
 1. **Read `method.config.md`** for project-specific values (Linear team, issue prefix, state IDs)
 2. **Read `CLAUDE.md`** for project coding conventions
 3. **Use Linear MCP tools** for issue management (`mcp__linear-server__*`)
-4. **Use VBW agents** for planning and execution (`vbw:vbw-lead`, `vbw:vbw-dev`, `vbw:vbw-qa`)
+4. **Dispatch heavy planning + execution through `/work`** (which routes to the `vbw` or `native` backend per `method.config.md`). Don't invoke `vbw:vbw-lead`, `vbw:vbw-dev`, or `vbw:vbw-qa` directly from skills — that bypasses Pipekit's backend dispatch and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
 
 ### "What's next?" in v2 — `pk next` reads Linear
 
 v2 retired the v1 `NEXT.md` mirror. The single source of truth for "what should I do next?" is **Linear**, accessed via:
 
-- **`pk next`** — phase-aware (reads `## Current Phase:` from `PHASES.md`, matches to `linear-map.json`, groups Linear issues by status with per-group hints). Falls back to global "next Approved" when no phase context.
-- **`pk status`** — full unscoped board view.
-- **`/pipekit-help`** — recommends next pipeline step based on project state (push-based replacement for "what skill do I run now?").
+- **`pk next`** — phase-aware (reads `## Current Phase:` from `PHASES.md`, matches to `linear-map.json`, groups Linear issues by status with per-group hints). Falls back to global "next Approved" when no phase context. Best when you know you want to pick up the next issue.
+- **`pk status`** — full unscoped board view across all phases. Best when you want the wider picture.
+- **`/pipekit-help`** — context-aware skill recommendation based on full project state (Linear, `PHASES.md`, recent transitions, pipeline-state files). Best when you're not sure *which step* in the pipeline to run next.
 
 Skills should **not** write a `NEXT.md` file. Skills MAY still print `➜ Next:` inline at the end of their output as a courtesy hint to the current user, but the persistence layer is Linear, not a sidecar markdown file.
 

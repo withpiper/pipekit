@@ -1,4 +1,6 @@
-# Pipekit Runbook (v2.3.0)
+# Pipekit Runbook
+
+**v2.4.3.2** — Last updated: 2026-05-14 04:30  *(doc-polish release — spec-loop flowchart added alongside coding-loop; `--confirmed` flag on `pk done`/`pk promote` cheat-sheet rows; `Backend: auto` in config table)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -9,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.3.0                (or latest tag)
+1. ./scripts/sync-method.sh v2.4.3.2               (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -21,7 +23,84 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 ---
 
-## Per-issue flowchart
+## Spec loop (per-issue flowchart — Needs Spec → Approved)
+
+The spec loop produces the input the coding loop consumes. An issue arrives in **Needs Spec** from `/phase-plan` (planned features) or **Triage** (ad-hoc bugs / client requests / `/brainstorm` output). It exits in **Approved**, ready for `pk branch` to pick up.
+
+Run from the parent repo. No worktree needed — specs are Linear-side artifacts, not code changes.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
+└─────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S1] Find next spec target                               │
+  │     pk next                                              │
+  │     • look for the "Needs Spec" group in the output      │
+  │     • phase-aware (reads PHASES.md + linear-map.json)    │
+  │                                                          │
+  │     For a brand-new idea:                                │
+  │     /brainstorm <idea>                                   │
+  │     • creates a Triage-state Linear issue                │
+  │     • use /brainstorm-review to batch-triage Triage      │
+  │       items into Ideas / Needs Spec / Kill               │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S2] Generate light spec                                 │
+  │     /light-spec <ID>                                     │
+  │     • reads issue + codebase + Strategy/ docs            │
+  │     • generates the structured AI→AI contract            │
+  │     • Phase 6 auto-cycles agent review (max 3 passes):   │
+  │         - pk spec-cycle      (polls Spec Review Agent v5)│
+  │         - /light-spec-revise (surgical revisions)        │
+  │     • stalemate detector breaks runaway loops            │
+  │     • Linear: Needs Spec → Specced (on Pass verdict)     │
+  │     • Linear: stays Needs Spec (on stalemate; revise     │
+  │       standalone via /light-spec-revise <ID>)            │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S3] Human review   (in the Linear browser, not Claude)  │
+  │     you                                                  │
+  │     • check scope, decisions, AC against intent          │
+  │     • accept → transition Specced → Approved             │
+  │     • reject → leave a Linear comment, keep in Specced;  │
+  │       re-run /light-spec-revise <ID> with the feedback   │
+  │                                                          │
+  │     This is the deliberate human gate of the spec loop.  │
+  │     Do not auto-chain past it from any skill.            │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S4] Pre-flight sanity   (recommended, not enforced)     │
+  │     /spec-preflight <ID>                                 │
+  │     • verifies file paths the spec cites exist           │
+  │     • flags stale line refs (commit drift since spec)    │
+  │     • runs phase-detect baseline                         │
+  │     • validates Linear status + dependency chain         │
+  │     • read-only — flags issues, doesn't transition state │
+  │     • optional but cheap; catches stale specs before     │
+  │       /work picks them up and wastes a planning pass     │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+       → Output: issue in Approved.
+         Hand off to the coding loop below.
+```
+
+> **Batching tip:** run the spec loop ahead of the coding loop. Specs in `Approved` state are the queue the coding loop pulls from; if you're shipping at pace, pre-spec a batch of 3-5 issues so `pk next` always finds work without forcing a context switch into speccing mid-execution.
+
+---
+
+## Coding loop (per-issue flowchart — Approved → Done)
+
+Consumes Approved issues from the spec loop. Each pass produces a merged PR and (for multi-tier projects) walks the issue through `Ship environments` to **Done**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -268,8 +347,8 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID>` | `./bin/pk done <ID>` | parent, dev | removes worktree + posts journal highlights to Linear (no state transition; v2.3.0) |
-| 8 | Promote | `pk promote <env> [--stash\|--take-remote]` | `./bin/pk promote <env> [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → Released or → Done (v2.3.0) |
+| 7 | Cleanup | `pk done <ID> [--confirmed]` | `./bin/pk done <ID> [--confirmed]` | parent, dev | removes worktree + posts journal highlights to Linear (no state transition; v2.3.0). **v2.4.3+**: refuses with `exit 1` if Linear state is `UAT`; pass `--confirmed` after UAT sign-off (Linear comment, PR comment, or session-log note recording the accept verdict). |
+| 8 | Promote | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → Released or → Done (v2.3.0). **v2.4.3+**: refuses if any bundled issue is still in `UAT`; pass `--confirmed` after UAT sign-off. |
 | meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
 | meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
 | meta | Install | `pk install` | `./bin/pk install` | repo root | symlinks pk onto $PATH (v2.0) |
@@ -283,7 +362,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 | Key | Values | Default | Used by |
 |---|---|---|---|
-| **Backend** | `vbw` \| `native` | `vbw` | `/work` agent dispatch |
+| **Backend** | `vbw` \| `native` \| `auto` | `vbw` | `/work` agent dispatch (`auto` routes per plan complexity — ≤3 files + no migration → native, otherwise → vbw) |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` PR base |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` enabled |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` runs QA subagent |

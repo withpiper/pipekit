@@ -1,8 +1,8 @@
 # Pipekit
 
-**Last updated:** 2026-05-09 *(updated for v2.3.0 — Released state + 3-tier-aware pk promote)*
+**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — methodology alignment + stamped-docs inventory + release checklist)*
 
-> **v2.3.0 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
+> **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
 > **NEXT.md is retired.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer. v2 replaces it with `pk next` (reads Linear directly + scopes to the current phase via `PHASES.md` as of v2.1.0). Consuming projects should:
 > - Delete any committed `NEXT.md` (`git rm NEXT.md`)
@@ -51,6 +51,8 @@ Per session (not per issue): /pk-exit          (last command of every Claude Cod
 **Stage 0** is the *contract* the development pipeline depends on — a set of artifacts (concept, definition, strategy, config, VBW scaffold, Linear map, phase plan) that must exist before the daily loop is safe to run. It's not a script you run once; it's a pre-condition. *How* those artifacts come to exist depends on the project's entry mode (greenfield, brownfield, inherited — see [Entry Modes](#entry-modes) below). **Stages 1-5** consume the contract and repeat per issue.
 
 **Bookends:** `/roadmap-review` validates Stage 0 outputs and plan health before entering the pipeline. `/strategy-sync` updates Strategy docs after features ship — closing the documentation loop.
+
+**Three-layer enforcement.** Conventions live in `CLAUDE.md` (VBW agents read this), hard gates live in CI + hooks (block merges that violate them), and skills are interactive shortcuts for hands-on sessions. The same rule is enforced at multiple layers so neither a missed skill invocation nor a permissive prompt can bypass it.
 
 ### Step-by-Step
 
@@ -123,12 +125,12 @@ A project can enter the dev pipeline through three legitimate paths. They differ
 | Mode | Who | Skills run | Skills skipped |
 |---|---|---|---|
 | **Greenfield** | Founder, fresh idea, no code yet | Full Stage 0 chain (`/concept` → `/define` → `/strategy-create` → `/startup` → `/vbw:init` → `/roadmap-create` → `/phase-plan`) | None |
-| **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield` (stub for now), `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` (the project already exists; concept/definition are reverse-engineered manually or via the v1.4.0 `/strategy-from-code` skill) |
+| **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield` (stub for now), `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` (the project already exists; concept/definition are reverse-engineered manually until the deferred `/strategy-from-code` auto-audit skill ships) |
 | **Inherited** | New contributor joining a Pipekit project | None — `/startup --mode=inherited` verifies the contract is intact and points to the dev pipeline | All of Stage 0 (artifacts are already on disk) |
 
 `/startup` auto-detects the mode by inspecting project state (no concept-brief + no code → greenfield; code present, no Strategy/ → brownfield; everything present → inherited) and **always confirms with the user** before proceeding — same pattern as tier resolution in `/work`. Mode is never picked silently.
 
-> **`/strategy-from-code` is deferred to v1.4.0.** Brownfield mode currently routes through `/strategy-create` with a manual-edit note: the generated docs reflect the project definition, not the existing code, so you'll want to edit them against reality before the first `/light-spec`.
+> **`/strategy-from-code` is deferred.** Originally promised for v1.4.0 (2026-04-27) but never built. Brownfield mode currently routes through `/strategy-create` with a manual-edit note: the generated docs reflect the project definition, not the existing code, so you'll want to edit them against reality before the first `/light-spec`. Track interest in the brainstorm backlog if you'd benefit from auto-audit.
 
 ---
 

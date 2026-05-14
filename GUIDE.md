@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**Last updated:** 2026-05-09 *(updated for v2.3.0 — Released state + 3-tier-aware pk promote)*
+**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — `/strategy-from-code` deferral wording)*
 
 ---
 
@@ -156,7 +156,7 @@ Pick the mode that matches your situation. Full description in [method.md § Ent
 | **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
 | **Inherited** | New contributor joining a Pipekit project | None — verify foundation, jump to dev pipeline | All of Stage 0 |
 
-`/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/work`). `/strategy-from-code` (auto-audit for brownfield) is deferred to v1.4.0; brownfield currently routes through `/strategy-create` with a manual-edit note.
+`/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/work`). `/strategy-from-code` (auto-audit for brownfield) is deferred — originally promised for v1.4.0 but never built; brownfield currently routes through `/strategy-create` with a manual-edit note.
 
 The rest of this section describes the **greenfield flow** in detail. Brownfield skips Steps 0.1 and 0.2 — adapt accordingly. Inherited mode runs no Stage 0 steps; jump straight to [Stage 1](#stage-1-definition) once the foundation check passes.
 
