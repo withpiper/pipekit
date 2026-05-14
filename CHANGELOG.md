@@ -45,6 +45,57 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.4.3.3 — 2026-05-14
+
+> **Canary-driven release.** One load-bearing skill behavior change (F6 — `/verify` pauses auto-ship when human-decision flags surface) plus a five-finding doc-polish bundle. All six items surfaced by a live v2.4.3.2 canary against Piper WIT-456 the same day. The canary itself validated v2.4.3.2's headline UAT-gate feature end-to-end (P1, P12, P13) and v2.3.3's skip-backward-transition guard in production (P15). Twelve passing signals total. Full canary log: `Logs/Sessions/2026-05-14_0838.md`.
+
+### What changed
+
+**`/verify` auto-ship now gates on `Pass AND zero flags AND --auto-ship` (F6 — load-bearing).** New Step 3.5 enumerates human-decision flags before the rollover decision:
+- Migration files in diff (always pause regardless of QA — migrations are high-stakes and warrant a human eye for irreversibility, RLS, `search_path` review).
+- QA verdict Pass with non-"none" Omissions / Scope-creep / Bugs-noticed sub-sections (the subagent classified the work as shippable in aggregate but still flagged items worth surfacing — treat each as a flag).
+- User invoked `/verify --qa` (forcing QA signals "I want eyes on it"; auto-ship would contradict the explicit flag).
+- `/work` advisory marker file (`.pk-work/<ID>.flags`) present (cross-skill signal — see below).
+
+When `FLAG_COUNT > 0`, auto-ship is forbidden even with `--auto-ship`. The skill surfaces the flag list + three resolution paths (address, accept-and-amend, `/work --resume`), then stops. The auto-chain itself stays — it is a feature when nothing is surfaced. F6 anchor: 2026-05-14 canary verbatim feedback from the user: *"the F6 — /work → /verify → pk ship auto-chain is a feature. The programming should pause on verify if there is ANY Flag for human decision making."*
+
+**`/work` Step 6.5 writes `.pk-work/<ISSUE-ID>.flags` when advisories surface (F6 cross-skill signal).** Triggers: self-reference grep #1/#2/#3 returns a match outside the file just edited, behavioral self-check finds a gap and the work ships anyway with the gap documented, or a documented Risk-fallback was invoked during execution. Marker file is one line per flag, gitignored at `.pk-work/`, consumed by `/verify` Step 3.5, cleaned up automatically when `pk done` removes the worktree. Re-runs of `/work --resume` overwrite the marker rather than appending. Empty markers are forbidden — file existence is the signal.
+
+**`bin/pk pk_config` → `pk config` in `/work` skill (F1).** Replaced 6 invocations in `skills/work/skill.md` (lines 65, 68-71, 79, 504). `pk_config` is an internal shell function inside `bin/pk` reachable only when the binary is *sourced*; the subcommand exposed for skill bodies is `pk config <key> [default]`. The skill body's wrong form crashed the first config read of every `/work` invocation; workers self-recovered by retrying with the correct form, but each crash + retry burned a Bash tool call + LLM cycles. Doc-only fix; no binary change needed.
+
+**`/work` Step 5 gains a "Test command discipline" preamble (F7).** One paragraph instructing executors to use the AC-stated test command verbatim before improvising. Surfaced by 3 retries on WIT-456: `pnpm --filter=@piper/web vitest run <abs-path>` (no such script) → `cd apps/web && pnpm test <abs-path>` (wrong relative path) → finally the AC's literal `pnpm turbo run test --filter=@piper/web`. Each ad-hoc invocation costs ~30s of retry; the AC string is pre-tested.
+
+**`pk branch` emits a fresh-worktree dependency-install hint (F8).** When the new worktree has `package.json` but no `node_modules/`, `pk branch` now ends with:
+```
+⚠️  Fresh worktree — install deps before first test:
+     (cd <wt-path> && <pkg-manager> install)
+```
+Lockfile detection picks `pnpm install` / `yarn install` / `npm install`. Worktrees inherit tracked files but not gitignored ones; the first test invocation otherwise triggered a multi-minute `pnpm install` while the worker session tried to figure out what was wrong. Surfaced on canary WIT-456 worker session.
+
+**`/pr-fix` Phase 6.6 pre-documents the expected external-action security warning (F10).** Posting a Linear comment from inside `/pr-fix` triggers a generic "external action" security warning because Linear is an external write. The action is sanctioned by the skill (Phase 6.6 is an explicit step), but the harness can't know that — so workers improvised transparency notes per-run. The new preamble in `skills/pr-fix/skill.md` § 6.6 gives the worker the exact line to surface, removing the need to improvise.
+
+**`pk done` + `/pk-exit` ordering hints (F11).** Two non-load-bearing additions:
+- `bin/pk done --help` row now appends *"Run from parent repo (not worktree); run /pk-exit inside the worktree session first."*
+- `skills/pk-exit/skill.md` frontmatter description now appends *"For worker sessions in a worktree, run /pk-exit before pk done (pk done cleans up the worktree this session lives in, so the log must be written first)."*
+
+The canonical sequence was already documented in RUNBOOK step [7]→[8] and the refuse-table line 435 (`pk done` from worktree → refuses with hint). But experienced users still paused mid-canary to ask "do I run /pk-exit first?" — the join between the two skills was implicit in the flowchart. These hints surface the dependency at each command's own help text.
+
+**`PK_VERSION`** 2.4.3.2 → 2.4.3.3. **`RUNBOOK.md`** sync-example line bumped to `v2.4.3.3`.
+
+### Why
+
+The 2026-05-14 canary against Piper WIT-456 ran the full v2 daily loop end-to-end against the v2.4.3.2 release and validated the headline UAT-gate features in production (PR #276 shipped, `pk done --confirmed` honored UAT bypass, `pk promote beta` refused without `--confirmed` then ran clean with it). In the process, six findings surfaced. F6 is the only behavior change — it was an explicit user methodology decision to keep the auto-chain but make `/verify` itself smarter about pausing. F1/F7/F8/F10/F11 are doc-tier polish that the v2.4.3.2 stamped-docs inventory and drift-check.sh wouldn't have caught (they check stamps and removed-skill references, not command examples vs `bin/pk`'s actual subcommand surface, and not user-friction patterns that show up only mid-loop).
+
+The canary pattern paid off: zero methodology rework, six fixes ready the same day, all anchored to concrete observed behavior rather than speculative cleanup. The canary log is the substantive artifact — read `Logs/Sessions/2026-05-14_0838.md` for the structured P/F findings tally + the moment-by-moment observations.
+
+### Migration
+
+None for consumers already on v2.4.3.2 — F1/F7/F8/F10/F11 are doc-only or hint-only. F6 changes `/verify`'s auto-ship gate: it is strictly *more conservative* (paused chains are easier to recover than over-eager shipping), and the new pause path is the documented expected behavior when a flag is present. Re-run `/pipekit-update v2.4.3.3` or `./scripts/sync-method.sh v2.4.3.3` in consumer projects.
+
+If your project already uses `.pk-work/` for something else, the F6 marker scheme will collide — but `.pk-work/` is a new directory in Pipekit's vocabulary and is unlikely to be in use already. (Pipekit's own `.gitignore` adds the entry.)
+
+---
+
 ## v2.4.3.2 — 2026-05-14
 
 > **Doc-polish release.** No code behavior changes. Brings every constitutional doc + SOP into alignment with the v2.4.3 code gate, establishes a stamped-docs inventory + release checklist, and closes drift that accumulated across v2.4.0 through v2.4.3.1.

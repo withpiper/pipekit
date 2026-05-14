@@ -62,13 +62,13 @@ ISSUE=${ISSUE:-$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)}
 
 ## Step 1 — Read configuration
 
-Read these values from `method.config.md` using the `bin/pk pk_config` binary — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline:
+Read these values from `method.config.md` using `pk config <key> [default]` — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline. (`pk_config` is the internal shell function inside `bin/pk`; the subcommand exposed to skill bodies is `pk config`. Using `bin/pk pk_config` would exit 1 with "Unknown subcommand: pk_config" — surfaced 2026-05-14 canary, fixed v2.4.3.3.)
 
 ```bash
-BACKEND=$(bin/pk pk_config "Backend" "vbw")
-DEEP_FLAG=$(bin/pk pk_config "Default deep flag" "false")
-QA_REVIEW=$(bin/pk pk_config "Require QA review" "false")
-STRATEGY_PATH=$(bin/pk pk_config "Strategy docs path" "Strategy/")
+BACKEND=$(pk config "Backend" "vbw")
+DEEP_FLAG=$(pk config "Default deep flag" "false")
+QA_REVIEW=$(pk config "Require QA review" "false")
+STRATEGY_PATH=$(pk config "Strategy docs path" "Strategy/")
 ```
 
 Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
@@ -76,7 +76,7 @@ Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
 Resolve the effective backend in this order (first match wins):
 
 1. `--backend=vbw`, `--backend=native`, or `--backend=auto` passed on the invocation
-2. `Backend` row in `method.config.md` (read via `bin/pk pk_config` above)
+2. `Backend` row in `method.config.md` (read via `pk config` above)
 3. Default: `vbw`
 
 If `--backend=` is passed with any value other than `vbw`, `native`, or `auto`, refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.`
@@ -267,6 +267,12 @@ Recommendation: pk delegate <ISSUE-ID> "the plan keeps revising on <area>. Refin
 
 ## Step 5 — Execute
 
+### Test command discipline (applies to every execute path)
+
+If the spec's Acceptance Criteria names a specific test command verbatim — e.g., `pnpm turbo run test --filter=@piper/web` — **use that command verbatim before improvising.** Spec-stated commands are pre-tested and known to work; ad-hoc invocations (`pnpm vitest run <path>`, `pnpm <pkg> test <abs-path>`, etc.) routinely cost two-to-three retries while you re-discover package-script naming, monorepo path conventions, and filter syntax. Surfaced 2026-05-14 canary (F7); fixed v2.4.3.3.
+
+If the AC doesn't name a test command, fall back to the project's § Pre-Deploy Gate in `method.config.md`.
+
 ### vbw backend
 
 Use Task tool with:
@@ -409,6 +415,32 @@ Why mandatory: WIT-451 canary 2026-05-13 shipped via the R4 documented fallback 
 
 If something fails this self-check, **surface it in the hand-off summary** — don't paper over. The user paces; they decide whether to ship-with-known-gap or revise.
 
+### Cross-skill flag marker (F6 — load-bearing for /verify Step 3.5)
+
+When this Step 6.5 surfaces *any* of the following, you MUST also write a flag marker file so `/verify` can pause the auto-ship chain:
+
+- Self-reference grep #1, #2, or #3 returned a match outside the file you just edited
+- Behavioral self-check found a UI/integration gap and you're shipping anyway with the gap documented
+- A documented Risk-fallback was invoked during this run (the same trigger as the mandatory follow-up WIT)
+
+Write the marker as `.pk-work/<ISSUE-ID>.flags`, one human-readable line per flag:
+
+```bash
+mkdir -p .pk-work
+{
+  # one line per surfaced flag — examples:
+  echo "self-ref match: <FILE:LINE> contains '<ISSUE-ID>' outside edited file"
+  echo "behavioral gap: <component> renders but <affordance> not wired (shipping with gap)"
+  echo "risk-fallback R<N> invoked: <deferred scope> — follow-up WIT <NEW-WIT-ID>"
+} > .pk-work/${ISSUE_ID}.flags
+```
+
+`.pk-work/` is gitignored at the repo root (see `.gitignore`). Marker is per-issue so concurrent worktrees on different issues don't collide. `/verify` reads this file in its Step 3.5 flag enumeration and pauses auto-ship if any line is present.
+
+**Do not write an empty marker** — `/verify` treats file existence as "flags present." If Step 6.5 found nothing surface-worthy, do not create the file.
+
+**Marker lifecycle:** the file is consumed by `/verify` (read-only) and cleaned up by `pk done` when the worktree is removed. If you re-run `/work --resume <ISSUE-ID>`, overwrite the marker — don't append to a stale one.
+
 ### Anti-rationalization guard
 
 If the user asks during execution about visible state — *"is this correct?"*, *"why does it look like this?"*, *"shouldn't there be X here?"* — and provides a screenshot or describes what they see:
@@ -475,7 +507,7 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
 | Plan revised >3 times | Refuse. Recommend `pk delegate`. |
 | `--backend=` with unknown value | Refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.` |
-| `bin/pk pk_config` binary absent | Warn: `bin/pk not found — cannot read Backend from config. Defaulting to vbw. Run /pipekit-update to fix.` |
+| `pk` (or `bin/pk`) binary absent | Warn: `pk not found — cannot read Backend from config. Defaulting to vbw. Run /pipekit-update to fix.` |
 | Subagent returns permission denial | Stop. Print the denial. Do not retry. |
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
 | Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |

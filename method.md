@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — methodology alignment + stamped-docs inventory + release checklist)*
+**v2.4.3.3** — Last updated: 2026-05-14 09:27  *(canary-driven release — `/verify` Step 3.5 flag gate (F6); content unchanged this release)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

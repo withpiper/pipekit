@@ -9,3 +9,6 @@ archive/scratch/
 
 # personal notepad — replaces v1 NEXT.md; free-form, never committed
 notepad.md
+
+# /work → /verify cross-skill flag markers (consumed by /verify Step 3.5)
+.pk-work/
