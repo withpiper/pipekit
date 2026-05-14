@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — `--confirmed` flag on `pk done`/`pk promote` cheat-sheet rows; `Backend: auto` in config table)*
+**v2.4.3.2** — Last updated: 2026-05-14 04:30  *(doc-polish release — spec-loop flowchart added alongside coding-loop; `--confirmed` flag on `pk done`/`pk promote` cheat-sheet rows; `Backend: auto` in config table)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -23,7 +23,84 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 
 ---
 
-## Per-issue flowchart
+## Spec loop (per-issue flowchart — Needs Spec → Approved)
+
+The spec loop produces the input the coding loop consumes. An issue arrives in **Needs Spec** from `/phase-plan` (planned features) or **Triage** (ad-hoc bugs / client requests / `/brainstorm` output). It exits in **Approved**, ready for `pk branch` to pick up.
+
+Run from the parent repo. No worktree needed — specs are Linear-side artifacts, not code changes.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  PARENT REPO       cwd: ~/Projects/<repo>     branch: dev       │
+└─────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S1] Find next spec target                               │
+  │     pk next                                              │
+  │     • look for the "Needs Spec" group in the output      │
+  │     • phase-aware (reads PHASES.md + linear-map.json)    │
+  │                                                          │
+  │     For a brand-new idea:                                │
+  │     /brainstorm <idea>                                   │
+  │     • creates a Triage-state Linear issue                │
+  │     • use /brainstorm-review to batch-triage Triage      │
+  │       items into Ideas / Needs Spec / Kill               │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S2] Generate light spec                                 │
+  │     /light-spec <ID>                                     │
+  │     • reads issue + codebase + Strategy/ docs            │
+  │     • generates the structured AI→AI contract            │
+  │     • Phase 6 auto-cycles agent review (max 3 passes):   │
+  │         - pk spec-cycle      (polls Spec Review Agent v5)│
+  │         - /light-spec-revise (surgical revisions)        │
+  │     • stalemate detector breaks runaway loops            │
+  │     • Linear: Needs Spec → Specced (on Pass verdict)     │
+  │     • Linear: stays Needs Spec (on stalemate; revise     │
+  │       standalone via /light-spec-revise <ID>)            │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S3] Human review   (in the Linear browser, not Claude)  │
+  │     you                                                  │
+  │     • check scope, decisions, AC against intent          │
+  │     • accept → transition Specced → Approved             │
+  │     • reject → leave a Linear comment, keep in Specced;  │
+  │       re-run /light-spec-revise <ID> with the feedback   │
+  │                                                          │
+  │     This is the deliberate human gate of the spec loop.  │
+  │     Do not auto-chain past it from any skill.            │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ [S4] Pre-flight sanity   (recommended, not enforced)     │
+  │     /spec-preflight <ID>                                 │
+  │     • verifies file paths the spec cites exist           │
+  │     • flags stale line refs (commit drift since spec)    │
+  │     • runs phase-detect baseline                         │
+  │     • validates Linear status + dependency chain         │
+  │     • read-only — flags issues, doesn't transition state │
+  │     • optional but cheap; catches stale specs before     │
+  │       /work picks them up and wastes a planning pass     │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼
+       → Output: issue in Approved.
+         Hand off to the coding loop below.
+```
+
+> **Batching tip:** run the spec loop ahead of the coding loop. Specs in `Approved` state are the queue the coding loop pulls from; if you're shipping at pace, pre-spec a batch of 3-5 issues so `pk next` always finds work without forcing a context switch into speccing mid-execution.
+
+---
+
+## Coding loop (per-issue flowchart — Approved → Done)
+
+Consumes Approved issues from the spec loop. Each pass produces a merged PR and (for multi-tier projects) walks the issue through `Ship environments` to **Done**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
