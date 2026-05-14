@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — `/strategy-from-code` deferral wording)*
+**v2.4.3.3** — Last updated: 2026-05-14 09:27  *(canary-driven release — `/verify` Step 3.5 flag gate (F6); content unchanged this release)*
 
 ---
 
