@@ -45,6 +45,46 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.5.0.1 — 2026-05-15
+
+> **Patch: `sync-method.sh` wrong-target bug.** RS-Vault's v2.5.0 migration (Finding #1 in `resources/rs-vault-v2.5.0-migration-followup.md`) surfaced that the sync script resolved its target from the script's own location instead of the consuming project's working directory. Result: invoking `bash ~/Projects/pipekit/scripts/sync-method.sh v2.5.0` from outside the pipekit repo silently synced INTO the pipekit repo itself, leaving the consuming project unchanged and dirtying pipekit's working tree with ~20 file rewrites. Recoverable but invisible until you noticed `pk version` still printed the old number.
+
+### What changed
+
+- **`scripts/sync-method.sh`** — `PROJECT_ROOT` now defaults to `${PWD:-$(pwd)}` instead of `$(dirname "$0")/..`. This matches the `cd <project> && bash <pipekit>/scripts/sync-method.sh` invocation pattern documented everywhere. Adds a safety check that compares the target's git origin URL against `METHOD_REPO` and refuses with a clear error message if they match (i.e. the user is about to sync Pipekit into itself). Error message explains both the likely cause (forgot to `cd`) and the recovery paths. Adds a `--target=<path>` flag for explicit override.
+- **Constitutional doc stamps (`method.md`, `RUNBOOK.md`, `GUIDE.md`)** — bumped to v2.5.0.1 per the v2.4.3.2 Release Checklist exception.
+- **`RUNBOOK.md` sync-example** — `v2.5.0` → `v2.5.0.1`.
+
+**`PK_VERSION`** 2.5.0 → 2.5.0.1.
+
+### Why
+
+Two things this patch achieves:
+
+1. **The documented invocation now works.** Every Pipekit handoff, README, RUNBOOK, and STARTUP example says some variant of `cd ~/Projects/<project> && bash ~/Projects/pipekit/scripts/sync-method.sh v<tag>`. Pre-v2.5.0.1, the `cd` was effectively ignored — `PROJECT_ROOT` was script-relative. v2.5.0.1 honors `$PWD` so the `cd` actually controls where the sync lands.
+2. **Self-sync is no longer silent.** If the user *does* forget to `cd` (or invokes from a session that lost its cwd), the script now refuses with `exit 1` and a helpful error rather than chewing through pipekit's own working tree. Detection is structural (git origin URL comparison), not heuristic.
+
+The handoff template (`resources/nebula-rs-vault-pipekit-v2.5.0-handoff.md`) still says `bash ~/Projects/pipekit/scripts/sync-method.sh v2.5.0` because that pattern now works correctly post-patch. Older handoffs that say the same thing will Just Work after the consuming project syncs to v2.5.0.1 (their local copy of sync-method.sh updates via the self-update guard on first sync).
+
+### Migration
+
+- **Pin to v2.5.0.1.** Run `./scripts/sync-method.sh v2.5.0.1` from inside your consuming project to pick up the patched script. The self-update guard re-execs with the new logic mid-sync.
+- **If you already synced v2.5.0 successfully**, you're fine — the v2.5.0 sync touched the same target files; v2.5.0.1 only changes the *invocation safety*. No re-sync needed unless you want the new safety check locally.
+- **If your v2.5.0 sync went into pipekit itself**, recover by: (a) `git status` in pipekit shows the spurious changes, (b) `git checkout .` discards them, (c) cd into your actual consuming project, (d) re-run with v2.5.0.1.
+
+### Knock-on followups (not in this patch)
+
+The RS-Vault migration surfaced four other findings beyond this one. Tracked separately:
+
+- **F2: `pk promote` optimistic Linear write.** Writes terminal state at PR-open, not merge. Documented behavior since v2.3.0 but semantically louder in v2.5.0's env-as-status model. Resolution path TBD — likely either a two-phase transition (`pk promote` opens PR + sets `In <NextEnv>`, then a `--finish` flag or post-merge hook writes terminal) or a `--wait` flag.
+- **F3: `bin/pk` drift in fresh worktrees.** `pk install` or sync rewrites `bin/pk` on disk in a way that shows as modified in worktrees pinned to older commits. Cosmetic; workaround is `git checkout -- bin/pk`. Likely fix: only update the user-PATH copy, not the in-tree file.
+- **F4: protected-branch consumer projects can't `git push` direct.** Handoff template says `git push` but Piper / RS-Vault / etc. require PR + status checks. Fix: handoff Step 6 should route through a sync PR. Not a code change — handoff template only.
+- **F5: extra started-type Linear states unflagged in pre-flight.** rs-vault has `In Progress` + `Building` + `In Dev`; canonical pair assumed. Fix: handoff Step 0c should list all started-type states. Not a code change.
+
+Full RS-Vault findings: `resources/rs-vault-v2.5.0-migration-followup.md`.
+
+---
+
 ## v2.5.0 — 2026-05-15
 
 > **Env-as-status.** Linear state names now derive from `Ship environments` chain position: `UAT` (PR open on preview, pre-merge) → `In <FirstEnv>` (e.g. `In Dev` — merged to first env) → `In <Env>` per intermediate hop → `Done` (final env). `Released` retired. `pk done` regains state-transition responsibility (UAT → `In <FirstEnv>`) with optional `--merge` flag to run `gh pr merge` for you. Resolves "tested but still UAT" status headache on multi-tier projects.

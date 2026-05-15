@@ -42,8 +42,14 @@ METHOD_REPO="${METHOD_REPO:-https://github.com/withpiper/pipekit.git}"
 DRY_RUN=false
 AUTO_INSTALL=false
 REF="main"
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CHANGELOG="$PROJECT_ROOT/pipekit/.sync-changelog.md"
+# v2.5.0.1: target is the cwd by default, NOT the script's parent directory.
+# Pre-v2.5.0.1, PROJECT_ROOT was derived from $(dirname "$0")/.. which silently
+# made absolute-path invocation (bash ~/Projects/pipekit/scripts/sync-method.sh)
+# sync INTO the pipekit repo itself. Now we use $PWD (matches the
+# `cd <project> && bash <pipekit>/scripts/sync-method.sh` flow) and refuse to
+# sync into Pipekit if the cwd's origin matches METHOD_REPO. RS-Vault
+# v2.5.0 migration surfaced this.
+PROJECT_ROOT="${PWD:-$(pwd)}"
 
 # Parse flags without mutating $@ — the self-update guard below re-execs with
 # "$@", and a shift here would silently drop --dry-run across the re-exec.
@@ -51,10 +57,43 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
     --auto-install) AUTO_INSTALL=true ;;
+    --target=*) PROJECT_ROOT="${arg#--target=}" ;;
     -*) echo "WARN: unknown flag: $arg" >&2 ;;
     *) REF="$arg" ;;
   esac
 done
+
+# Refuse to sync Pipekit into itself. The original v2.5.0 bug: a forgotten
+# `cd` left $PWD pointing at the pipekit repo itself, and PROJECT_ROOT
+# derived from the script path made absolute-path invocation just as
+# dangerous — both would clobber Pipekit's own working tree.
+# Detection: compare normalized git origin URL against METHOD_REPO.
+if [ -d "$PROJECT_ROOT/.git" ] || [ -f "$PROJECT_ROOT/.git" ]; then
+  _norm_url() {
+    echo "$1" | sed -E 's#^(https?://|git@)##; s#:#/#; s#\.git$##' | tr 'A-Z' 'a-z'
+  }
+  _project_origin=$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || echo "")
+  if [ -n "$_project_origin" ] && [ "$(_norm_url "$_project_origin")" = "$(_norm_url "$METHOD_REPO")" ]; then
+    echo "ERROR: refusing to sync Pipekit into itself." >&2
+    echo "  Target:      $PROJECT_ROOT" >&2
+    echo "  Origin:      $_project_origin" >&2
+    echo "  Method repo: $METHOD_REPO" >&2
+    echo "" >&2
+    echo "  This usually means you forgot to 'cd' into your consuming project." >&2
+    echo "    cd ~/Projects/<your-project>" >&2
+    echo "    bash <path-to-pipekit>/scripts/sync-method.sh $REF" >&2
+    echo "" >&2
+    echo "  Or run from inside the project with the local sync-method.sh:" >&2
+    echo "    cd ~/Projects/<your-project>" >&2
+    echo "    bash scripts/sync-method.sh $REF" >&2
+    echo "" >&2
+    echo "  If you genuinely intend to update Pipekit, edit files in the repo" >&2
+    echo "  directly and commit — don't sync Pipekit into itself." >&2
+    exit 1
+  fi
+fi
+
+CHANGELOG="$PROJECT_ROOT/pipekit/.sync-changelog.md"
 
 echo "=== Method Sync ==="
 echo "Source: $METHOD_REPO @ $REF"

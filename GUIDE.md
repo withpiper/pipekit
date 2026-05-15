@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — UAT split into `UAT` (PR open on preview) + `In <Env>` (deployed); `pk done` regains UAT → `In <FirstEnv>` transition with `--merge` opt-in; `Released` retired)*
+**v2.5.0.1** — Last updated: 2026-05-15  *(sync-method.sh wrong-target patch — refuses to sync Pipekit into itself; `$PWD` is now the sync target)*
 
 ---
 
