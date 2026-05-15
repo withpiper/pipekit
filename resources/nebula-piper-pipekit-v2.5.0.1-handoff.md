@@ -73,8 +73,16 @@ Use Linear MCP to list all started-type workflow states for the Piper team:
 
 ```
 Tool: mcp__claude_ai_Linear__list_issue_statuses
-Args: { team: "Piper" }   # or the exact team name from method.config.md
+Args: { team: "Withpiper" }
 ```
+
+⚠ **Team-name gotcha:** the Linear team name is **`Withpiper`**, NOT `Piper`. The 2026-05-15 migration session hit this — `team: "Piper"` returns empty. Before any Linear MCP call in this handoff, verify with:
+
+```bash
+grep -E "^Team name:" ~/Projects/piper/method.config.md
+```
+
+Whatever that prints is the canonical name (don't guess from the project nickname).
 
 Report back to Ethan: full list of started-type states. Expected: `In Progress`, `Building`, `UAT`, `In Dev`, `In Beta`. Anything extra (e.g. `In Review`, `Code Review`, `QA`) is fine but worth surfacing so we know what the board looks like.
 
@@ -283,7 +291,7 @@ git pull --ff-only
 
 ```
 Tool: mcp__claude_ai_Linear__list_issues
-Args: { state: "UAT", team: "Piper" }
+Args: { state: "UAT", team: "Withpiper" }   # NOT "Piper" — see Step 0c
 ```
 
 For each issue:
