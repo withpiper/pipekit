@@ -35,12 +35,13 @@ Canonical files use a `pipekit-` prefix so they never collide with project-speci
 | `pipekit-discipline.md` | AI coding discipline: Red Flags, Ad-hoc Plan Gate, scope hygiene | ✅ |
 | `pipekit-tooling.md` | Verify installed library APIs, pin package manager, pre-deploy gate | ✅ |
 | `pipekit-security.md` | Secrets, boundary validation, OWASP, auth must be explicit | ✅ |
+| `pipekit-migrations.md` | Frozen-file invariant, hardening discipline, parallel-branch coordination, drift recovery | ✅ |
 
 These are synced by `scripts/sync-method.sh` from Pipekit on every run. Changes must round-trip through pipekit — local edits to `pipekit-*.md` files will be overwritten on next sync. If you need to override a canonical rule, create a companion file (e.g., `security.md`) whose content takes precedence per your CLAUDE.md Routing Pointers ordering.
 
 ## Adding project-specific rules
 
-Create new files directly in this directory — `sync-method.sh` won't touch anything outside the four canonical names above. Common project-specific patterns:
+Create new files directly in this directory — `sync-method.sh` won't touch anything outside the five canonical names above. Common project-specific patterns:
 
 - `security.md` — project-specific auth, RLS, secrets; sits alongside `pipekit-security.md` baseline
 - `tooling.md` — project-specific commands, monorepo filters, pre-deploy gate; sits alongside `pipekit-tooling.md` baseline

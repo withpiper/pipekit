@@ -220,10 +220,10 @@ if [ -d "$TEMP/templates/v2" ]; then
 fi
 
 # --- Sync canonical .claude/rules/ files ---
-# Contract: Pipekit owns three canonical rule files prefixed `pipekit-`
-# (pipekit-discipline, pipekit-tooling, pipekit-security) plus the README
-# that documents the hub-and-spoke model. These get overwritten on every
-# sync — changes must round-trip through pipekit.
+# Contract: Pipekit owns four canonical rule files prefixed `pipekit-`
+# (pipekit-discipline, pipekit-tooling, pipekit-security, pipekit-migrations)
+# plus the README that documents the hub-and-spoke model. These get
+# overwritten on every sync — changes must round-trip through pipekit.
 #
 # The `pipekit-` prefix exists specifically to avoid collision with common
 # project-specific filenames (security.md, tooling.md are typical names
@@ -237,7 +237,7 @@ if [ -d "$TEMP/templates/rules" ]; then
   echo ""
   echo "Canonical rules (.claude/rules/):"
   mkdir -p "$PROJECT_ROOT/.claude/rules"
-  for canonical in README.md pipekit-discipline.md pipekit-tooling.md pipekit-security.md; do
+  for canonical in README.md pipekit-discipline.md pipekit-tooling.md pipekit-security.md pipekit-migrations.md; do
     if [ -f "$TEMP/templates/rules/$canonical" ]; then
       sync_file "$TEMP/templates/rules/$canonical" "$PROJECT_ROOT/.claude/rules/$canonical" ".claude/rules/$canonical"
     fi
