@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — `/strategy-from-code` deferral wording)*
+**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — UAT split into `UAT` (PR open on preview) + `In <Env>` (deployed); `pk done` regains UAT → `In <FirstEnv>` transition with `--merge` opt-in; `Released` retired)*
 
 ---
 

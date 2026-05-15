@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.4.3.2** — Last updated: 2026-05-14 04:23  *(doc-polish release — methodology alignment + stamped-docs inventory + release checklist)*
+**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — UAT split into `UAT` (PR open on preview) + `In <Env>` (deployed); `pk done` regains UAT → `In <FirstEnv>` transition with `--merge` opt-in; `Released` retired)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
