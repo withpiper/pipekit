@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `--confirmed` flag, `Backend: auto`, `/pk-exit` manual-invocation discipline)*
+**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — UAT split into `UAT` (PR open on preview) + `In <Env>` (deployed); `pk done` regains state transition with `--merge` opt-in; `Released` retired)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -21,7 +21,7 @@ Stage 0: Foundation (a contract — see Entry Modes)
   /concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create → /phase-plan
 
 Stages 1-5: Development — the v2 daily loop (repeats per issue)
-  pk next → pk branch → /work → /verify → pk ship → [PR review + UAT] → pk done [--confirmed] → pk promote [--confirmed] → /pk-exit
+  pk next → pk branch → /work → /verify → pk ship → [PR review + preview UAT] → pk done [--merge] → [dev UAT] → pk promote [--confirmed] → /pk-exit
 ```
 
 Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a script. Three entry modes satisfy the contract: greenfield (full chain), brownfield (skip /concept and /define), inherited (verify and proceed). `/startup` auto-detects mode and confirms with the user. The v2 daily loop replaces v1's `/branch → /launch → /verify → /launch --close` chain — see `RUNBOOK.md` for the one-page flowchart. Full Entry Modes table in `method.md`.
@@ -90,9 +90,9 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
 | `/work <ID>` | Plan + execute in-session. Dispatches to `Backend: vbw` (full vbw-lead/dev/qa pipeline), `Backend: native` (in-context Claude with parallel Agent grounding), or `Backend: auto` (routes per plan complexity — ≤3 files + no migration → native, otherwise → vbw) per `method.config.md`. Per-invocation override via `--backend=`. |
 | `/verify` | Pre-deploy gate. |
-| `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` invokes the antagonistic reviewer. |
-| `pk done <ID> [--confirmed]` | Verify merged, cleanup worktree+branch, post commits to Linear. Cleanup-only — no state transition. **v2.4.3+**: exits 1 if Linear is still `UAT`; pass `--confirmed` once UAT is signed off to bypass. |
-| `pk promote <env> [--confirmed]` | One hop along `Ship environments` (multi-tier projects). Optimistic state transition at PR-open → `Released` (intermediate) or `Done` (final hop). **v2.4.3+**: exits 1 if any bundled issue is still `UAT`; pass `--confirmed` to bypass. |
+| `pk ship [--review]` | Push, open PR, Linear → UAT (PR open on preview). `--review` invokes the antagonistic reviewer. |
+| `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree+branch, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.5.0+**: regained the state-transition role retired in v2.3.0 (see CHANGELOG). `--confirmed` accepted for backward compat (no-op). |
+| `pk promote <env> [--confirmed]` | One hop along `Ship environments` (multi-tier projects). Optimistic state transition at PR-open → `In <Env>` (intermediate, e.g. `In Beta`) or `Done` (final hop). **v2.4.3+**: exits 1 if any bundled issue is still `UAT` (PR not merged); pass `--confirmed` after env-UAT signoff to bypass. |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. **Run manually as the last command of every Claude Code session** — never auto-chained from `/work`, `/verify`, or any other skill. |
 
 **Orthogonal skills (unchanged in v2):**

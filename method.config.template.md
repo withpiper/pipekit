@@ -71,7 +71,7 @@ Best for: solo dev, small teams, projects where preview URLs replace a staging e
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote main` (or `pk promote` with no arg) opens the `dev` → `main` PR.
-**Linear transitions:** `pk ship` → UAT; `pk promote main` → Done (optimistic, at PR-open). `pk done` is cleanup-only — it does NOT transition state.
+**Linear transitions (v2.5.0):** `pk ship` → `UAT` (PR open on preview); `pk done` → `In Dev` (merge confirmed, on dev); `pk promote main` → `Done` (on main). All `pk promote` transitions optimistic at PR-open. `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
 
 ### Three-Tier (dev → beta → main)
 
@@ -86,7 +86,7 @@ Best for: teams with QA, projects needing a stable UAT environment, regulated in
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR; `pk promote <env>` walks one hop per invocation (`pk promote beta` then `pk promote main`) per `Ship environments` in the V2 block below.
-**Linear transitions:** `pk ship` → UAT; `pk promote beta` → Released; `pk promote main` → Done. All transitions optimistic at PR-open. `pk done` is cleanup-only — it does NOT transition state.
+**Linear transitions (v2.5.0):** `pk ship` → `UAT` (PR open on preview); `pk done` → `In Dev` (merge confirmed, on dev); `pk promote beta` → `In Beta` (on beta); `pk promote main` → `Done` (on main). All `pk promote` transitions optimistic at PR-open. `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
 
 ### Environments
 

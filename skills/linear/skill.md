@@ -14,7 +14,7 @@ The argument is a Linear issue identifier (e.g., `PROJ-178`) or a full Linear UR
 
 ## Linear State IDs
 
-Read all state IDs from your project's `method.config.md` under "Workflow State IDs". The table maps state names (Building, UAT, Done, etc.) to Linear state UUIDs specific to your workspace.
+Read all state IDs from your project's `method.config.md` under "Workflow State IDs". The table maps state names (Building, UAT, In Dev, In Beta, Done, etc.) to Linear state UUIDs specific to your workspace.
 
 ## Workflow Phases
 
@@ -77,10 +77,10 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
    - For **production** (merged to `main`): verify `vercel --prod` deployment succeeds.
    - For **hotfixes** (merged to `main`): immediately cherry-pick back to both `dev` and `beta`.
    - **Post a comment** confirming deployment target.
-3. **Transition state per environment.** Under v2.3.0, state maps 1:1 to environment:
-   - **2-tier project** (`Ship environments: dev,main`): on `main` merge → move to **Done** (`stateId: {Done state ID}`).
-   - **3-tier project** (`Ship environments: dev,beta,main`): on `beta` merge → move to **Released** (`stateId: {Released state ID}`); on `main` merge → move to **Done**.
-   - The recommended path is `pk promote <env>` which sets state at PR-open time. This manual step only applies if you opened the promote PR by hand without `pk promote`.
+3. **Transition state per environment.** Under v2.5.0, state maps 1:1 to environment via env-named statuses:
+   - **2-tier project** (`Ship environments: dev,main`): on `dev` merge → move to **In Dev** (set by `pk done`); on `main` merge → move to **Done** (set by `pk promote main`).
+   - **3-tier project** (`Ship environments: dev,beta,main`): on `dev` merge → **In Dev** (`pk done`); on `beta` merge → **In Beta** (`pk promote beta`); on `main` merge → **Done** (`pk promote main`).
+   - The recommended path is `pk done` (UAT → `In <FirstEnv>`) and `pk promote <env>` (one hop per call). This manual fallback only applies if you opened the promote PR by hand without `pk promote`.
 
 ---
 
@@ -106,7 +106,9 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
 | Implement | Building | Summary of changes + preview URL |
 | Review (iterations) | Building | Updates on changes |
 | Review (PR created) | UAT | PR link |
-| Merge & Deploy | Done | Deployment confirmed |
+| Merge to first env | In `<FirstEnv>` (e.g. In Dev) | Set by `pk done` |
+| Promote intermediate | In `<Env>` (e.g. In Beta) | Set by `pk promote <env>` |
+| Final promote | Done | Deployment confirmed |
 
 ## Comment Style
 

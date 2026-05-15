@@ -39,10 +39,21 @@ assert_lt() {
   fi
 }
 
-# ─── pk_state_rank: canonical ladder ordering ───────────────────────────────
+# Stub pk_config to return a known 3-tier Ship environments chain so
+# pk_state_rank can compute "In <env>" positions deterministically.
+# v2.5.0 replaced the hardcoded UAT/Released/Done ladder with one that
+# derives In <Env> ranks from the project's Ship environments line.
+pk_config() {
+  case "$1" in
+    'Ship environments') echo "dev,beta,main" ;;
+    *) echo "${2:-}" ;;
+  esac
+}
+
+# ─── pk_state_rank: canonical ladder ordering (v2.5.0 — env-derived) ────────
 echo "pk_state_rank: canonical ladder is strictly monotonic"
 prev=$(pk_state_rank "Triage")
-for state in "Ideas" "Future Phases" "On Deck" "Needs Spec" "Specced" "Approved" "Building" "In Progress" "UAT" "Released" "Done"; do
+for state in "Ideas" "Future Phases" "On Deck" "Needs Spec" "Specced" "Approved" "Building" "In Progress" "UAT" "In Dev" "In Beta" "Done"; do
   cur=$(pk_state_rank "$state")
   assert_lt "$state ranks above previous" "$prev" "$cur"
   prev=$cur
@@ -50,20 +61,21 @@ done
 
 # ─── pk_state_rank: pairwise checks that matter for the gate ────────────────
 echo "pk_state_rank: gate-relevant pairs"
-assert_lt "Approved < Released" "$(pk_state_rank Approved)" "$(pk_state_rank Released)"
-assert_lt "UAT < Released"      "$(pk_state_rank UAT)"      "$(pk_state_rank Released)"
-assert_lt "Released < Done"     "$(pk_state_rank Released)" "$(pk_state_rank Done)"
+assert_lt "Approved < In Dev"   "$(pk_state_rank Approved)" "$(pk_state_rank 'In Dev')"
+assert_lt "UAT < In Dev"        "$(pk_state_rank UAT)"      "$(pk_state_rank 'In Dev')"
+assert_lt "In Dev < In Beta"    "$(pk_state_rank 'In Dev')" "$(pk_state_rank 'In Beta')"
+assert_lt "In Beta < Done"      "$(pk_state_rank 'In Beta')" "$(pk_state_rank Done)"
 assert_lt "On Deck < Approved"  "$(pk_state_rank "On Deck")" "$(pk_state_rank Approved)"
 
-# Done must NOT rank below Released (no backward promote main → beta).
+# Done must NOT rank below any In <env> (no backward promote main → beta).
 done_rank=$(pk_state_rank Done)
-released_rank=$(pk_state_rank Released)
-if [ "$done_rank" -gt "$released_rank" ]; then
+in_beta_rank=$(pk_state_rank 'In Beta')
+if [ "$done_rank" -gt "$in_beta_rank" ]; then
   pass=$((pass + 1))
-  printf '  ok  Done > Released (rejects backward Done→Released)\n'
+  printf '  ok  Done > In Beta (rejects backward Done→In Beta)\n'
 else
   fail=$((fail + 1))
-  printf '  FAIL Done > Released\n       Done=%d Released=%d\n' "$done_rank" "$released_rank"
+  printf '  FAIL Done > In Beta\n       Done=%d In Beta=%d\n' "$done_rank" "$in_beta_rank"
 fi
 
 # ─── pk_state_rank: unknown + terminal-off-ladder ───────────────────────────

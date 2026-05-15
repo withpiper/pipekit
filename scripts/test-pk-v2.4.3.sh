@@ -142,12 +142,15 @@ else
   ok "cmd_promote --confirmed flag accepted by arg parser"
 fi
 
-# ─── Finding 1: cmd_done UAT-state refusal logic ────────────────────────────
+# ─── Finding 1: cmd_done UAT-state refusal — REMOVED in v2.5.0 ──────────────
+# v2.5.0 dropped this refusal: pk done IS the transition out of UAT (it
+# verifies merge then flips state UAT → In <FirstEnv>). The PR-merge check
+# is now the load-bearing gate (was: PR-merge AND UAT-refusal). This block
+# verifies the v2.5.0 behavior: cmd_done with state==UAT proceeds past the
+# old gate and lands on the PR-merge check (which fails in this fixture
+# because no real PR exists).
 echo ""
-echo "cmd_done: UAT-state refusal triggers without --confirmed, bypasses with"
-# Stub pk_linear_get_state to return 'UAT' regardless of arg. We need a
-# fake git branch matching feature/FAKE-99999-* so cmd_done resolves
-# past the branch lookup and into the UAT gate.
+echo "cmd_done (v2.5.0): UAT no longer refuses; proceeds to PR-merge check"
 (
   cd "$stage"
   git init -q test-uat 2>/dev/null
@@ -162,34 +165,36 @@ echo "cmd_done: UAT-state refusal triggers without --confirmed, bypasses with"
   source "$repo_root/bin/pk"
   pk_linear_get_state() { echo "UAT"; }
 
-  # Without --confirmed: should error with "still in 'UAT'"
-  out_no_confirm=$(cmd_done FAKE-99999 2>&1) || true
-  if echo "$out_no_confirm" | grep -q "still in 'UAT'"; then
-    echo "OK_REFUSE"
+  # cmd_done with state==UAT (no --confirmed needed): should NOT refuse on
+  # UAT; should fall through to the PR-merge check, which fails in this
+  # fixture (no real PR open for FAKE-99999).
+  out=$(cmd_done FAKE-99999 2>&1) || true
+  if echo "$out" | grep -q "still in 'UAT'"; then
+    echo "BAD_REFUSE: $out"
+  elif echo "$out" | grep -q "is not merged"; then
+    echo "OK_NO_REFUSE_THEN_MERGE_CHECK"
   else
-    echo "NO_REFUSE: $out_no_confirm"
+    echo "UNEXPECTED: $out"
   fi
 
-  # With --confirmed: should bypass the UAT gate and proceed to the
-  # PR-merge check (which will fail because there's no real PR). The key
-  # is the output should NOT mention "still in 'UAT'".
+  # --confirmed should be accepted as a no-op for backward compat (v2.5.0):
   out_confirm=$(cmd_done FAKE-99999 --confirmed 2>&1) || true
-  if echo "$out_confirm" | grep -q "still in 'UAT'"; then
-    echo "BAD_BYPASS: $out_confirm"
+  if echo "$out_confirm" | grep -q "unknown arg"; then
+    echo "BAD_CONFIRMED_REJECTED: $out_confirm"
   else
-    echo "OK_BYPASS"
+    echo "OK_CONFIRMED_ACCEPTED"
   fi
 ) > "$stage/uat-test.out" 2>&1
 uat_out=$(cat "$stage/uat-test.out")
-if echo "$uat_out" | grep -q "OK_REFUSE"; then
-  ok "cmd_done refuses when state == UAT and --confirmed missing"
+if echo "$uat_out" | grep -q "OK_NO_REFUSE_THEN_MERGE_CHECK"; then
+  ok "cmd_done (v2.5.0): state==UAT no longer refuses; lands on PR-merge check"
 else
-  nope "cmd_done should refuse UAT without --confirmed" "$uat_out"
+  nope "cmd_done (v2.5.0): expected no UAT refusal + PR-merge check error" "$uat_out"
 fi
-if echo "$uat_out" | grep -q "OK_BYPASS"; then
-  ok "cmd_done with --confirmed bypasses the UAT refusal"
+if echo "$uat_out" | grep -q "OK_CONFIRMED_ACCEPTED"; then
+  ok "cmd_done (v2.5.0): --confirmed accepted as no-op (backward compat)"
 else
-  nope "cmd_done --confirmed should bypass UAT refusal" "$uat_out"
+  nope "cmd_done (v2.5.0): --confirmed should be accepted, not rejected" "$uat_out"
 fi
 
 echo ""

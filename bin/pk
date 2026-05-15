@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.4.3.2"
+PK_VERSION="2.5.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -295,23 +295,116 @@ pk_linear_issues_in_state() {
 # with custom workflows). Terminal-but-off-ladder states (Canceled,
 # Duplicate) return a sentinel rank that never matches a target.
 pk_state_rank() {
-  case "$1" in
-    'Triage')        echo 1 ;;
-    'Ideas')         echo 2 ;;
-    'Future Phases') echo 3 ;;
-    'On Deck')       echo 4 ;;
-    'Needs Spec')    echo 5 ;;
-    'Specced')       echo 6 ;;
-    'Approved')      echo 7 ;;
-    'Building')      echo 8 ;;
-    'In Progress')   echo 9 ;;
-    'UAT')           echo 10 ;;
-    'Released')      echo 11 ;;
-    'Done')          echo 12 ;;
-    'Canceled')      echo 99 ;;
-    'Duplicate')     echo 99 ;;
-    *)               echo 0 ;;
+  local state="$1"
+  # Hardcoded pre-deploy ladder (ranks 1-10).
+  case "$state" in
+    'Triage')        echo 1;  return ;;
+    'Ideas')         echo 2;  return ;;
+    'Future Phases') echo 3;  return ;;
+    'On Deck')       echo 4;  return ;;
+    'Needs Spec')    echo 5;  return ;;
+    'Specced')       echo 6;  return ;;
+    'Approved')      echo 7;  return ;;
+    'Building')      echo 8;  return ;;
+    'In Progress')   echo 9;  return ;;
+    'UAT')           echo 10; return ;;
+    'Done')          echo 50; return ;;
+    'Canceled')      echo 99; return ;;
+    'Duplicate')     echo 99; return ;;
   esac
+  # Post-merge "In <env>" states (v2.5.0). Rank by position in Ship
+  # environments chain — first env after preview = 11, next = 12, etc.
+  # Generalizes to any project topology (dev,beta,main / develop,staging,
+  # production / etc.) without hardcoded names. Unknown "In <env>" names
+  # (env not in the chain) return 0 so they fall through the leap-frog
+  # check the same way as fully-unknown states — preserves the "allow
+  # transition for custom workflows" semantic.
+  case "$state" in
+    'In '*)
+      local env_name env_lower chain idx=0 found=-1 e
+      env_name="${state#In }"
+      env_lower=$(echo "$env_name" | tr '[:upper:]' '[:lower:]')
+      chain=$(pk_config "Ship environments" "")
+      if [ -z "$chain" ]; then
+        echo 0
+        return
+      fi
+      local IFS=','
+      for e in $chain; do
+        e=$(echo "$e" | tr -d ' ')
+        if [ "$e" = "$env_lower" ]; then
+          found=$idx
+          break
+        fi
+        idx=$((idx + 1))
+      done
+      if [ "$found" -ge 0 ]; then
+        echo $((11 + found))
+      else
+        echo 0
+      fi
+      return
+      ;;
+  esac
+  echo 0
+}
+
+# Capitalize the first letter of a word ("dev" → "Dev"). Used to derive
+# state names ("In Dev", "In Beta", ...) from Ship environments entries
+# which are lowercase by convention.
+pk_capitalize() {
+  echo "$1" | awk '{print toupper(substr($1,1,1)) substr($1,2)}'
+}
+
+# Linear state name for "just merged to the first deploy env" (v2.5.0).
+# n-tier:  "In <FirstEnv-Capitalized>"  (e.g. "In Dev")
+# 1-tier:  "Done"  (first env == final env; nothing more to promote to)
+pk_first_env_state_name() {
+  local chain envs_arr=()
+  chain=$(pk_config "Ship environments" "")
+  if [ -z "$chain" ]; then
+    echo "Done"
+    return
+  fi
+  IFS=',' read -ra envs_arr <<< "$chain"
+  if [ ${#envs_arr[@]} -le 1 ]; then
+    echo "Done"
+    return
+  fi
+  local first
+  first=$(echo "${envs_arr[0]}" | tr -d ' ')
+  echo "In $(pk_capitalize "$first")"
+}
+
+# Linear state name for a given env target in a promote hop (v2.5.0).
+# Intermediate hops: "In <Env-Capitalized>"
+# Final env in chain: "Done"
+# env not in chain: "" (caller should treat as error)
+pk_env_state_name() {
+  local env="$1"
+  local chain envs_arr=()
+  chain=$(pk_config "Ship environments" "")
+  if [ -z "$chain" ]; then
+    echo "Done"
+    return
+  fi
+  IFS=',' read -ra envs_arr <<< "$chain"
+  local last_idx=$((${#envs_arr[@]} - 1))
+  local idx=0 e env_trim
+  env_trim=$(echo "$env" | tr -d ' ')
+  for e in "${envs_arr[@]}"; do
+    e=$(echo "$e" | tr -d ' ')
+    if [ "$e" = "$env_trim" ]; then
+      if [ "$idx" -eq "$last_idx" ]; then
+        echo "Done"
+      else
+        echo "In $(pk_capitalize "$env_trim")"
+      fi
+      return
+    fi
+    idx=$((idx + 1))
+  done
+  echo ""
 }
 
 # Fetch the current workflow-state name for a Linear issue by identifier.
@@ -385,10 +478,12 @@ pk_linear_set_state() {
         echo "  Linear: $id already at '$current_state' (target was '$state_name') — skip backward transition"
         return 0
       fi
-      # Leap-frog: current is Approved-or-earlier AND target is Released/Done.
-      # The WIT's commits made it into a promote bundle without UAT/In Progress —
-      # surface it loudly and refuse the transition.
-      if [ "$rank_current" -le "$rank_approved" ] && [ "$rank_target" -ge "$(pk_state_rank Released)" ]; then
+      # Leap-frog: current is Approved-or-earlier AND target is a post-merge
+      # state (rank 11+ — any "In <env>" or Done). The WIT's commits made it
+      # into a promote bundle without UAT/In Progress — surface it loudly
+      # and refuse the transition. Threshold 11 = first env after UAT in
+      # the v2.5.0 ladder (UAT=10, In <FirstEnv>=11).
+      if [ "$rank_current" -le "$rank_approved" ] && [ "$rank_target" -ge 11 ]; then
         echo "  Linear: $id at '$current_state' — refusing leap-frog to '$state_name'." >&2
         echo "    Commits shipped without Building/In Progress/UAT. Review manually before transitioning." >&2
         return 0
@@ -678,7 +773,27 @@ cmd_status() {
     return 1
   fi
   echo "── Linear: $team ──"
-  for state in "In Progress" "Building" "UAT" "Approved"; do
+  # Pre-deploy + UAT buckets are universal.
+  local states=("In Progress" "Building" "UAT" "Approved")
+  # Append "In <env>" buckets for every non-final env in Ship environments
+  # (v2.5.0). Final env's state is "Done" — not shown in `pk status` since
+  # it's terminal, not in-flight.
+  local chain envs_arr=()
+  chain=$(pk_config "Ship environments" "")
+  if [ -n "$chain" ]; then
+    IFS=',' read -ra envs_arr <<< "$chain"
+    local last_idx=$((${#envs_arr[@]} - 1))
+    local idx=0 e
+    for e in "${envs_arr[@]}"; do
+      e=$(echo "$e" | tr -d ' ')
+      if [ "$idx" -lt "$last_idx" ]; then
+        states+=("In $(pk_capitalize "$e")")
+      fi
+      idx=$((idx + 1))
+    done
+  fi
+  local state
+  for state in "${states[@]}"; do
     local issues count
     issues=$(pk_linear_issues_in_state "$state" 2>/dev/null || echo "[]")
     count=$(echo "$issues" | jq 'length')
@@ -898,10 +1013,15 @@ Reviewer subagent invocation printed in pk output. Findings will land as a PR re
 }
 
 cmd_done() {
-  local confirmed=false id=""
+  # --confirmed is accepted for backward compat (v2.4.3) but is now a no-op:
+  # v2.5.0 dropped the UAT-state refusal because pk done IS the transition
+  # out of UAT (UAT → In <FirstEnv> on merge). The pre-merge gate below is
+  # what actually stops accidental early-fires.
+  local do_merge=false id=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --confirmed) confirmed=true; shift ;;
+      --merge)     do_merge=true; shift ;;
+      --confirmed) shift ;;
       --*)         echo "pk done: unknown arg $1" >&2; return 2 ;;
       *)           id="$1"; shift ;;
     esac
@@ -931,29 +1051,28 @@ cmd_done() {
     fi
   fi
 
-  # UAT-state code refusal (v2.4.3) — belt-and-braces for v2.4.2's doc gate.
-  # The empirical failure: a worker session auto-merged PR #265 on green CI
-  # and immediately chained `pk done`, wiping the worktree while the user
-  # was still doing interactive UAT on dev. Doc gates rely on the model
-  # reading prose; this gate is exit-1 and doesn't lie. --confirmed bypasses.
-  if ! $confirmed; then
-    local current_state
-    current_state=$(pk_linear_get_state "$issue" 2>/dev/null || echo "")
-    if [ "$current_state" = "UAT" ]; then
-      echo "ERROR: $issue is still in 'UAT'." >&2
-      echo "  Complete interactive UAT and merge the PR first." >&2
-      echo "  Re-run with --confirmed once UAT is signed off:" >&2
-      echo "    pk done $issue --confirmed" >&2
+  # Optional: merge the PR for the user (v2.5.0, M3 opt-in).
+  # Merge-commit per repo policy (squash is disabled, --merge produces an
+  # anchor commit on the integration branch). If the PR is already merged,
+  # this is a clean no-op courtesy of gh's idempotent behavior.
+  if $do_merge; then
+    echo "Merging PR for $current..."
+    if ! gh pr merge "$current" --merge 2>&1; then
+      echo "ERROR: gh pr merge failed. Resolve (conflicts? failing CI? not approved?) and rerun." >&2
       return 1
     fi
   fi
 
-  # Verify PR is merged
+  # Verify PR is merged. In the v2.5.0 model, pk done's primary job IS
+  # confirming the merge happened — without it, the In <FirstEnv> state
+  # transition would be a lie (code wouldn't actually be on the first env).
   local pr_state
   pr_state=$(pk_gh_pr_view "$current" | jq -r '.state // empty')
   if [ "$pr_state" != "MERGED" ]; then
     echo "ERROR: PR for $current is not merged (state: ${pr_state:-NOT_FOUND})" >&2
-    echo "  Run  pk ship  to open the PR, or merge it manually first." >&2
+    echo "  Options:" >&2
+    echo "    - Merge in GitHub UI, then rerun pk done." >&2
+    echo "    - Or: pk done ${id:-} --merge  (lets pk run gh pr merge for you)." >&2
     return 1
   fi
 
@@ -1049,9 +1168,17 @@ $commits"
   fi
   pk_linear_comment "$issue" "$body" || true
 
-  # No state transition here — `pk done` is cleanup-only as of v2.3.0.
-  # State movement is owned by `pk ship` (→ UAT) and `pk promote` (→ Released
-  # / → Done). A worktree closing does not mean the issue is shipped.
+  # Linear state transition (v2.5.0): UAT → In <FirstEnv>, or → Done for
+  # 1-tier projects where the merge IS the final deploy. This reverses the
+  # v2.3.0 "cleanup-only" rule, which assumed UAT covered every post-ship
+  # phase. The v2.5.0 model splits that: UAT = "PR open on preview", and
+  # In <FirstEnv> = "merged, code on dev". pk done is the legitimate
+  # transition point because it has just verified the merge happened.
+  local next_state
+  next_state=$(pk_first_env_state_name)
+  if [ -n "$next_state" ]; then
+    pk_linear_set_state "$issue" "$next_state" "advance" || true
+  fi
 
   echo "Removing worktree..."
   if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
@@ -1310,12 +1437,15 @@ cmd_promote() {
     --body "Batch promote. Merge-commit per ruleset (one anchor commit on $target per promote).") || return 1
   echo "PR: $promote_url"
 
-  # Position-based state mapping: last env in chain → Done, else → Released.
+  # Env-as-status mapping (v2.5.0): per-env state name derived from
+  # Ship environments — intermediate hops → "In <Env>", final hop → "Done".
+  # Replaces v2.3.0's binary Released/Done mapping, which collapsed every
+  # non-final env into a single bucket and hid which env an issue was on.
   local target_state
-  if [ "$target_idx" -eq $((${#envs_arr[@]} - 1)) ]; then
-    target_state="Done"
-  else
-    target_state="Released"
+  target_state=$(pk_env_state_name "$target")
+  if [ -z "$target_state" ]; then
+    echo "ERROR: could not derive state name for env '$target' (not in Ship environments?)" >&2
+    return 1
   fi
 
   if [ -n "$issue_prefix" ]; then
@@ -1328,10 +1458,10 @@ cmd_promote() {
       echo "  4. Transitioning $id_count issue(s) → $target_state"
       while IFS= read -r issue_id; do
         if ! pk_linear_set_state "$issue_id" "$target_state" "advance"; then
-          if [ "$target_state" = "Released" ]; then
-            echo "    Linear: $issue_id — Released state not configured. Add it via Linear UI + method.config.md, then re-run." >&2
+          if [ "$target_state" = "Done" ]; then
+            echo "    Linear: $issue_id — transition to Done failed. Check state name + permissions." >&2
           else
-            echo "    Linear: $issue_id — transition to $target_state failed. Check state name + permissions." >&2
+            echo "    Linear: $issue_id — state '$target_state' not configured in Linear. Add it (type: started) via Linear UI, then re-run." >&2
           fi
         fi
       done <<< "$issue_ids"
@@ -1754,11 +1884,11 @@ Subcommands:
   pk next                         What should I do now?
   pk status                       Quick triage of the Linear board + worktrees
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
-  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review)
-  pk done [<ID>] [--confirmed]    Verify PR merged, cleanup worktree+branch (no Linear state change). Refuses if issue is in UAT — pass --confirmed once UAT is signed off. Run from parent repo (not worktree); run /pk-exit inside the worktree session first.
+  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review). UAT = PR open on preview branch (pre-merge).
+  pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote <env> [--stash|--take-remote] [--confirmed]  Walk one hop in Ship environments; transitions issues → Released (intermediate) or Done (final). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT — pass --confirmed to override.
+  pk promote <env> [--stash|--take-remote] [--confirmed]  Walk one hop in Ship environments; transitions issues → In <Env> (intermediate hop) or Done (final hop). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)

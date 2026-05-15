@@ -58,10 +58,10 @@ Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pi
 | 5 | Branch | `pk branch <ID>` | Worktree + branch + Linear → In Progress |
 | 6 | **Work** | **`/work <ID>`** | **Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`.** |
 | 7 | **Verify** | **`/verify`** | **Pre-deploy gate (types + lint + test).** |
-| 8 | Ship | `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` triggers antagonistic review. |
-| 9 | UAT | (Linear UI / browser) | You test the built feature |
-| 10 | Done | `pk done <ID> [--confirmed]` | Verify merged, cleanup worktree, post commits to Linear. Cleanup-only — no state transition. **v2.4.3+**: refuses with `exit 1` if Linear is still `UAT`; pass `--confirmed` once UAT is signed off. |
-| 11 | Promote | `pk promote <env> [--confirmed]` | (Multi-tier projects) one hop along `Ship environments` → `Released` or `Done`. **v2.4.3+**: refuses if any bundled issue is still `UAT`. |
+| 8 | Ship | `pk ship [--review]` | Push, open PR, Linear → UAT (PR open on preview branch). `--review` triggers antagonistic review. |
+| 9 | UAT | (Linear UI / browser) | You test the built feature — on the PR preview pre-merge, on the first deploy env post-merge. |
+| 10 | Done | `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.5.0+**: state transition restored — see CHANGELOG. |
+| 11 | Promote | `pk promote <env> [--confirmed]` | (Multi-tier projects) one hop along `Ship environments` → `In <Env>` (intermediate) or `Done` (final). **v2.4.3+**: refuses if any bundled issue is still `UAT` (PR not merged); `--confirmed` bypasses after env-UAT signoff. |
 | 12 | Session log | `/pk-exit` | Narrative log to `Logs/Sessions/<date>_<HHMM>.md`. **Per-session, not per-issue** — run manually as the last command of every Claude Code session regardless of where the current issue stands. Never auto-chained from another skill. |
 | 13 | Strategy Sync | `/strategy-sync` | Update docs to match what was built (post-ship) |
 

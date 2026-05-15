@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — UAT row + transitions reference `--confirmed`, 2-tier Released clarification)*
+**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — `Released` retired in favor of per-env `In <Env>` states; `pk done` does UAT → `In <FirstEnv>` transition)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -67,12 +67,12 @@ Labels = Cross-cutting metadata        <- Filterable on everything
 ### Pipeline
 
 ```
-Planned:   Triage -> Ideas -> Future Phases -> On Deck -> Needs Spec -> Specced -> Approved -> Building -> UAT -> Released -> Done
-Ad-hoc:    Triage -> In Progress -> UAT -> Released -> Done                                                                -> Canceled
-                                                                                                                            -> Duplicate
+Planned:   Triage -> Ideas -> Future Phases -> On Deck -> Needs Spec -> Specced -> Approved -> Building -> UAT -> In <FirstEnv> -> [In <Env> ->]* Done
+Ad-hoc:    Triage -> In Progress -> UAT -> In <FirstEnv> -> [In <Env> ->]* Done                                                                -> Canceled
+                                                                                                                                                -> Duplicate
 ```
 
-**Released** is meaningful only on 3-tier projects (`Ship environments: dev,beta,main`). On 2-tier projects (`Ship environments: dev,main`), state goes UAT → Done directly via the single `pk promote main` hop, and Released is unused — there's no need to configure a Released state ID in `method.config.md` for 2-tier projects.
+**State / environment mapping** (v2.5.0): one state per env in `Ship environments`. For 3-tier (`dev,beta,main`): `UAT` (PR open on preview) → `In Dev` (merged to dev) → `In Beta` (promoted to beta) → `Done` (promoted to main). For 2-tier (`dev,main`): `UAT` → `In Dev` → `Done`. For 1-tier (`main`): `UAT` → `Done` (no intermediate state). The status name itself tells you which env the code currently lives on. `Released` from v2.3.0–v2.4.x is retired — replaced by env-specific `In <Env>` states.
 
 ### Principle
 
@@ -93,9 +93,10 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
 | **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
 | **Building** | started | VBW | Steps 4-7 | VBW planning + execution + QA. Current-phase execution queue only. |
-| **UAT** | started | You | Step 8 | Code merged to integration env (`dev`). Your turn to accept or reject. **v2.4.3+**: `pk done` and `pk promote` exit 1 while an issue is in this state — pass `--confirmed` once UAT is signed off to bypass. |
-| **Released** | started | You | Step 8.5 | Code merged to staging env (`beta`). Pre-prod validation. 3-tier projects only. |
-| **Done** | completed | -- | Step 9 | Code merged to production env (`main`). Live. |
+| **UAT** | started | You | Step 8a | PR open on preview branch (pre-merge). Code review + preview-URL acceptance testing happens here. **v2.4.3+**: `pk promote` refuses if any bundled issue is still in UAT (PR not merged) — pass `--confirmed` to bypass after env-UAT signoff. |
+| **In `<FirstEnv>`** (e.g. `In Dev`) | started | You | Step 8b | Code merged to first deploy env. Interactive UAT in progress, or signed-off-awaiting-promote. Set by `pk done` after merge confirmation. |
+| **In `<Env>`** (e.g. `In Beta`) | started | You | Step 8c+ | Code promoted to a non-final env. One state per non-final env in `Ship environments`. Set by `pk promote <env>`. |
+| **Done** | completed | -- | Step 9 | Code promoted to the final env in `Ship environments` (`main` / `production` / etc.). Live. |
 | **Canceled** | canceled | -- | -- | Won't do. |
 | **Duplicate** | canceled | -- | -- | Merged into another issue. |
 
@@ -111,10 +112,11 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | Specced | Needs Spec | Agent or human sends back for revision | You |
 | Specced | Approved | You approve scope, decisions, priority | You |
 | Approved | Building | Phase batch is ready for execution | You (or VBW pickup) |
-| Building | UAT | VBW QA passes | VBW QA agent |
-| UAT | Released | `pk promote beta --confirmed` (3-tier projects, after UAT sign-off) | You + `pk promote` |
-| UAT | Done | `pk promote main --confirmed` (2-tier projects, single hop after UAT sign-off) | You + `pk promote` |
-| Released | Done | `pk promote main` (3-tier projects; no `--confirmed` needed past UAT) | You + `pk promote` |
+| Building | UAT | VBW QA passes + `pk ship` | VBW QA agent + you |
+| UAT | In `<FirstEnv>` | `pk done` after PR merge (or `pk done --merge`) | You + `pk done` |
+| UAT | Done | `pk done` on 1-tier project (first env IS final env) | You + `pk done` |
+| In `<Env>` | In `<NextEnv>` | `pk promote <NextEnv> --confirmed` (after env-UAT signoff) | You + `pk promote` |
+| In `<Env>` | Done | `pk promote <FinalEnv> --confirmed` (final hop after env-UAT signoff) | You + `pk promote` |
 | UAT | Building | You reject — needs rework | You |
 | Triage | In Progress | Hotfix or quick fix — you're handling it manually | You |
 | In Progress | UAT | Manual fix ready for acceptance testing | You |
@@ -124,12 +126,12 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 
 | Lane | Path | Managed By |
 |---|---|---|
-| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → [Released →] Done | VBW |
-| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → [Released →] Done | VBW (enters the phase) |
-| **Hotfix** | Triage → In Progress → UAT → [Released →] Done | You (manual fix) |
+| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | VBW |
+| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | VBW (enters the phase) |
+| **Hotfix** | Triage → In Progress → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | You (manual fix) |
 | **Quick fix** | Triage → In Progress → Done | You (no UAT needed) |
 
-`[Released →]` is only present on 3-tier projects.
+`[In <Env> →]*` is one state per non-final env in `Ship environments`. 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. 2-tier (`dev,main`): `In Dev → Done`. 1-tier (`main`): `UAT → Done` (no intermediate `In <Env>`).
 
 **Building** = VBW owns it. Phase-batched, trigger rules apply. Never put ad-hoc work here.
 **In Progress** = You're doing it by hand, outside the phase. VBW ignores these.
@@ -142,7 +144,7 @@ The backlog is ordered by **phase proximity** (furthest out → closest to execu
 Ideas → Future Phases → On Deck → Needs Spec
 ```
 
-- **Current phase** = issues in Needs Spec + Specced + Approved + Building + UAT
+- **Current phase** = issues in Needs Spec + Specced + Approved + Building + UAT + any In `<Env>` state
 - **Next phase** = issues in On Deck
 - **Future** = issues in Future Phases
 - **Someday** = issues in Ideas

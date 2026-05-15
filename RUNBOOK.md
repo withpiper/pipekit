@@ -255,22 +255,23 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │ [5e] Interactive UAT  (THE Stage 3 gate — non-skippable) │
   │                                                          │
   │      Human exercises the feature in the running app:     │
-  │      • Vercel PR preview URL (pre-merge), OR             │
-  │      • dev.<project> domain (post-merge to dev)          │
+  │      • PR preview URL (pre-merge)    — state: UAT        │
+  │      • dev.<project> (post-merge)    — state: In Dev     │
   │                                                          │
   │      Walk through every AC. Record the verdict —         │
-  │      Linear comment, PR comment, or session-log note     │
-  │      — so there's an audit trail.                        │
+  │      Linear comment, PR comment, or session-log note.    │
   │                                                          │
-  │      Do NOT proceed to [6] / [8] / [9] until UAT signs   │
-  │      off. /work, /verify, /pk-exit must NOT auto-chain   │
-  │      past this step. Surfaced 2026-05-13 (WIT-451):      │
-  │      the worker session auto-fired pk done before UAT    │
-  │      completed and wiped the worktree mid-test.          │
+  │      Do NOT auto-chain past this step. /work, /verify,   │
+  │      /pk-exit must NOT invoke pk done or pk promote on   │
+  │      their own. Surfaced 2026-05-13 (WIT-451): worker    │
+  │      session auto-fired pk done before UAT completed     │
+  │      and wiped the worktree mid-test.                    │
   │                                                          │
-  │      v2.4.3+ enforces this in code: pk done / pk promote │
-  │      refuse with exit 1 when Linear state is UAT. Pass   │
-  │      --confirmed once UAT is signed off to bypass.       │
+  │      v2.5.0+: pk done IS the legitimate UAT → In Dev     │
+  │      transition (it verifies the merge). pk promote      │
+  │      refuses with exit 1 if any bundled issue is in      │
+  │      UAT (PR not yet merged) — pass --confirmed after    │
+  │      env-UAT signoff to hop forward.                     │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -298,12 +299,12 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [8] Cleanup (no state change)                            │
-  │     pk done <ID>                                         │
-  │     • verifies PR merged                                 │
+  │ [8] Cleanup + state transition                           │
+  │     pk done <ID> [--merge]                               │
+  │     • verifies PR merged (--merge runs gh pr merge first)│
   │     • posts journal highlights to Linear                 │
+  │     • Linear: UAT → In <FirstEnv> (or → Done for 1-tier) │
   │     • removes worktree, deletes local branch             │
-  │     • does NOT transition Linear state — promote does    │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -320,7 +321,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • walks Ship environments (e.g. dev,beta,main)       │
   │     • opens source → target PR per hop                   │
   │     • transitions issues optimistically at PR-open:      │
-  │         intermediate hop  →  Released                    │
+  │         intermediate hop  →  In <Env>  (e.g. In Beta)    │
   │         final hop         →  Done                        │
   │     • 2-tier projects: pk promote (no arg) picks the     │
   │       only hop; sets state directly to Done              │
@@ -347,8 +348,8 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID> [--confirmed]` | `./bin/pk done <ID> [--confirmed]` | parent, dev | removes worktree + posts journal highlights to Linear (no state transition; v2.3.0). **v2.4.3+**: refuses with `exit 1` if Linear state is `UAT`; pass `--confirmed` after UAT sign-off (Linear comment, PR comment, or session-log note recording the accept verdict). |
-| 8 | Promote | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → Released or → Done (v2.3.0). **v2.4.3+**: refuses if any bundled issue is still in `UAT`; pass `--confirmed` after UAT sign-off. |
+| 7 | Cleanup | `pk done <ID> [--merge]` | `./bin/pk done <ID> [--merge]` | parent, dev | verifies PR merged (or `--merge` runs `gh pr merge` first), removes worktree, posts journal highlights to Linear, transitions Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.5.0+**: regained the state-transition role retired in v2.3.0. `--confirmed` accepted for backward compat (no-op). |
+| 8 | Promote | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → `In <Env>` (intermediate) or → Done (final). **v2.4.3+**: refuses if any bundled issue is still in `UAT` (PR not merged); pass `--confirmed` after env-UAT sign-off. |
 | meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
 | meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
 | meta | Install | `pk install` | `./bin/pk install` | repo root | symlinks pk onto $PATH (v2.0) |

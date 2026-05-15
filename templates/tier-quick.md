@@ -42,4 +42,4 @@
 
 ## Close path
 
-`pk ship` → Linear → UAT. UAT pass → merge PR → `pk done PROJ-XXX` (cleanup only; no state change) → `pk promote <env>` walks the chain (→ Released for intermediate hops, → Done for the final hop; 2-tier: `pk promote` with no arg).
+`pk ship` → Linear → UAT (PR open on preview). UAT pass → merge PR → `pk done PROJ-XXX` (cleanup + Linear UAT → `In <FirstEnv>`) → `pk promote <env>` walks the chain (→ `In <Env>` for intermediate hops, → Done for the final hop; 2-tier: `pk promote` with no arg).

@@ -387,10 +387,12 @@ Pipekit requires Triage enabled + these 12 workflow states:
   Started states:
     • In Progress               (type: started)
     • Building                  (type: started)
-    • UAT                       (type: started)
+    • UAT                       (type: started)   ← PR open on preview branch
+    • In <FirstEnv>             (type: started)   ← merged to first env (e.g. "In Dev")
+    • In <Env>                  (type: started)   ← one per non-final env (e.g. "In Beta")
 
   Completed states:
-    • Done                      (type: completed)
+    • Done                      (type: completed) ← merged to final env
 
   Canceled states:
     • Canceled                  (type: canceled)
@@ -430,10 +432,12 @@ _"Linear's workflow states need to be configured in the UI. Here's exactly what 
    STARTED section:
      + In Progress (usually exists by default)
      + Building
-     + UAT
+     + UAT                                    (PR open on preview)
+     + In <FirstEnv>  (e.g. "In Dev")         (merged to first env in Ship environments)
+     + In <Env>       (e.g. "In Beta")        (one per non-final env, position-ordered)
 
    COMPLETED section:
-     ✓ Done (usually exists by default)
+     ✓ Done (usually exists by default)       (merged to final env)
 
    CANCELED section:
      ✓ Canceled (usually exists by default)
@@ -463,6 +467,8 @@ Populate the Workflow State IDs table in `method.config.md`:
 | Building | `{uuid}` |
 | In Progress | `{uuid}` |
 | UAT | `{uuid}` |
+| In `<FirstEnv>` (e.g. In Dev) | `{uuid}` |
+| In `<Env>` (e.g. In Beta) — one per non-final env | `{uuid}` |
 | Done | `{uuid}` |
 | Canceled | `{uuid}` |
 | Duplicate | `{uuid}` |

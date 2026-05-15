@@ -94,6 +94,6 @@ If the session was pure execution with no decisions, write "—".>
 
 ## What this skill does NOT do
 
-- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge AND interactive UAT (the Stage 3 gate). `/pk-exit` writes the session log and stops — it does not chain into cleanup. The WIT-451 canary 2026-05-13 surfaced the cost of auto-chaining: a worker session ran `pk done` before the human finished UAT and wiped the worktree mid-test. If the user wants cleanup, they run `pk done <ID>` themselves from the parent repo after merge.
+- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge — it transitions Linear UAT → `In <FirstEnv>` and removes the worktree, so it must run when the human is ready, not on autopilot. `/pk-exit` writes the session log and stops — it does not chain into cleanup. The WIT-451 canary 2026-05-13 surfaced the cost of auto-chaining: a worker session ran `pk done` before the human finished UAT and wiped the worktree mid-test. If the user wants cleanup, they run `pk done <ID>` (or `pk done <ID> --merge`) themselves from the parent repo.
 - **No `pk promote` invocation, ever.** Same rationale. Promotion is a Stage 4 human step.
 - **No Linear state writes.** Comments and state transitions belong to `pk branch`, `pk ship`, `pk done`, and `pk promote` — each at its own deliberate human step.

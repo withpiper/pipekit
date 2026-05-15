@@ -28,8 +28,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR (Linear → UAT). `pk promote main` (or `pk promote` with no arg, since only one hop exists) opens the `dev` → `main` PR.
-**Linear transitions:** `pk ship` → UAT; `pk promote main` → Done (optimistic, at PR-open). `pk done` is cleanup-only — it does NOT transition state.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR (Linear → `UAT`). `pk done` after merge → `In Dev`. `pk promote main` (or `pk promote` with no arg, since only one hop exists) opens the `dev` → `main` PR.
+**Linear transitions (v2.5.0):** `pk ship` → `UAT` (PR open on preview); `pk done` → `In Dev` (merge confirmed); `pk promote main` → `Done` (optimistic, at PR-open).
 
 ### Three-Tier (dev → beta → main)
 
@@ -50,8 +50,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR. `pk promote <env>` walks the chain one hop per invocation (`pk promote beta`, then `pk promote main` after the beta merge) per `Ship environments` in `method.config.md`.
-**Linear transitions:** `pk ship` → UAT; `pk promote beta` → Released; `pk promote main` → Done. All transitions optimistic at PR-open. `pk done` is cleanup-only — it does NOT transition state.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR. `pk done` after merge → `In Dev`. `pk promote <env>` walks the chain one hop per invocation (`pk promote beta`, then `pk promote main`) per `Ship environments` in `method.config.md`.
+**Linear transitions (v2.5.0):** `pk ship` → `UAT` (PR open on preview); `pk done` → `In Dev` (merge confirmed); `pk promote beta` → `In Beta`; `pk promote main` → `Done`. All `pk promote` transitions optimistic at PR-open.
 
 ### Branch Naming (both models)
 
@@ -111,11 +111,12 @@ This sets repo-level merge flags AND creates/updates the ruleset. The script liv
 **Three-tier flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 
 Each project defines its own promotion skills. State transitions fire optimistically at **PR-open**, not at merge — the merge itself is the source-of-truth anchor (`pk done` is cleanup-only as of v2.3.0). After `pk ship` and after each `pk promote`, issues transition in Linear:
-- `pk ship` → issues move to **UAT**
-- `pk promote beta` (three-tier) → issues move to **Released**
+- `pk ship` → issues move to **UAT** (PR open on preview)
+- `pk done` (after merge) → issues move to **In `<FirstEnv>`** (e.g. `In Dev`)
+- `pk promote beta` (three-tier) → issues move to **In Beta**
 - `pk promote main` (final hop, either tier) → issues move to **Done**
 
-**v2.4.3+ UAT gate:** `pk done <ID>` and `pk promote <env>` refuse with `exit 1` when the relevant issue (or any bundled issue, for `pk promote`) is in `UAT`. Pass `--confirmed` after UAT is signed off (Linear comment, PR comment, or session-log note recording the accept verdict) to bypass. This is a belt-and-braces backstop: the discipline rule was "don't advance past UAT without sign-off," and v2.4.3 added code-level enforcement so the binary can't be hand-waved through.
+**v2.5.0+ UAT gate:** `pk promote <env>` refuses with `exit 1` when any bundled issue is still in `UAT` (PR not yet merged). Pass `--confirmed` after env-UAT is signed off (Linear comment, PR comment, or session-log note recording the accept verdict) to bypass. `pk done` no longer refuses on UAT (it IS the transition out of UAT) — its safety check is the PR-merged verification. The discipline rule remains: "don't advance past UAT without sign-off"; code-level enforcement lives in `pk promote --confirmed`.
 
 **Hotfix flow:** `hotfix/*` → PR to `main` → cherry-pick back to `dev` and `beta`
 
@@ -210,7 +211,7 @@ pk done <ID>           # cleanup worktree+branch, post commits/diffstat to Linea
 # Three-tier: pk promote beta   (then pk promote main after that PR merges)
 ```
 
-`pk promote <env>` walks one hop along `Ship environments` per invocation. State transitions fire optimistically at PR-open: matching issues → **Released** for intermediate hops, → **Done** for the final hop.
+`pk promote <env>` walks one hop along `Ship environments` per invocation. State transitions fire optimistically at PR-open: matching issues → **`In <Env>`** for intermediate hops (e.g. `In Beta`), → **Done** for the final hop.
 
 See **Batch vs Per-Issue Promotion** below for when to ship one issue at a time vs. accumulate several before promoting.
 

@@ -45,6 +45,84 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.5.0 — 2026-05-15
+
+> **Env-as-status.** Linear state names now derive from `Ship environments` chain position: `UAT` (PR open on preview, pre-merge) → `In <FirstEnv>` (e.g. `In Dev` — merged to first env) → `In <Env>` per intermediate hop → `Done` (final env). `Released` retired. `pk done` regains state-transition responsibility (UAT → `In <FirstEnv>`) with optional `--merge` flag to run `gh pr merge` for you. Resolves "tested but still UAT" status headache on multi-tier projects.
+
+### What changed
+
+**`bin/pk`:**
+
+- **`pk_state_rank`** — refactored to compute "In `<env>`" ranks from `Ship environments` chain position (rank 11 + idx). Pre-deploy ranks (Triage through UAT) stay hardcoded; Done = 50 (fixed high). Unknown "In `<x>`" envs return 0 to fall through the leap-frog gate. Replaces v2.3.0's fixed `UAT < Released < Done` ladder which couldn't generalize past 3-tier.
+- **`pk_first_env_state_name`** (new helper) — returns `"In <FirstEnv-Capitalized>"` (n-tier) or `"Done"` (1-tier).
+- **`pk_env_state_name <env>`** (new helper) — returns `"In <Env-Capitalized>"` for intermediate hops, `"Done"` for the final env, empty string for envs not in the chain.
+- **`pk_capitalize`** (new helper) — first-letter capitalization for env names → state names.
+- **`cmd_done`** — adds Linear state transition (UAT → `In <FirstEnv>`, or → Done for 1-tier) after the PR-merge check passes. **Drops** the v2.4.3 UAT-state refusal — `pk done` IS the legitimate UAT-out transition now; the PR-merge check is the load-bearing gate. **Adds `--merge` flag** (M3 opt-in) — runs `gh pr merge "$current" --merge` before the merge-verification step, so one command handles the full hand-off. `--confirmed` is still parsed (backward compat) but is a no-op.
+- **`cmd_promote`** — target-state mapping now goes through `pk_env_state_name "$target"` instead of position-based `Released` / `Done` binary. Intermediate hops set `In <Env>` (e.g. `In Beta`, `In Staging`); final hop still sets `Done`. UAT-refusal gate retained — still refuses if any bundled issue is in `UAT` (PR not yet merged); `--confirmed` bypasses after env-UAT signoff.
+- **`pk_linear_set_state` leap-frog check** — threshold changed from `pk_state_rank Released` (== 11 in v2.4.x, == 0 in v2.5.0 since Released is gone) to a literal `11` (any "In `<env>`" or Done state). Comment updated.
+- **`cmd_status`** — now iterates `Ship environments` and shows one bucket per non-final env (`In Dev`, `In Beta`, etc.) alongside the existing `In Progress` / `Building` / `UAT` / `Approved` buckets. Final env (Done) excluded from in-flight view.
+- **`cmd_help`** — `pk done`/`pk ship`/`pk promote` descriptions updated; `--merge` flag documented; `--confirmed` deprecation note for `pk done`.
+
+**Docs (rename + flow updates):**
+
+- **`method.md`** — Stage 3+4 narratives rewritten: UAT semantics narrowed to "PR open on preview"; `In <FirstEnv>` introduced; pk done's state transition documented; pk promote rows updated (Released → `In <Env>`); quick-reference tables refreshed.
+- **`RUNBOOK.md`** — `[5e]` interactive-UAT box rewritten to reference the two-phase UAT (`UAT` pre-merge, `In Dev` post-merge); `[8]` pk done box updated with state transition + `--merge` flag; `[9]` pk promote box updated (Released → `In <Env>`); cheat-sheet rows refreshed.
+- **`README.md`** — Stage 10 pk done description and Stage 11 pk promote description updated.
+- **`STARTUP.md`** — header stamp v2.3.0 → v2.5.0; transition-quick-table updated.
+- **`GUIDE.md`** — pipeline overview, two-tier/three-tier release flows, status ladder, and command tables updated. PROJ-6 example status changed from UAT to In Dev.
+- **`CLAUDE.md`** — header stamp v2.4.3.2 → v2.5.0; v2 daily loop sequence shows the new chain; pk done / pk promote table rows updated.
+- **`sop/Linear_SOP.md`** — header stamp v2.4.3.2 → v2.5.0; pipeline diagram + state-meaning table + transitions table + fast-track paths all rewritten for env-as-status.
+- **`sop/Git_and_Deployment.md`** — 2-tier and 3-tier transition blocks updated; v2.5.0 UAT-gate note replaces v2.4.3 description.
+- **`sop/Skills_SOP.md`** — pk ship / pk done / pk promote rows updated.
+- **`skills/linear/skill.md`**, **`skills/startup/skill.md`**, **`skills/pk-exit/skill.md`** — state-name references refreshed; `/startup` now prompts to create `In <FirstEnv>` + `In <Env>` workflow states; `/pk-exit` discipline note explains pk done's new state-transition role.
+- **`method.config.template.md`** — 2-tier and 3-tier example Linear-transition blocks rewritten with explicit UAT → `In Dev` → (`In Beta` →) `Done` paths.
+
+**Tests:**
+
+- **`scripts/test-pk-promote.sh`** — pk_state_rank assertions updated for env-derived ranks. Stubs `pk_config` to return `dev,beta,main` so In Dev=11, In Beta=12, Done=50 are deterministic. Pairwise checks now reference `In Dev` and `In Beta` instead of `Released`. 27/27 passing.
+- **`scripts/test-pk-v2.4.3.sh`** — Finding 1 (cmd_done UAT-refusal) inverted: now asserts that cmd_done with state==UAT does NOT refuse (proceeds to PR-merge check) and that `--confirmed` is accepted as a no-op. 9/9 passing.
+
+**`PK_VERSION`** 2.4.3.2 → 2.5.0.
+
+### Why
+
+Multi-tier projects (Piper: dev → beta → main) accumulated a UX headache through v2.3.0–v2.4.x: an issue could be tested + signed off in dev but Linear still showed `UAT`, because the only thing that flipped state was `pk promote`. "UAT" reads as "actively being tested" — confusing when testing is complete and the issue is just parked awaiting the next hop.
+
+The fix isn't a deeper state machine; it's matching state names to the physical question "which env is this on?". v2.3.0 already had the state-maps-to-env intuition (CHANGELOG: *"With state mapped 1:1 to environment (UAT = on dev, Released = on beta, Done = on main), Linear's state always reflects reality"*), but `Released` as a single label collapsed every non-final env into one bucket and didn't generalize past 3-tier. v2.5.0 derives per-env state names directly from `Ship environments`, so the status column on a Linear board literally tells you "this is on beta" or "this is on staging" — no ambiguity, no per-project naming guessing.
+
+The split of UAT into two phases (`UAT` = on preview branch pre-merge; `In <FirstEnv>` = on dev post-merge) honestly maps to the two distinct activities that previously shared one label: PR review on the preview URL, vs interactive UAT on the deploy env. `pk done` becomes the legitimate transition between them (it verifies the merge happened, so the In `<FirstEnv>` claim isn't a lie).
+
+### Breaking changes (consumer migration required)
+
+- **Linear workspace states.** Consuming projects must:
+  1. Rename existing `Released` state → `In <SecondEnv>` (e.g. `In Beta`). Linear's UUIDs persist across renames so existing issues stay attached.
+  2. Add new `In <FirstEnv>` state (e.g. `In Dev`), type `started`, positioned between `UAT` and the renamed-Released.
+  3. (Optional) Reclassify currently-`UAT` issues whose PR is already merged → `In <FirstEnv>`.
+  4. Pull updated Pipekit via `./scripts/sync-method.sh v2.5.0`.
+
+- **`method.config.md` "Workflow State IDs" table.** Add rows for the new per-env states + capture their UUIDs.
+
+- **`pk done` flag semantics.** `--confirmed` is now a no-op (was: bypass UAT-state refusal). `--merge` is new (opt-in: runs `gh pr merge` before state transition + cleanup). Scripts/skills that passed `--confirmed` to `pk done` will continue to work; the flag is silently accepted.
+
+### Migration runbook (Piper-specific)
+
+Piper is the lead consumer. Steps already partially executed during the v2.5.0 design session (states renamed/added in Linear before this code shipped):
+
+1. ✅ Done (already executed manually): Rename `Released` → `In Beta` in Linear workflow.
+2. ✅ Done (already executed manually): Add `In Dev` (type: started) between `UAT` and `In Beta`.
+3. **TODO**: Reclassify currently-`UAT` issues whose PR is already merged → `In Dev`. WIT-414 is the known case (PR #279 merged 2026-05-14). Eyeball any other `UAT` issues for PR-merge state.
+4. **TODO**: Sync Piper to v2.5.0: `cd ~/Projects/piper && bash ~/Projects/pipekit/scripts/sync-method.sh v2.5.0` (or `./scripts/sync-method.sh` for HEAD).
+5. **TODO**: Spot-check Piper's `method.config.md` Workflow State IDs table — add UUIDs for `In Dev` and verify `In Beta` UUID matches the renamed state.
+6. **TODO**: Smoke test on a sandbox WIT — full chain (`pk branch` → `pk ship` → merge → `pk done` → `pk promote beta` → `pk promote main`).
+
+If steps 1+2 hadn't been done before code shipped: `pk promote beta` would have written to the non-existent `Released` state and gotten "state not found" errors. Recoverable (manual state flip in Linear UI) but messy.
+
+### Conceptual reversal
+
+v2.3.0 deliberately stripped `pk done` of state-transition responsibility ("a worktree closing does not mean the issue is shipped"). v2.5.0 reverses that: pk done sets `In <FirstEnv>`, not `Done`. The v2.3.0 objection doesn't apply — pk done is no longer claiming the issue is shipped, just that it's now on the first deploy env (which is accurate, since pk done verified the merge). State movement is still owned by pk ship + pk done + pk promote collectively; pk done now sits between pk ship (sets UAT) and pk promote (sets per-env / Done).
+
+---
+
 ## v2.4.3.2 — 2026-05-14
 
 > **Doc-polish release.** No code behavior changes. Brings every constitutional doc + SOP into alignment with the v2.4.3 code gate, establishes a stamped-docs inventory + release checklist, and closes drift that accumulated across v2.4.0 through v2.4.3.1.

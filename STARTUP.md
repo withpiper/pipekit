@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v2.3.0** — Last updated: 2026-05-09  *(state-machine alignment — Released state + 3-tier pk promote)*
+**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — `Released` retired in favor of `In <Env>` per env; `pk done` does UAT → `In <FirstEnv>` transition)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -199,11 +199,11 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *`
 | You don't need a skill for... | Because v2 handles it via... |
 |---|---|
 | Open PR feature → dev | `pk ship` |
-| Promote one hop along Ship environments | `pk promote <env>` (e.g. `pk promote beta`, `pk promote main`); transitions issues → Released or → Done by chain position |
+| Promote one hop along Ship environments | `pk promote <env>` (e.g. `pk promote beta`, `pk promote main`); transitions issues → `In <Env>` or → Done by chain position |
 | Push branch + get Vercel preview | Vercel auto-fires on PR open |
 | Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` (lift from rs-vault) on merge to main |
 | Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
-| Linear status transitions | `pk ship` (→ UAT), `pk promote <env>` (→ Released or → Done by hop position). `pk done` is cleanup-only. |
+| Linear status transitions | `pk ship` → `UAT` (PR open on preview); `pk done` → `In <FirstEnv>` (e.g. `In Dev` — merge confirmed); `pk promote <env>` → `In <Env>` (intermediate) or → Done (final hop). |
 
 ### 4.2 Skills that are still legitimately project-specific
 
@@ -292,8 +292,8 @@ Before writing any feature code, verify the full v2 daily loop works end-to-end:
 [ ] /verify                     (pre-deploy gate runs to green)
 [ ] pk ship                     (push, open PR, Linear → UAT; verify preview deploys)
 [ ] Merge PR (rebase or merge-commit); verify dev deployment
-[ ] pk done <ID>                (cleanup worktree + branch; no state change)
-[ ] pk promote <env>            (one hop per call; → Released for intermediate, → Done for final)
+[ ] pk done <ID> [--merge]      (cleanup worktree+branch; Linear UAT → In <FirstEnv>)
+[ ] pk promote <env>            (one hop per call; → In <Env> for intermediate, → Done for final)
 [ ] /pk-exit                    (writes session log to Logs/Sessions/<date>_<HHMM>.md)
 ```
 

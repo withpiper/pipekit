@@ -41,4 +41,4 @@ Inside Standard, complexity still routes execution:
 
 ## Close path
 
-`pk ship` → Linear → UAT. UAT pass → merge PR → `pk done PROJ-XXX` (cleanup only; no state change) → `pk promote <env>` walks the chain (→ Released for intermediate hops, → Done for the final hop). `/strategy-sync` can be run per-issue or batched at end of phase.
+`pk ship` → Linear → UAT (PR open on preview). UAT pass → merge PR → `pk done PROJ-XXX` (cleanup + Linear UAT → `In <FirstEnv>`) → `pk promote <env>` walks the chain (→ `In <Env>` for intermediate hops, → Done for the final hop). `/strategy-sync` can be run per-issue or batched at end of phase.

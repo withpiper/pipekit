@@ -115,13 +115,14 @@ STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
     table
 
   Stage 4: Release
-    pk promote <env> ──→ pk done <ID>
-         │                    │
-     One hop per          Worktree
-     invocation;          cleanup
-     transitions          (no state
-     issues to            change)
-     Released or Done
+    pk done <ID> ──→ pk promote <env>
+         │                  │
+     Worktree           One hop per
+     cleanup;           invocation;
+     Linear: UAT →      transitions
+     In <FirstEnv>      issues to
+     (or → Done for     In <Env> or
+     1-tier)            Done
 
   Stage 5: Doc Loop
     /strategy-sync (after UAT)
@@ -638,7 +639,7 @@ Skip PR review for pure copy/UI tweaks and internal-only refactors with no exter
 
 Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this cleans up the worktree + branch and posts commits + diffstat to Linear.
+**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, and transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`). Or pass `--merge` and let `pk done` run `gh pr merge` for you.
 
 **Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
 
@@ -652,20 +653,20 @@ Your git architecture (chosen during `/startup`) determines the release flow:
 
 **Two-tier** (`dev` → `main`):
 ```
-feature/* → pk ship (PR to dev) → pk promote (PR to main)
+feature/* → pk ship (PR to dev) → pk done (UAT → In Dev) → pk promote (PR to main)
 ```
-- `pk ship` opens the feature → dev PR (Linear → UAT)
-- `pk done <ID>` cleans up the worktree (no state change)
-- `pk promote main` (or `pk promote` with no arg, since only one hop) opens the dev → main PR and transitions the issue → Done
+- `pk ship` opens the feature → dev PR (Linear → `UAT`)
+- `pk done <ID>` after merge: cleanup + Linear → `In Dev`
+- `pk promote main` (or `pk promote` with no arg) opens the dev → main PR and transitions the issue → `Done`
 
 **Three-tier** (`dev` → `beta` → `main`):
 ```
-feature/* → pk ship (PR to dev) → pk promote beta (PR to beta) → pk promote main (PR to main)
+feature/* → pk ship (PR→dev) → pk done (UAT→In Dev) → pk promote beta (PR→beta) → pk promote main (PR→main)
 ```
-- `pk ship` opens the feature → dev PR (Linear → UAT)
-- `pk promote beta` opens dev → beta and transitions the issue → Released
-- `pk promote main` opens beta → main and transitions the issue → Done
-- `pk done <ID>` (whenever; cleanup-only, no state change)
+- `pk ship` opens the feature → dev PR (Linear → `UAT`)
+- `pk done <ID>` after merge: cleanup + Linear → `In Dev`
+- `pk promote beta` opens dev → beta and transitions the issue → `In Beta`
+- `pk promote main` opens beta → main and transitions the issue → `Done`
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
@@ -727,7 +728,7 @@ Phase 2 Status — 2026-04-15
 |-------|-------|--------|------|
 | PROJ-4 | Advanced search | Done | — |
 | PROJ-5 | Saved searches | Building | 2d |
-| PROJ-6 | Activity log | UAT | 0d |
+| PROJ-6 | Activity log | In Dev | 0d |
 | PROJ-7 | Export reports | Needs Spec | 4d |
 
 Progress: 1/4 Done (25%)
@@ -783,7 +784,7 @@ If you want time-boxed sprints with capacity tracking, map phases to Linear Cycl
 
 ### Phase State Tracking
 
-Phases are tracked in `.vbw-planning/PHASES.md`, not in Linear. Linear tracks individual issue status (Needs Spec, Building, UAT, Released, Done). PHASES.md tracks which issues belong to which phase and the phase's overall progress.
+Phases are tracked in `.vbw-planning/PHASES.md`, not in Linear. Linear tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). PHASES.md tracks which issues belong to which phase and the phase's overall progress.
 
 ---
 
@@ -847,16 +848,16 @@ Initiative = Stage              "What stage does this ship in?"
 
 ```
 Planned path:
-  Triage → Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → [Released →] Done
+  Triage → Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → In <FirstEnv> → [In <Env> →]* Done
 
 Ad-hoc path:
-  Triage → In Progress → UAT → [Released →] Done
+  Triage → In Progress → UAT → In <FirstEnv> → [In <Env> →]* Done
 
 Terminal:
   → Canceled | Duplicate
 ```
 
-`[Released →]` is present only on 3-tier projects (`Ship environments: dev,beta,main`). State maps 1:1 to environment: UAT (on dev), Released (on beta), Done (on main).
+`[In <Env> →]*` is one state per non-final env in `Ship environments`. For 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. For 2-tier (`dev,main`): `In Dev → Done`. State maps 1:1 to environment: `UAT` = PR open on preview branch; `In Dev` = merged to dev; `In Beta` = promoted to beta; `Done` = on the final env.
 
 **Key distinction:**
 - **Building** = VBW owns it. Phase-batched, planned work.
@@ -1125,7 +1126,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
 | Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
-| Ship | `pk ship` | Push, open PR against integration branch, Linear → UAT |
+| Ship | `pk ship` | Push, open PR against integration branch, Linear → UAT (PR open on preview branch) |
 | Ship + Review | `pk ship --review` | Above + Linear "review-in-flight" comment + reviewer invocation printed |
 | PR Fix | `/pr-fix` | Triage PR review findings (fix / reject / defer); posts Linear summary |
 | PR Security Review | `/pr-security-review` | Antagonistic security review for migrations / RLS / SECURITY DEFINER / auth |
@@ -1135,7 +1136,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command | Invocation | What It Does |
 |---------|------------|-------------|
 | Cleanup | `pk done <ID>` | Post-merge: cleanup worktree+branch, post commits/diffstat to Linear. **No state transition** (cleanup-only as of v2.3.0). |
-| Promote | `pk promote <env>` | One-hop along `Ship environments`. Transitions matching issues → Released (intermediate) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. |
+| Promote | `pk promote <env>` | One-hop along `Ship environments`. Transitions matching issues → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. |
 
 ### Stage 5: Doc Loop
 

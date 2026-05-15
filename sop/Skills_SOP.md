@@ -46,12 +46,12 @@ These skills work across any project that follows the method. They read `method.
 | `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. | Stage 2: Plan + Build |
 | `/review-plan` | Spawns `plan-reviewer` agent against `PLAN.md` (vbw backend). | Stage 2: Plan + Build |
 | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` | Stage 3: Verify + Ship |
-| `pk ship [--review]` | Push, open PR, Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
+| `pk ship [--review]` | Push, open PR, Linear → UAT (PR open on preview). `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
 | `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary | Stage 3: Verify + Ship |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
-| `pk done <ID>` | Post-merge cleanup: worktree+branch, commits to Linear. Cleanup-only — no state transition. | Stage 4: Release |
-| `pk promote <env>` | One hop along `Ship environments`. Transitions matching issues → Released (intermediate) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
+| `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
+| `pk promote <env>` | One hop along `Ship environments`. Transitions matching issues → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
 | `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md` | Per session |
 | `pk status` | Full unscoped Linear board view | Anytime |
