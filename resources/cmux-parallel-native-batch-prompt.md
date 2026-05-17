@@ -39,7 +39,7 @@ The prompt below is Piper-specific in a few places. To use for another project, 
 
 These are the empirically-confirmed pitfalls from the 2026-05-17 batch test. Each is mitigated in the prompt below:
 
-1. **Stale `02-*-PLAN.md` `status: ready` blocks fresh worktree edits.** Until v2.6.0's `pk done --merge` write-SUMMARY-and-flip-status lands (candidate #2), workers must detect and unblock by writing the missing SUMMARY for any prior-shipped WIT whose PLAN.md still says ready. ~10-15 min wasted on this in the test before pattern was understood.
+1. **Stale `02-*-PLAN.md` `status: ready` blocks fresh worktree edits.** Until v2.6.0's `pk done --merge` write-SUMMARY-and-flip-status lands (candidate #2), workers must detect and unblock by writing the missing SUMMARY for any prior-shipped WIT whose PLAN.md still says ready. ~10-15 min wasted on this in the test before pattern was understood. **Mitigation:** before starting a batch, run a pre-flight sweep that flips every shipped-but-stale PLAN to `status: shipped`. The 2026-05-17 sweep covered 13 plans in one commit — see Piper `a6db75b` for the pattern.
 2. **Sending `<digit>\n` to Claude menus from master is ambiguous.** "6\n" on a 6-option menu silently picked option 4 because rendered "Type something" / "Chat about this" rows aren't part of the numeric mapping. Use arrow-key + Enter instead.
 3. **`send-key enter` needs 2-3s before next `read-screen`.** Claude repaints after the keystroke; immediate read-screen sees stale state and can mis-conclude "nothing happened."
 4. **Piper's local `dev` doesn't auto-pull after `pk done --merge`.** After 5× merges, master's dev was 1 ahead + 5 behind. v2.6.0 candidate #5 will fix; until then, `git fetch && git pull --ff-only` manually at end of batch.
@@ -91,13 +91,28 @@ Read /Users/ethanrosch/Projects/pipekit/.claude/rules/pipekit-cmux.md before spa
    - State is "Approved" (bump from Triage if needed via `save_issue` with the Approved state UUID)
    - Description has `## Acceptance Criteria` (if missing, STOP and surface to user — runner can't proceed without AC)
 
-3. Check the phase's PLAN.md status: `ls .vbw-planning/phases/[REPLACE: current-phase-slug]/02-*-PLAN.md`. Any plan with `status: ready` whose WIT is in Linear state `Done` (or `In Dev`/`In Beta`) is STALE and will block file-guard edits in fresh worktrees. For each stale one:
-   - Verify the WIT really shipped: `mcp__claude_ai_Linear__get_issue` → status
-   - Write `02-<id>-SUMMARY.md` capturing PR URL + merge commit + outcome (you can derive from `git log`)
-   - Flip the PLAN.md frontmatter `status: ready` → `status: complete`
-   - Commit on dev with `docs(plan): mark 02-<id>-PLAN.md complete + write SUMMARY (batch pre-flight)`
+3. **Pre-flight stale-PLAN sweep.** Any PLAN.md with `status: ready` whose corresponding SUMMARY.md already exists is STALE and will block file-guard edits in fresh worktrees. Sweep them in one commit before the batch starts:
 
-   This step is v2.6.0 candidate #2 territory (pk done --merge should do this automatically). Until that lands, do it manually here.
+   ```bash
+   cd [REPLACE: ~/Projects/<project>]
+   for f in .vbw-planning/phases/[REPLACE: current-phase-slug]/02-*-PLAN.md; do
+     plan_id=$(basename "$f" -PLAN.md)
+     summary="${f%-PLAN.md}-SUMMARY.md"
+     plan_status=$(grep -E "^status:" "$f" | head -1 | sed 's/status: *//')
+     if [ -f "$summary" ] && [ "$plan_status" = "ready" ]; then
+       sed -i '' 's/^status: ready$/status: shipped/' "$f"
+       echo "Flipped $plan_id status: ready → shipped"
+     fi
+   done
+   git diff --stat .vbw-planning/phases/[REPLACE: current-phase-slug]/   # verify
+   git add .vbw-planning/phases/[REPLACE: current-phase-slug]/02-*-PLAN.md
+   git commit -m "chore(plan): backfill status:shipped on stale PLANs (batch pre-flight)"
+   git push origin dev   # admin bypass acceptable for non-code metadata sweep
+   ```
+
+   If any PLAN.md has `status: ready` but NO matching SUMMARY.md, STOP and surface — that's actual in-flight work, not stale.
+
+   This step is v2.6.0 candidate #2 territory (`pk done --merge` should do this automatically). Until that lands, the pre-flight sweep is the workaround.
 
 ## Per-WIT orchestration sequence
 
@@ -138,7 +153,20 @@ Record `$WORKER` ref for each WIT.
 
 ### Step B: Poll worker progress
 
-Every ~60s, for each active worker:
+**Critical: master burns context on every `read-screen` poll. Don't poll on a fixed cadence — poll proportional to the WIT's expected effort, and prefer event-driven polls over time-driven ones.**
+
+Per-WIT polling cadence (rough heuristic):
+
+| WIT effort estimate | Poll interval | First poll |
+|---------------------|---------------|------------|
+| ~10 min (Quick) | 90s | T+60s |
+| ~30 min (Medium) | 3 min | T+2min |
+| ~45-60 min | 5 min | T+3min |
+| >60 min | Spawn fewer of these; reconsider native-only |
+
+The worker session has its own cmux notify hook on the Notification + Stop events (see `~/.claude/settings.json`). When a worker reaches an interactive gate or finishes its turn, your sidebar gets a ping. **Treat that ping as the natural polling trigger** — read the worker's screen right after the ping arrives, not before.
+
+If `cmux notify` doesn't fire (e.g. the worker is mid-execution, not at a gate), fall back to the time-based cadence above. Do NOT poll every 60s reflexively — that's how master context gets blown on a 5-WIT batch.
 
 ```bash
 cmux read-screen --surface "$WORKER" --lines 30
