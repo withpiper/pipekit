@@ -94,6 +94,45 @@ cmux doesn't change the blast radius of dangerous commands. `rm -rf`, `git reset
 - **`pk done` notifications.** Claude Code's `Stop` and `Notification` hooks should be wired to `cmux notify` (see `~/.claude/settings.json` example in the cmux docs). Sidebar lights up when a worker session waits for human input — useful for Pipekit's "deliberate human gate" steps (UAT signoff, `pk done` confirmation, `pk promote --confirmed`).
 - **Promote visibility.** When `pk promote` opens a multi-tier promote PR, consider keeping panes open for: (a) PR CI status (`gh pr checks <#> --watch`), (b) target-env deploy progress, (c) Linear board view. cmux can layout these so you don't alt-tab during a promote.
 
+## Orchestrating other Claude sessions
+
+When master control is driving other Claude sessions in worker panes (the parallel-batch pattern), two extra rules apply that don't apply to non-Claude panes:
+
+### Never send `<digit>\n` to a Claude interactive menu
+
+<important>
+Claude Code's interactive menus accept arrow-key navigation + Enter, OR numeric shortcuts — but the numeric mapping is NOT always 1:1 with what's rendered. Items like "Type something" or "Chat about this" may be parsed separately from the numbered options, and numeric input clamps to the last "real" option.
+</important>
+
+Empirically observed 2026-05-17: sending `"6"$'\n'` to confirm option 6 ("Chat about this") on a 6-option menu silently selected option 4 ("Use a VBW subagent"). The worker proceeded with the wrong path, corrupting a native-only test.
+
+Use arrow-key navigation + Enter instead:
+
+```bash
+# Default: highlighted option is option 1
+cmux send-key --surface "$WORKER" enter
+
+# Navigate down before confirming
+cmux send-key --surface "$WORKER" down
+cmux send-key --surface "$WORKER" down
+cmux send-key --surface "$WORKER" enter
+```
+
+Or send the literal text of what you want if the menu accepts text input.
+
+### Wait 2-3s between `send-key enter` and the next `read-screen`
+
+Claude needs a beat to repaint after a keystroke lands. Empirically observed 2026-05-17: a first `cmux send-key enter` on a `pk ship` confirmation appeared not to fire (next `read-screen` still showed the prompt). Re-sending as `cmux send "pk ship"$'\n'` worked. Possible the first send-key landed but the worker hadn't repainted yet.
+
+Pattern:
+
+```bash
+cmux send-key --surface "$WORKER" enter
+sleep 2
+cmux read-screen --surface "$WORKER" --lines 20
+# If state hasn't moved, fall back to explicit cmux send "<command>"$'\n'
+```
+
 ## Anti-patterns to avoid
 
 - Backgrounding a long-running command with `&` instead of spawning a pane — the process is invisible and you can't see its output without `tee`/log-tailing tricks.
@@ -101,3 +140,5 @@ cmux doesn't change the blast radius of dangerous commands. `rm -rf`, `git reset
 - Sending a command without reading the screen after — you don't know if it landed correctly.
 - Greping `read-screen` output for "ERROR" without first clearing the screen — sticky scrollback will lie.
 - Calling `cmux rpc surface.send_text` for any reason — the routing bug is unfixed at this writing.
+- Sending `<digit>\n` to a Claude menu from a master orchestrator — numeric mapping is ambiguous when "Type something" / "Chat about this" rows are interleaved with numbered options. Use arrow-key navigation + Enter.
+- Reading the screen immediately after `send-key enter` — wait 2-3s for the worker to repaint.
