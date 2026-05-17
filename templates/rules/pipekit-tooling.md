@@ -34,7 +34,13 @@ Before calling any library API — especially for fast-moving libs (Next.js, Rea
 - Import paths are the same
 - Default behaviors haven't flipped
 
-Skip this step **only** for standard library calls, long-stable APIs (fetch, Promise, Array methods), or libs whose version you just verified in the same session.
+**Worst-class failure mode: API takes a target arg but ignores it AND lies about success.**
+
+Case study (cmux, 2026-05-17): `cmux rpc surface.send_text --surface <ref> "..."` accepts a `surface` arg but routes the input to the currently-focused surface regardless, then echoes the focused surface's id back so the call looks successful. A load-test run fired into a different Claude Code session in another workspace; ~1 hour was wasted debugging "why is the wrong thing running" before the routing bug surfaced. The fix path was the surface-aware CLI command (`cmux send --surface <ref>`), which the docs documented but training-data examples hadn't been updated to reflect.
+
+Generalization: when an API has any function-shape that includes "target identifier + payload," verify by sending a payload to a known surface and checking it landed there — not by trusting the response. Doubly so for RPC/socket surfaces where the response often echoes server-side state rather than reflecting the requested operation.
+
+Skip the verify step **only** for standard library calls, long-stable APIs (fetch, Promise, Array methods), or libs whose version you just verified in the same session.
 
 ## Package Manager
 
