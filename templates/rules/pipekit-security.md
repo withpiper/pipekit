@@ -23,6 +23,8 @@ If you accidentally commit a secret: rotate it immediately, then rewrite history
 
 Overvalidation is a smell: it suggests the architecture doesn't know where its trust boundaries are.
 
+Security bugs live in the seams between layers — frontend↔backend, service↔service, app↔database, sync↔async. The boundary rule above says where to *validate*; this is where to *look* when auditing. When reviewing a change, name which seams it crosses and verify each crossing is intact.
+
 ## Authorization Must Be Explicit
 
 Every data-access path must have authorization checked at the point of query, not in application code around the query. If the DB supports it (Row Level Security, policies, ACLs), use it there — auth-in-app-code is a layer that can be bypassed.
