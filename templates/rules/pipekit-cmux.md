@@ -4,6 +4,8 @@ Rules for any Claude Code session running inside cmux. If the project is not run
 
 cmux ships a CLI that controls workspaces, panes, surfaces, browser tabs, and notifications. Use it to orchestrate multi-pane work that needs to stay visible — never `&`-background a process that you'll want to inspect later.
 
+This is the cmux-shaped half of the broader parallel-work principle. See `pipekit-discipline.md` § Parallel work patterns for the subagent half and the shared rule ("spawn parallel work, don't block on it").
+
 ## Canonical references
 
 Fetch these if anything in this rule contradicts what you observe — `cmux` evolves fast and a stale rule is worse than no rule:
