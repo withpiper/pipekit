@@ -609,13 +609,14 @@ pk_gh_pr_view() {
 # ensure the head branch is pushed to origin first; pk ship and pk promote
 # both do this. GraphQL kept as fallback for non-rate-limit failures.
 pk_gh_pr_create() {
-  local base head title body
+  local base head title body draft=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --base)  base="$2";  shift 2 ;;
       --head)  head="$2";  shift 2 ;;
       --title) title="$2"; shift 2 ;;
       --body)  body="$2";  shift 2 ;;
+      --draft) draft=true; shift ;;
       *) echo "pk_gh_pr_create: unknown arg $1" >&2; return 2 ;;
     esac
   done
@@ -624,20 +625,30 @@ pk_gh_pr_create() {
   if [ -n "$slug" ]; then
     local rest_url rest_err
     rest_err=$(mktemp)
-    rest_url=$(gh api -X POST "repos/${slug}/pulls" \
-      -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
-      --jq '.html_url' 2>"$rest_err")
+    if $draft; then
+      # REST API: `draft` is a boolean field. Use -F (raw) not -f (string)
+      # so gh api passes it as JSON boolean rather than string "true".
+      rest_url=$(gh api -X POST "repos/${slug}/pulls" \
+        -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
+        -F draft=true \
+        --jq '.html_url' 2>"$rest_err")
+    else
+      rest_url=$(gh api -X POST "repos/${slug}/pulls" \
+        -f title="$title" -f head="$head" -f base="$base" -f body="$body" \
+        --jq '.html_url' 2>"$rest_err")
+    fi
     if [ -n "$rest_url" ]; then
       rm -f "$rest_err"
       echo "$rest_url"
       return 0
     fi
-    # REST failed — surface error and try GraphQL as last resort.
+    # REST failed — surface error and try gh CLI as last resort.
     echo "REST pr create failed: $(tail -1 "$rest_err")" >&2
     rm -f "$rest_err"
   fi
-  local out
-  if out=$(gh pr create --base "$base" --head "$head" --title "$title" --body "$body" 2>&1); then
+  local out gh_args=(pr create --base "$base" --head "$head" --title "$title" --body "$body")
+  $draft && gh_args+=(--draft)
+  if out=$(gh "${gh_args[@]}" 2>&1); then
     echo "$out" | grep -oE 'https://[^ ]+' | head -1
     return 0
   fi
@@ -1023,10 +1034,17 @@ cmd_branch() {
 cmd_ship() {
   local env=""
   local review=false
+  # v2.6.0 #6: PRs open as Draft by default. Outside reviewers
+  # (Semgrep, claude-review) trigger on `[opened, ready_for_review]` —
+  # opening Draft means no reviews fire during iteration. Use
+  # `pk ready <ID>` (or `pk ship --ready`) to flip Draft → Ready and
+  # fire the merge-time review.
+  local ready=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --env=*) env="${1#--env=}"; shift ;;
       --review) review=true; shift ;;
+      --ready) ready=true; shift ;;
       *) shift ;;
     esac
   done
@@ -1065,11 +1083,23 @@ cmd_ship() {
     pr_body="$pr_body
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
-    echo "Opening PR against $target..."
-    pr_url=$(pk_gh_pr_create --base "$target" --head "$current" \
-      --title "${issue}: ${title:-$current}" \
-      --body "$pr_body") || return 1
+    if $ready; then
+      echo "Opening PR (Ready — --ready opt-out) against $target..."
+      pr_url=$(pk_gh_pr_create --base "$target" --head "$current" \
+        --title "${issue}: ${title:-$current}" \
+        --body "$pr_body") || return 1
+    else
+      echo "Opening PR (Draft) against $target..."
+      pr_url=$(pk_gh_pr_create --base "$target" --head "$current" \
+        --title "${issue}: ${title:-$current}" \
+        --body "$pr_body" --draft) || return 1
+    fi
     echo "PR: $pr_url"
+    if ! $ready; then
+      echo ""
+      echo "PR is Draft — outside reviewers (Semgrep, claude-review) will not fire yet."
+      echo "When ready to merge: pk ready $issue"
+    fi
   fi
 
   # Merge-strategy reminder. Squash is disabled repo-wide (v2.2.0+) — it
@@ -1134,6 +1164,67 @@ INSTRUCTIONS
 PR: $pr_url
 Reviewer subagent invocation printed in pk output. Findings will land as a PR review comment; check the PR for results." || true
   fi
+}
+
+# v2.6.0 #6: flip a Draft PR to Ready. Fires the `ready_for_review` event,
+# which is the trigger Pipekit's CI templates (templates/ci/semgrep.yml,
+# templates/ci/claude-review.yml) listen for. Use this as the "I'm done
+# iterating, run the outside reviewer now" gesture. No Linear state change
+# (UAT stays UAT — the WIT was already In Review/UAT after pk ship).
+cmd_ready() {
+  local id="${1:-}"
+  local current pr_number pr_state
+  if [ -n "$id" ]; then
+    # Explicit ID — find the feature branch locally so we can look up its PR.
+    current=$(git branch --list "feature/${id}-*" --format="%(refname:short)" 2>/dev/null | head -1)
+    if [ -z "$current" ]; then
+      # No local branch — try matching by remote.
+      current=$(git ls-remote --heads origin "feature/${id}-*" 2>/dev/null \
+        | head -1 | awk '{print $2}' | sed 's|refs/heads/||')
+    fi
+    if [ -z "$current" ]; then
+      echo "ERROR: no feature branch found matching feature/${id}-*" >&2
+      return 1
+    fi
+  else
+    current=$(pk_current_branch)
+    id=$(pk_branch_issue_id)
+    if [ -z "$id" ]; then
+      echo "ERROR: pass <ISSUE-ID> or run from a feature branch (e.g. pk ready RS-60)" >&2
+      return 1
+    fi
+  fi
+
+  # Find the PR for this branch.
+  local pr_view
+  pr_view=$(pk_gh_pr_view "$current")
+  pr_number=$(echo "$pr_view" | jq -r '.number // empty')
+  pr_state=$(echo "$pr_view" | jq -r '.state // empty')
+  if [ -z "$pr_number" ]; then
+    echo "ERROR: no PR found for branch $current. Run 'pk ship' first." >&2
+    return 1
+  fi
+  if [ "$pr_state" = "MERGED" ] || [ "$pr_state" = "CLOSED" ]; then
+    echo "ERROR: PR #$pr_number for $current is $pr_state — nothing to flip." >&2
+    return 1
+  fi
+
+  # Check current Draft state. `gh pr ready` is idempotent for Ready PRs
+  # (no-op exit 0) but we want a clear message when there's nothing to do.
+  local is_draft
+  is_draft=$(gh pr view "$pr_number" --json isDraft -q '.isDraft' 2>/dev/null || echo "false")
+  if [ "$is_draft" != "true" ]; then
+    echo "PR #$pr_number is already Ready. No flip needed."
+    return 0
+  fi
+
+  echo "Flipping PR #$pr_number Draft → Ready..."
+  if ! gh pr ready "$pr_number" 2>&1; then
+    echo "ERROR: gh pr ready failed. Check gh auth + PR permissions." >&2
+    return 1
+  fi
+  echo "Done. Outside reviewers (Semgrep, claude-review) will now fire."
+  echo "  PR: $(echo "$pr_view" | jq -r '.url // empty')"
 }
 
 cmd_done() {
@@ -2136,11 +2227,12 @@ Subcommands:
   pk next                         What should I do now?
   pk status                       Quick triage of the Linear board + worktrees
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
-  pk ship [--env=<env>] [--review]  Push, gh pr create, Linear → UAT (optional antagonistic review). UAT = PR open on preview branch (pre-merge).
+  pk ship [--env=<env>] [--review] [--ready]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/.
+  pk ready [<ID>]                 Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch.
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote <env> [--stash|--take-remote] [--confirmed]  Walk one hop in Ship environments; transitions issues → In <Env> (intermediate hop) or Done (final hop). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
+  pk promote <env> [--stash|--take-remote] [--confirmed] [--finish]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)
@@ -2325,6 +2417,7 @@ main() {
     status)   cmd_status "$@" ;;
     branch)   cmd_branch "$@" ;;
     ship)     cmd_ship "$@" ;;
+    ready)    cmd_ready "$@" ;;
     done)     cmd_done "$@" ;;
     verify)   cmd_verify "$@" ;;
     config|cfg) cmd_config "$@" ;;

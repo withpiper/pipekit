@@ -173,9 +173,29 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │ [5] Ship   (still in worktree, still on feature branch)  │
   │     pk ship                 (or --env=<env>)             │
   │     • push (idempotent)                                  │
-  │     • gh pr create against integration branch            │
+  │     • gh pr create as DRAFT against integration branch   │
+  │       (v2.6.0+: Draft is default; --ready opens Ready)   │
   │     • Linear → UAT (→ In Review for non-standard envs)   │
+  │     • Outside reviewers (Semgrep, claude-review) do NOT  │
+  │       fire on Draft — flip with pk ready when shipping   │
   │     • on push/gh failure → STOP, surface error, no retry │
+  └──────────────────────────────────────────────────────────┘
+       │
+       ▼ iterate freely on Draft (no review fires)
+       │
+  ┌──────────────────────────────────────────────────────────┐
+  │ [5a] Flip Draft → Ready  (v2.6.0+ — fires reviewers)     │
+  │      pk ready [<ID>]                                     │
+  │                                                          │
+  │      • Runs `gh pr ready <#>` on the feature PR          │
+  │      • Fires `ready_for_review` GitHub event             │
+  │      • templates/ci/semgrep.yml + claude-review.yml      │
+  │        listen for this event — review runs once, at the  │
+  │        actual merge moment, not on every push            │
+  │      • Linear state unchanged (UAT stays UAT)            │
+  │                                                          │
+  │      Skip this step if you used `pk ship --ready`        │
+  │      (one-shot tiny WITs where iteration won't happen).  │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -343,8 +363,10 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 | 3 | (Variant) | `/work <ID> --deep` | — (skill) | worktree | reads Linear; spawns 3 grounding agents |
 | 3 | (Variant) | `/work <ID> --backend=vbw\|native` | — (skill) | worktree | per-invocation backend override (v2.0) |
 | 4 | Verify | `/verify` | `./bin/pk verify` | worktree | local-only |
-| 5 | Ship | `pk ship` | `./bin/pk ship` | worktree | push + gh pr create + writes Linear (UAT) |
+| 5 | Ship | `pk ship` | `./bin/pk ship` | worktree | push + gh pr create as **Draft** (v2.6.0+) + writes Linear (UAT) |
 | 5 | (Variant) | `pk ship --env=<env>` | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
+| 5 | (Variant) | `pk ship --ready` | `./bin/pk ship --ready` | worktree | open Ready instead of Draft (v2.6.0+; for one-shot tiny WITs) |
+| **5a** | **Flip Draft → Ready** | **`pk ready [<ID>]`** | **`./bin/pk ready [<ID>]`** | **worktree or parent** | **fires `ready_for_review` GH event → outside reviewers run (v2.6.0+)** |
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
