@@ -209,9 +209,16 @@ sync_file() {
       CHANGES=$((CHANGES + 1))
     fi
   else
-    cp "$src" "$dst"
-    echo "  SYNCED $label"
-    CHANGES=$((CHANGES + 1))
+    # Idempotent (v2.6.0 #12): skip cp when content matches so unchanged
+    # files don't get their mtime bumped. Prevents `git status` noise
+    # (and the F3 "bin/pk drift in worktrees" symptom) on no-op syncs.
+    if [ -f "$dst" ] && diff -q "$src" "$dst" >/dev/null 2>&1; then
+      echo "  OK $label (no changes)"
+    else
+      cp "$src" "$dst"
+      echo "  SYNCED $label"
+      CHANGES=$((CHANGES + 1))
+    fi
   fi
 }
 
