@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — UAT split into `UAT` (PR open on preview) + `In <Env>` (deployed); `pk done` regains state transition with `--merge` opt-in; `Released` retired)*
+**v2.6.0** — Last updated: 2026-05-23  *(tier system restored — `tier:*` Linear labels gate `/work` Steps 3/4/6/7; `bin/pk` worktree-setup polish: `.envrc` symlink, auto-install with `--no-install` opt-out, SUMMARY + PLAN-flip on `pk done`, integration auto-pull; `pk_promote` no longer silent-exits; `sync_file` idempotent)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

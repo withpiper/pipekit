@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.5.0.1** — Last updated: 2026-05-15  *(sync-method.sh wrong-target patch — refuses to sync Pipekit into itself; `$PWD` is now the sync target)*
+**v2.6.0** — Last updated: 2026-05-23  *(tier system restored + `bin/pk` worktree-setup polish — see CHANGELOG.md v2.6.0)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

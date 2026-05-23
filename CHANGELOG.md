@@ -45,6 +45,76 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.6.0 — 2026-05-23
+
+> **Minor: tier system restored + `bin/pk` worktree-setup polish.** Bundles 8 candidates surfaced through the v2.5.0 / v2.5.0.1 release cycle, the 2026-05-17 cmux parallel-native batch (5 WITs / 75 min / 1.5-1.8× speedup), and the 2026-05-18 reviewer-strategy thread. Headline: tier inference (`tier:quick` / `tier:standard` / `tier:heavy` Linear labels) is wired back into `/work` — the config↔code mismatch since v2.0.0 is closed. Supporting items: `pk done` finalizes VBW plan state, `pk branch` auto-installs deps + symlinks `.envrc`, `pk promote` no longer silently exits on no-WIT-match commit ranges, `sync-method.sh` is idempotent on unchanged files.
+
+### What changed
+
+**Tier system reinstatement** (`skills/work/skill.md`)
+- **Step 2.6 (new)**: infer tier from Linear `tier:*` labels (defaults to Standard). Surface a Quick → `/06-linear-todo-runner` batch alternative and a Heavy `/strategy-sync`-required warning.
+- **Step 3 (Plan)**: Quick forces inline planning (no spec-validator / Explore / vbw-scout subagents even with `--deep`). Heavy forces parallel grounding regardless of `--deep`. Standard unchanged.
+- **Step 4 (Verdict)**: Quick uses a single y/N gate — no revision loop. Standard / Heavy keep the 3-revision verdict.
+- **Step 6 (Security)**: Quick skips review even with `--deep`. Heavy forces it regardless of `--deep`.
+- **Step 7 (Hand-off)**: Heavy appends a `/strategy-sync` reminder before close.
+- Semantics match the existing per-tier templates at `templates/tier-{quick,standard,heavy}.md`. The `method.config.template.md` Tiers section was already accurate; the code side now honors it.
+
+**`pk done` writes VBW SUMMARY + flips PLAN status** (`bin/pk`)
+- After a confirmed merge, flips `.vbw-planning/phases/<phase>/<phase>-<id>-PLAN.md` frontmatter `status: ready` → `status: complete` (frontmatter-scoped via awk).
+- Writes `<phase>-<id>-SUMMARY.md` alongside with PR URL, merge SHA, commits-shipped count, diffstat, close date.
+- Prints a commit hint so the user can land the changes when ready.
+- Idempotent (re-runs preserve existing SUMMARY; status flip is no-op if already complete). Skips silently when there's no `.vbw-planning/` or no matching PLAN.md.
+- Unblocks fresh-worktree edits for batch flows — VBW's file-guard otherwise treats every `status: ready` PLAN.md as in-progress.
+
+**`pk done` auto-pulls integration branch post-merge** (`bin/pk`)
+- After confirmed merge, fast-forwards local `dev`/`main` if HEAD is on it; otherwise fetches so the next checkout is current. Divergence warns rather than fails.
+
+**`pk branch` auto-runs lockfile-matched install + `--no-install` opt-out** (`bin/pk`)
+- Replaces the F8 fresh-worktree hint (added v2.4.3.3 / 2026-05-14) with the action it suggested. Detects `pnpm` / `yarn` / `npm` from the lockfile, runs install in foreground.
+- New `--no-install` flag for cached-deps or spec-only worktrees. Flag surfaces in the "To enter:" output after an install runs so it's discoverable for next time.
+- Install failure warns loudly but doesn't return 1 — the worktree, env symlinks, and Linear state are already set up.
+
+**`pk branch` symlinks `.envrc` alongside `.env`** (`bin/pk`)
+- Adds `.envrc` to the env-symlink loop in `cmd_branch`. Without it, direnv stays inert in fresh worktrees and MCP servers / other direnv-loaded tooling fail to auth at Claude Code session launch. Existing `-f` guard means non-direnv projects are unaffected.
+
+**`pk promote` no longer silent-exits on commit ranges with no WIT matches** (`bin/pk`)
+- The two `git log | grep -oE PREFIX-N` pipelines in `cmd_promote` exited 1 under `set -euo pipefail` when commit ranges contained no issue-prefix matches — killing the script before the `if [ -n "$bundled_ids" ]` check could skip safely. Fixed with `{ grep ... || true; }` scoped to grep, matching the precedent at `bin/pk:528-529`.
+
+**`sync_file` is idempotent on unchanged files** (`scripts/sync-method.sh`)
+- Skip `cp` when `diff -q` reports no content change. Prevents the F3 "bin/pk drift in worktrees" symptom and reduces git-status noise on no-op syncs. Side effect: faster sync (no cp for unchanged files).
+
+**cmux numeric-menu discipline** (`.claude/rules/pipekit-cmux.md`)
+- Codified pre-v2.6.0 in the canonical rule file (`Never send <digit>\n to a Claude interactive menu` + `Wait 2-3s between send-key enter and the next read-screen`). Listed here for v2.6.0 traceability.
+
+**`PK_VERSION`** 2.5.0.1 → 2.6.0.
+
+### Why
+
+Three motivations stacked into one release:
+
+1. **Tier reinstatement is the headliner.** Empirical anchor: 2026-05-17 cmux parallel-native batch shipped 5 WITs in 75 min wall-clock vs 90-135 min serial (1.5-1.8× speedup), 5/5 clean. WIT-478 PR 1 took 3 hours for one ADR doc under the full gate stack (would be <30 min on Quick). WIT-474 (Production Fee float drift) sat unworked for 2 days as "Quick Win, can slot any time" because no fast lane existed. v2.6.0 closes the config↔code gap and restores the Quick fast lane.
+2. **`bin/pk` worktree-setup paper cuts.** `.envrc` symlink (Piper handoff 2026-05-23) and auto-install (v2.4.3.3 F8 follow-through) make fresh worktrees ready-to-use without the human typing the lockfile-install command. `pk done` SUMMARY + PLAN flip unblocks batch flows that were hitting VBW's file-guard wall on every fresh worktree.
+3. **`pk promote` silent-exit recovery.** RS-Vault canary 2026-05-15 surfaced a silent-failure mode that was easy to misdiagnose as `gh` or network issues. Trivial fix; high signal restoration.
+
+### Migration
+
+- **Pin to v2.6.0.** Run `./scripts/sync-method.sh v2.6.0` from inside your consuming project.
+- **Tier labels in Linear.** To use the new tier behavior, add a `tier:quick`, `tier:standard`, or `tier:heavy` label to your Linear issues. Issues without a `tier:*` label default to **Standard** (current behavior). No action needed for projects that don't want to adopt tiers yet.
+- **`pk branch --no-install`.** If your workflow doesn't need a fresh `pnpm install` on every worktree (cached deps, spec-only worktrees), pass `--no-install`. The flag surfaces in the "To enter:" output after the first install runs so it's discoverable.
+- **VBW SUMMARY / PLAN-flip commits.** `pk done` now leaves `.vbw-planning/` files modified (SUMMARY written, PLAN status flipped). Commit them with `git add .vbw-planning/ && git commit` to propagate the status to future worktrees. Without the commit, batch workers may still hit the stale-PLAN file-guard wall.
+
+### Knock-on followups (not in this release)
+
+Held for v2.6.1 pending more empirical data:
+
+- **Reviewer trio (Path 3)**: `templates/ci/semgrep.yml` + `templates/ci/claude-review.yml` + `/pr-fix --from-review` + `/pr-fix --second-opinion=gemini` opt-in. Decided 2026-05-18; 3+ more data points needed on claude-review path-restriction.
+- **`pk ship --draft` default + new `pk ready <ID>` flip command**. Couples with the reviewer trio; both ship together or hold.
+- **F2 two-phase promote transition** (intermediate state at PR-open + `--finish` post-merge). 1-day item, needs design work.
+
+Full backlog: `resources/v2.6.0-candidates.md`.
+
+---
+
 ## v2.5.0.1 — 2026-05-15
 
 > **Patch: `sync-method.sh` wrong-target bug.** RS-Vault's v2.5.0 migration (Finding #1 in `resources/rs-vault-v2.5.0-migration-followup.md`) surfaced that the sync script resolved its target from the script's own location instead of the consuming project's working directory. Result: invoking `bash ~/Projects/pipekit/scripts/sync-method.sh v2.5.0` from outside the pipekit repo silently synced INTO the pipekit repo itself, leaving the consuming project unchanged and dirtying pipekit's working tree with ~20 file rewrites. Recoverable but invisible until you noticed `pk version` still printed the old number.
