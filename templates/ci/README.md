@@ -88,9 +88,19 @@ If your project's review costs become prohibitive, the lever is **the skip-on-tr
 - `pk ready <ID>` — flips Draft → Ready (fires reviewers).
 - `/pr-fix --second-opinion=gemini` — opt-in local second opinion via Gemini Flash (covered in `pr-fix` skill, v2.6.0+). Use when you want a non-Claude, non-OpenAI-stack second read on a specific PR without standing up a GHA.
 
-## Held back for v2.6.x
+## Custom Semgrep rules
 
-These exist in `resources/v2.6.0-candidates.md` but aren't yet implemented:
+Pipekit ships starter Semgrep rules at `templates/ci/semgrep-rules/`. Currently:
 
-- **Semgrep custom rule for UUID validation on dynamic route params.** Deterministic backup for the PR #341 miss (claude-review caught the pattern on PR #331 but missed the analogous case on #341). Files as a v2.6.0 #5 sub-task — would live at `.semgrepignore` plus a custom rule in the consumer's `.semgrep.yml`.
-- **`/pr-fix --from-review` flag.** Read existing GHA review comments instead of doing a fresh review — turns the local `/pr-fix` into a "respond to the GHA's findings" tool rather than a parallel reviewer.
+- **`uuid-route-params.yml`** — flags dynamic route params flowing into Supabase queries without UUID validation. Deterministic backup for the failure mode surfaced 2026-05-18 (PR #331 claude-review caught it in three files; PR #341 had the same pattern and claude-review missed it). Copy to your project at `.semgrep/uuid-route-params.yml` and add `--config=.semgrep/` to your Semgrep invocation.
+
+These are **starter rules** — test against your codebase before enabling in CI. Patterns may need tuning to your project's route conventions.
+
+## `/pr-fix` flags (v2.6.0)
+
+These flags ship alongside the CI templates:
+
+- **`/pr-fix --from-review`** — skip the local Phase 3 fresh review; ingest existing PR review comments (typically from `claude-review.yml`) and feed them into Phase 4 aggregation + Phase 5 discussion. Use after the GHA reviewer has run to "address what claude-review flagged" without re-reviewing.
+- **`/pr-fix --second-opinion=gemini`** — after Phase 4, invoke Gemini Flash for a parallel review. Opt-in only — counts against your Gemini quota. Requires `GEMINI_API_KEY`. See `skills/pr-fix/skill.md` § 4.6 for the full procedure and the thinking-tokens gotcha.
+
+The flags compose: `/pr-fix --review --from-review --second-opinion=gemini` reviews-only, ingests GHA, adds Gemini.

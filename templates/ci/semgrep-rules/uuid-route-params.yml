@@ -1,0 +1,91 @@
+# Semgrep custom rule: UUID validation on dynamic route params.
+#
+# Deterministic backup for the failure mode surfaced 2026-05-18 on Piper
+# PR #341 — claude-review caught the analogous UUID-validation pattern
+# on PR #331 (three locations) but missed the same pattern on PR #341.
+# "Apply standard patterns universally" isn't 100% reliable across LLM
+# reviewers; this rule is the determinism that catches what the LLM misses.
+#
+# To adopt, copy this file into your project at `.semgrep/uuid-route-params.yml`
+# and reference it from your Semgrep workflow:
+#
+#   - run: semgrep ci --config=auto --config=.semgrep/
+#
+# Or include it directly in your `.semgrep.yml`:
+#
+#   include:
+#     - .semgrep/uuid-route-params.yml
+#
+# Caveat: this is a STARTER rule. Test it against your codebase before
+# enabling in CI — Next.js / React route conventions vary, and false
+# positives are possible if your project uses a non-standard params shape.
+# Tune the patterns to your actual route signature.
+
+rules:
+  - id: uuid-route-param-no-validation
+    severity: WARNING
+    message: |
+      Dynamic route param `$PARAM` flows into a Supabase query without
+      UUID validation. An invalid UUID in the URL would either error
+      noisily (Postgres rejects malformed UUID syntax) or — worse — match
+      an unintended row if the param is used in a non-UUID column.
+
+      Add a UUID check before the query:
+
+        if (!isUUID($PARAM)) {
+          return notFound();
+        }
+        // ...query using $PARAM
+
+      Or with zod:
+
+        const parsed = z.string().uuid().safeParse($PARAM);
+        if (!parsed.success) return notFound();
+
+      Suppress with `// nosemgrep: uuid-route-param-no-validation` if
+      the param is intentionally validated downstream or in middleware.
+    languages: [typescript, javascript]
+    patterns:
+      # Catch the destructured route param flowing into a Supabase query.
+      - pattern-either:
+          - pattern: |
+              const { ..., $PARAM, ... } = $PROPS.params;
+              ...
+              $CLIENT.from(...).$METHOD(...).eq(..., $PARAM)
+          - pattern: |
+              const { ..., $PARAM, ... } = await $PROPS.params;
+              ...
+              $CLIENT.from(...).$METHOD(...).eq(..., $PARAM)
+          - pattern: |
+              const { ..., $PARAM, ... } = $PROPS.params;
+              ...
+              $CLIENT.from(...).$METHOD(...).match({ ..., $COL: $PARAM, ... })
+      # Don't fire when validation is visibly present.
+      - pattern-not-inside: |
+          if (!isUUID($PARAM)) { ... }
+          ...
+      - pattern-not-inside: |
+          if (!isValidUUID($PARAM)) { ... }
+          ...
+      - pattern-not-inside: |
+          z.string().uuid().safeParse($PARAM)
+          ...
+      - pattern-not-inside: |
+          z.string().uuid().parse($PARAM)
+          ...
+      # Don't fire when the param goes through a validator helper.
+      - pattern-not-inside: |
+          const $VALIDATED = validateUUID($PARAM);
+          ...
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+      references:
+        - https://github.com/withpiper/piper/pull/331
+        - https://github.com/withpiper/piper/pull/341
+      anchor: |
+        Piper PR #331 (2026-05-18) caught this pattern via claude-review
+        in three files. Piper PR #341 (2026-05-18) had the same pattern
+        in one route and claude-review missed it. Adding this rule means
+        the deterministic baseline catches the next miss regardless of
+        which LLM reviewer is the standing one.

@@ -12,13 +12,24 @@ You are a precision PR reviewer. Your job is to perform diff-based review across
 - `/pr-fix` — "review and fix the PR", "check the PR for issues", "fix PR issues"
 - `/pr-fix --review` — "just review the PR", "review only"
 - `/pr-fix --quick` — "quick fix", "auto-fix critical issues"
+- `/pr-fix --from-review` — "address the GHA review", "fix what claude-review flagged" (skip Phase 3 fresh review; ingest existing GHA review comments instead)
+- `/pr-fix --second-opinion=gemini` — "get a Gemini second opinion", "what does Gemini think" (after Phase 4, also surface a Gemini Flash review as a parallel report — opt-in only)
 - `/pr-fix security` — "check security", "review security"
 - `/pr-fix errors tests` — "check error handling and tests"
 
 ## Arguments
 
-- **Flags:** `--review` (phases 1-4 only, no fixes), `--quick` (skip discussion, auto-fix Critical + High)
+- **Flags:**
+  - `--review` (phases 1-4 only, no fixes)
+  - `--quick` (skip discussion, auto-fix Critical + High)
+  - `--from-review` (skip Phase 3 fresh review; ingest existing PR review comments — typically from `claude-review.yml` GHA — and feed them into Phase 4 aggregation)
+  - `--second-opinion=gemini` (after Phase 4, invoke a Gemini Flash second-opinion review; surface its findings as a parallel report. Requires `GEMINI_API_KEY` env var. Use sparingly — counts against your Gemini quota.)
 - **Dimensions:** `correctness`, `security`, `errors`, `tests` — overrides auto-routing, loads only named dimensions
+- **Flag interactions:**
+  - `--from-review` and `--quick` compose (ingest GHA findings → auto-fix Critical + High)
+  - `--from-review` and `--second-opinion=gemini` compose (ingest GHA findings → also get Gemini's read)
+  - `--second-opinion=gemini` runs after Phase 4 regardless of whether Phase 3 was fresh or ingested
+  - All four can compose: `/pr-fix --review --from-review --second-opinion=gemini` reviews-only, ingests GHA, adds Gemini, no fixes
 
 ## Reference Files
 
@@ -126,6 +137,35 @@ Tell the user which dimensions loaded and why (one line each):
 
 For each loaded dimension, read its reference file and apply the checklist against the diff.
 
+### 3.0 If `--from-review` — ingest GHA review comments instead
+
+When the `--from-review` flag is set, skip the fresh review (3.1 / 3.2 / 3.3) and ingest the existing PR review comments instead. The typical source is `templates/ci/claude-review.yml` (Path 3 reviewer), but any external reviewer comments are fair game.
+
+```bash
+PR_NUM=$(gh pr view --json number -q .number)
+
+# All review submissions (top-level "Approve / Request Changes / Comment").
+gh pr view "$PR_NUM" --json reviews -q '.reviews[] | select(.state != "DISMISSED")'
+
+# Inline comments tied to specific file:line.
+gh api repos/{owner}/{repo}/pulls/$PR_NUM/comments
+```
+
+For each review comment, build a structured finding:
+
+| Source field | Becomes |
+|---|---|
+| `path` + `line` (or `original_line` if outdated) | **Location** (`file:line`) |
+| `body` | **What** + **Why** (parse the comment's structure if it follows Critical/High/Medium markers; else infer severity from tone) |
+| User of the reviewer | **Source** (e.g., `claude-review[bot]`, `semgrep[bot]`) |
+| — | **Confidence** = `85` (external reviewers we trust; not auto-elevated to 100 because they share blind spots with claude-review) |
+
+Apply Phase 2's dimension routing to classify each finding (file path → Security / Correctness / Errors / Tests). Comments that don't fit a dimension are tagged `Correctness` by default.
+
+Outdated comments (where the source line has changed): include with a flag `[stale-line]` next to the location.
+
+**Skip 3.1, 3.2, 3.3 entirely under `--from-review`.** Jump straight to Phase 4 with the ingested findings as the input set.
+
 ### 3.1 Read References
 
 Read ONLY the reference files for loaded dimensions. Do not read skipped dimensions.
@@ -216,6 +256,64 @@ Note what is well-done in the changeset. A review that only lists problems is in
 > "No issues found above the 80-confidence threshold. Reviewed {N} files across {dimensions}. The code looks ready for merge."
 
 **If `--review` flag is set, stop here.**
+
+### 4.6 If `--second-opinion=gemini` — append a parallel Gemini report
+
+When the flag is set, after Phase 4's report is printed, invoke Gemini Flash for an independent read. This is the **opt-in Gemini path** per the v2.6.0 Path 3 reviewer model — Gemini is *not* a standing reviewer, but it's available on-demand for "I want a non-Claude, non-OpenAI-stack second opinion on this specific PR."
+
+Preconditions:
+- `GEMINI_API_KEY` must be set in the environment. Refuse with a clear error if missing:
+  > `--second-opinion=gemini requires GEMINI_API_KEY. Get a free key at https://aistudio.google.com/apikey and export it in your shell.`
+
+Procedure:
+
+1. Capture the full diff:
+   ```bash
+   git diff dev...HEAD > /tmp/pr-fix-diff-$$.patch
+   ```
+
+2. Build a prompt for Gemini that includes:
+   - The Phase 1 intent statement
+   - The diff
+   - The Phase 4 report (so Gemini can comment on what was missed, not duplicate)
+   - Instructions: "Independently review this diff. Surface any findings the Claude review (above) missed or under-emphasized. Return Critical / High / Medium with `file:line` citations. Be terse; ≤500 words."
+
+3. Call Gemini Flash. Use `gemini-flash-latest` (free-tier eligible). **Watch the thinking-token gotcha**: Gemini 2.5+ Flash uses internal thinking tokens that count against `maxOutputTokens`. On first invocation in this skill, set `maxOutputTokens=65536` and `generationConfig.thinkingConfig.thinkingBudget=-1` (uncapped):
+
+   ```bash
+   curl -sS -X POST \
+     "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$GEMINI_API_KEY" \
+     -H 'Content-Type: application/json' \
+     -d "$(jq -n --arg prompt "$PROMPT" '{
+       contents: [{parts: [{text: $prompt}]}],
+       generationConfig: {
+         maxOutputTokens: 65536,
+         thinkingConfig: { thinkingBudget: -1 }
+       }
+     }')"
+   ```
+
+   **Do NOT use `gemini-3.1-pro-preview` or `gemini-pro-latest`** — both resolve to a paid-tier model with zero free quota; the API returns 429. Stick to `gemini-flash-latest`.
+
+4. Parse the response. The Gemini response shape: `.candidates[0].content.parts[0].text` contains the review markdown. Print it verbatim under a heading:
+
+   ```markdown
+   ---
+
+   ## Gemini Second Opinion
+
+   _Gemini Flash, independent review. Findings here did not pass through Phase 4 deduplication — treat as a parallel report, not a merged set. Confidence = 70 (external model, no shared training with Claude reviewer)._
+
+   {gemini's review verbatim}
+   ```
+
+5. **Do NOT merge Gemini's findings into the main Phase 4 report.** Keep them parallel for user judgment. The point of a second opinion is comparison, not consensus.
+
+6. Clean up the temp file.
+
+**Cost note:** each invocation uses Gemini API quota. Free tier covers casual use; for heavy use the cost is small but non-zero. The flag exists for the "I want one more set of eyes on this important PR" case, not for every review.
+
+**Vendor framing:** Gemini is acceptable risk under Pipekit's vendor model (see `resources/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"). Google's track record is closer to Anthropic's than to OpenAI/Microsoft's — moderate-but-acceptable IP-absorption surface. If your project's risk tolerance is tighter, skip this flag and rely on Semgrep + Claude.
 
 ---
 
