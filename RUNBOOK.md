@@ -322,9 +322,13 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │ [8] Cleanup + state transition                           │
   │     pk done <ID> [--merge]                               │
   │     • verifies PR merged (--merge runs gh pr merge first)│
+  │     • auto-pulls integration branch (v2.6.0+)            │
   │     • posts journal highlights to Linear                 │
+  │     • writes .vbw-planning SUMMARY + flips PLAN status   │
+  │       to complete (v2.6.0+; skipped silently if no VBW)  │
   │     • Linear: UAT → In <FirstEnv> (or → Done for 1-tier) │
   │     • removes worktree, deletes local branch             │
+  │     • prints commit hint for .vbw-planning/ changes      │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -336,15 +340,29 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [9] Promote — one hop per invocation                     │
-  │     pk promote <env>                                     │
-  │     • walks Ship environments (e.g. dev,beta,main)       │
-  │     • opens source → target PR per hop                   │
-  │     • transitions issues optimistically at PR-open:      │
-  │         intermediate hop  →  In <Env>  (e.g. In Beta)    │
-  │         final hop         →  Done                        │
-  │     • 2-tier projects: pk promote (no arg) picks the     │
-  │       only hop; sets state directly to Done              │
+  │ [9] Promote — two-phase, one hop per invocation (v2.6.0+)│
+  │                                                          │
+  │     Phase 1 — open the promote PR:                       │
+  │       pk promote <env>                                   │
+  │       • walks Ship environments (e.g. dev,beta,main)     │
+  │       • opens source → target PR per hop                 │
+  │       • embeds bundled WIT tracker in PR body            │
+  │       • WITs stay in source state until merge            │
+  │       • 2-tier: pk promote (no arg) picks the only hop   │
+  │                                                          │
+  │     ── human merges PR in GitHub UI ──                   │
+  │                                                          │
+  │     Phase 2 — finish the promote post-merge:             │
+  │       pk promote <env> --finish                          │
+  │       • finds the merged promote PR                      │
+  │       • parses the marker for bundled WITs               │
+  │       • transitions each issue:                          │
+  │           intermediate hop  →  In <Env>  (e.g. In Beta)  │
+  │           final hop         →  Done                      │
+  │                                                          │
+  │     Eliminates the ~5min Linear-ahead-of-reality window  │
+  │     (F2 fix). Phase 1 prints the exact --finish command  │
+  │     so the two-step flow is discoverable without docs.   │
   └──────────────────────────────────────────────────────────┘
 ```
 
@@ -370,8 +388,9 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID> [--merge]` | `./bin/pk done <ID> [--merge]` | parent, dev | verifies PR merged (or `--merge` runs `gh pr merge` first), removes worktree, posts journal highlights to Linear, transitions Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.5.0+**: regained the state-transition role retired in v2.3.0. `--confirmed` accepted for backward compat (no-op). |
-| 8 | Promote | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | one hop per call along Ship environments; transitions issues → `In <Env>` (intermediate) or → Done (final). **v2.4.3+**: refuses if any bundled issue is still in `UAT` (PR not merged); pass `--confirmed` after env-UAT sign-off. |
+| 7 | Cleanup | `pk done <ID> [--merge]` | `./bin/pk done <ID> [--merge]` | parent, dev | verifies PR merged (or `--merge` runs `gh pr merge` first), removes worktree, posts journal highlights to Linear, transitions Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls the integration branch and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (skipped silently when no VBW). `--confirmed` accepted for backward compat (no-op). |
+| **8** | **Promote — open** | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | **v2.6.0+ two-phase**: opens promote PR, embeds bundled-WIT tracker in PR body, **WITs stay in source state until merge**. Refuses if any bundled issue is still in `UAT`; pass `--confirmed` after env-UAT sign-off. |
+| **8b** | **Promote — finish** | **`pk promote <env> --finish`** | **`./bin/pk promote <env> --finish`** | **parent, dev** | **v2.6.0+**: after the promote PR merges, transitions bundled WITs → `In <Env>` (intermediate) or → Done (final). Reads the tracker from the merged PR body; falls back to PR commits for older promote PRs without the marker. |
 | meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
 | meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
 | meta | Install | `pk install` | `./bin/pk install` | repo root | symlinks pk onto $PATH (v2.0) |

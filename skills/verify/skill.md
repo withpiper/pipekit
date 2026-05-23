@@ -251,11 +251,11 @@ Auto-ship fires when **all three** conditions hold:
 Behavior:
 
 1. Print: `✓ /verify Pass + 0 flags — auto-running pk ship`
-2. Run `pk ship` via bash. Use no flags — `pk ship` reads `Integration branch` from `method.config.md` to pick the destination, which gives `dev` for Piper-style multi-env projects and `main` for single-env projects (correct in both cases).
-3. If `pk ship` succeeds: print its output (PR URL + Linear transition) and exit.
+2. Run `pk ship` via bash. Use no flags — `pk ship` reads `Integration branch` from `method.config.md` to pick the destination, which gives `dev` for Piper-style multi-env projects and `main` for single-env projects (correct in both cases). v2.6.0+: opens the PR as **Draft**; outside reviewers (Semgrep + claude-review per `templates/ci/`) do not fire yet.
+3. If `pk ship` succeeds: print its output (PR URL + Linear transition) and exit. The hand-off should remind the user that outside reviewers will fire when they run `pk ready <ID>` — that's the merge-moment gesture, not part of the auto-flow.
 4. If `pk ship` fails (push rejected, gh CLI error, branch protection): surface the error verbatim and STOP. Do NOT auto-retry — push failures usually mean branch protection, lockfile drift, or remote conflicts that need human eyes.
 
-`--review` (antagonistic review) stays opt-in; the user runs `pk ship --review` separately if they want it.
+`--review` (antagonistic review) stays opt-in; the user runs `pk ship --review` separately if they want it. The Draft default is also opt-out-able via `pk ship --ready` for one-shot tiny WITs where iteration won't happen.
 
 ### Pass-with-flags pause (the F6 gate — load-bearing)
 

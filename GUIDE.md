@@ -602,22 +602,35 @@ If verify fails → fix the gaps in the worktree (often by re-invoking `/work` w
 
 ### Ship
 
-**Command:** `pk ship` (or `pk ship --review` for antagonistic review)
+**Command:** `pk ship` (or `pk ship --review`, or `pk ship --ready`)
 **Input:** Verify-passed worktree
-**Output:** Branch pushed, PR open against integration branch, Linear → UAT
+**Output:** Branch pushed, PR opened as **Draft** (v2.6.0+), Linear → UAT
 
 `pk ship` is idempotent — rerun is safe. It:
 
 - Pushes the feature branch (skips if already current)
-- Opens a PR via `gh pr create` against the integration branch from `method.config.md` (`Integration branch: dev` for most projects)
+- Opens a PR via `gh pr create --draft` against the integration branch from `method.config.md` (`Integration branch: dev` for most projects). The Draft state means outside reviewers (Semgrep + claude-review per `templates/ci/`) do NOT fire during iteration. v2.6.0+.
 - Transitions Linear from In Progress → UAT (or → In Review per project config)
 
-`pk ship --review` additionally:
+Variants:
 
-- Posts a Linear comment flagging review-in-flight (closes the mid-loop visibility gap — v2.1.0)
-- Prints the antagonistic reviewer subagent invocation for you to paste into a Claude session
+- `pk ship --ready` opens the PR Ready immediately (outside reviewers fire on `opened` event). Use for one-shot tiny WITs where iteration won't happen.
+- `pk ship --review` additionally posts a Linear comment flagging review-in-flight + prints the antagonistic reviewer subagent invocation (v2.1.0). The reviewer plays devil's advocate vs `/work` + `/verify` — surfaces cross-cutting concerns the spec didn't think to mention. Don't skip on anything auth, security, financial, or compliance-adjacent.
 
-The reviewer plays devil's advocate vs `/work` + `/verify` (which validate spec adherence) — surfaces cross-cutting concerns the spec didn't think to mention. Don't skip on anything auth, security, financial, or compliance-adjacent.
+### Flip Draft → Ready (v2.6.0+)
+
+**Command:** `pk ready [<ID>]`
+**Input:** Open Draft PR
+**Output:** PR flipped to Ready; outside reviewers fire on `ready_for_review` event
+
+The merge-moment gesture. After iterating on a Draft PR (pushing fixes, addressing your own review notes), flip to Ready when you actually want the outside reviewers to run. The `pk ready` command:
+
+- Finds the PR for the feature branch (by branch name match)
+- Runs `gh pr ready <#>` — fires `ready_for_review` event
+- Outside reviewers (Semgrep, claude-review) configured in `templates/ci/` listen for this event and run once, at the merge moment, not on every push
+- No Linear state change (UAT stays UAT — the WIT was already In Review/UAT after `pk ship`)
+
+Idempotent: if the PR is already Ready, prints "No flip needed" and exits 0.
 
 ### PR Review (opt-in)
 
@@ -639,7 +652,7 @@ Skip PR review for pure copy/UI tweaks and internal-only refactors with no exter
 
 Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, and transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`). Or pass `--merge` and let `pk done` run `gh pr merge` for you.
+**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`), auto-pulls the integration branch (v2.6.0+), and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (v2.6.0+; skipped silently when no VBW). Or pass `--merge` and let `pk done` run `gh pr merge` for you.
 
 **Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
 
@@ -653,20 +666,26 @@ Your git architecture (chosen during `/startup`) determines the release flow:
 
 **Two-tier** (`dev` → `main`):
 ```
-feature/* → pk ship (PR to dev) → pk done (UAT → In Dev) → pk promote (PR to main)
+feature/* → pk ship (Draft) → pk ready → pk done (UAT → In Dev)
+         → pk promote (PR to main) → pk promote --finish (→ Done)
 ```
-- `pk ship` opens the feature → dev PR (Linear → `UAT`)
-- `pk done <ID>` after merge: cleanup + Linear → `In Dev`
-- `pk promote main` (or `pk promote` with no arg) opens the dev → main PR and transitions the issue → `Done`
+- `pk ship` opens the feature → dev PR as Draft (Linear → `UAT`)
+- `pk ready` flips Draft → Ready (fires outside reviewers)
+- `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + VBW SUMMARY/PLAN-flip
+- `pk promote main` (or `pk promote` with no arg) opens the dev → main PR. WITs stay in `In Dev`.
+- `pk promote main --finish` (v2.6.0+ Phase 2) after the promote PR merges: transitions the issue → `Done`
 
 **Three-tier** (`dev` → `beta` → `main`):
 ```
-feature/* → pk ship (PR→dev) → pk done (UAT→In Dev) → pk promote beta (PR→beta) → pk promote main (PR→main)
+feature/* → pk ship (Draft) → pk ready → pk done (UAT→In Dev)
+         → pk promote beta → pk promote beta --finish (→ In Beta)
+         → pk promote main → pk promote main --finish (→ Done)
 ```
-- `pk ship` opens the feature → dev PR (Linear → `UAT`)
-- `pk done <ID>` after merge: cleanup + Linear → `In Dev`
-- `pk promote beta` opens dev → beta and transitions the issue → `In Beta`
-- `pk promote main` opens beta → main and transitions the issue → `Done`
+- `pk ship` opens the feature → dev PR as Draft (Linear → `UAT`)
+- `pk ready` flips Draft → Ready (fires outside reviewers)
+- `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + VBW SUMMARY/PLAN-flip
+- `pk promote beta` opens dev → beta. WITs stay in `In Dev`. `--finish` after merge transitions → `In Beta`.
+- `pk promote main` opens beta → main. WITs stay in `In Beta`. `--finish` after merge transitions → `Done`.
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
@@ -1126,17 +1145,20 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
 | Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
-| Ship | `pk ship` | Push, open PR against integration branch, Linear → UAT (PR open on preview branch) |
-| Ship + Review | `pk ship --review` | Above + Linear "review-in-flight" comment + reviewer invocation printed |
-| PR Fix | `/pr-fix` | Triage PR review findings (fix / reject / defer); posts Linear summary |
+| Ship | `pk ship` | Push, open PR as **Draft** (v2.6.0+) against integration branch, Linear → UAT |
+| Ship Ready | `pk ship --ready` | Open Ready immediately (v2.6.0+; one-shot tiny WITs) |
+| Ready flip | `pk ready [<ID>]` | Flip Draft → Ready (v2.6.0+); fires outside reviewers |
+| Ship + Review | `pk ship --review` | Adds Linear "review-in-flight" comment + reviewer invocation printed |
+| PR Fix | `/pr-fix` | Triage PR review findings (fix / reject / defer); posts Linear summary. v2.6.0+: `--from-review` ingests GHA review; `--second-opinion=gemini` adds parallel Gemini Flash read. |
 | PR Security Review | `/pr-security-review` | Antagonistic security review for migrations / RLS / SECURITY DEFINER / auth |
 
 ### Stage 4: Release
 
 | Command | Invocation | What It Does |
 |---------|------------|-------------|
-| Cleanup | `pk done <ID>` | Post-merge: cleanup worktree+branch, post commits/diffstat to Linear. **No state transition** (cleanup-only as of v2.3.0). |
-| Promote | `pk promote <env>` | One-hop along `Ship environments`. Transitions matching issues → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. |
+| Cleanup | `pk done <ID> [--merge]` | Post-merge: verify merge, cleanup worktree+branch, post commits/diffstat to Linear, transition UAT → In `<FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. |
+| Promote — open | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR. WITs stay in source state. PR body embeds bundled-WIT tracker. 2-tier: `pk promote` with no arg picks the only hop. |
+| Promote — finish | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions matching issues → `In <Env>` (intermediate) or → Done (final). |
 
 ### Stage 5: Doc Loop
 

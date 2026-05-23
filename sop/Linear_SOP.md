@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — `Released` retired in favor of per-env `In <Env>` states; `pk done` does UAT → `In <FirstEnv>` transition)*
+**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` — WITs stay in source state until `pk promote <env> --finish` runs after the promote PR merges; `pk ship` opens Draft by default + new `pk ready` flip command)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -93,9 +93,9 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
 | **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
 | **Building** | started | VBW | Steps 4-7 | VBW planning + execution + QA. Current-phase execution queue only. |
-| **UAT** | started | You | Step 8a | PR open on preview branch (pre-merge). Code review + preview-URL acceptance testing happens here. **v2.4.3+**: `pk promote` refuses if any bundled issue is still in UAT (PR not merged) — pass `--confirmed` to bypass after env-UAT signoff. |
+| **UAT** | started | You | Step 8a | PR open on preview branch (pre-merge — v2.6.0+ opens as Draft; `pk ready` flips to Ready to fire outside reviewers). Code review + preview-URL acceptance testing happens here. **v2.4.3+**: `pk promote` (Phase 1) refuses if any bundled issue is still in UAT (PR not merged) — pass `--confirmed` to bypass after env-UAT signoff. |
 | **In `<FirstEnv>`** (e.g. `In Dev`) | started | You | Step 8b | Code merged to first deploy env. Interactive UAT in progress, or signed-off-awaiting-promote. Set by `pk done` after merge confirmation. |
-| **In `<Env>`** (e.g. `In Beta`) | started | You | Step 8c+ | Code promoted to a non-final env. One state per non-final env in `Ship environments`. Set by `pk promote <env>`. |
+| **In `<Env>`** (e.g. `In Beta`) | started | You | Step 8c+ | Code promoted to a non-final env. One state per non-final env in `Ship environments`. **v2.6.0+**: set by `pk promote <env> --finish` (Phase 2, after the promote PR merges) — replaces the pre-v2.6.0 optimistic-at-PR-open transition. |
 | **Done** | completed | -- | Step 9 | Code promoted to the final env in `Ship environments` (`main` / `production` / etc.). Live. |
 | **Canceled** | canceled | -- | -- | Won't do. |
 | **Duplicate** | canceled | -- | -- | Merged into another issue. |
@@ -115,8 +115,8 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | Building | UAT | VBW QA passes + `pk ship` | VBW QA agent + you |
 | UAT | In `<FirstEnv>` | `pk done` after PR merge (or `pk done --merge`) | You + `pk done` |
 | UAT | Done | `pk done` on 1-tier project (first env IS final env) | You + `pk done` |
-| In `<Env>` | In `<NextEnv>` | `pk promote <NextEnv> --confirmed` (after env-UAT signoff) | You + `pk promote` |
-| In `<Env>` | Done | `pk promote <FinalEnv> --confirmed` (final hop after env-UAT signoff) | You + `pk promote` |
+| In `<Env>` | In `<NextEnv>` | `pk promote <NextEnv>` opens PR (no state change); `pk promote <NextEnv> --finish` after merge transitions (v2.6.0+) | You + `pk promote` |
+| In `<Env>` | Done | `pk promote <FinalEnv>` opens PR; `pk promote <FinalEnv> --finish` after merge transitions (final hop) | You + `pk promote` |
 | UAT | Building | You reject — needs rework | You |
 | Triage | In Progress | Hotfix or quick fix — you're handling it manually | You |
 | In Progress | UAT | Manual fix ready for acceptance testing | You |

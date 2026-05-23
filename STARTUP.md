@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v2.5.0** — Last updated: 2026-05-15  *(env-as-status — `Released` retired in favor of `In <Env>` per env; `pk done` does UAT → `In <FirstEnv>` transition)*
+**v2.6.0** — Last updated: 2026-05-23  *(tier system restored + Path 3 reviewer pipeline + two-phase `pk promote` — see CHANGELOG.md)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -198,12 +198,12 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *`
 
 | You don't need a skill for... | Because v2 handles it via... |
 |---|---|
-| Open PR feature → dev | `pk ship` |
-| Promote one hop along Ship environments | `pk promote <env>` (e.g. `pk promote beta`, `pk promote main`); transitions issues → `In <Env>` or → Done by chain position |
+| Open PR feature → dev | `pk ship` (Draft by default v2.6.0+; `pk ready` flips to Ready) |
+| Promote one hop along Ship environments | **Phase 1**: `pk promote <env>` (e.g. `pk promote beta`) — opens promote PR, WITs stay in source state. **Phase 2**: `pk promote <env> --finish` after the PR merges — transitions WITs → `In <Env>` or → Done by chain position. |
 | Push branch + get Vercel preview | Vercel auto-fires on PR open |
 | Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` (lift from rs-vault) on merge to main |
 | Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
-| Linear status transitions | `pk ship` → `UAT` (PR open on preview); `pk done` → `In <FirstEnv>` (e.g. `In Dev` — merge confirmed); `pk promote <env>` → `In <Env>` (intermediate) or → Done (final hop). |
+| Linear status transitions | `pk ship` → `UAT` (PR open as Draft on preview, v2.6.0+); `pk done` → `In <FirstEnv>` (e.g. `In Dev` — merge confirmed; v2.6.0+ also auto-pulls + writes VBW SUMMARY); `pk promote <env> --finish` → `In <Env>` (intermediate) or → Done (final hop). Two-phase since v2.6.0 — Phase 1 (`pk promote <env>`) opens the PR without state change. |
 
 ### 4.2 Skills that are still legitimately project-specific
 
@@ -290,10 +290,12 @@ Before writing any feature code, verify the full v2 daily loop works end-to-end:
 [ ] cd .worktrees/<ID>-<slug> && claude --dangerously-skip-permissions
 [ ] /work <ID>                  (plan + execute; verdict gate before code)
 [ ] /verify                     (pre-deploy gate runs to green)
-[ ] pk ship                     (push, open PR, Linear → UAT; verify preview deploys)
+[ ] pk ship                     (push, open PR as Draft v2.6.0+, Linear → UAT; verify preview deploys)
+[ ] pk ready                    (flip Draft → Ready when shipping; fires outside reviewers)
 [ ] Merge PR (rebase or merge-commit); verify dev deployment
 [ ] pk done <ID> [--merge]      (cleanup worktree+branch; Linear UAT → In <FirstEnv>)
-[ ] pk promote <env>            (one hop per call; → In <Env> for intermediate, → Done for final)
+[ ] pk promote <env>            (Phase 1 v2.6.0+: open promote PR; WITs stay in source state)
+[ ] pk promote <env> --finish   (Phase 2 v2.6.0+: after promote PR merges; → In <Env> for intermediate, → Done for final)
 [ ] /pk-exit                    (writes session log to Logs/Sessions/<date>_<HHMM>.md)
 ```
 

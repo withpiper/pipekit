@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `/work` dispatch over direct vbw-agent calls; `/pipekit-help` usage hint)*
+**v2.6.0** — Last updated: 2026-05-23  *(tier system restored in `/work`; `pk ship --draft` default + `pk ready`; two-phase `pk promote`; `/pr-fix` gains `--from-review` + `--second-opinion=gemini`)*
 
 ---
 
@@ -46,12 +46,14 @@ These skills work across any project that follows the method. They read `method.
 | `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. | Stage 2: Plan + Build |
 | `/review-plan` | Spawns `plan-reviewer` agent against `PLAN.md` (vbw backend). | Stage 2: Plan + Build |
 | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` | Stage 3: Verify + Ship |
-| `pk ship [--review]` | Push, open PR, Linear → UAT (PR open on preview). `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
-| `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary | Stage 3: Verify + Ship |
+| `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
+| `pk ready [<ID>]` | Flip Draft PR to Ready (v2.6.0+). Fires `ready_for_review` → outside reviewers (Semgrep + claude-review per `templates/ci/`) run. No Linear state change. | Stage 3: Verify + Ship |
+| `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary. v2.6.0+: `--from-review` ingests existing GHA review comments; `--second-opinion=gemini` adds parallel Gemini Flash read. | Stage 3: Verify + Ship |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
-| `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
-| `pk promote <env>` | One hop along `Ship environments`. Transitions matching issues → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
+| `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status. `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
+| `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR along `Ship environments`. WITs stay in source state. 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
+| `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). | Stage 4: Release |
 | `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md` | Per session |
 | `pk status` | Full unscoped Linear board view | Anytime |

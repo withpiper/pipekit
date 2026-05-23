@@ -58,10 +58,12 @@ Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pi
 | 5 | Branch | `pk branch <ID>` | Worktree + branch + Linear → In Progress |
 | 6 | **Work** | **`/work <ID>`** | **Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`.** |
 | 7 | **Verify** | **`/verify`** | **Pre-deploy gate (types + lint + test).** |
-| 8 | Ship | `pk ship [--review]` | Push, open PR, Linear → UAT (PR open on preview branch). `--review` triggers antagonistic review. |
+| 8 | Ship | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` triggers antagonistic review. |
+| 8a | Flip to Ready | `pk ready [<ID>]` | (v2.6.0+) Flip Draft → Ready; fires outside reviewers (Semgrep + claude-review per `templates/ci/`). |
 | 9 | UAT | (Linear UI / browser) | You test the built feature — on the PR preview pre-merge, on the first deploy env post-merge. |
-| 10 | Done | `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.5.0+**: state transition restored — see CHANGELOG. |
-| 11 | Promote | `pk promote <env> [--confirmed]` | (Multi-tier projects) one hop along `Ship environments` → `In <Env>` (intermediate) or `Done` (final). **v2.4.3+**: refuses if any bundled issue is still `UAT` (PR not merged); `--confirmed` bypasses after env-UAT signoff. |
+| 10 | Done | `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. |
+| 11a | Promote — open | `pk promote <env>` | **Phase 1** (v2.6.0+): opens promote PR. WITs stay in source state. 2-tier: no arg picks the only hop. `--confirmed` bypasses the UAT gate after env-UAT signoff. |
+| 11b | Promote — finish | `pk promote <env> --finish` | **Phase 2** (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate) or → `Done` (final). |
 | 12 | Session log | `/pk-exit` | Narrative log to `Logs/Sessions/<date>_<HHMM>.md`. **Per-session, not per-issue** — run manually as the last command of every Claude Code session regardless of where the current issue stands. Never auto-chained from another skill. |
 | 13 | Strategy Sync | `/strategy-sync` | Update docs to match what was built (post-ship) |
 

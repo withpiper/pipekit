@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `--confirmed` flag in Release Flow, optimistic state-transition rationale)*
+**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` + `pk ship` Draft default + `pk ready` flip command; `pk done` auto-pulls integration and writes VBW SUMMARY)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---
@@ -28,8 +28,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR (Linear → `UAT`). `pk done` after merge → `In Dev`. `pk promote main` (or `pk promote` with no arg, since only one hop exists) opens the `dev` → `main` PR.
-**Linear transitions (v2.5.0):** `pk ship` → `UAT` (PR open on preview); `pk done` → `In Dev` (merge confirmed); `pk promote main` → `Done` (optimistic, at PR-open).
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; Linear → `UAT`). `pk ready` flips it to Ready (fires outside reviewers). `pk done` after merge → `In Dev`. `pk promote main` (or `pk promote` with no arg, since only one hop exists) opens the `dev` → `main` PR; `pk promote main --finish` runs after merge.
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed; also auto-pulls integration + writes VBW SUMMARY); `pk promote main --finish` → `Done` (after promote PR merges — two-phase, not optimistic).
 
 ### Three-Tier (dev → beta → main)
 
@@ -50,8 +50,8 @@ dev  (active development)
 | **Preview** | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR. `pk done` after merge → `In Dev`. `pk promote <env>` walks the chain one hop per invocation (`pk promote beta`, then `pk promote main`) per `Ship environments` in `method.config.md`.
-**Linear transitions (v2.5.0):** `pk ship` → `UAT` (PR open on preview); `pk done` → `In Dev` (merge confirmed); `pk promote beta` → `In Beta`; `pk promote main` → `Done`. All `pk promote` transitions optimistic at PR-open.
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+). `pk ready` flips to Ready. `pk done` after merge → `In Dev`. `pk promote <env>` walks the chain two-phase per hop (`pk promote beta` opens; `pk promote beta --finish` after merge transitions; repeat for main) per `Ship environments` in `method.config.md`.
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed); `pk promote beta --finish` → `In Beta` (after merge); `pk promote main --finish` → `Done` (after final merge). Each `pk promote` is two-phase — WITs stay in source state until the `--finish` after the promote PR merges.
 
 ### Branch Naming (both models)
 
@@ -110,13 +110,13 @@ This sets repo-level merge flags AND creates/updates the ruleset. The script liv
 **Two-tier flow:** `feature/*` → PR to `dev` → PR to `main`
 **Three-tier flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 
-Each project defines its own promotion skills. State transitions fire optimistically at **PR-open**, not at merge — the merge itself is the source-of-truth anchor (`pk done` is cleanup-only as of v2.3.0). After `pk ship` and after each `pk promote`, issues transition in Linear:
-- `pk ship` → issues move to **UAT** (PR open on preview)
+Each project defines its own promotion skills. As of v2.6.0, state transitions fire **after merge**, not optimistically at PR-open — the v2.6.0 F2 fix eliminated the ~5-minute Linear-ahead-of-reality window. After `pk ship` (Draft) → `pk ready` (Ready, fires outside reviewers) and after each `pk promote --finish`, issues transition in Linear:
+- `pk ship` (opens Draft) → issues move to **UAT** (PR open on preview branch)
 - `pk done` (after merge) → issues move to **In `<FirstEnv>`** (e.g. `In Dev`)
-- `pk promote beta` (three-tier) → issues move to **In Beta**
-- `pk promote main` (final hop, either tier) → issues move to **Done**
+- `pk promote beta --finish` (three-tier, after promote PR merges) → issues move to **In Beta**
+- `pk promote main --finish` (final hop, either tier; after promote PR merges) → issues move to **Done**
 
-**v2.5.0+ UAT gate:** `pk promote <env>` refuses with `exit 1` when any bundled issue is still in `UAT` (PR not yet merged). Pass `--confirmed` after env-UAT is signed off (Linear comment, PR comment, or session-log note recording the accept verdict) to bypass. `pk done` no longer refuses on UAT (it IS the transition out of UAT) — its safety check is the PR-merged verification. The discipline rule remains: "don't advance past UAT without sign-off"; code-level enforcement lives in `pk promote --confirmed`.
+**v2.5.0+ UAT gate** (still applies): `pk promote <env>` (Phase 1) refuses with `exit 1` when any bundled issue is still in `UAT` (feature PR not yet merged). Pass `--confirmed` after env-UAT is signed off (Linear comment, PR comment, or session-log note recording the accept verdict) to bypass. `pk done` no longer refuses on UAT (it IS the transition out of UAT) — its safety check is the PR-merged verification. The discipline rule remains: "don't advance past UAT without sign-off"; code-level enforcement lives in `pk promote --confirmed`.
 
 **Hotfix flow:** `hotfix/*` → PR to `main` → cherry-pick back to `dev` and `beta`
 
@@ -190,28 +190,44 @@ claude --dangerously-skip-permissions
 ### Step 4: Open PR to Dev (with optional review)
 
 ```
-pk ship                # push, open PR against integration branch from config, Linear → UAT
+pk ship                # push, open PR as DRAFT (v2.6.0+) against integration branch from config, Linear → UAT
 pk ship --review       # additionally posts review-in-flight to Linear and prints reviewer invocation
+pk ship --ready        # open Ready immediately (v2.6.0+; one-shot tiny WITs)
 ```
 
-For migrations / RLS / SECURITY DEFINER / auth, use `/pr-security-review` instead of (or alongside) the generic reviewer. After review findings, `/pr-fix` triages.
+The Draft default means outside reviewers (Semgrep + claude-review per `templates/ci/`) do not fire while you iterate. When ready to merge:
+
+```
+pk ready [<ID>]        # flip Draft → Ready; fires ready_for_review → outside reviewers run (v2.6.0+)
+```
+
+For migrations / RLS / SECURITY DEFINER / auth, use `/pr-security-review` instead of (or alongside) the generic reviewer. After review findings, `/pr-fix` triages (v2.6.0+: `--from-review` ingests the GHA review; `--second-opinion=gemini` adds a parallel Gemini read).
 
 ### Step 5: Merge to Dev
 
 PR is reviewed, approved, and merged (rebase or merge-commit per § Merge Strategy by Hop). Feature available on dev. Vercel preview is automatic; for Supabase projects, GitHub Actions `db-pr-check.yml` validates migrations on PR open and `db-migrate.yml` applies them on `main` merge.
 
 ```
-pk done <ID>           # cleanup worktree+branch, post commits/diffstat to Linear (no state change)
+pk done <ID> [--merge] # verify merge, cleanup worktree+branch, post commits to Linear,
+                       # transition UAT → In <FirstEnv>, auto-pull integration (v2.6.0+),
+                       # write VBW SUMMARY + flip PLAN status (v2.6.0+; skipped if no VBW)
 ```
 
-### Step 6: Promote to Production
+### Step 6: Promote to Production (two-phase as of v2.6.0)
 
 ```
-# Two-tier:   pk promote main   (or pk promote with no arg — auto-picks the only hop)
-# Three-tier: pk promote beta   (then pk promote main after that PR merges)
+# Phase 1 — open the promote PR (WITs stay in source state):
+# Two-tier:   pk promote main
+# Three-tier: pk promote beta
+
+# ── human merges the promote PR in GitHub UI ──
+
+# Phase 2 — transition Linear states after merge:
+# Two-tier:   pk promote main --finish
+# Three-tier: pk promote beta --finish    (then pk promote main + --finish after that PR merges)
 ```
 
-`pk promote <env>` walks one hop along `Ship environments` per invocation. State transitions fire optimistically at PR-open: matching issues → **`In <Env>`** for intermediate hops (e.g. `In Beta`), → **Done** for the final hop.
+`pk promote <env>` (Phase 1) walks one hop along `Ship environments` per invocation and embeds a bundled-WIT tracker in the PR body. Phase 2 (`--finish`) parses the marker, transitions matching issues → **`In <Env>`** for intermediate hops (e.g. `In Beta`), → **Done** for the final hop. The two-phase model (v2.6.0+) replaces the optimistic-at-PR-open behavior — fixes the F2 ~5min Linear-ahead-of-reality window.
 
 See **Batch vs Per-Issue Promotion** below for when to ship one issue at a time vs. accumulate several before promoting.
 
