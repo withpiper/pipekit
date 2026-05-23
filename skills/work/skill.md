@@ -7,12 +7,12 @@ description: V2 daily-loop skill — plan + execute a Linear issue from inside i
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
-You are a focused work driver. Given a Linear issue ID, you read its spec, plan the work, present the plan for one-screen verdict, dispatch execution, and stop. No tier inference, no round-2 verdict loops, no auto-chain.
+You are a focused work driver. Given a Linear issue ID, you read its spec, infer the tier from Linear labels, plan the work, present the plan for verdict, dispatch execution, and stop. Tier shapes which gates run; no round-2 verdict loops, no auto-chain.
 
 ## Triggers
 
-- `/work <ISSUE-ID>` — primary
-- `/work <ISSUE-ID> --deep` — adds spec-validator + plan-review subagent + security-review on completion
+- `/work <ISSUE-ID>` — primary (tier inferred from Linear `tier:*` label, defaults to Standard)
+- `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec-validator + plan-review subagent + security-review; no-op on Quick (light by design); redundant on Heavy (already forced)
 - `/work <ISSUE-ID> --backend=vbw|native|auto` — override the project's default backend for this invocation only
 - "work on RS-30" / "let's do PIP-123"
 
@@ -127,7 +127,63 @@ Now that you have `<ISSUE-ID>` and the issue `title`, label the work in two plac
 
 Both are best-effort. Skip silently if either fails — never block planning on a labeling failure.
 
+## Step 2.6 — Infer tier from Linear labels
+
+Scan the `labels` you fetched in Step 2 for `tier:quick`, `tier:standard`, or `tier:heavy`. Take the first match. If none, default to **Standard**.
+
+```bash
+TIER=$(echo "$labels" | grep -oE 'tier:(quick|standard|heavy)' | head -1 | sed 's/^tier://')
+TIER=${TIER:-standard}
+```
+
+Print one line:
+
+```
+Tier: <quick|standard|heavy>
+```
+
+Tier shapes which gates run in Steps 3, 4, and 6. Standard is the existing baseline. Quick lightens; Heavy strengthens. Per-tier semantics live in `pipekit/templates/tier-{quick,standard,heavy}.md` — read those for the canonical definitions.
+
+### Quick-tier batch offer
+
+If `TIER == quick`, surface the batch path inline (non-blocking — user can `Ctrl-C` if they want to switch):
+
+```
+tier:quick — single-issue mode (light gates).
+  Batch alternative: abort and run /06-linear-todo-runner for parallel
+  execution of multiple tier:quick issues from the backlog.
+```
+
+### Heavy-tier surface
+
+If `TIER == heavy`, surface upcoming requirements so the user can plan:
+
+```
+tier:heavy — extended gates. This run will require:
+  - Security review (forced at Step 6, regardless of --deep)
+  - /strategy-sync before close
+Plan accordingly.
+```
+
+### Tier interaction with --deep
+
+- `Quick`: `--deep` is no-op (Quick is deliberately light — trust the AC; skip subagents).
+- `Standard`: `--deep` works as before (user-controlled rigor).
+- `Heavy`: `--deep` behavior is forced regardless of CLI flag. Passing `--deep` is harmless but redundant.
+
 ## Step 3 — Plan
+
+**Tier-aware path selection** (resolved against `$TIER` from Step 2.6):
+
+| Tier | Path | Subagents |
+|------|------|-----------|
+| Quick | Default (inline) — **forced**; `--deep` is ignored | None |
+| Standard | `--deep` if flag set, else Default | spec-validator + Explore (+ vbw-scout for vbw backend) if `--deep` |
+| Heavy | `--deep` parallel grounding — **forced** | spec-validator + Explore (+ vbw-scout for vbw backend) |
+
+If `TIER == quick`, skip directly to "Default path: plan inline." Do not spawn the spec-validator / Explore / vbw-scout subagents even if `--deep` was passed.
+
+If `TIER == heavy`, take the `--deep` parallel-grounding path below regardless of whether `--deep` was passed on the invocation.
 
 ### `--deep` path: parallel grounding
 
@@ -241,6 +297,28 @@ Examples:
 
 ## Step 4 — Verdict gate
 
+**Tier-aware verdict** (resolved against `$TIER` from Step 2.6):
+
+| Tier | Gate form | Revision loop |
+|------|-----------|---------------|
+| Quick | Single y/N | None — one shot, no revisions |
+| Standard / Heavy | 3-option verdict | Up to 3 revisions, then refuse |
+
+### Quick path (single y/N)
+
+For `tier:quick`, the AC is the plan. Print the plan and ask once:
+
+```
+Plan looks right? (y/n)
+```
+
+- **`y`** → step 5
+- **`n`** → exit cleanly with: `Aborted. Refine the AC in Linear and rerun /work <ISSUE-ID>.`
+
+No revision loop — Quick tier trusts the spec. If the plan is wrong, the AC is the cause; revising the plan in-session is the wrong fix.
+
+### Standard / Heavy path (3-option verdict)
+
 Print the plan, then ask exactly:
 
 ```
@@ -329,9 +407,17 @@ Wait for the subagent to return.
 
 **Inline path** — work through the plan directly using Edit, Write, Read, Bash. Same discipline (atomic commits, test after change, surface blockers). Use a TaskCreate with one task per "Files to touch" item to track your own progress.
 
-## Step 6 — `--deep` security review
+## Step 6 — Security review (tier-aware)
 
-After dev completes (whether subagent or inline), if `--deep`:
+**Tier-aware gate** (resolved against `$TIER` from Step 2.6):
+
+| Tier | Security review |
+|------|-----------------|
+| Quick | Skip (forced — even if `--deep` was passed; rely on `/pr-security-review` post-ship for sensitive Quick changes) |
+| Standard | Run if `--deep` was passed |
+| Heavy | Run (forced — regardless of `--deep`) |
+
+After dev completes (whether subagent or inline), invoke the review when the gate fires:
 
 Use Task tool with:
 - `subagent_type: "security-review"` (project may have this; otherwise `"general-purpose"`)
@@ -478,6 +564,7 @@ Nothing else skips. Not "the user might want to inspect." Not "implementation de
 3. Surface `/verify`'s verdict block to the user verbatim.
 4. After `/verify` returns:
    - **Pass:** `pk ship` will already have run inside `/verify`'s rollover. Print: _"Run `/pk-exit` at the end of the session to write `Logs/Sessions/<date>_<HHMM>.md`."_
+     - **If `TIER == heavy`**, append: _"Heavy tier: `/strategy-sync` is required before this issue can close. Run it before `pk done` / `pk promote`."_
    - **Partial / Fail:** STOP. The verdict block already showed the per-AC table; do not invoke `pk ship`. Tell the user: _"Address the failures and re-run `/verify` when ready (or `/work --resume` if execution gaps remain)."_
 
 ### When the rollover IS skipped (one of the two mechanical conditions)
@@ -514,7 +601,6 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 
 ## What this skill does NOT do
 
-- No tier inference (Quick/Standard/Heavy gone — use `--deep` if you want extra rigor).
 - No `--auto` chain (the user is the chain).
 - No PR creation (that's `pk ship`).
 - No NEXT.md write (NEXT.md doesn't exist in v2).
@@ -529,7 +615,7 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Concern | v1 (`/launch --auto`) | v2 (`/work`) |
 |---|---|---|
 | Lines of skill prose | 765 | ~330 |
-| Tier system | Quick/Standard/Heavy | None (`--deep` flag) |
+| Tier system | Quick/Standard/Heavy (label-driven) | Quick/Standard/Heavy (Linear `tier:*` labels, opt-in; restored in v2.6.0) |
 | Verdict loop | 3 rounds + stalemate detection | 1 screen, 3 options, 3-revision hard limit |
 | Backend | VBW only | `vbw \| native` per config |
 | Auto-chain | Yes (4 hidden agent invocations) | No (user paces) |
