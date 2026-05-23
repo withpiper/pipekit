@@ -1455,8 +1455,12 @@ cmd_promote() {
   issue_prefix=$(pk_config "Issue prefix" "")
   if ! $confirmed && [ -n "$issue_prefix" ]; then
     local bundled_ids
+    # `{ grep ... || true; }` because under `set -euo pipefail`, grep with
+    # no matches exits 1 and pipefail propagates that, killing the script
+    # before the `if [ -n "$bundled_ids" ]` check below can skip cleanly.
+    # Scoped to grep so a later sort failure still surfaces.
     bundled_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
-      | grep -oE "${issue_prefix}-[0-9]+" | sort -u)
+      | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
     if [ -n "$bundled_ids" ]; then
       local uat_ids=""
       while IFS= read -r bid; do
@@ -1499,8 +1503,9 @@ cmd_promote() {
 
   if [ -n "$issue_prefix" ]; then
     local issue_ids
+    # Same `|| true` pattern as the UAT-refusal block above — scoped to grep.
     issue_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
-      | grep -oE "${issue_prefix}-[0-9]+" | sort -u)
+      | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
     if [ -n "$issue_ids" ]; then
       local id_count
       id_count=$(echo "$issue_ids" | wc -l | tr -d ' ')
