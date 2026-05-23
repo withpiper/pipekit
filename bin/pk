@@ -814,9 +814,22 @@ cmd_status() {
 }
 
 cmd_branch() {
-  local id="${1:-}"
+  local id=""
+  local skip_install=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --no-install) skip_install=true; shift ;;
+      --*) echo "Unknown flag: $1" >&2; return 1 ;;
+      *)
+        if [ -z "$id" ]; then
+          id="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
   if [ -z "$id" ]; then
-    echo "Usage: pk branch <ISSUE-ID>" >&2
+    echo "Usage: pk branch <ISSUE-ID> [--no-install]" >&2
     return 1
   fi
   local issue
@@ -870,13 +883,14 @@ cmd_branch() {
   echo ""
   echo "Done."
 
-  # Fresh-worktree dependency hint (F8 — surfaced 2026-05-14 canary against
-  # Piper WIT-456). Worktrees inherit tracked files but not gitignored ones
-  # like node_modules/. First test invocation otherwise triggers a multi-
-  # minute pnpm install while the worker session tries to figure out what's
-  # wrong. Hint here so the human installs deps before running /work.
+  # Fresh-worktree dependency install (F8 + v2.6.0 #15). Worktrees inherit
+  # tracked files but not gitignored ones like node_modules/. Auto-running
+  # the lockfile-matched install here prevents /work or test runs from
+  # triggering a multi-minute install mid-flight. Pass --no-install to skip
+  # when deps are already cached or you don't need them.
+  local installed=false
+  local pkg_install=""
   if [ -f "$wt_path/package.json" ] && [ ! -d "$wt_path/node_modules" ]; then
-    local pkg_install=""
     if [ -f "$wt_path/pnpm-lock.yaml" ]; then
       pkg_install="pnpm install"
     elif [ -f "$wt_path/yarn.lock" ]; then
@@ -885,15 +899,31 @@ cmd_branch() {
       pkg_install="npm install"
     fi
     if [ -n "$pkg_install" ]; then
-      echo ""
-      echo "⚠️  Fresh worktree — install deps before first test:"
-      echo "     (cd $wt_path && $pkg_install)"
+      if [ "$skip_install" = "true" ]; then
+        echo ""
+        echo "Skipping dep install (--no-install). Run before testing:"
+        echo "  (cd $wt_path && $pkg_install)"
+      else
+        echo ""
+        echo "Installing deps ($pkg_install)..."
+        if (cd "$wt_path" && $pkg_install); then
+          installed=true
+        else
+          echo ""
+          echo "⚠️  install failed — fix and re-run:"
+          echo "     (cd $wt_path && $pkg_install)"
+        fi
+      fi
     fi
   fi
 
   echo ""
   echo "To enter:"
   echo "  cd $wt_path && claude --dangerously-skip-permissions"
+  if [ "$installed" = "true" ]; then
+    echo ""
+    echo "(next time use 'pk branch $id --no-install' to skip the dep install)"
+  fi
 }
 
 cmd_ship() {
