@@ -1216,6 +1216,25 @@ $commits"
   fi
   echo "Deleting local branch $current..."
   git branch -D "$current" 2>/dev/null || true
+
+  # Auto-pull integration branch (v2.6.0 #8). After a confirmed merge, the
+  # parent's local integration branch is stale. Fast-forward it if we're
+  # on it; otherwise fetch so the next checkout is current. Divergence is
+  # rare but real (concurrent push to dev) — warn rather than fail because
+  # the merge already succeeded and the user can reconcile manually.
+  local integration head_branch
+  integration=$(pk_integration_branch)
+  if [ -n "$integration" ]; then
+    head_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+    if [ "$head_branch" = "$integration" ]; then
+      if ! git pull --ff-only origin "$integration" --quiet 2>/dev/null; then
+        echo "⚠️  Local $integration diverges from origin/$integration — reconcile manually."
+      fi
+    else
+      git fetch origin "$integration" --quiet 2>/dev/null || true
+    fi
+  fi
+
   echo "Done."
 }
 
