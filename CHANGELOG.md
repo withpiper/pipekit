@@ -47,7 +47,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## v2.6.0 — 2026-05-23
 
-> **Minor: tier system restored + `bin/pk` worktree-setup polish.** Bundles 8 candidates surfaced through the v2.5.0 / v2.5.0.1 release cycle, the 2026-05-17 cmux parallel-native batch (5 WITs / 75 min / 1.5-1.8× speedup), and the 2026-05-18 reviewer-strategy thread. Headline: tier inference (`tier:quick` / `tier:standard` / `tier:heavy` Linear labels) is wired back into `/work` — the config↔code mismatch since v2.0.0 is closed. Supporting items: `pk done` finalizes VBW plan state, `pk branch` auto-installs deps + symlinks `.envrc`, `pk promote` no longer silently exits on no-WIT-match commit ranges, `sync-method.sh` is idempotent on unchanged files.
+> **Minor: tier system restored + Path 3 reviewer pipeline + two-phase promote + worktree-setup polish.** Twelve candidates landed in one release — the v2.5.0 / v2.5.0.1 cycle's findings plus the 2026-05-17 cmux parallel-native batch (5 WITs / 75 min / 1.5-1.8× speedup) and the 2026-05-18 reviewer-strategy work. Three headline groups: (1) **tier inference** is back in `/work` via Linear `tier:*` labels — closing the config↔code mismatch since v2.0.0; (2) **Path 3 reviewer pipeline** ships — Semgrep + Claude templates, `/pr-fix --from-review` + `--second-opinion=gemini` flags, `pk ship --draft` default + new `pk ready <ID>` command, and the F2 two-phase promote that stops `pk promote` from writing Linear state ~5 minutes ahead of reality; (3) **VBW plan-state finalization** in `pk done` unblocks fresh-worktree batch flows. Plus six smaller items: `.envrc` symlink, `pk branch` auto-install + `--no-install`, `pk done` auto-pull, `pk_promote` silent-exit fix, `sync_file` idempotent, cmux numeric-menu rule.
 
 ### What changed
 
@@ -86,30 +86,56 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 **cmux numeric-menu discipline** (`.claude/rules/pipekit-cmux.md`)
 - Codified pre-v2.6.0 in the canonical rule file (`Never send <digit>\n to a Claude interactive menu` + `Wait 2-3s between send-key enter and the next read-screen`). Listed here for v2.6.0 traceability.
 
+**F2 — `pk promote` two-phase Linear transition** (`bin/pk`)
+- Replaces the optimistic-at-PR-open behavior (v2.3.0–v2.5.0) where Linear advanced to `In <Env>` ~5 minutes before the merge landed. Aborted promotes required manual Linear revert.
+- **Phase 1**: `pk promote <env>` opens the promote PR. Bundled WITs stay in source-env state. The PR body embeds a `<!-- pipekit-promote-tracking: source=<s> target=<t> wits=<W1,W2,...> -->` marker (stateless, cross-machine — no local state file required).
+- **Phase 2**: `pk promote <env> --finish` finds the most recent merged promote PR, parses the marker, transitions each bundled WIT to the target state. Falls back to deriving WITs from PR commits when no marker exists (older PRs).
+- Phase 1 prints the exact `--finish` command at the end so the two-step flow is discoverable without docs.
+
+**CI workflow templates** (`templates/ci/`)
+- `templates/ci/semgrep.yml` — deterministic outside reviewer (`semgrep ci --config=auto`, free Community Rules, no token required). Triggers on `[opened, ready_for_review]` only — matches Pipekit's Draft-PR lifecycle.
+- `templates/ci/claude-review.yml` — semantic outside reviewer via `anthropics/claude-code-action@v1`. Includes a `triage` job (Option B path-filtering per v2.6.0 #5) that skips doc-only PRs (`.md`/`.txt`/`.rst`) and trivial PRs (<5 LOC). Path filtering is intentionally absent — PR #331 evidence showed claude-review caught bugs in non-high-leverage paths that any allowlist would miss.
+- `templates/ci/semgrep-rules/uuid-route-params.yml` — starter custom rule flagging dynamic route params flowing into Supabase queries without UUID validation. Deterministic backup for the Piper PR #341 miss (claude-review caught the pattern on PR #331 but missed it on #341).
+- `templates/ci/README.md` — documents the Draft-PR lifecycle, `branches:` configuration per tier, custom-rule adoption, and the `/pr-fix` flags below.
+
+**`/pr-fix` — `--from-review` + `--second-opinion=gemini` flags** (`skills/pr-fix/skill.md`)
+- `--from-review` — skip Phase 3's fresh review and ingest existing PR review comments (typically from `claude-review.yml` GHA) instead. Maps each comment to a structured finding (file:line + body → severity inference). Default confidence = 85.
+- `--second-opinion=gemini` — after Phase 4, invoke `gemini-flash-latest` for a parallel review. Surfaces findings as a separate section, NOT merged into Phase 4 (the point of a second opinion is comparison). Requires `GEMINI_API_KEY`; refuses cleanly without. Documents the thinking-tokens gotcha (`maxOutputTokens=65536`, `thinkingBudget=-1`).
+- Flags compose: `/pr-fix --review --from-review --second-opinion=gemini` is valid (reviews-only + ingest GHA + parallel Gemini).
+
+**`pk ship` opens Draft by default + new `pk ready` command** (`bin/pk`)
+- `pk ship` now passes `--draft` to `gh pr create` unless `--ready` is set. Outside reviewers (Semgrep + claude-review templates) trigger on `[opened, ready_for_review]` — opening Draft means no review fires during iteration.
+- New `pk ready [<ID>]` flips the feature PR from Draft to Ready (`gh pr ready <#>`). No Linear state change. Closes the dead-code gap from Piper PR #330 (`ready_for_review` trigger was wired but nothing in Pipekit fired it).
+- `pk ship --ready` opens Ready immediately for one-shot tiny WITs where iteration won't happen.
+- `pk_gh_pr_create` helper gained a `--draft` flag (REST `-F draft=true`, gh CLI `--draft`).
+
 **`PK_VERSION`** 2.5.0.1 → 2.6.0.
 
 ### Why
 
-Three motivations stacked into one release:
+This release stacks four motivations:
 
 1. **Tier reinstatement is the headliner.** Empirical anchor: 2026-05-17 cmux parallel-native batch shipped 5 WITs in 75 min wall-clock vs 90-135 min serial (1.5-1.8× speedup), 5/5 clean. WIT-478 PR 1 took 3 hours for one ADR doc under the full gate stack (would be <30 min on Quick). WIT-474 (Production Fee float drift) sat unworked for 2 days as "Quick Win, can slot any time" because no fast lane existed. v2.6.0 closes the config↔code gap and restores the Quick fast lane.
-2. **`bin/pk` worktree-setup paper cuts.** `.envrc` symlink (Piper handoff 2026-05-23) and auto-install (v2.4.3.3 F8 follow-through) make fresh worktrees ready-to-use without the human typing the lockfile-install command. `pk done` SUMMARY + PLAN flip unblocks batch flows that were hitting VBW's file-guard wall on every fresh worktree.
-3. **`pk promote` silent-exit recovery.** RS-Vault canary 2026-05-15 surfaced a silent-failure mode that was easy to misdiagnose as `gh` or network issues. Trivial fix; high signal restoration.
+2. **Path 3 reviewer pipeline closes the "no real outside reviewer" gap.** Pre-v2.6.0 consumers ran two Claude reviewers in parallel (GHA + local `/pr-fix`) — convergent perspective, shared blind spots, double credit cost. v2.6.0 ships Semgrep (deterministic, no LLM, free) + Claude (semantic, the empirically-strongest LLM reviewer on Piper PR #331) + opt-in Gemini second-opinion. OpenAI/Microsoft stack disqualified on the IP-absorption pattern (`resources/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"), not on quality.
+3. **F2 fixes the "Linear ahead of reality" semantic bug.** Pre-v2.6.0 `pk promote` wrote `In <Env>` at PR-open, ~5 minutes before the merge landed. Two-phase (`pk promote` opens; `pk promote --finish` transitions post-merge) trades one extra command for accurate Linear state.
+4. **`bin/pk` worktree-setup paper cuts.** `.envrc` symlink (Piper handoff 2026-05-23) and auto-install (v2.4.3.3 F8 follow-through) make fresh worktrees ready-to-use without the human typing the lockfile-install command. `pk done` SUMMARY + PLAN flip unblocks batch flows that were hitting VBW's file-guard wall on every fresh worktree. `pk_promote` silent-exit on RS-Vault 2026-05-15 was a trivial fix with high signal-restoration value.
 
 ### Migration
 
 - **Pin to v2.6.0.** Run `./scripts/sync-method.sh v2.6.0` from inside your consuming project.
 - **Tier labels in Linear.** To use the new tier behavior, add a `tier:quick`, `tier:standard`, or `tier:heavy` label to your Linear issues. Issues without a `tier:*` label default to **Standard** (current behavior). No action needed for projects that don't want to adopt tiers yet.
+- **CI workflow adoption.** Copy `pipekit/templates/ci/semgrep.yml` and `pipekit/templates/ci/claude-review.yml` into `.github/workflows/` and edit the `branches:` list to match your `Ship environments`. `claude-review.yml` requires the `CLAUDE_CODE_OAUTH_TOKEN` repo secret. See `pipekit/templates/ci/README.md` for the full lifecycle doc.
+- **Draft-PR flow.** `pk ship` now opens Draft by default. Iterate freely, then `pk ready <WIT-ID>` to fire the outside reviewers at the merge moment. Use `pk ship --ready` if you want the old behavior on a one-shot tiny WIT.
+- **Two-phase promote.** `pk promote <env>` opens the PR but no longer writes Linear state. After merge, run `pk promote <env> --finish` to transition WITs to the target state. Phase 1 prints the exact `--finish` command at the end — no docs lookup needed.
 - **`pk branch --no-install`.** If your workflow doesn't need a fresh `pnpm install` on every worktree (cached deps, spec-only worktrees), pass `--no-install`. The flag surfaces in the "To enter:" output after the first install runs so it's discoverable.
 - **VBW SUMMARY / PLAN-flip commits.** `pk done` now leaves `.vbw-planning/` files modified (SUMMARY written, PLAN status flipped). Commit them with `git add .vbw-planning/ && git commit` to propagate the status to future worktrees. Without the commit, batch workers may still hit the stale-PLAN file-guard wall.
 
 ### Knock-on followups (not in this release)
 
-Held for v2.6.1 pending more empirical data:
+Held for v2.6.x+:
 
-- **Reviewer trio (Path 3)**: `templates/ci/semgrep.yml` + `templates/ci/claude-review.yml` + `/pr-fix --from-review` + `/pr-fix --second-opinion=gemini` opt-in. Decided 2026-05-18; 3+ more data points needed on claude-review path-restriction.
-- **`pk ship --draft` default + new `pk ready <ID>` flip command**. Couples with the reviewer trio; both ship together or hold.
-- **F2 two-phase promote transition** (intermediate state at PR-open + `--finish` post-merge). 1-day item, needs design work.
+- **#10 — `pk_promote` strict ownership match.** Closing-keyword + commit-title prefix verification. ~3h, defense-in-depth — cuts leap-frog noise.
+- **#11 — `/light-spec` two-step placeholder workaround.** Investigate root cause first; may already be moot if upstream fixed it.
 
 Full backlog: `resources/v2.6.0-candidates.md`.
 
