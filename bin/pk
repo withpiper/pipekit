@@ -850,7 +850,7 @@ cmd_branch() {
   fi
 
   # Symlink env files (idempotent)
-  for envf in .env .env.local .env.dev .env.prod .mcp.json .sentryclirc; do
+  for envf in .env .env.local .env.dev .env.prod .envrc .mcp.json .sentryclirc; do
     if [ -f "$root/$envf" ] && [ ! -e "$wt_path/$envf" ]; then
       ln -sf "$root/$envf" "$wt_path/$envf"
     fi
