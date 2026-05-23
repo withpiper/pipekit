@@ -1390,17 +1390,21 @@ cmd_verify() {
 }
 
 # Walks `Ship environments` one hop per invocation. Target arg is the
-# destination env. State transitions fire optimistically at PR-open time
-# (matches `pk ship`). Position-based state mapping: last hop → Done,
-# any non-last → Released.
+# destination env. Two-phase Linear state transition (v2.6.0 #3 / F2):
+#   - `pk promote <env>` opens the PR, WITs stay in source state.
+#   - `pk promote <env> --finish` transitions WITs to target state after merge.
+# Replaces the v2.3.0–v2.5.0 optimistic-at-PR-open behavior, which left
+# Linear ~5 minutes ahead of reality while the promote PR was open.
+# Position-based state mapping: last hop → Done, any non-last → In <Env>.
 cmd_promote() {
-  local stash=false take_remote=false bootstrap=false confirmed=false target=""
+  local stash=false take_remote=false bootstrap=false confirmed=false finish=false target=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --stash)       stash=true;       shift ;;
       --take-remote) take_remote=true; shift ;;
       --bootstrap)   bootstrap=true;   shift ;;
       --confirmed)   confirmed=true;   shift ;;
+      --finish)      finish=true;      shift ;;
       --*)           echo "pk promote: unknown arg $1" >&2; return 2 ;;
       *)             target="$1";      shift ;;
     esac
@@ -1453,6 +1457,89 @@ cmd_promote() {
   fi
 
   local source="${envs_arr[$((target_idx - 1))]}"
+
+  # Resolve target state name early — both phases need it.
+  local target_state
+  target_state=$(pk_env_state_name "$target")
+  if [ -z "$target_state" ]; then
+    echo "ERROR: could not derive state name for env '$target' (not in Ship environments?)" >&2
+    return 1
+  fi
+
+  # ─── Phase 2: --finish — transition Linear states after merge ───
+  # Looks up the most recent merged promote PR between source and target,
+  # parses its body for the pipekit-promote-tracking marker (containing
+  # bundled WITs), and transitions each WIT to the target state. Falls
+  # back to deriving from PR commits if no marker is found (older PRs).
+  if $finish; then
+    echo "pk promote --finish: $source → $target"
+
+    # Find most recent merged promote PR.
+    local merged_pr_json pr_number pr_url pr_body pr_merged_at
+    merged_pr_json=$(gh pr list --base "$target" --head "$source" --state merged \
+      --limit 1 --json number,url,body,mergedAt 2>/dev/null || echo "[]")
+    pr_number=$(echo "$merged_pr_json" | jq -r '.[0].number // empty')
+    if [ -z "$pr_number" ]; then
+      echo "ERROR: no merged promote PR found for $source → $target." >&2
+      echo "  Open one first: pk promote $target" >&2
+      return 1
+    fi
+    pr_url=$(echo "$merged_pr_json" | jq -r '.[0].url // empty')
+    pr_body=$(echo "$merged_pr_json" | jq -r '.[0].body // empty')
+    pr_merged_at=$(echo "$merged_pr_json" | jq -r '.[0].mergedAt // empty')
+    echo "  PR #$pr_number (merged $pr_merged_at): $pr_url"
+
+    # Parse the tracking marker. Marker format:
+    # <!-- pipekit-promote-tracking: source=<s> target=<t> wits=<W1,W2,...> -->
+    local wits_csv issue_ids
+    wits_csv=$(echo "$pr_body" | grep -oE 'pipekit-promote-tracking:[^>]*wits=[A-Za-z0-9,-]*' \
+      | sed -E 's/.*wits=//' | head -1)
+    if [ -n "$wits_csv" ]; then
+      issue_ids=$(echo "$wits_csv" | tr ',' '\n' | grep -E '.+' || true)
+    else
+      # Fallback: derive from PR commits (for promote PRs opened pre-v2.6.0
+      # without the marker).
+      local issue_prefix
+      issue_prefix=$(pk_config "Issue prefix" "")
+      if [ -n "$issue_prefix" ]; then
+        issue_ids=$(gh pr view "$pr_number" --json commits 2>/dev/null \
+          | jq -r '.commits[].messageBody, .commits[].messageHeadline' 2>/dev/null \
+          | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
+      fi
+      if [ -n "$issue_ids" ]; then
+        echo "  (no marker; derived WITs from PR commits)"
+      fi
+    fi
+
+    if [ -z "$issue_ids" ]; then
+      echo "  No bundled WITs found in PR #$pr_number — nothing to transition."
+      return 0
+    fi
+
+    local id_count
+    id_count=$(echo "$issue_ids" | wc -l | tr -d ' ')
+    echo "  Transitioning $id_count issue(s) → $target_state"
+    local fail_count=0
+    while IFS= read -r issue_id; do
+      [ -z "$issue_id" ] && continue
+      if ! pk_linear_set_state "$issue_id" "$target_state" "advance"; then
+        fail_count=$((fail_count + 1))
+        if [ "$target_state" = "Done" ]; then
+          echo "    Linear: $issue_id — transition to Done failed. Check state name + permissions." >&2
+        else
+          echo "    Linear: $issue_id — state '$target_state' not configured in Linear. Add it (type: started) via Linear UI, then re-run." >&2
+        fi
+      fi
+    done <<< "$issue_ids"
+    if [ "$fail_count" -gt 0 ]; then
+      echo ""
+      echo "$fail_count transition(s) failed. Fix the cause and rerun: pk promote $target --finish"
+      return 1
+    fi
+    echo "Done."
+    return 0
+  fi
+  # ─── End Phase 2 ───
 
   # Guard against missing target branch on origin. GitHub's repo-level
   # "auto-delete head branches" will silently remove long-lived release
@@ -1595,51 +1682,50 @@ cmd_promote() {
   fi
 
   echo "  3. Open promote PR ($source → $target, $commits_ahead commits)"
-  local date promote_url
+
+  # Compute bundled WITs and embed them in the PR body as a tracking marker.
+  # v2.6.0 #3 / F2: Phase 2 (--finish) reads this marker to know which WITs
+  # to transition post-merge. Marker format is intentionally stateless and
+  # cross-machine-portable (lives on the PR, not in local files).
+  local bundled_wits_csv=""
+  if [ -n "$issue_prefix" ]; then
+    bundled_wits_csv=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
+      | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u \
+      | tr '\n' ',' | sed 's/,$//')
+  fi
+
+  local date promote_url pr_body
   date=$(date +%Y-%m-%d)
+  pr_body="Batch promote. Merge-commit per ruleset (one anchor commit on $target per promote).
+
+<!-- pipekit-promote-tracking: source=$source target=$target wits=$bundled_wits_csv -->
+
+After merging in the GitHub UI, run: \`pk promote $target --finish\`
+to transition bundled WITs to \`$target_state\` in Linear."
+
   promote_url=$(pk_gh_pr_create --base "$target" --head "$source" \
     --title "Promote $source → $target ($date)" \
-    --body "Batch promote. Merge-commit per ruleset (one anchor commit on $target per promote).") || return 1
+    --body "$pr_body") || return 1
   echo "PR: $promote_url"
 
-  # Env-as-status mapping (v2.5.0): per-env state name derived from
-  # Ship environments — intermediate hops → "In <Env>", final hop → "Done".
-  # Replaces v2.3.0's binary Released/Done mapping, which collapsed every
-  # non-final env into a single bucket and hid which env an issue was on.
-  local target_state
-  target_state=$(pk_env_state_name "$target")
-  if [ -z "$target_state" ]; then
-    echo "ERROR: could not derive state name for env '$target' (not in Ship environments?)" >&2
-    return 1
-  fi
-
-  if [ -n "$issue_prefix" ]; then
-    local issue_ids
-    # Same `|| true` pattern as the UAT-refusal block above — scoped to grep.
-    issue_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
-      | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
-    if [ -n "$issue_ids" ]; then
-      local id_count
-      id_count=$(echo "$issue_ids" | wc -l | tr -d ' ')
-      echo "  4. Transitioning $id_count issue(s) → $target_state"
-      while IFS= read -r issue_id; do
-        if ! pk_linear_set_state "$issue_id" "$target_state" "advance"; then
-          if [ "$target_state" = "Done" ]; then
-            echo "    Linear: $issue_id — transition to Done failed. Check state name + permissions." >&2
-          else
-            echo "    Linear: $issue_id — state '$target_state' not configured in Linear. Add it (type: started) via Linear UI, then re-run." >&2
-          fi
-        fi
-      done <<< "$issue_ids"
-    fi
-  fi
+  # v2.6.0 #3 / F2 — Linear state transitions moved to Phase 2 (--finish).
+  # Bundled WITs stay in the source-env state while the promote PR is open.
+  # Eliminates the ~5min window where Linear was ahead of reality.
 
   if $stash_made; then
     echo ""
     echo "Note: your local edits are stashed. Run 'git stash pop' after the promote PR is merged."
   fi
   echo ""
-  echo "Open the PR in browser and merge with 'Create a merge commit'."
+  echo "Bundled WITs stay in source state until merge."
+  if [ -n "$bundled_wits_csv" ]; then
+    local bundled_count
+    bundled_count=$(echo "$bundled_wits_csv" | tr ',' '\n' | grep -cE '.+')
+    echo "  ($bundled_count WIT(s) tracked: $bundled_wits_csv)"
+  fi
+  echo ""
+  echo "After merging in the GitHub UI:"
+  echo "  pk promote $target --finish"
 }
 
 cmd_log() {
