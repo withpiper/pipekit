@@ -1,0 +1,45 @@
+# Semgrep — deterministic static analysis on release-class PRs.
+#
+# Part of Pipekit's Path 3 reviewer model (v2.6.0): Semgrep is the
+# deterministic outside reviewer; claude-review.yml is the semantic one.
+# Free Community Rules, no SEMGREP_APP_TOKEN required.
+#
+# Triggers: `opened` and `ready_for_review` only — matches Pipekit's
+# Draft-PR lifecycle (open as Draft, iterate freely, `pk ready <ID>`
+# to flip when shipping). Avoids the per-push credit burn of `synchronize`.
+#
+# Tune the `branches` list to your project's release-class branches
+# (the ones that hit deploy gates). 2-tier: typically `main`. 3-tier:
+# typically `beta` and `main`. Edit method.config.md's `Ship environments`
+# and mirror it here.
+
+name: Semgrep
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+    # Release-class branches only — match method.config.md `Ship environments`.
+    branches:
+      - main
+      # - beta   # uncomment for 3-tier projects
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  semgrep:
+    name: scan
+    runs-on: ubuntu-latest
+    # Skip Drafts — matches Pipekit's `pk ship --draft` default + `pk ready` flip.
+    if: github.event.pull_request.draft == false
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      # `--config=auto` resolves rule packs from detected stack
+      # (TypeScript, Next.js, React, Node, security-audit, OWASP top ten).
+      # Free Community Rules cover the common case; no token required.
+      # Add SEMGREP_APP_TOKEN as a repo secret to opt into Semgrep Pro Rules
+      # (paid tier — typically not needed for Pipekit projects).
+      - run: semgrep ci --config=auto

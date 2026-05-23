@@ -346,6 +346,7 @@ If all steps work, the pipeline is ready. Start building.
 ### Skills (v2 — most projects need none beyond what Pipekit ships)
 - [ ] `pk doctor` clean (config + Linear API + worktree dir all OK)
 - [ ] GitHub Actions migration workflows in `.github/workflows/` if using Supabase (db-migrate.yml + db-pr-check.yml)
+- [ ] **Outside reviewer workflows in `.github/workflows/`** — lift `pipekit/templates/ci/semgrep.yml` + `pipekit/templates/ci/claude-review.yml`; edit the `branches:` list to match `method.config.md` `Ship environments`. See `pipekit/templates/ci/README.md` for the Draft-PR lifecycle.
 - [ ] Project-specific skills built only if they survive the "would v2 not cover this?" test (e.g., `reset-user`, `component`)
 - [ ] Pipeline validated end-to-end (test issue through full cycle per Step 6)
 
@@ -358,6 +359,6 @@ If all steps work, the pipeline is ready. Start building.
 3. **Create:** GitHub repo + Vercel project + Supabase project + Linear workspace
 4. **Sync:** `./scripts/sync-method.sh` to pull in portable skills and SOPs; then `pk init` + `pk doctor`
 5. **Configure:** Fill in `method.config.md`, write `CLAUDE.md`, create `.claude/rules/`
-6. **Add infra (if applicable):** GitHub Actions migration workflows for Supabase; project-specific skills only if v2 doesn't cover it
+6. **Add infra (if applicable):** GitHub Actions migration workflows for Supabase; outside-reviewer workflows from `pipekit/templates/ci/`; project-specific skills only if v2 doesn't cover it
 7. **Validate:** Push a test issue through the full v2 daily loop (Step 6)
 8. **Ship:** Start building features

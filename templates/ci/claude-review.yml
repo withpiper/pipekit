@@ -1,0 +1,85 @@
+# Claude PR Review — semantic outside reviewer on release-class PRs.
+#
+# Part of Pipekit's Path 3 reviewer model (v2.6.0): Claude is the
+# semantic outside reviewer; semgrep.yml is the deterministic one.
+# Empirically caught 2 must-fix bugs on Piper PR #331 (2026-05-18)
+# that Semgrep and Gemini both missed.
+#
+# Triggers: `opened` and `ready_for_review` only. Match the Pipekit
+# Draft-PR lifecycle (open as Draft via `pk ship` default, iterate
+# freely without firing reviews, `pk ready <ID>` flips to Ready at
+# the actual merge moment). Drops `synchronize` to avoid per-push
+# credit burn on iteration.
+#
+# Path filtering: ALL paths reviewed by default (PR #331 evidence
+# showed claude-review caught bugs in non-high-leverage paths that
+# any allowlist would miss). Skip-on-trivial guard below filters
+# doc-only and tiny PRs to limit credit waste — see v2.6.0 #5 Option B.
+
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+    # Release-class branches only — match method.config.md `Ship environments`.
+    branches:
+      - main
+      # - beta   # uncomment for 3-tier projects
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Skip-on-trivial guard (v2.6.0 #5 Option B): doc-only PRs and tiny
+  # diffs don't get the semantic reviewer. Preserves credit for PRs
+  # that actually benefit from cross-file pattern review.
+  triage:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      should_review: ${{ steps.check.outputs.should_review }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: check
+        name: Should this PR get a Claude review?
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Skip if every changed file is .md / .txt / docs-only.
+          changed=$(gh pr diff "$PR_NUM" --name-only)
+          non_doc=$(echo "$changed" | { grep -vE '\.(md|txt|rst)$' || true; } | grep -E '.+' || true)
+          if [ -z "$non_doc" ]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping: doc-only PR (all changed files are .md/.txt/.rst)"
+            exit 0
+          fi
+          # Skip if total LOC changed is <5 (trivial: typo fix, tiny constant
+          # tweak). Threshold tuned to filter rename/typo PRs without
+          # affecting real fixes.
+          loc=$(gh pr diff "$PR_NUM" --stat 2>/dev/null \
+            | tail -1 \
+            | { grep -oE '[0-9]+ (insertion|deletion)' || true; } \
+            | awk '{sum+=$1} END {print sum+0}')
+          if [ "${loc:-0}" -lt 5 ]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping: trivial PR (LOC=$loc, threshold=5)"
+            exit 0
+          fi
+          echo "should_review=true" >> "$GITHUB_OUTPUT"
+          echo "Reviewing: non-doc files changed, LOC=$loc"
+
+  review:
+    needs: triage
+    if: needs.triage.outputs.should_review == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
