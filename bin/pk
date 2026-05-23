@@ -645,6 +645,100 @@ pk_gh_pr_create() {
   return 1
 }
 
+# Find the VBW PLAN.md for an issue ID across all phase dirs. Flexible
+# match — VBW-native flat layout is .vbw-planning/phases/<phase>/<phase-num>-<id-num>-PLAN.md,
+# but consumers may use alt nested layouts. Returns first match or empty.
+pk_vbw_find_plan() {
+  local root="$1"
+  local issue="$2"
+  [ -d "$root/.vbw-planning/phases" ] || return 1
+  local id_num
+  id_num=$(echo "$issue" | grep -oE '[0-9]+$' || echo "")
+  [ -z "$id_num" ] && return 1
+  local f
+  # Native flat: phases/<phase>/<phase-num>-<id-num>-PLAN.md
+  for f in "$root"/.vbw-planning/phases/*/*-"${id_num}"-PLAN.md; do
+    if [ -f "$f" ]; then
+      echo "$f"
+      return 0
+    fi
+  done
+  # Alt nested: phases/<phase>/<slug>-<id>/PLAN.md
+  for f in "$root"/.vbw-planning/phases/*/*"${issue}"*/PLAN.md; do
+    if [ -f "$f" ]; then
+      echo "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# v2.6.0 #2: After a confirmed pk done merge, flip the PLAN.md frontmatter
+# status from "ready" to "complete" and write a SUMMARY.md alongside.
+# Unblocks fresh-worktree edits for batch flows by removing the stale
+# "active plan" marker that VBW's file-guard treats as in-progress.
+# Idempotent — re-runs are safe (existing SUMMARY.md is kept; status flip
+# is no-op if already complete). Skips silently when no .vbw-planning/ or
+# no matching PLAN.md exists.
+pk_vbw_finalize_plan() {
+  local root="$1"
+  local issue="$2"
+  local pr_url="$3"
+  local merge_sha="$4"
+  local commits_count="$5"
+  local diffstat="$6"
+
+  local plan_file
+  plan_file=$(pk_vbw_find_plan "$root" "$issue") || return 1
+
+  # Flip PLAN status: ready → complete (frontmatter-scoped). Awk because
+  # sed -i is non-portable across BSD/GNU; awk gives us safe replacement
+  # bounded to the leading `---` block.
+  if grep -q "^status: ready$" "$plan_file" 2>/dev/null; then
+    local tmp
+    tmp=$(mktemp)
+    awk '
+      NR==1 && /^---$/ { in_fm=1; print; next }
+      in_fm && /^---$/ { in_fm=0; print; next }
+      in_fm && /^status: ready$/ { print "status: complete"; next }
+      { print }
+    ' "$plan_file" > "$tmp" && mv "$tmp" "$plan_file"
+  fi
+
+  # Write SUMMARY.md (idempotent — skip if exists).
+  local summary_file="${plan_file%-PLAN.md}-SUMMARY.md"
+  if [ ! -f "$summary_file" ]; then
+    local today
+    today=$(date +%Y-%m-%d)
+    cat > "$summary_file" <<SUMMARY
+---
+status: shipped
+issue: ${issue}
+pr: ${pr_url}
+merged: ${merge_sha}
+commits: ${commits_count}
+closed: ${today}
+---
+
+# Shipped — ${issue}
+
+- PR: ${pr_url}
+- Merge commit: \`${merge_sha}\`
+- Commits shipped: ${commits_count}
+- Diff: ${diffstat:-n/a}
+- Closed: ${today}
+SUMMARY
+  fi
+
+  # Print the relative paths so the user can see what was touched.
+  local plan_rel summary_rel
+  plan_rel="${plan_file#$root/}"
+  summary_rel="${summary_file#$root/}"
+  echo "$plan_rel"
+  echo "$summary_rel"
+  return 0
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommands
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1233,6 +1327,24 @@ $commits"
     else
       git fetch origin "$integration" --quiet 2>/dev/null || true
     fi
+  fi
+
+  # Write VBW SUMMARY + flip PLAN status (v2.6.0 #2). Best-effort: skips
+  # silently when there's no .vbw-planning/ or no matching PLAN.md.
+  # Unblocks fresh-worktree edits for batch flows — VBW's file-guard
+  # otherwise treats `status: ready` PLAN.md files as still-active and
+  # blocks edits outside their files_modified list.
+  local merge_sha commits_count
+  merge_sha=$(git rev-parse --short "origin/${integration}" 2>/dev/null || echo "")
+  commits_count="0"
+  [ -n "${commits:-}" ] && commits_count=$(echo "$commits" | wc -l | tr -d ' ')
+  local plan_touched
+  plan_touched=$(pk_vbw_finalize_plan "$root" "$issue" "${pr_url_done:-}" "$merge_sha" "$commits_count" "${diffstat:-}" 2>/dev/null || true)
+  if [ -n "$plan_touched" ]; then
+    echo ""
+    echo "VBW: marked plan complete + wrote summary"
+    echo "$plan_touched" | sed 's/^/  → /'
+    echo "  Commit when ready: git add .vbw-planning/ && git commit"
   fi
 
   echo "Done."
