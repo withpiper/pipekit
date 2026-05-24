@@ -274,14 +274,44 @@ If none of these have triggered, keep accumulating.
 
 The migration application moment depends on your project's Supabase setup. v2's canonical pattern is the rs-vault GitHub Actions pair (`db-pr-check.yml` + `db-migrate.yml`), which decouples migration apply from the promotion skill entirely:
 
-| Setup | Migrations validate at | Migrations apply at | Test on dev preview? |
-|-------|------------------------|---------------------|----------------------|
-| **GitHub Actions (rs-vault pattern, recommended)** | PR open → ephemeral postgres reset (`db-pr-check.yml`) | `main` merge → `db-migrate.yml` runs `supabase db push` | No — schema applies at main merge; dev preview validates against ephemeral postgres |
-| **Separate dev + prod DBs** (piper pattern) | Per-environment GitHub Actions or manual `supabase db push --project-ref <env-ref>` post-merge | Per environment | Yes — each env has its own DB, no shared mutation |
-| **Supabase branching** (per-PR ephemeral DBs) | PR open → Vercel-Supabase integration spins up a branch DB | Per branch DB | Yes — each PR has its own DB branch |
-| **Single shared DB** (no dev/prod split) | Manual or via single GitHub Action on main merge | Main merge only | No — schema doesn't exist on dev preview until main lands |
+| Setup | Migrations validate at | Migrations apply at | Test on dev preview? | Beta uses isolated DB? |
+|-------|------------------------|---------------------|----------------------|------------------------|
+| **GitHub Actions (rs-vault pattern, recommended)** | PR open → ephemeral postgres reset (`db-pr-check.yml`) | `main` merge → `db-migrate.yml` runs `supabase db push` | No — schema applies at main merge; dev preview validates against ephemeral postgres | n/a (two-tier) |
+| **Separate per-env DBs** | Per-environment GitHub Actions or manual `supabase db push --project-ref <env-ref>` post-merge | Per environment | Yes — each env has its own DB, no shared mutation | Yes |
+| **Shared beta+prod DB** (piper pattern) | Per-environment Actions for dev (`piper-dev`); shared workflow for beta+prod (`piper-prod`) | dev env on dev merge; prod env on `main` merge | Yes for dev (own DB); No for beta (reads from prod schema) | **No** — see § Shared beta+prod DB sequencing below |
+| **Supabase branching** (per-PR ephemeral DBs) | PR open → Vercel-Supabase integration spins up a branch DB | Per branch DB | Yes — each PR has its own DB branch | n/a (per-PR DBs) |
+| **Single shared DB** (no dev/prod split) | Manual or via single GitHub Action on main merge | Main merge only | No — schema doesn't exist on dev preview until main lands | n/a (single DB) |
 
 Read your project's `.github/workflows/` to determine which mode you're in. Lift the rs-vault workflow pair (`db-migrate.yml` + `db-pr-check.yml`) if you don't have migration CI yet — it requires `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` GitHub secrets and decouples the migration concern from `pk ship` entirely. Pair migration PRs with `/pr-security-review`.
+
+#### Shared beta+prod DB: schema-before-code sequencing
+
+If your project uses the **Shared beta+prod DB** pattern (beta reads from the same Supabase project as prod), the natural sequencing question is: when does the migration apply to the shared DB?
+
+Two options, with different trade-offs:
+
+| Sequence | When `supabase-production.yml` (or equivalent) fires | What lives between merge and apply |
+|----------|------------------------------------------------------|--------------------------------------|
+| **(a) Code-first** (`main`-merge trigger, default in many starter configs) | After the `beta → main` PR merges | A window where beta runs new code against the old prod schema. Audit-emission / new-function-call paths break on beta until the migration lands. Window length = time between beta merge and main merge + workflow runtime. |
+| **(b) Schema-first** (`beta`-merge trigger, **recommended for shared beta+prod**) | After the `dev → beta` PR merges | No window. By the time beta serves new code, the shared DB schema already supports it. Trade-off: prod schema mutates one cycle earlier than code; less rollback flexibility if you decide to abort a beta→main release. |
+
+**Recommendation: schema-first (b)** for shared beta+prod DB setups. The "rollback flexibility" lost in (b) is rarely exercised in practice (most teams forward-fix rather than rollback migrations), while the broken-beta window in (a) is a daily-hazard friction that compounds with every release. The friction is acute when the offending change is a function-signature widening (e.g. adding DEFAULTs that the new code starts omitting params for) — old code on beta breaks the moment new code lands until the next promote closes the loop.
+
+**Implementation**: change the trigger in `supabase-production.yml` (or your project's equivalent) from `push to main` → `push to beta`. One-line YAML change:
+
+```diff
+ on:
+   push:
+-    branches: [main]
++    branches: [beta]
+     paths: ['supabase/migrations/**']
+```
+
+After the change: document in the project's `engineering/sop/` (or equivalent) that "beta merge = schema cutover, main merge = code cutover."
+
+**Discipline pair**: backward-compatible migrations. Even with schema-first, every migration should still work with the previous code. Example: adding a function DEFAULT is safe because old code still passes all params; renaming a column is NOT safe because old code on prod between the migration and the next deploy would break. Reserve destructive migrations (`DROP`, `RENAME`, type-narrowing CHECK constraints) for explicit zero-downtime patterns (dual-write, dual-read, etc.).
+
+**Fast-cycle recovery** when you discover you're in (a) and need to close the window: run the dev → beta → main promote pair back-to-back. The beta → main merge triggers the prod migration; keep the window under a few minutes by having both PRs ready before starting.
 
 #### Three-tier specifics (dev → beta → main)
 

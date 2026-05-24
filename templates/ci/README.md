@@ -81,6 +81,14 @@ If your project's review costs become prohibitive, the lever is **the skip-on-tr
 - **Semgrep**: Piper PR #335 (`3706208`, 2026-05-18) — 1059 rules / 56 files / 54s on a 6083+/350- promote PR. Zero findings on that PR (wrong PR class for Semgrep's strengths); pays off on user-input handling, dep upgrades, pattern-heavy code.
 - **claude-review trigger config**: Piper PR #317 (Draft-skip + `ready_for_review`) + PR #330 (drop `synchronize`).
 
+## Shared beta+prod DB? Read this before configuring your migration workflow
+
+If your project's beta env reads from the same Supabase project as prod (no isolated beta DB), the choice of when migrations apply to the shared DB is load-bearing. The default many starter configs use — `supabase-production.yml` firing on `main`-merge — creates a window between beta-merge and main-merge where beta runs new code against the old prod schema. Audit-emission and new-function-call paths break on beta until the migration lands.
+
+**Pipekit's recommendation for shared beta+prod DBs: fire migrations on `beta`-merge, not `main`-merge.** Closes the window. Full rationale + the one-line YAML diff in [`sop/Git_and_Deployment.md` § Shared beta+prod DB: schema-before-code sequencing](../../sop/Git_and_Deployment.md#shared-betaprod-db-schema-before-code-sequencing).
+
+This is a workflow-shape decision, not a Pipekit code change — but it's worth getting right at project bootstrap so consumers don't rediscover the broken-beta friction one production cycle at a time.
+
 ## Related Pipekit gestures
 
 - `pk ship` — opens PR (Draft by default). Will not fire reviewers until `pk ready` flip.
