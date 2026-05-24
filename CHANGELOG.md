@@ -45,6 +45,30 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.6.0.1 — 2026-05-24
+
+> **Patch: `pk branch` auto-allows direnv on the worktree.** v2.6.0 #14 added `.envrc` to the symlink loop in `cmd_branch`, but direnv treats the worktree path as a new `.envrc` and blocks it until manually allowed. Symptom: MCP servers and other direnv-loaded tooling still fail to auth at Claude Code launch in fresh worktrees — the exact failure mode #14 was meant to fix. v2.6.0.1 closes the half-broken state by running `direnv allow` on the worktree after the symlink lands.
+
+### What changed
+
+- **`bin/pk` `cmd_branch`** — after the `.envrc` symlink, run `direnv allow "$wt_path"` if `direnv` is on `$PATH`. Fails soft (suppressed via `|| true`) when direnv is missing. The symlink target is the parent's `.envrc` which the user has already `direnv allow`-ed (otherwise direnv wouldn't have loaded in the parent), so the auto-allow doesn't bypass the user's trust decision — it propagates it.
+
+**`PK_VERSION`** 2.6.0 → 2.6.0.1.
+
+### Why
+
+v2.6.0 #14 shipped the `.envrc` symlink to fix MCP auth failures in fresh worktrees launched via `pk branch`. In testing 2026-05-24, the symlink lands correctly but direnv refuses to load it with `error /<worktree>/.envrc is blocked. Run \`direnv allow\` to approve its content`. Net effect: same MCP auth failure mode, one extra manual step (`direnv allow`) to recover. The fix delivered half its value.
+
+The justification for auto-allow: direnv's allow-gate exists to prevent malicious `.envrc` files from being added to a repo without the user's knowledge. The worktree's `.envrc` is not new content — it's a symlink to the parent's `.envrc` which the user has already explicitly allowed. Auto-allowing on the symlink target propagates an existing trust decision rather than bypassing the security model.
+
+### Migration
+
+- **Pin to v2.6.0.1.** Run `./scripts/sync-method.sh v2.6.0.1` from inside your consuming project.
+- **Existing fresh worktrees** still need a one-time manual `direnv allow $WT_PATH` to recover (v2.6.0.1's auto-allow only fires on new `pk branch` invocations).
+- **direnv not installed?** No-op — `command -v direnv` check skips the auto-allow silently.
+
+---
+
 ## v2.6.0 — 2026-05-23
 
 > **Minor: tier system restored + Path 3 reviewer pipeline + two-phase promote + worktree-setup polish.** Twelve candidates landed in one release — the v2.5.0 / v2.5.0.1 cycle's findings plus the 2026-05-17 cmux parallel-native batch (5 WITs / 75 min / 1.5-1.8× speedup) and the 2026-05-18 reviewer-strategy work. Three headline groups: (1) **tier inference** is back in `/work` via Linear `tier:*` labels — closing the config↔code mismatch since v2.0.0; (2) **Path 3 reviewer pipeline** ships — Semgrep + Claude templates, `/pr-fix --from-review` + `--second-opinion=gemini` flags, `pk ship --draft` default + new `pk ready <ID>` command, and the F2 two-phase promote that stops `pk promote` from writing Linear state ~5 minutes ahead of reality; (3) **VBW plan-state finalization** in `pk done` unblocks fresh-worktree batch flows. Plus six smaller items: `.envrc` symlink, `pk branch` auto-install + `--no-install`, `pk done` auto-pull, `pk_promote` silent-exit fix, `sync_file` idempotent, cmux numeric-menu rule.

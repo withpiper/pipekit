@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.6.0** — Last updated: 2026-05-23  *(tier system restored + `bin/pk` worktree-setup polish — see CHANGELOG.md v2.6.0)*
+**v2.6.0.1** — Last updated: 2026-05-24  *(`pk branch` auto-allows direnv after `.envrc` symlink — closes the half-broken v2.6.0 #14 MCP-auth fix in fresh worktrees)*
 
 ---
 

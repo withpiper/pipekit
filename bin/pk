@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.6.0"
+PK_VERSION="2.6.0.1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -973,6 +973,18 @@ cmd_branch() {
       ln -sf "$root/$envf" "$wt_path/$envf"
     fi
   done
+
+  # Auto-allow direnv when .envrc was symlinked (v2.6.0.1). Direnv treats
+  # the worktree path as a new .envrc and blocks it until allowed — but
+  # the symlink target is the parent's .envrc which the user has already
+  # `direnv allow`-ed (otherwise direnv wouldn't have loaded in the parent
+  # to begin with). Without auto-allow, the symlink-fix from #14 is half-
+  # broken: MCP servers and other direnv-loaded tooling still fail to auth
+  # in the worktree at Claude Code launch. Fails soft when direnv isn't
+  # installed.
+  if [ -L "$wt_path/.envrc" ] && command -v direnv >/dev/null 2>&1; then
+    direnv allow "$wt_path" >/dev/null 2>&1 || true
+  fi
 
   # Sync parent's bin/pk into the worktree. Worktrees check out the committed
   # version of bin/pk (often older than the parent's working tree, especially
