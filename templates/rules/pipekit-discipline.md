@@ -28,11 +28,24 @@ Before writing or modifying code, you must be able to answer these four question
 | What breaks if I delete this? | Coupling and fragility | Safe refactoring |
 | When does timing work? | Async and ordering | Race conditions, correctness |
 
-These are the questions the Ad-hoc Plan Gate (below) must answer for the changed scope. If any are unclear on a non-trivial change, flag the gap and ask before proceeding.
+These are the questions the Plan Gate (below) must answer for the changed scope. If any are unclear on a non-trivial change, flag the gap and ask before proceeding.
 
-## Ad-hoc Plan Gate
+## Plan Gate
 
-For any non-trivial change outside a full VBW planning flow, produce a 3-5 bullet plan and pause for approval before writing code. Even for "quick fixes."
+For any non-trivial change outside a full VBW planning flow, declare your plan before writing code. Two formats by scope:
+
+### Inline Planning (default — small / single-module changes)
+
+```
+PLAN: 1. <step> 2. <step> 3. <step>
+→ Executing unless you redirect.
+```
+
+Three steps max. One line. The user can redirect with a single word; you proceed otherwise. Use this for bug fixes, small refactors, isolated edits in a single module.
+
+### Expanded Plan Gate (cross-module / multi-file / new surface)
+
+Produce a 3–5 bullet plan and pause for explicit approval. Use this when the change touches more than one module, introduces a new public surface, or has cross-cutting effects.
 
 **Plan format:**
 
@@ -48,13 +61,11 @@ For any non-trivial change outside a full VBW planning flow, produce a 3-5 bulle
 Proceed? (y/n)
 ```
 
-**When this applies:** any code change in an interactive session that isn't part of a VBW plan — bug fixes, hotfixes, refactors, quick features.
+**When clarification is needed,** never hand back a blank questionnaire. Anchor the ambiguity in a hypothetical baseline — propose one reading of the request, name the tension, and ask the user to confirm or redirect. A user can disagree with a concrete proposal far faster than they can answer abstract open questions.
 
 **Does NOT apply to:** reading files, exploring code, running tests, git operations, or obviously trivial edits where intent is unambiguous (typo fixes, single-variable renames, tooltip text). Trust user intent on small, low-impact changes — don't over-process them.
 
-**When clarification is needed,** never hand back a blank questionnaire. Anchor the ambiguity in a hypothetical baseline — propose one reading of the request, name the tension, and ask the user to confirm or redirect. A user can disagree with a concrete proposal far faster than they can answer abstract open questions.
-
-VBW handles planned work well — tasks have verify/done criteria and atomic commits. But interactive sessions have no gate. This lightweight plan prevents scope creep ("while I'm here, let me also..."), wrong-direction work (building before confirming approach), and silent assumption errors (you assumed X, user meant Y).
+VBW handles planned work well — tasks have verify/done criteria and atomic commits. But interactive sessions have no gate. This two-tier plan prevents scope creep ("while I'm here, let me also..."), wrong-direction work (building before confirming approach), and silent assumption errors (you assumed X, user meant Y).
 
 ## Scope Hygiene
 
@@ -69,6 +80,67 @@ VBW handles planned work well — tasks have verify/done criteria and atomic com
 You are a collaborator, not a compliance engine. If you spot a misconception in the user's framing, an adjacent bug the proposed change won't fix, or a tension between the user's stated goal and their proposed approach — say so. State the disagreement, offer the alternative, let the user decide.
 
 This is the counterweight to the Red Flag "the user said to just do it." Pure compliance is fast and feels cooperative; it also ships bugs the user would have caught if you'd spoken up.
+
+## Completion Claims
+
+Before declaring any non-trivial decision or completed work, run this loop. It catches vibes-masquerading-as-decisions before they ship.
+
+### 1. CLAIM
+
+Before any non-trivial decision, write the claim in this exact form:
+
+```
+CLAIM: <the assertion you're about to make in one sentence>
+WHY THIS MATTERS: <what breaks or who suffers if the claim is wrong>
+```
+
+If you can't write the claim that compactly, you have a vibe, not a decision.
+
+### 2. EXTRACT
+
+Pass the ARTIFACT and the CONTRACT to the reviewer. Strip your reasoning. If you hand over conclusions, you'll get back validation of your conclusions.
+
+- **ARTIFACT** = the code, diff, spec, or decision document being reviewed
+- **CONTRACT** = what the artifact is supposed to satisfy (for Pipekit: the Linear issue's AC list)
+
+### 3. DOUBT
+
+Spawn a fresh-context subagent with this prompt verbatim:
+
+```
+Adversarial review. Find what is wrong with this artifact.
+Assume the author is overconfident. Look for:
+- Unstated assumptions
+- Edge cases not handled
+- Hidden coupling or shared state
+- Ways the contract could be violated
+- Existing conventions this might break
+- Failure modes under unexpected input
+
+Do NOT validate. Do NOT summarize. Find issues, or state
+explicitly that you cannot find any after thorough examination.
+
+ARTIFACT: <paste artifact>
+CONTRACT: <paste contract>
+```
+
+### 4. RECONCILE
+
+For each finding the reviewer returns, classify in this **precedence order** (first matching class wins):
+
+1. **AC misread** — reviewer flagged something specifically because the CONTRACT (AC) you provided was unclear or incomplete. Fix the AC first, re-classify on the next cycle. (Adapts doubt-driven-development's "Contract misread" to Linear acceptance criteria; the AC is the contract.)
+2. **Valid + actionable** — real issue requiring a change to the artifact. Change it, re-loop.
+3. **Valid trade-off** — issue is real but cost of fixing exceeds cost of accepting. Document the trade-off explicitly so the user sees it.
+4. **Noise** — reviewer flagged something that's actually correct under context the reviewer didn't have.
+
+### 5. STOP
+
+Stop when:
+- Next iteration returns only trivial or already-considered findings, OR
+- 3 cycles completed (escalate to user, don't grind a fourth alone), OR
+- User explicitly says "ship it."
+
+**Doubt theater red flag**: across 2+ cycles where the reviewer surfaced substantive findings, zero findings were classified as actionable. You are validating, not doubting. Stop and escalate.
 
 ## Parallel work patterns
 
