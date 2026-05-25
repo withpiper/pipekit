@@ -66,6 +66,31 @@ UNVERIFIED: <claim>
 
 Never collapse UNVERIFIED claims into confident prose. The flag is the load-bearing signal.
 
+### Enumerate the Surface Before Claiming Behavior
+
+The verify-installed-source rule has a sibling: when asked "what does the CI/CD do?" / "will X fire on Y?" / "is the migration applied?", **list the full surface first**, then read each entry. Reading only the first or expected file is partial verification masquerading as verified.
+
+Case study (Pipekit-the-repo, 2026-05-25): a session inside the WIT-461 worktree advised the user that "dev-merge doesn't auto-trigger supabase-production.yml — that fires on beta-merge per the 2026-05-24 schema-first sequencing." Technically correct about `supabase-production.yml`, but the session knew about ONE workflow and didn't `ls .github/workflows/`. There was a second workflow (`supabase-dev.yml`) that DID fire on dev-merge and applied the migration to piper-dev. The advisory caused the user to manually check whether the migration had landed — extra friction triggered by an incomplete-enumeration claim.
+
+**Required sequence** for any claim about project infrastructure:
+
+1. **List the surface.** Concrete commands by domain:
+
+| Claim category | List command |
+|---|---|
+| "Will workflow X fire?" / "What CI runs on Y?" | `ls .github/workflows/` (or your project's equivalent) — read each file's `on:` block |
+| "Has migration X applied to env Y?" | `ls supabase/migrations/` then `gh run list --workflow=<workflow>.yml` for the deploy workflow |
+| "Where is env var X set?" | `ls .env*` AND `grep -r <VAR>` in CI workflow files (env vars may be set in multiple places) |
+| "What scripts can I run?" | `cat package.json` AND `ls scripts/` AND `cat Makefile` — don't claim a command absent before checking all three |
+| "What rules auto-load?" | `ls .claude/rules/` — multiple files share the namespace |
+| "What skills are installed?" | `ls .claude/skills/` — names may differ from upstream Pipekit's `skills/` |
+
+2. **Read each entry that matches the question.** Skipping ahead to "the obvious one" is the exact failure mode.
+
+3. **Only then synthesize.** If two entries contradict (e.g., one workflow says it fires on `dev`, another says it fires on `beta`), name both and explain the split before claiming a behavior.
+
+**Why this lives in tooling, not discipline:** the failure is structural to how AI sessions browse the filesystem — they grep for a known string and stop. Discipline rules ask the session to verify what it knows; this rule asks the session to discover what it didn't know existed.
+
 ## Package Manager
 
 Read the project's package manager from `method.config.md` or infer from lockfile:
