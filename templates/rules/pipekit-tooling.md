@@ -42,6 +42,30 @@ Generalization: when an API has any function-shape that includes "target identif
 
 Skip the verify step **only** for standard library calls, long-stable APIs (fetch, Promise, Array methods), or libs whose version you just verified in the same session.
 
+### Source Authority Hierarchy
+
+When verifying a library API, source rank matters. Higher tier wins on conflict:
+
+| Tier | Source | Authoritative? |
+|------|--------|----------------|
+| 1 | Official package docs (matching installed version) + installed source under `node_modules/<pkg>/` | Yes — ground truth |
+| 2 | Official blog posts, changelogs, release notes from the vendor | Yes — for version-dated claims |
+| 3 | Web standards (MDN, ECMA, IETF RFCs) | Yes — for platform behavior |
+| 4 | Runtime compatibility tables (caniuse, Node.js docs) | Yes — for "does X work on Y" |
+| — | StackOverflow, third-party blogs, AI-generated examples, your own training data | **No** — leads, not facts |
+
+### Verification Failure: UNVERIFIED Flag
+
+If you cannot reach a Tier 1–4 source for an API claim, emit it as UNVERIFIED rather than asserting:
+
+```
+UNVERIFIED: <claim>
+  Reason: <docs offline | no matching version | could not locate in node_modules>
+  Need: <what would confirm — e.g., "run `pnpm list <pkg>`" or "ask user to paste current docs">
+```
+
+Never collapse UNVERIFIED claims into confident prose. The flag is the load-bearing signal.
+
 ## Package Manager
 
 Read the project's package manager from `method.config.md` or infer from lockfile:
@@ -65,7 +89,3 @@ If the gate has drifted from what's actually enforced in CI, that's its own bug 
 ## CLI Commands
 
 Use commands defined in `package.json` scripts, not ad-hoc invocations. If you need to run `tsc --noEmit`, check `package.json` for an existing `check-types` or `typecheck` script first — using the project's alias keeps your invocation consistent with CI.
-
-## Pipekit `pk` CLI
-
-`pk` is a globally-installed CLI binary at `~/.local/bin/pk`, **not** a slash command. When the user types `pk <subcommand>` (e.g. `pk next`, `pk status`, `pk branch RS-69`, `pk ship`, `pk done`, `pk promote`), execute it as a bash command in the current project's working tree. Do **not** search for `/pk-status`, `/pk-next`, or similar slash commands — they don't exist. The `pk` binary reads `method.config.md` and `.vbw-planning/PHASES.md` from the current project.
