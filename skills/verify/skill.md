@@ -55,13 +55,13 @@ VERIFY_DIR="Logs/Verify/${TODAY}/${ISSUE}"
 
 ## Step 0.5 — Tier-gated dispatch (one-screen contract)
 
-| Tier | Evidence layer | reality-check.md | verify-complete.md | QA subagent | pk ship gate |
-|---|---|---|---|---|---|
-| quick | no | virtual (printed only) | virtual | only if `--qa` | warn-but-proceed (Day 3) |
-| standard | yes | written | written on PASS | per config + `--qa` | hard, file required (Day 3) |
-| heavy | yes | written | written on PASS | per config + `--qa` | hard, file required (Day 3) |
+| Tier | Evidence layer | reality-check.md | verify-complete.md | QA subagent | Antagonistic review | pk ship gate |
+|---|---|---|---|---|---|---|
+| quick | no | virtual (printed only) | virtual | only if `--qa` | never | warn-but-proceed |
+| standard | yes | written | written on PASS | per config + `--qa` | auto on sensitive-path diffs; opt-in via `--review` otherwise | hard, file required |
+| heavy | yes | written | written on PASS | per config + `--qa` | mandatory | hard, file required |
 
-Antagonistic review (mandatory in heavy, opt-in via `--review` in standard) is Step 5 below.
+Sensitive-path patterns are documented in Step 5.
 
 For tier:quick, the rest of this skill executes against stdout only — no file writes — and Steps 5 / 7 / 8 are skipped. For tier:standard and tier:heavy, every step below appends to or writes the files under `$VERIFY_DIR`. Step 5 (antagonistic) is also skipped for tier:standard unless `--review` is passed.
 
@@ -259,7 +259,7 @@ After the subagent returns, read `$VERIFY_DIR/qa-verdict.md` and grep the **Verd
 
 If the subagent fails to write the file (Write permission denied, disk full), surface the error and treat the QA verdict as `Fail` — better to block ship than to ship on a silently-missing verdict.
 
-## Step 5 — Antagonistic review (mandatory in tier:heavy; opt-in via --review in tier:standard; skipped in tier:quick)
+## Step 5 — Antagonistic review (mandatory tier:heavy; auto for sensitive-path diffs on tier:standard; opt-in via --review on tier:standard; skipped tier:quick)
 
 Antagonistic review is a separate, adversarial subagent with the **same inputs** as QA (diff + AC list) but a different lens: find what is wrong, not whether it shipped. The prompt is the **verbatim DOUBT prompt** from `pipekit-discipline.md` § Completion Claims — never paraphrase it, the wording is load-bearing.
 
@@ -267,11 +267,52 @@ Run conditions:
 
 ```bash
 RUN_ADVERSARIAL=false
-[ "$TIER" = "heavy" ] && RUN_ADVERSARIAL=true
-[ "$TIER" = "standard" ] && echo "$@" | grep -q -- '--review' && RUN_ADVERSARIAL=true
+TRIGGER_REASON=""
+
+# tier:heavy — always fires
+if [ "$TIER" = "heavy" ]; then
+  RUN_ADVERSARIAL=true
+  TRIGGER_REASON="tier:heavy mandatory"
+fi
+
+# tier:standard — explicit --review flag fires
+if [ "$TIER" = "standard" ] && echo "$@" | grep -q -- '--review'; then
+  RUN_ADVERSARIAL=true
+  TRIGGER_REASON="--review flag"
+fi
+
+# tier:standard — sensitive-path auto-trigger (mirrors /pr-fix patterns)
+if [ "$TIER" = "standard" ] && [ "$RUN_ADVERSARIAL" = "false" ]; then
+  SENSITIVE_PATHS=$(git diff --name-only "origin/$INTEGRATION...HEAD" 2>/dev/null \
+    | grep -E '(supabase/migrations/|/auth/|/middleware\.|/rls\.|/policies\.)' || true)
+  SENSITIVE_CONTENT=""
+  if git diff "origin/$INTEGRATION...HEAD" 2>/dev/null \
+    | grep -qE 'SECURITY DEFINER|GRANT EXECUTE|REVOKE EXECUTE|CREATE POLICY|ALTER POLICY'; then
+    SENSITIVE_CONTENT="yes"
+  fi
+  if [ -n "$SENSITIVE_PATHS" ] || [ -n "$SENSITIVE_CONTENT" ]; then
+    RUN_ADVERSARIAL=true
+    TRIGGER_REASON="sensitive-path auto-trigger"
+    echo "⚠ Antagonistic review auto-triggered on tier:standard — diff touches sensitive surface."
+    [ -n "$SENSITIVE_PATHS" ] && echo "  Paths: $(echo "$SENSITIVE_PATHS" | tr '\n' ' ')"
+    [ -n "$SENSITIVE_CONTENT" ] && echo "  Content: RLS/SECURITY DEFINER/GRANT-EXECUTE pattern in diff"
+  fi
+fi
+
+if [ "$RUN_ADVERSARIAL" = "false" ]; then
+  : # skip to Step 6
+else
+  echo "Antagonistic review: $TRIGGER_REASON"
+fi
 ```
 
 If `RUN_ADVERSARIAL=false`, skip to Step 6.
+
+**Sensitive-path patterns** mirror `/pr-fix`'s plan (which lands Week 4). Defaults:
+- **Paths:** `supabase/migrations/`, `/auth/`, `/middleware\.`, `/rls\.`, `/policies\.`
+- **Content (diff body grep):** `SECURITY DEFINER`, `GRANT EXECUTE`, `REVOKE EXECUTE`, `CREATE POLICY`, `ALTER POLICY`
+
+The reasoning: these are the exact surfaces where shipping without adversarial review historically caused incidents — RLS bypasses, missing `search_path` on SECURITY DEFINER functions, GRANT scope creep. Trivial-but-not-quick standard issues that don't touch these surfaces stay opt-in (no token blowup on `tier:standard` typo fixes). Project-specific path/content overrides can be added to `method.config.md` in a future `[verify.sensitive_paths]` block (deferred to v2.7.1+).
 
 ### Step 5a — Spawn the adversarial subagent
 
@@ -587,7 +628,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 - No Linear status updates — `pk ship` and `pk done` post the necessary ones.
 - No PR creation — `pk ship` is separate.
 - No re-running of failed tests — fix and re-invoke (idempotent).
-- No `Logs/Verify/` pruning — consuming projects own retention; recommend gitignore (see `STARTUP.md`).
+- No `Logs/Verify/` pruning — artifacts are intentionally committed as the per-PR audit trail (v2.7.0-rc1 decision). Consuming projects own retention via periodic cleanup commits (e.g., quarterly `git rm -r Logs/Verify/<old-date>/`). Do NOT gitignore — the verify-complete.md sentinel travels with the merge as evidence that the pre-deploy gate passed at that SHA.
 - No source modifications. Subagents have `Read, Bash, Write` — `Write` is scoped to `$VERIFY_DIR`. They do not edit project source files.
 
 ## Comparison with v2.6
@@ -600,5 +641,5 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | Verify-complete sentinel | None | `verify-complete.md` on PASS (read by `pk ship` Day 3) |
 | Pass-with-flags pause | Yes (Step 3.5) | Yes (Step 6) — flag check E added for antagonistic findings |
 | Auto-ship rollover | Yes (Step 4) | Yes (Step 9) — unchanged behavior |
-| Antagonistic review | Not present | Mandatory tier:heavy; opt-in `--review` tier:standard |
+| Antagonistic review | Not present | Mandatory tier:heavy; auto on sensitive-path diffs for tier:standard; opt-in `--review` for tier:standard otherwise |
 | QA verdict capture | Parent-side parse | Subagent writes `$VERIFY_DIR/qa-verdict.md`; parent inlines into reality-check.md |

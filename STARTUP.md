@@ -110,7 +110,7 @@ Execute in order. Each step unlocks the next.
 [ ] Clone locally
 [ ] Initialize framework (e.g., `npx create-next-app@latest`)
 [ ] Set up TypeScript strict mode
-[ ] Add .gitignore, .env.example  (recommended entries: .pk-work/, Logs/Verify/)
+[ ] Add .gitignore, .env.example  (recommended entry: .pk-work/ — transient /work marker files)
 [ ] Create initial CLAUDE.md (project overview, stack, conventions)
 [ ] Set up branch protection (main: require PR + CI)
 ```

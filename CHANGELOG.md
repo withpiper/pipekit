@@ -66,7 +66,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
   - `reality-check.md` — gate-results table with anchors, inlined `qa-verdict.md` (Step 4) + `adversarial.md` (Step 5), flags surfaced, status reasoning, next actions.
   - `verify-complete.md` — minimal sentinel (issue, stamp, tier, status, sha) written **only on PASS**. Stale sentinels are explicitly removed on NEEDS WORK so `pk ship`'s gate cannot trust a stale file.
 - **QA verdict via Write tool.** Subagent is configured with `allowed-tools: Read, Bash, Write` and writes its verdict block to `$VERIFY_DIR/qa-verdict.md` directly. Returns a one-line confirmation. Removes parent-side parsing. Anchor-emit discipline: cite sources as `<file>:<line>`, gate output as `evidence.txt:L<line>`.
-- **Step 5 antagonistic review.** New subagent dispatch using the **verbatim** DOUBT prompt from `pipekit-discipline.md`. Mandatory for `tier:heavy`, opt-in via `--review` for `tier:standard`, skipped for `tier:quick`. Writes findings to `$VERIFY_DIR/adversarial.md`. Findings do NOT auto-downgrade status — classification (AC misread / actionable / trade-off / noise) is the user's RECONCILE call, not the subagent's.
+- **Step 5 antagonistic review.** New subagent dispatch using the **verbatim** DOUBT prompt from `pipekit-discipline.md`. Mandatory for `tier:heavy`. For `tier:standard`: auto-fires on **sensitive-path diffs** (paths matching `supabase/migrations/`, `/auth/`, `/middleware\.`, `/rls\.`, `/policies\.` or diff content matching `SECURITY DEFINER` / `GRANT EXECUTE` / `REVOKE EXECUTE` / `CREATE POLICY` / `ALTER POLICY`); otherwise opt-in via `--review`. Skipped for `tier:quick`. Patterns mirror Week 4's `/pr-fix` design. Writes findings to `$VERIFY_DIR/adversarial.md`. Findings do NOT auto-downgrade status — classification (AC misread / actionable / trade-off / noise) is the user's RECONCILE call, not the subagent's.
 - **Flag check E** added to Step 6 enumeration: antagonistic findings count surface as flags, pausing auto-ship per the load-bearing F6 rule. Existing Step 3.5 (now Step 6) flag logic and Step 4 (now Step 9) auto-ship behavior preserved verbatim.
 
 **`pk ship` verify-complete.md gate** (`bin/pk`)
@@ -87,7 +87,7 @@ The DOUBT prompt format borrows from doubt-driven-development (addyosmani) and a
 
 - **Pin to v2.7.0-rc1.** Run `./scripts/sync-method.sh v2.7.0-rc1` from inside your consuming project. RC sync recommended for one cycle of dogfooding before bumping to v2.7.0 stable.
 - **`tier:*` labels.** Add the `tier:(quick|standard|heavy)` Linear labels to your team if not already present (per v2.6.0 reinstatement). Issues without a tier label default to `standard` — gate behaves as if the issue is opted in to the artifact pipeline.
-- **`.gitignore` recommendation.** Add `Logs/Verify/` and `.pk-work/` to your project's `.gitignore` (see `STARTUP.md` § 3.1). These are per-machine evidence artifacts; checking them in produces noisy diffs and inflates worktree size.
+- **`.gitignore` recommendation.** Add `.pk-work/` only (transient `/work` marker files). `Logs/Verify/` is **intentionally committed** as the per-PR audit trail — the `verify-complete.md` sentinel travels with the merge as evidence that the pre-deploy gate passed at the verified SHA. Retention is the consumer's call (periodic `git rm -r Logs/Verify/<old-date>/` commits work fine).
 - **Linear API key required for `pk_linear_tier`.** The gate falls back to `standard` if Linear is unreachable, but the artifact layer requires you to actually call `/verify` to produce `verify-complete.md`. Projects without a Linear key still gate on file presence — they just can't differentiate tiers.
 - **`--force` audit trail.** Bypassing the gate via `pk ship --force` posts a Linear comment to the issue: `Shipped without verify-complete.md (--force at <ISO-timestamp>)`. Use sparingly — `pk_linear_comment` is best-effort so an outage won't block the ship.
 - **`PK_VERIFY_BYPASS=1`** is the emergency escape, not the daily-driver escape. It bypasses Linear comment writing and only appends to `Logs/Verify/bypass.log`. Reserve for production incident recovery when Linear is also down.
@@ -95,7 +95,7 @@ The DOUBT prompt format borrows from doubt-driven-development (addyosmani) and a
 ### What's deferred to v2.7.0 stable
 
 - **Week 4: `/pr-fix` full subagent dispatch.** Diff-aware persona dispatch (always-on quartet + conditional security/migration/performance/adversarial), cross-persona promotion (3-line bucket match-key + 25→50→75→100 confidence ladder), severity × autofix matrix with `--quick` remap. `--legacy-flat` escape hatch preserves v2.6 behavior.
-- **Antagonistic review for `tier:standard` without `--review`.** Currently opt-in; tier:standard projects can run a full cycle without the review subagent firing. Will revisit after dogfood data on Pipekit-the-repo.
+- **Project-configurable sensitive-path patterns for `/verify`** — currently hardcoded; future `[verify.sensitive_paths]` block in `method.config.md` would let consumers override the defaults. Deferred to v2.7.1+ along with the analogous `[pr-fix.sensitive_paths]` block.
 - **Phase 2: `/pk-compound` + `resources/solutions/`.** Bug-track first, knowledge-track reassess at month 3.
 
 ---
