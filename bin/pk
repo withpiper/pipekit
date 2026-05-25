@@ -1088,6 +1088,41 @@ cmd_ship() {
     return 1
   fi
 
+  # --- v2.7 verify-complete.md gate (Day 3 — warn-only) -------------------
+  # Day 2 wired /verify to write Logs/Verify/<date>/<id>/verify-complete.md
+  # on PASS. This block reads the sentinel; missing file means /verify was
+  # not run or returned NEEDS WORK. Initial landing is warn-only (return 0)
+  # so existing flows keep working while consumers adopt the new /verify.
+  # Next commit flips to hard-fail (return 1).
+  if [ "${PK_VERIFY_BYPASS:-0}" = "1" ]; then
+    echo "⚠ verify-complete.md gate bypassed via PK_VERIFY_BYPASS=1" >&2
+    mkdir -p Logs/Verify 2>/dev/null
+    echo "$(date -u +%FT%TZ) ${issue}" >> Logs/Verify/bypass.log 2>/dev/null || true
+  else
+    local _tier
+    _tier=$(pk_linear_tier "$issue" 2>/dev/null || echo "standard")
+    local _today _vc
+    _today=$(date -u +%Y%m%d)
+    _vc="Logs/Verify/${_today}/${issue}/verify-complete.md"
+
+    if [ ! -f "$_vc" ]; then
+      if [ "$_tier" = "quick" ]; then
+        echo "⚠ verify-complete.md missing (${_vc}) — tier:quick is virtual, proceeding." >&2
+      elif $force; then
+        echo "⚠ verify-complete.md missing — bypassed via --force." >&2
+        pk_linear_comment "$issue" "Shipped without verify-complete.md (--force at $(date -u +%FT%TZ))" || true
+      else
+        echo "WARN: verify-complete.md missing for ${issue}." >&2
+        echo "      Expected: ${_vc}" >&2
+        echo "      Run /verify first, or pass --force to bypass (logs a Linear comment)." >&2
+        echo "      (Warn-only this release — next release hard-fails.)" >&2
+        # Day 3 commit 1: warn-only — fall through to ship.
+        # Day 3 commit 2 inserts `return 1` here.
+      fi
+    fi
+  fi
+  # ------------------------------------------------------------------------
+
   # Push (idempotent — git is fine with re-pushes)
   echo "Pushing $current..."
   git push -u origin "$current"
