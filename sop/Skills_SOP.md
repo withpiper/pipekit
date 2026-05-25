@@ -95,6 +95,29 @@ description: One-line description of what the skill does
 [Full skill instructions...]
 ```
 
+### Frontmatter Conventions
+
+Two patterns are now standard:
+
+**1. `description:` as trigger surface.** The `description` field is where you pack invocation triggers. Format:
+
+```
+description: <one-line what it does>. Use when <condition A>. Use when <condition B>.
+```
+
+The "Use when" clauses are what Claude scans to decide whether to auto-invoke. Vague descriptions ("Helper skill for X") will not be invoked when they should be; trigger-phrased descriptions will. Temporal variants (`Use after`, `Use before`, `Use as Stage 0 step…`) are acceptable when the trigger is sequential rather than conditional.
+
+**2. `disable-model-invocation: true` for prompt-only skills.** Skills that should only run when the user explicitly types `/<name>` — never auto-invoked — set this key. Currently applied to: `/pk-exit`, `/concept`, `/define`. Cost is one frontmatter line; benefit is explicit intent signal and cheaper agent runs.
+
+### Body Conventions for High-Stakes Skills
+
+Skills that gate ship/merge decisions (`/verify`, `/pr-fix`, `/pr-security-review`, `/work`, `/pk-bug`) include two extra body sections:
+
+- **`## When NOT to use`** — explicit anti-criteria. Prevents misuse on the wrong surface. Example for `/verify`: "Not for design review — see `/pr-fix`. Not for security audits — see `/security-review`."
+- **`## Common Rationalizations`** — three to five sentences the user might say to skip the skill, paired with the rebuttal. Example for `/verify`: "'It's a small change' → run the gate anyway; the gate is the gate."
+
+These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill-index`) — they'd be noise. Apply only where misuse has a meaningful cost.
+
 ### Key Conventions
 
 1. **Read `method.config.md`** for project-specific values (Linear team, issue prefix, state IDs)

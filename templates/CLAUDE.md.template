@@ -98,6 +98,7 @@ Feedback-derived rules this project has learned to follow. Add new rules when pa
 | Linear workflow | On demand | `method/sop/Linear_SOP.md` |
 | Skills authoring | On demand | `method/sop/Skills_SOP.md` |
 | VBW commands | On demand | `method/sop/VBW_Help.md` |
+| Reusable solution patterns (Phase 2) | On demand | `resources/solutions/` |
 
 Add new rules as topics emerge in this project. See `.claude/rules/README.md` for naming conventions.
 
