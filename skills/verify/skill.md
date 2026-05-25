@@ -15,13 +15,14 @@ You verify that a feature branch's work is shippable. You run the project's pre-
 - `reality-check.md` — structured verdict with gate results table, QA block, flags, status reasoning
 - `verify-complete.md` — minimal sentinel written only on PASS
 
-The Day 3 wiring will have `pk ship` read `verify-complete.md` as a hard gate. Day 2 (this skill) only **writes** the artifacts; `pk ship` does not yet consult them.
+`pk ship` reads `verify-complete.md` as a hard gate (wired Day 3). Without that file, ship aborts — except `tier:quick` (warn + proceed), `--force` (bypass + Linear audit comment), or `PK_VERIFY_BYPASS=1` (emergency, logs to bypass.log).
 
 ## Triggers
 
 - `/verify` — primary; uses current branch's issue ID
 - `/verify <ISSUE-ID>` — explicit
 - `/verify --qa` — force QA review even if `Require QA review: false`
+- `/verify --review` — force antagonistic review (mandatory anyway for tier:heavy)
 - "verify this" / "is this ready to ship?"
 
 ## Required preconditions
@@ -60,9 +61,9 @@ VERIFY_DIR="Logs/Verify/${TODAY}/${ISSUE}"
 | standard | yes | written | written on PASS | per config + `--qa` | hard, file required (Day 3) |
 | heavy | yes | written | written on PASS | per config + `--qa` | hard, file required (Day 3) |
 
-Antagonistic review (mandatory in heavy, opt-in via `--review` in standard) is wired Day 4.
+Antagonistic review (mandatory in heavy, opt-in via `--review` in standard) is Step 5 below.
 
-For tier:quick, the rest of this skill executes against stdout only — no file writes — and Step 6 / Step 7 are skipped. For tier:standard and tier:heavy, every step below appends to or writes the files under `$VERIFY_DIR`.
+For tier:quick, the rest of this skill executes against stdout only — no file writes — and Steps 5 / 7 / 8 are skipped. For tier:standard and tier:heavy, every step below appends to or writes the files under `$VERIFY_DIR`. Step 5 (antagonistic) is also skipped for tier:standard unless `--review` is passed.
 
 ## Step 1 — Read configuration
 
@@ -156,7 +157,7 @@ The first failing command's last 30 lines:
 Next: fix the gate failure, then re-run /verify (idempotent).
 ```
 
-For `TIER != quick`, still write `reality-check.md` (Step 6) with status NEEDS WORK. Do **not** write `verify-complete.md`. Do **not** run QA review on a failed gate.
+For `TIER != quick`, still write `reality-check.md` (Step 7) with status NEEDS WORK. Do **not** write `verify-complete.md`. Do **not** run QA review on a failed gate. Do **not** run antagonistic review on a failed gate.
 
 If `GATE_RC == 0`, print:
 
@@ -187,6 +188,8 @@ Backend-pluggable:
 - **vbw** backend: use `subagent_type: "vbw:vbw-qa"` (project must have VBW installed)
 - **native** backend: use `subagent_type: "general-purpose"`
 
+The subagent is configured with `allowed-tools: Read, Bash, Write` (the `Write` permission is what lets it land the verdict file). Recommend `model: sonnet` — deterministic file-shaping work.
+
 Use Task tool with:
 
 - `description: "QA review of <ISSUE-ID>"`
@@ -196,9 +199,19 @@ Use Task tool with:
 
   Linear issue: <ISSUE-ID>
   Branch: <CURRENT>
+  Tier: <TIER>
+
+  Write target: <VERIFY_DIR>/qa-verdict.md
+    Use the Write tool to create this file with the verdict block below.
+    Return only a one-line confirmation: "QA verdict written: <path>".
 
   Spec (from Linear):
   <full description from step 4a>
+
+  Gate evidence (for anchor cites):
+  <VERIFY_DIR>/evidence.txt
+    Cite gate output as `evidence.txt:L<line>` — point at the `==> $ ...`
+    header row for each command, not the body.
 
   Diff (relative to origin/<INTEGRATION>):
   <output of git diff --stat>
@@ -211,7 +224,14 @@ Use Task tool with:
   4. Look for things the diff DID that the spec didn't authorize (scope creep).
   5. Note any obvious bugs you can see (logic errors, missing null checks in financial math, RLS bypasses).
 
-  Return verdict in this exact format:
+  Anchor-emit discipline:
+  - Cite source lines as `<file>:<line>` (e.g., `app/lib/budget.ts:88`)
+  - Cite gate output as `evidence.txt:L<line>` (the `==> $` header row)
+  - Vague refs ("somewhere in the auth module") are invalid — re-grep until you have a line.
+
+  Write to <VERIFY_DIR>/qa-verdict.md exactly this shape:
+
+  ## QA verdict
 
   **Verdict:** Pass | Partial | Fail
   **Reasoning:** <2–4 sentences>
@@ -219,13 +239,13 @@ Use Task tool with:
   **Per-AC table:**
   | # | AC summary | Status | Evidence |
   |---|---|---|---|
-  | 1 | <text> | Met / Unmet / Partial | <file:line or "no change found"> |
+  | 1 | <text> | Met / Unmet / Partial | `<file>:<line>` or "no change found" |
 
   **Omissions:** <list of spec requirements not addressed in diff, or "none">
 
   **Scope creep:** <list of diff changes not authorized by spec, or "none">
 
-  **Bugs noticed:** <list of obvious bugs, or "none observed">
+  **Bugs noticed:** <list of obvious bugs with file:line, or "none observed">
 
   Verdict rules:
   - Pass — every AC has Met evidence; no omissions; no significant scope creep; no bugs noticed
@@ -233,13 +253,92 @@ Use Task tool with:
   - Fail — fundamental ACs Unmet, OR scope creep significant enough to block ship, OR bugs noticed
   ```
 
-Wait for the subagent to return. Capture its full verdict block as `QA_BLOCK` (Day 4 will rewrite this to a Write-to-reality-check pattern with anchor-emit discipline; Day 2 keeps the parent-side capture). Print verbatim — no editorializing.
+The subagent returns only a one-line confirmation; the verdict block lives in the file. Parent-side parsing is removed — Step 7 reads `qa-verdict.md` and inlines it into `reality-check.md`.
 
-Set `QA_VERDICT` to `Pass | Partial | Fail` for use in Step 6 status reasoning.
+After the subagent returns, read `$VERIFY_DIR/qa-verdict.md` and grep the **Verdict:** line to set `QA_VERDICT` (`Pass | Partial | Fail`) for use in Step 6 flag check B and Step 7 status reasoning.
 
-## Step 5 — Human-decision flag enumeration
+If the subagent fails to write the file (Write permission denied, disk full), surface the error and treat the QA verdict as `Fail` — better to block ship than to ship on a silently-missing verdict.
 
-After the gate (and QA, if run), enumerate any **human-decision flags** present. A flag is anything that should pause the auto-ship chain even when the headline verdict is Pass. The principle: the auto-chain is a feature, but it must not bypass a human eye when there is any signal worth a human eye.
+## Step 5 — Antagonistic review (mandatory in tier:heavy; opt-in via --review in tier:standard; skipped in tier:quick)
+
+Antagonistic review is a separate, adversarial subagent with the **same inputs** as QA (diff + AC list) but a different lens: find what is wrong, not whether it shipped. The prompt is the **verbatim DOUBT prompt** from `pipekit-discipline.md` § Completion Claims — never paraphrase it, the wording is load-bearing.
+
+Run conditions:
+
+```bash
+RUN_ADVERSARIAL=false
+[ "$TIER" = "heavy" ] && RUN_ADVERSARIAL=true
+[ "$TIER" = "standard" ] && echo "$@" | grep -q -- '--review' && RUN_ADVERSARIAL=true
+```
+
+If `RUN_ADVERSARIAL=false`, skip to Step 6.
+
+### Step 5a — Spawn the adversarial subagent
+
+Backend-pluggable (same as QA):
+
+- **vbw** backend: use `subagent_type: "vbw:vbw-qa"` (re-uses QA agent — only the prompt differs)
+- **native** backend: use `subagent_type: "general-purpose"`
+
+Configure with `allowed-tools: Read, Bash, Write`. Recommend `model: opus` — adversarial review benefits from deeper reasoning.
+
+Use Task tool with:
+
+- `description: "Antagonistic review of <ISSUE-ID>"`
+- Prompt template (the verbatim DOUBT prompt wrapped with Write target + inputs):
+  ```
+  Write target: <VERIFY_DIR>/adversarial.md
+    Use the Write tool to create this file with your findings.
+    Return only a one-line confirmation: "Adversarial findings written: <path>".
+
+  Anchor-emit discipline:
+  - Cite source lines as `<file>:<line>`
+  - Cite gate output as `evidence.txt:L<line>`
+  - No vague refs.
+
+  Write to <VERIFY_DIR>/adversarial.md exactly this shape:
+
+  ## Antagonistic review
+
+  Findings (or "No issues found after thorough examination."):
+
+  | # | Finding | File:line | Class |
+  |---|---|---|---|
+  | 1 | <text> | `<file>:<line>` | unstated_assumption \| edge_case \| coupling \| contract_violation \| convention_break \| failure_mode |
+
+  ---
+
+  Adversarial review. Find what is wrong with this artifact.
+  Assume the author is overconfident. Look for:
+  - Unstated assumptions
+  - Edge cases not handled
+  - Hidden coupling or shared state
+  - Ways the contract could be violated
+  - Existing conventions this might break
+  - Failure modes under unexpected input
+
+  Do NOT validate. Do NOT summarize. Find issues, or state
+  explicitly that you cannot find any after thorough examination.
+
+  ARTIFACT:
+  <output of git diff --stat>
+  <output of git diff>
+
+  CONTRACT:
+  <full Linear issue description from Step 4a — the AC list is the contract>
+  ```
+
+The adversarial subagent's job is to find issues — it does NOT classify them. Classification happens in the parent's RECONCILE step (per `pipekit-discipline.md` § Completion Claims): AC misread → Valid actionable → Valid trade-off → Noise. That step is the user's, not the subagent's.
+
+After the subagent returns, read `$VERIFY_DIR/adversarial.md` and count findings to set `ADVERSARIAL_FINDING_COUNT`. Used in Step 7 status reasoning and Step 6 flag check E (added below).
+
+### Doubt theater check
+
+Per the discipline rule: "2+ cycles with substantive findings, zero actionable classifications = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future `/pk-compound`-style iteration loop. Day-4 deliverable surfaces the findings; user judgment closes the loop.
+
+## Step 6 — Human-decision flag enumeration
+
+After the gate, QA, and antagonistic review (if run), enumerate any **human-decision flags** present. A flag is anything that should pause the auto-ship chain even when the headline verdict is Pass. The principle: the auto-chain is a feature, but it must not bypass a human eye when there is any signal worth a human eye.
 
 Run these checks in order. Surface every match. For `TIER != quick`, also append each surfaced flag as a `FLAG: ...` line to `$VERIFY_DIR/evidence.txt`.
 
@@ -291,15 +390,28 @@ fi
 
 The marker is `.pk-work/` per repo convention; gitignored.
 
+### Flag check E — Antagonistic review surfaced findings
+
+If Step 5 ran and `ADVERSARIAL_FINDING_COUNT > 0`, surface one flag per finding (or one aggregate flag, your choice — the count matters more than the granularity):
+
+```bash
+if [ -n "$ADVERSARIAL_FINDING_COUNT" ] && [ "$ADVERSARIAL_FINDING_COUNT" -gt 0 ]; then
+  echo "FLAG: antagonistic review surfaced $ADVERSARIAL_FINDING_COUNT finding(s) — see adversarial.md"
+  [ "$TIER" != "quick" ] && printf 'FLAG: antagonistic review: %d finding(s)\n' "$ADVERSARIAL_FINDING_COUNT" >> "$VERIFY_DIR/evidence.txt"
+fi
+```
+
+Adversarial findings are advisory — they do not auto-downgrade the QA verdict — but they always warrant a human eye before ship. The RECONCILE step (per `pipekit-discipline.md` § Completion Claims) is the user's: AC misread → Valid actionable → Valid trade-off → Noise.
+
 ### Tally
 
-After all four checks, count flags:
+After all five checks, count flags:
 
 ```bash
 FLAG_COUNT=<sum of flags surfaced above>
 ```
 
-If `FLAG_COUNT > 0`, the verdict is treated as **Pass-with-flags** in Step 8's auto-ship decision, even if the QA verdict block says Pass. This is the load-bearing rule for F6.
+If `FLAG_COUNT > 0`, the verdict is treated as **Pass-with-flags** in Step 9's auto-ship decision, even if the QA verdict block says Pass. This is the load-bearing rule for F6.
 
 Print one summary line:
 
@@ -307,7 +419,7 @@ Print one summary line:
 Flags: <count>  ·  Auto-ship: <will-fire | paused>
 ```
 
-## Step 6 — Write reality-check.md (skip for tier:quick)
+## Step 7 — Write reality-check.md (skip for tier:quick)
 
 For `TIER != quick`, render `$VERIFY_DIR/reality-check.md` with this structure:
 
@@ -332,31 +444,32 @@ For `TIER != quick`, render `$VERIFY_DIR/reality-check.md` with this structure:
 
 ## QA verdict
 
-<QA_BLOCK verbatim, or "Not run.">
+<inline contents of `$VERIFY_DIR/qa-verdict.md`, or "Not run.">
 
 ## Antagonistic review
 
-Not applicable for tier:<TIER>. (Wired Day 4 for tier:heavy; opt-in via `--review` for tier:standard.)
+<inline contents of `$VERIFY_DIR/adversarial.md`, or "Not run (tier:<TIER>, no --review).">
 
 ## Flags surfaced
 
-<bulleted list of all flags from Step 5, or "none">
+<bulleted list of all flags from Step 6, or "none">
 
 ## Status reasoning
 
 <2–4 sentences. Examples:
  - "Gate green, QA Pass, 0 flags → PASS."
  - "Gate green, QA Pass, 2 flags (migration files; --qa forced) → PASS (auto-ship paused for human decision)."
+ - "Gate green, antagonistic review 3 findings → PASS (auto-ship paused; user reconciles findings before ship)."
  - "Gate red on `pnpm turbo run lint` (exit 1) → NEEDS WORK.">
 
 ## Next actions
 
-<hint copy from Step 8's verdict table, scoped to this run's verdict + flag count>
+<hint copy from Step 9's verdict table, scoped to this run's verdict + flag count>
 ```
 
-Use the Write tool with `file_path = "$VERIFY_DIR/reality-check.md"` to land the file. Re-runs overwrite.
+Use the Write tool with `file_path = "$VERIFY_DIR/reality-check.md"` to land the file. Re-runs overwrite. The QA and adversarial sections inline the fragment files written by their respective subagents — assembly happens here, not at subagent boundaries (parent-side parsing is for inclusion, not for verdict computation).
 
-## Step 7 — Write verify-complete.md on PASS (skip for tier:quick)
+## Step 8 — Write verify-complete.md on PASS (skip for tier:quick)
 
 For `TIER != quick` AND status == PASS, write `$VERIFY_DIR/verify-complete.md`:
 
@@ -372,21 +485,23 @@ reality-check: reality-check.md
 sha: <git rev-parse HEAD>
 ```
 
-**Status logic (Day 2 — loose):**
+**Status logic:**
 
 - Gate red → NEEDS WORK (no `verify-complete.md`)
 - QA ran and Verdict == Fail → NEEDS WORK (no `verify-complete.md`)
 - Otherwise (gate green AND no QA-Fail) → PASS (write `verify-complete.md`)
 
-Flags do **not** downgrade the status — they pause auto-ship in Step 8 but the file still gets written. Day 3 wires `pk ship` to consult `verify-complete.md`; the Step 8 flag-pause is the additional human-gate layer.
+Antagonistic findings do **not** downgrade the status — they pause auto-ship in Step 9 via Flag check E, but the file still gets written. The reasoning: adversarial review surfaces issues for the user to RECONCILE; classification (actionable vs trade-off vs noise) is the user's, not the subagent's. Pre-classifying as Fail would short-circuit the discipline.
 
-If the status is NEEDS WORK and a previous PASS run left a stale `verify-complete.md` on disk, delete it explicitly so the next `pk ship` (after Day 3 wires the gate) cannot trust a stale sentinel:
+Flags do **not** downgrade the status — they pause auto-ship in Step 9 but the file still gets written. `pk ship` consults `verify-complete.md` (Day 3); the Step 9 flag-pause is the additional human-gate layer.
+
+If the status is NEEDS WORK and a previous PASS run left a stale `verify-complete.md` on disk, delete it explicitly so the next `pk ship` cannot trust a stale sentinel:
 
 ```bash
 [ -f "$VERIFY_DIR/verify-complete.md" ] && [ "$STATUS" != "PASS" ] && rm "$VERIFY_DIR/verify-complete.md"
 ```
 
-## Step 8 — Hand off (with auto-ship for the /work rollover path)
+## Step 9 — Hand off (with auto-ship for the /work rollover path)
 
 Based on verdict + flag tally, print the next-action:
 
@@ -412,7 +527,7 @@ Verify complete: <VERIFY_DIR>/verify-complete.md  (present only on PASS)
 Auto-ship fires when **all three** conditions hold:
 
 1. The verdict is **Pass** (gate green; QA Pass if QA ran).
-2. The flag tally from Step 5 is **zero** (no migration files, no QA Pass-with-non-empty sub-sections, no `--qa` force, no `/work` advisory marker).
+2. The flag tally from Step 6 is **zero** (no migration files, no QA Pass-with-non-empty sub-sections, no `--qa` force, no `/work` advisory marker, no antagonistic findings).
 3. This skill was invoked with the `--auto-ship` argument (passed via the Skill tool's `args` parameter by `/work`'s Step 7 rollover).
 
 Behavior:
@@ -444,7 +559,7 @@ To proceed:
   • OR /work --resume <ISSUE-ID> if execution gaps remain.
 ```
 
-Then **stop**. The chain does not advance to `pk ship` without explicit human action. This rule is non-negotiable — it is the entire reason Step 5 exists. Skipping it on agent judgment reintroduces the F6 failure mode the canary 2026-05-14 surfaced.
+Then **stop**. The chain does not advance to `pk ship` without explicit human action. This rule is non-negotiable — it is the entire reason Step 6 exists. Skipping it on agent judgment reintroduces the F6 failure mode the canary 2026-05-14 surfaced.
 
 ### Standalone /verify (no --auto-ship)
 
@@ -473,7 +588,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 - No PR creation — `pk ship` is separate.
 - No re-running of failed tests — fix and re-invoke (idempotent).
 - No `Logs/Verify/` pruning — consuming projects own retention; recommend gitignore (see `STARTUP.md`).
-- No antagonistic review (Day 4 wires this for tier:heavy mandatory + tier:standard `--review` opt-in).
+- No source modifications. Subagents have `Read, Bash, Write` — `Write` is scoped to `$VERIFY_DIR`. They do not edit project source files.
 
 ## Comparison with v2.6
 
@@ -483,5 +598,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | Evidence artifact | None | `Logs/Verify/<date>/<id>/evidence.txt` with per-command exit + duration |
 | Reality check | Printed to stdout | Written to `reality-check.md` for standard/heavy |
 | Verify-complete sentinel | None | `verify-complete.md` on PASS (read by `pk ship` Day 3) |
-| Pass-with-flags pause | Yes (Step 3.5) | Yes (Step 5) — unchanged behavior |
-| Auto-ship rollover | Yes (Step 4) | Yes (Step 8) — unchanged behavior |
+| Pass-with-flags pause | Yes (Step 3.5) | Yes (Step 6) — flag check E added for antagonistic findings |
+| Auto-ship rollover | Yes (Step 4) | Yes (Step 9) — unchanged behavior |
+| Antagonistic review | Not present | Mandatory tier:heavy; opt-in `--review` tier:standard |
+| QA verdict capture | Parent-side parse | Subagent writes `$VERIFY_DIR/qa-verdict.md`; parent inlines into reality-check.md |
