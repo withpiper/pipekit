@@ -511,6 +511,20 @@ pk_linear_comment() {
   echo "  Linear: comment posted on $id"
 }
 
+# Return the issue's tier (quick|standard|heavy) by scanning Linear labels for
+# the first `tier:*` match. Defaults to "standard" when no label is set or the
+# Linear lookup fails — keeps the v2.7 verify-complete.md gate operative even
+# when Linear is unreachable. Mirrors the label-scan logic in skills/work/skill.md.
+pk_linear_tier() {
+  local id="$1"
+  local q='query($id: String!) { issue(id: $id) { labels { nodes { name } } } }'
+  local tier
+  tier=$(pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" 2>/dev/null \
+    | jq -r '.data.issue.labels.nodes[]?.name // empty' 2>/dev/null \
+    | grep -oE '^tier:(quick|standard|heavy)$' | head -1 | sed 's/^tier://')
+  echo "${tier:-standard}"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Git / worktree helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1052,11 +1066,15 @@ cmd_ship() {
   # `pk ready <ID>` (or `pk ship --ready`) to flip Draft → Ready and
   # fire the merge-time review.
   local ready=false
+  # v2.7: --force bypasses the verify-complete.md gate (wired Day 3).
+  # Parsed now so callers can adopt the flag before the gate lands.
+  local force=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --env=*) env="${1#--env=}"; shift ;;
       --review) review=true; shift ;;
       --ready) ready=true; shift ;;
+      --force) force=true; shift ;;
       *) shift ;;
     esac
   done
