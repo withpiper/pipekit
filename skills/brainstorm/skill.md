@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: Analyze a feature idea, assess feasibility, and create a Linear issue
+description: Analyze a feature idea, assess feasibility, file Linear issue. Use when the user shares a raw idea mid-session. Use when scoping a feature before /light-spec. Produces a triaged Linear ticket, not a full spec.
 ---
 
 # Brainstorm Skill

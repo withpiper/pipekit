@@ -1,6 +1,6 @@
 ---
 name: roadmap-review
-description: Validate roadmap health — issue completeness, dependency ordering, spec coverage, and doc freshness
+description: Audit roadmap health — issues, dependency order, spec coverage, doc freshness. Use when speccing a new phase. Use when /phase-plan output looks suspicious. Use before /roadmap-create reruns.
 ---
 
 # Roadmap Review Skill

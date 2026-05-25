@@ -1,6 +1,6 @@
 ---
 name: work
-description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Backend-pluggable (vbw | native) per method.config.md.
+description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Backend-pluggable (vbw | native | auto) per method.config.md.
 ---
 
 # /work

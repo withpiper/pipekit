@@ -1,6 +1,6 @@
 ---
 name: phase-plan
-description: Select issues for the next execution phase, track phase state, and promote to "Needs Spec"
+description: Compose the next execution phase from the roadmap, track phase state, promote to Needs Spec. Use when current phase is closing and you need to pick the next batch. Use when PHASES.md needs a fresh Current Phase entry.
 ---
 
 # Phase Plan Skill

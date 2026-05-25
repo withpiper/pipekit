@@ -1,6 +1,6 @@
 ---
 name: sync-linear
-description: Bidirectional sync between VBW planning files and Linear workspace
+description: Bidirectional sync between VBW planning files and Linear. Use when .vbw-planning/ and Linear have drifted. Use after manual edits to either side. Keeps planning state coherent between the two surfaces.
 ---
 
 # Sync Linear Skill

@@ -1,6 +1,6 @@
 ---
 name: brainstorm-review
-description: Batch disposition of untriaged Linear issues — Now/Later/Kill for each, with scope reduction for "Now" items
+description: Batch-triage untriaged Linear issues — Now/Later/Kill verdict per item. Use when the brainstorm backlog has stacked up. Use before /phase-plan to clean the candidate pool. EXPAND/HOLD/REDUCE framework with scope reduction on Now items.
 ---
 
 # Brainstorm Review Skill

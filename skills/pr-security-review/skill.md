@@ -1,6 +1,6 @@
 ---
 name: pr-security-review
-description: Security-focused antagonistic review of a PR diff. Purpose-built for migrations, RLS policies, SECURITY DEFINER functions, auth changes — surfaces RLS correctness gaps, search_path attacks, PII leak vectors, action-allowlist coverage, gate-bypass patterns. Different from /security-review (periodic repo audit) and /pr-fix (broad PR review).
+description: Security-focused antagonistic PR diff review. Use when a PR touches migrations, RLS, SECURITY DEFINER, auth, or Server Actions on privileged tables. Use before merge of any security-sensitive change. Different from /security-review (repo-wide) and /pr-fix (broad review).
 ---
 
 # /pr-security-review — Security-focused PR review

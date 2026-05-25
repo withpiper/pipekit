@@ -1,6 +1,6 @@
 ---
 name: pipekit-help
-description: Read the project's current state and recommend the next pipeline step with a one-line why. Push-based replacement for "what skill do I run now?"
+description: Recommend the next pipeline step based on current project state. Use when unsure which Pipekit skill to run next. Use after finishing a step and wanting a deterministic "what now?" answer. Reads filesystem + Linear, not memory.
 ---
 
 # Pipekit Help Skill

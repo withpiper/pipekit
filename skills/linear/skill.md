@@ -1,3 +1,8 @@
+---
+name: linear
+description: Linear issue workflow helper. Use when triaging a Linear ticket. Use when transitioning state outside /work or /verify. Use when you need a structured comment template.
+---
+
 # Linear Issue Workflow
 
 You guide the user through working on a Linear issue end-to-end, updating the issue status and posting comments at each milestone.

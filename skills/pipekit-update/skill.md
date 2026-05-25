@@ -1,6 +1,6 @@
 ---
 name: pipekit-update
-description: Pull the latest Pipekit skills, SOPs, and templates from GitHub into the current project
+description: Pull latest Pipekit skills, SOPs, templates from GitHub into current project. Use when adopting a new Pipekit release. Use when a synced skill has drifted from upstream. Never touches project-specific files.
 ---
 
 # Pipekit Update Skill

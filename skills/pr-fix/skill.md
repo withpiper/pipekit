@@ -1,6 +1,6 @@
 ---
 name: pr-fix
-description: Precision PR review across 4 dimensions with confidence-gated findings, interactive discussion, and targeted remediation
+description: Precision 4-dimension PR review with confidence-gated findings and interactive remediation. Use when a PR has reviewer comments needing structured triage. Use when pk ship --review surfaced findings. Different from /pr-security-review (security-only).
 ---
 
 # PR Fix

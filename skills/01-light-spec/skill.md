@@ -1,7 +1,6 @@
 ---
-# name: light-spec
-Description: Draft a structured light spec for a Linear issue, optionally with Linear agent refinement, ready for VBW planning ingestion
-
+name: light-spec
+description: Structured spec generation with auto-cycled agent review. Use when a Linear issue moves to spec stage. Use when writing/refining a feature spec before /work. Use when /spec-validator flags gaps.
 ---
 
 # Light Spec Skill

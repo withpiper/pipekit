@@ -1,6 +1,6 @@
 ---
 name: roadmap-create
-description: Create a staged roadmap from strategy docs and populate Linear with issues, projects, and milestones
+description: Build a staged roadmap from strategy docs and populate Linear with issues, projects, milestones. Use as Stage 0 step 6 after /strategy-create. Use when bootstrapping the Linear hierarchy for a new project. Merges with VBW phases without overwriting.
 ---
 
 # Roadmap Create Skill

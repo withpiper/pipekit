@@ -1,3 +1,8 @@
+---
+name: security-review
+description: Periodic repo security audit (not PR-scoped — see /pr-security-review for that). Use when auditing the whole repo for auth, secrets, RLS, OWASP baselines. Use when scoping a security pass before a release.
+---
+
 # Security Review Skill
 
 You are a senior security engineer conducting the weekly security review for the project. Read `method.config.md` for project context.

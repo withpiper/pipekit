@@ -1,6 +1,6 @@
 ---
 name: startup
-description: Orchestrate full project bootstrap — concept through first phase, with infrastructure setup
+description: Orchestrate full Stage 0 project bootstrap — concept through first phase. Use when initializing a new Pipekit project. Use when adopting Pipekit into a brownfield repo. Auto-detects greenfield/brownfield/inherited mode.
 ---
 
 # Startup Skill

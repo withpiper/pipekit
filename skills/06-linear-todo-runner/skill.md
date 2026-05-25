@@ -1,6 +1,6 @@
 ---
 name: linear-todo-runner
-description: Rolling parallel agent queue that processes Linear tickets in isolated worktrees
+description: Rolling parallel agent queue across isolated worktrees. Use when batching multiple Approved Linear issues for parallel execution. Use when phase has independent issues with no shared blockers. Up to 4 workers, dependency-aware.
 ---
 
 # Linear Todo Runner

@@ -1,6 +1,6 @@
 ---
 name: task-processor
-description: Process and execute tasks from Linear systematically
+description: Fetch, prioritize, and execute Linear tasks systematically. Use when you want a single skill to walk through ready Linear issues end-to-end. Use as a lighter alternative to /linear-todo-runner when running serially.
 ---
 # Task Processor Skill
 

@@ -1,6 +1,6 @@
 ---
 name: release-changelog
-description: Generate a draft CHANGELOG entry from git commits between tags. Output to stdout for human review and edit. Read-only on git state; never auto-writes to CHANGELOG.md.
+description: Draft a CHANGELOG entry from git commits between tags. Use when cutting a release and need a starting CHANGELOG block. Use after a version bump to regroup commits into canonical sections. Read-only on git and CHANGELOG.md — outputs to stdout.
 ---
 
 # Release Changelog Skill

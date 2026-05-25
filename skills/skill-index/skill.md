@@ -1,6 +1,6 @@
 ---
 name: skill-index
-description: Automatically sync skill index documentation after skills are added or modified
+description: Sync skill index docs after skills change. Use when a skill is added, renamed, or removed under .claude/skills/. Use when Skills_SOP.md skill list has drifted from the directory. Keeps the catalog current.
 ---
 
 # Skill Index

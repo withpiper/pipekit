@@ -1,6 +1,6 @@
 ---
 name: light-spec-revise
-description: Apply Spec Review Agent feedback to an existing Light Spec. Surgical edits only, detects stalemate loops, refuses to rewrite from scratch.
+description: Apply Spec Review Agent feedback to a Light Spec — surgical edits only. Use when the Spec Review Agent posted unresolved blockers. Use when iterating a spec without rewriting from scratch. Detects stalemate loops.
 ---
 
 # Light Spec Revise Skill

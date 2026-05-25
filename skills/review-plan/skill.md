@@ -1,6 +1,6 @@
 ---
 name: review-plan
-description: Run the plan-reviewer agent against a VBW-generated PLAN.md before execution. Independent gate that catches scope drift, atomicity failures, test gaps, and risk-coverage holes Lead's self-review can't see.
+description: Run plan-reviewer agent against a VBW PLAN.md before execution. Use after /work plan phase and before approving execution. Use when you need an independent gate catching scope drift, atomicity failures, test gaps. Requires a fresh chat.
 ---
 
 # Review Plan Skill

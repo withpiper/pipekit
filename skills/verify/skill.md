@@ -1,6 +1,6 @@
 ---
 name: verify
-description: V2 verify skill — run pre-deploy gate + optional QA review subagent on a feature branch. Returns Pass/Partial/Fail with per-AC table.
+description: V2 verify skill — pre-deploy gate + optional QA review subagent. Use when a Linear issue is ready for verify (Stage 3). Use when /work finished and you need a Pass/Partial/Fail verdict per AC before pk ship.
 ---
 
 # /verify

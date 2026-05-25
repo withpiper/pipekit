@@ -1,6 +1,7 @@
 ---
 name: define
-description: Distill a validated concept into a full project definition — stages, roles, workflows, success criteria
+description: Turn a validated concept brief into a full project definition. Use after /concept produces a viable brief. Use before /strategy-create as Stage 0 step 2. Outputs stages, roles, workflows, success criteria.
+disable-model-invocation: true
 ---
 
 # Define Skill

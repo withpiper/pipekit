@@ -1,6 +1,6 @@
 ---
 name: strategy-sync
-description: Update Strategy docs to reflect shipped features — close the documentation loop
+description: Update Strategy docs to reflect what actually shipped. Use after a feature lands in prod and Strategy docs drifted. Use at phase close to reconcile docs with reality. Use a fresh chat — recall contaminates the diff.
 ---
 
 # Strategy Sync Skill

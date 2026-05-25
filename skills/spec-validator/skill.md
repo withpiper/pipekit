@@ -1,6 +1,6 @@
 ---
 name: spec-validator
-description: Validate technical specification documents for completeness and consistency
+description: Audit a technical spec for completeness and consistency. Use after /light-spec drafts a spec and before promoting to Approved. Use when a spec feels under-specified. Flags gaps for /light-spec-revise to close.
 ---
 
 # Spec Validator Skill

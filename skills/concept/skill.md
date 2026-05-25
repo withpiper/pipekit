@@ -1,6 +1,7 @@
 ---
 name: concept
-description: Analyze a project idea — assess viability, capture context, and produce a structured concept brief
+description: Distill a raw project idea into a structured concept brief. Use when starting a greenfield Pipekit project. Use as the first Stage 0 step before /define. Skip for brownfield/inherited projects.
+disable-model-invocation: true
 ---
 
 # Concept Skill

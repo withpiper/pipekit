@@ -1,6 +1,6 @@
 ---
 name: strategy-create
-description: Bootstrap strategy docs from a project definition — configurable doc set tailored to project needs
+description: Bootstrap strategy docs from a project definition. Use after /define produces a project definition. Use as Stage 0 step 3 before /roadmap-create. Configurable doc set; counterpart to /strategy-sync which updates existing docs.
 ---
 
 # Strategy Create Skill
