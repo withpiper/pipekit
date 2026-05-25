@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v2.6.0.1** — Last updated: 2026-05-24  *(`pk branch` auto-allows direnv after `.envrc` symlink — closes the half-broken v2.6.0 #14 MCP-auth fix in fresh worktrees)*
+**v2.7.0-rc1** — Last updated: 2026-05-25  *(/verify writes Logs/Verify/<date>/<id>/{evidence.txt,reality-check.md,verify-complete.md}; pk ship hard-fails when verify-complete.md missing for tier:standard|heavy — `--force` / `PK_VERIFY_BYPASS=1` / tier:quick escape; tier:heavy mandatory antagonistic review; tier:standard opt-in via `--review`)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.6.0.1               (or latest tag)
+1. ./scripts/sync-method.sh v2.7.0-rc1             (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

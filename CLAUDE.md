@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.6.0** — Last updated: 2026-05-23  *(tier system restored — `tier:*` Linear labels gate `/work` Steps 3/4/6/7; `bin/pk` worktree-setup polish: `.envrc` symlink, auto-install with `--no-install` opt-out, SUMMARY + PLAN-flip on `pk done`, integration auto-pull; `pk_promote` no longer silent-exits; `sync_file` idempotent)*
+**v2.7.0-rc1** — Last updated: 2026-05-25  *(discipline substrate — Completion Claims + Plan Gate two-tier in `pipekit-discipline.md`; source authority hierarchy + UNVERIFIED flag in `pipekit-tooling.md`; v2.7 skill frontmatter conventions on 30 skills; `/verify` full rewrite — tier-aware evidence layer writes `Logs/Verify/<date>/<id>/{evidence.txt,reality-check.md,verify-complete.md}` with per-command anchors; `pk ship` hard-fails on missing `verify-complete.md` for tier:standard|heavy, with `--force`/`PK_VERIFY_BYPASS=1`/tier:quick escape hatches; QA verdict now written by subagent via Write tool; Step 5 antagonistic review mandatory tier:heavy / opt-in `--review` tier:standard using verbatim DOUBT prompt)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

@@ -45,6 +45,61 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.7.0-rc1 — 2026-05-25
+
+> **Release candidate: discipline substrate + evidence-gated `/verify` + `pk ship` hard-fail.** Week 1 lays the rules substrate that the rest of v2.7 leans on (Completion Claims doctrine, two-tier Plan Gate, source-authority hierarchy, trigger-phrased skill descriptions). Week 2-3 rewrites `/verify` to write a per-issue evidence layer (`evidence.txt` with per-command anchors, `reality-check.md`, `verify-complete.md`) and wires `pk ship` to hard-fail on missing `verify-complete.md` for `tier:standard | tier:heavy`. Antagonistic review is mandatory for `tier:heavy` and opt-in via `--review` for `tier:standard`, using the verbatim DOUBT prompt from `pipekit-discipline.md`. RC because Week 4 (`/pr-fix` full subagent dispatch + cross-persona promotion) is still ahead; ship to consumers when Week 2-3 validation completes on Pipekit-the-repo.
+
+### What changed
+
+**Discipline substrate** (`templates/rules/pipekit-discipline.md`, `templates/rules/pipekit-tooling.md`, `sop/Skills_SOP.md`, `templates/CLAUDE.md.template`)
+- **Completion Claims doctrine.** New H2 section in `pipekit-discipline.md`: CLAIM → EXTRACT → DOUBT → RECONCILE → STOP loop with verbatim adversarial subagent prompt. RECONCILE precedence: AC misread → Valid actionable → Valid trade-off → Noise. Doubt-theater red flag at 2+ cycles with substantive findings but zero actionable.
+- **Plan Gate two-tier.** Inline form (`PLAN: 1. … 2. … 3. … → Executing unless you redirect.`) for small/single-module changes; Expanded 5-bullet form for cross-module/new-surface/multi-file. Replaces the prior single 5-bullet ad-hoc gate.
+- **Source Authority Hierarchy.** New subsections in `pipekit-tooling.md`: Tier 1 official docs + installed source under `node_modules/<pkg>/` is ground truth; Tiers 2-4 vendor changelogs / web standards / runtime tables are authoritative for their scope; StackOverflow / third-party blogs / AI-generated examples / training data are leads not facts. UNVERIFIED flag pattern when no Tier 1-4 source available.
+- **Skill frontmatter conventions** in `sop/Skills_SOP.md`: trigger-phrased descriptions (pack `Use when X. Use when Y.` into the `description:` field — this is the surface Claude scans for auto-invocation) + `disable-model-invocation: true` for prompt-only skills (`/pk-exit`, `/concept`, `/define`).
+- **`resources/solutions/` routing pointer** in `templates/CLAUDE.md.template` — placeholder for Phase 2's `/pk-compound` bug-track corpus.
+- **30 skill descriptions** updated to trigger-phrase format. Verification: `grep -E '^description:' .claude/skills/*/skill.md | grep -v 'Use when'` returns only intentional exemptions (`/pk-exit`, `/pk-bug`).
+
+**`/verify` full rewrite** (`skills/verify/skill.md`)
+- **Tier-aware dispatch.** Step 0.5 one-screen contract: `quick` is virtual (stdout only, no file writes); `standard` writes the evidence layer; `heavy` adds mandatory antagonistic review.
+- **Evidence artifact layer.** For `TIER != quick`, every run produces three files under `Logs/Verify/<YYYYMMDD>/<ISSUE>/`:
+  - `evidence.txt` — per-command `==> $ <cmd>` header, tee'd stdout/stderr, `exit:` + `duration:` trailers. Flag-enumeration appends `FLAG: ...` lines. Per-command structure enables anchor cites as `evidence.txt:L<line>`.
+  - `reality-check.md` — gate-results table with anchors, inlined `qa-verdict.md` (Step 4) + `adversarial.md` (Step 5), flags surfaced, status reasoning, next actions.
+  - `verify-complete.md` — minimal sentinel (issue, stamp, tier, status, sha) written **only on PASS**. Stale sentinels are explicitly removed on NEEDS WORK so `pk ship`'s gate cannot trust a stale file.
+- **QA verdict via Write tool.** Subagent is configured with `allowed-tools: Read, Bash, Write` and writes its verdict block to `$VERIFY_DIR/qa-verdict.md` directly. Returns a one-line confirmation. Removes parent-side parsing. Anchor-emit discipline: cite sources as `<file>:<line>`, gate output as `evidence.txt:L<line>`.
+- **Step 5 antagonistic review.** New subagent dispatch using the **verbatim** DOUBT prompt from `pipekit-discipline.md`. Mandatory for `tier:heavy`, opt-in via `--review` for `tier:standard`, skipped for `tier:quick`. Writes findings to `$VERIFY_DIR/adversarial.md`. Findings do NOT auto-downgrade status — classification (AC misread / actionable / trade-off / noise) is the user's RECONCILE call, not the subagent's.
+- **Flag check E** added to Step 6 enumeration: antagonistic findings count surface as flags, pausing auto-ship per the load-bearing F6 rule. Existing Step 3.5 (now Step 6) flag logic and Step 4 (now Step 9) auto-ship behavior preserved verbatim.
+
+**`pk ship` verify-complete.md gate** (`bin/pk`)
+- New `pk_linear_tier` helper queries the issue's Linear labels for `tier:(quick|standard|heavy)`, defaults to `standard` on miss/error so the gate stays operative when Linear is unreachable.
+- After issue extraction (~line 1090 of `cmd_ship`), before `git push`: read `Logs/Verify/<YYYYMMDD>/<ISSUE>/verify-complete.md`. Missing file → `return 1` with the expected path printed.
+- Three escape hatches: `--force` (parsed in `cmd_ship`; bypass + Linear comment audit trail via `pk_linear_comment`); `PK_VERIFY_BYPASS=1` env var (emergency bypass + `Logs/Verify/bypass.log` entry); `tier:quick` (warn + proceed, virtual gate by design).
+- Shipped in two atomic commits (warn-only then hard-fail flip) for bisect-clean rollback.
+
+**`PK_VERSION`** 2.6.0.1 → 2.7.0-rc1.
+
+### Why
+
+The catalog audit (multi-day external review of `shanraisshan/claude-code-best-practice`, deep-dives into `addyosmani/agent-skills`, `msitarzewski/agency-agents` Testing division, and `EveryInc/compound-engineering-plugin`) surfaced one convergent gap: **artifact-gated review that the model cannot persuade its way through**. Pipekit's prior `/verify` was persuasion-based prose — the LLM decided whether to comply. v2.7's evidence layer turns review into an artifact chain with explicit stop conditions (the `verify-complete.md` sentinel) and default-deny posture (`pk ship` aborts on missing file).
+
+The DOUBT prompt format borrows from doubt-driven-development (addyosmani) and adapts the "Contract misread" classification to Pipekit's Linear AC list. The Plan Gate two-tier reformulation absorbed feedback that the prior single 5-bullet gate was over-applied to trivial edits — inline mode now handles bug fixes and small refactors without ceremony.
+
+### Migration
+
+- **Pin to v2.7.0-rc1.** Run `./scripts/sync-method.sh v2.7.0-rc1` from inside your consuming project. RC sync recommended for one cycle of dogfooding before bumping to v2.7.0 stable.
+- **`tier:*` labels.** Add the `tier:(quick|standard|heavy)` Linear labels to your team if not already present (per v2.6.0 reinstatement). Issues without a tier label default to `standard` — gate behaves as if the issue is opted in to the artifact pipeline.
+- **`.gitignore` recommendation.** Add `Logs/Verify/` and `.pk-work/` to your project's `.gitignore` (see `STARTUP.md` § 3.1). These are per-machine evidence artifacts; checking them in produces noisy diffs and inflates worktree size.
+- **Linear API key required for `pk_linear_tier`.** The gate falls back to `standard` if Linear is unreachable, but the artifact layer requires you to actually call `/verify` to produce `verify-complete.md`. Projects without a Linear key still gate on file presence — they just can't differentiate tiers.
+- **`--force` audit trail.** Bypassing the gate via `pk ship --force` posts a Linear comment to the issue: `Shipped without verify-complete.md (--force at <ISO-timestamp>)`. Use sparingly — `pk_linear_comment` is best-effort so an outage won't block the ship.
+- **`PK_VERIFY_BYPASS=1`** is the emergency escape, not the daily-driver escape. It bypasses Linear comment writing and only appends to `Logs/Verify/bypass.log`. Reserve for production incident recovery when Linear is also down.
+
+### What's deferred to v2.7.0 stable
+
+- **Week 4: `/pr-fix` full subagent dispatch.** Diff-aware persona dispatch (always-on quartet + conditional security/migration/performance/adversarial), cross-persona promotion (3-line bucket match-key + 25→50→75→100 confidence ladder), severity × autofix matrix with `--quick` remap. `--legacy-flat` escape hatch preserves v2.6 behavior.
+- **Antagonistic review for `tier:standard` without `--review`.** Currently opt-in; tier:standard projects can run a full cycle without the review subagent firing. Will revisit after dogfood data on Pipekit-the-repo.
+- **Phase 2: `/pk-compound` + `resources/solutions/`.** Bug-track first, knowledge-track reassess at month 3.
+
+---
+
 ## v2.6.0.1 — 2026-05-24
 
 > **Patch: `pk branch` auto-allows direnv on the worktree.** v2.6.0 #14 added `.envrc` to the symlink loop in `cmd_branch`, but direnv treats the worktree path as a new `.envrc` and blocks it until manually allowed. Symptom: MCP servers and other direnv-loaded tooling still fail to auth at Claude Code launch in fresh worktrees — the exact failure mode #14 was meant to fix. v2.6.0.1 closes the half-broken state by running `direnv allow` on the worktree after the symlink lands.
