@@ -75,6 +75,11 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 - Three escape hatches: `--force` (parsed in `cmd_ship`; bypass + Linear comment audit trail via `pk_linear_comment`); `PK_VERIFY_BYPASS=1` env var (emergency bypass + `Logs/Verify/bypass.log` entry); `tier:quick` (warn + proceed, virtual gate by design).
 - Shipped in two atomic commits (warn-only then hard-fail flip) for bisect-clean rollback.
 
+**`/light-spec` tier auto-derive** (`skills/01-light-spec/skill.md`)
+- New Phase 3.6 parses the spec body's `**Complexity:**` field and maps it to a `tier:*` Linear label: `Trivial | Low → tier:quick`, `Medium → tier:standard`, `High | Very High | Critical → tier:heavy`. Hour-range fallback when no named token present (`≤4h → quick`, `5-11h → standard`, `≥12h → heavy`).
+- Phase 5's Linear save merges existing labels (stripping any stale `tier:*`) with `spec` + the Phase 3.6-derived tier. Custom human-applied labels (`Feature`, `Finance`, domain tags) survive the publish.
+- Closes the spec-author-classified-as-Heavy-but-the-label-says-otherwise gap surfaced by WIT-419 (spec body said `Complexity: High (~16-22h)` but the Linear label was `Heavy`, not `tier:heavy` — `pk_linear_tier` defaulted to `standard` instead of recognizing the intent).
+
 **`PK_VERSION`** 2.6.0.1 → 2.7.0-rc1.
 
 ### Why
@@ -96,6 +101,7 @@ The DOUBT prompt format borrows from doubt-driven-development (addyosmani) and a
 
 - **Week 4: `/pr-fix` full subagent dispatch.** Diff-aware persona dispatch (always-on quartet + conditional security/migration/performance/adversarial), cross-persona promotion (3-line bucket match-key + 25→50→75→100 confidence ladder), severity × autofix matrix with `--quick` remap. `--legacy-flat` escape hatch preserves v2.6 behavior.
 - **Project-configurable sensitive-path patterns for `/verify`** — currently hardcoded; future `[verify.sensitive_paths]` block in `method.config.md` would let consumers override the defaults. Deferred to v2.7.1+ along with the analogous `[pr-fix.sensitive_paths]` block.
+- **`/02-light-spec-revise` tier re-derive** — currently only `/01-light-spec` runs Phase 3.6. If a revise cycle changes the Complexity field, the `tier:*` label doesn't auto-refresh. v2.7.1 candidate.
 - **Phase 2: `/pk-compound` + `resources/solutions/`.** Bug-track first, knowledge-track reassess at month 3.
 
 ---

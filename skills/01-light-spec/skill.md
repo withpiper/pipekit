@@ -1,6 +1,6 @@
 ---
 name: light-spec
-description: Structured spec generation with auto-cycled agent review. Use when a Linear issue moves to spec stage. Use when writing/refining a feature spec before /work. Use when /spec-validator flags gaps.
+description: Structured spec generation with auto-cycled agent review + tier auto-derive (v2.7.0-rc1+). Use when a Linear issue moves to spec stage. Use when writing/refining a feature spec before /work. Use when /spec-validator flags gaps.
 ---
 
 # Light Spec Skill
@@ -99,6 +99,33 @@ Before presenting to the user, audit every section:
    - Move it to **Risks & Open Questions** if it can't be resolved now
 3. **Validate:** the spec is only ready when no guessing is required for task decomposition. `[TBD]` is acceptable; implicit assumptions are not.
 
+### Phase 3.6 — Derive tier label from Complexity (v2.7.0-rc1+)
+
+The spec's `**Complexity:**` field is the source of truth for the issue's tier. Parse it and compute the matching `tier:*` Linear label so the downstream `/work` and `/verify` skills get a consistent gate signal — no manual labeling step required.
+
+**Mapping:**
+
+| Complexity in spec body | Tier label | Why this tier |
+|---|---|---|
+| `Trivial`, `Low (~2-4h)` | `tier:quick` | `/work` uses inline planning, single-issue mode, light gates. |
+| `Medium (~6-10h)` | `tier:standard` | Default tier. Full /work pipeline, evidence layer, opt-in antagonistic review (auto-fires on sensitive-path diffs). |
+| `High (~12-20h+)`, `Very High`, `Critical` | `tier:heavy` | Mandatory antagonistic review, `/strategy-sync` reminder at hand-off, full evidence pipeline. |
+
+**Extraction logic:**
+
+1. Read the line matching `**Complexity:**` from the spec body.
+2. Match the **first named complexity token** present (case-insensitive): `Trivial | Low | Medium | High | Very High | Critical`. Ignore everything else (hour ranges, parentheticals).
+3. Map per the table above. If no token matches but an hour range is present (e.g., `~8h`), infer: `≤4h → quick`, `5-11h → standard`, `≥12h → heavy`.
+4. If the Complexity line is missing or ambiguous, surface a one-line confirmation prompt before publishing: `Complexity not parseable — apply 'tier:standard' (Recommended) or 'tier:heavy' / 'tier:quick'?` Default `standard`.
+
+**Why this is a Phase 3.6 step, not a Phase 5 inline action:** the user gets one final read-through (Phase 4) before publish. Surfacing the derived tier alongside the spec gives them a redirect window if the auto-derivation looks wrong. The tier choice ships in Phase 5's label payload as a normal part of the save.
+
+Print the derived tier in the Phase 4 spec re-presentation as a one-liner near the Complexity field:
+
+```
+Derived tier: tier:heavy  (from "Complexity: High (~16-22h)")
+```
+
 ### Phase 4 — Present and Iterate
 
 1. Show the draft spec to the user.
@@ -145,8 +172,13 @@ Before presenting to the user, audit every section:
    - `state`: `Specced` (light spec applied, awaiting human review)
    - `priority`: ask user (default 0/None if unsure)
    - `project`: suggest based on Phase 2 findings, confirm with user
-   - `labels`: add `spec` label
+   - `labels`: **merged list**: `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
+     - Pull `existing_labels` from Phase 1's `get_issue` payload (new issues → empty list).
+     - Strip any pre-existing `tier:quick | tier:standard | tier:heavy` label — the Phase 3.6 derivation replaces it. Other labels (`Feature`, `Finance`, domain tags, etc.) are preserved.
+     - Linear's `save_issue` replaces the labels list wholesale; passing the full merged set is required.
 2. Store the issue ID for reference.
+
+**Why the merge:** `save_issue` doesn't support add/remove deltas — pass it the desired final state. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
 
 ### Phase 6 — Spec Review Cycle (automated)
 
@@ -248,11 +280,23 @@ The VBW lead agent will read the Linear issue, extract the spec, and use it as t
 
 ## Complexity Guidelines
 
-Same as `/brainstorm`, but with planning implications:
+Same as `/brainstorm`, but with planning implications. Phase 3.6 maps these to `tier:*` Linear labels automatically.
 
-- **Low (~2-4h):** Can skip full VBW planning — spec is sufficient for `/linear-todo-runner` to pick up directly if AC section is complete.
-- **Medium (~6-10h):** Benefits from a single VBW plan (1 PLAN.md). The light spec provides enough for the lead agent to generate tasks.
-- **High (~12-20h+):** Likely needs multiple VBW plans across a phase. The light spec seeds the architect agent's phase decomposition.
+| Complexity | Planning implication | Auto-derived tier (v2.7.0-rc1+) |
+|---|---|---|
+| **Trivial** | Single-step change, no decomposition. Often a typo/copy/rename. | `tier:quick` |
+| **Low (~2-4h)** | Can skip full VBW planning — spec is sufficient for `/linear-todo-runner` to pick up directly if AC section is complete. | `tier:quick` |
+| **Medium (~6-10h)** | Benefits from a single VBW plan (1 PLAN.md). The light spec provides enough for the lead agent to generate tasks. | `tier:standard` |
+| **High (~12-20h+)** | Likely needs multiple VBW plans across a phase. The light spec seeds the architect agent's phase decomposition. | `tier:heavy` |
+| **Very High / Critical** | Cross-phase, cross-team, or migrates load-bearing infrastructure. Always heavy. | `tier:heavy` |
+
+The auto-derived tier feeds into:
+- `/work` Steps 3/4/6/7 (plan strictness, security review, hand-off behavior — per v2.6.0 tier reinstatement)
+- `/verify` Step 0.5 dispatch (evidence layer + reality-check + verify-complete sentinel for tier ≥ standard)
+- `/verify` Step 5 (mandatory antagonistic review on heavy; auto-fires on sensitive-path diffs for standard)
+- `pk ship` verify-complete.md gate (hard-fail on standard/heavy missing, warn-but-proceed on quick)
+
+If you disagree with the auto-derivation, change the Complexity field in the spec body and re-run `/light-spec PROJ-XXX` — the tier label will refresh on the next publish.
 
 ## Red Flags
 
