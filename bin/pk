@@ -1088,12 +1088,11 @@ cmd_ship() {
     return 1
   fi
 
-  # --- v2.7 verify-complete.md gate (Day 3 — warn-only) -------------------
+  # --- v2.7 verify-complete.md gate (hard-fail) ---------------------------
   # Day 2 wired /verify to write Logs/Verify/<date>/<id>/verify-complete.md
   # on PASS. This block reads the sentinel; missing file means /verify was
-  # not run or returned NEEDS WORK. Initial landing is warn-only (return 0)
-  # so existing flows keep working while consumers adopt the new /verify.
-  # Next commit flips to hard-fail (return 1).
+  # not run or returned NEEDS WORK. Bypass via --force (Linear comment audit
+  # trail) or PK_VERIFY_BYPASS=1 (emergency only, logs to bypass.log).
   if [ "${PK_VERIFY_BYPASS:-0}" = "1" ]; then
     echo "⚠ verify-complete.md gate bypassed via PK_VERIFY_BYPASS=1" >&2
     mkdir -p Logs/Verify 2>/dev/null
@@ -1112,12 +1111,10 @@ cmd_ship() {
         echo "⚠ verify-complete.md missing — bypassed via --force." >&2
         pk_linear_comment "$issue" "Shipped without verify-complete.md (--force at $(date -u +%FT%TZ))" || true
       else
-        echo "WARN: verify-complete.md missing for ${issue}." >&2
-        echo "      Expected: ${_vc}" >&2
-        echo "      Run /verify first, or pass --force to bypass (logs a Linear comment)." >&2
-        echo "      (Warn-only this release — next release hard-fails.)" >&2
-        # Day 3 commit 1: warn-only — fall through to ship.
-        # Day 3 commit 2 inserts `return 1` here.
+        echo "ERROR: verify-complete.md missing for ${issue}." >&2
+        echo "       Expected: ${_vc}" >&2
+        echo "       Run /verify first, or pass --force to bypass (logs a Linear comment)." >&2
+        return 1
       fi
     fi
   fi
