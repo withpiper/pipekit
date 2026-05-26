@@ -313,6 +313,39 @@ After the change: document in the project's `engineering/sop/` (or equivalent) t
 
 **Fast-cycle recovery** when you discover you're in (a) and need to close the window: run the dev → beta → main promote pair back-to-back. The beta → main merge triggers the prod migration; keep the window under a few minutes by having both PRs ready before starting.
 
+#### Solo-dev exception: when Supabase branch DBs become ceremony
+
+Per-PR Supabase branch DBs (the "Supabase branching" row in the Setup table above) exist to isolate concurrent feature branches running mutually-exclusive migrations. The model assumes ≥ 2 developers landing schema changes against the same Supabase project in parallel. **For a solo dev, that constraint never binds** — there's only ever one in-flight migration. The branch-DB workflow then pays setup/teardown cost (per-PR provision, sync workflows, cleanup workflows, Vercel-Supabase integration churn) without delivering its core value.
+
+The trade is asymmetric in the solo-dev case:
+
+| What branch DBs cost (solo dev) | What branch DBs uniquely provide (solo dev) |
+|---|---|
+| 30s-2min branch-DB provision per PR | **Pre-merge preview-env validation with the pending migration applied** — preview deploy sees the new schema |
+| `vercel-supabase-sync.yml` + `*-cleanup.yml` workflow runtime + maintenance cost | `supabase gen types` run against the new schema at preview-build time |
+| Supabase usage per branch DB (token cost on plans that charge per branch) | (everything else is substitutable: idempotency → local `supabase db reset`; destructive-migration sandbox → local; schema invariants → pgtap CI) |
+| Mental overhead of "which DB does this preview point at?" | |
+| Per-PR cleanup race conditions when a PR is force-pushed mid-cleanup | |
+
+The only non-substitutable value is preview-env validation with pending migration. **For that, the rs-vault pattern (recommended setup row in the table above) substitutes via pgtap CI + local `supabase start` + post-dev-merge UAT on the integration DB.** You lose pre-merge "click around the preview deploy with new schema" but you gain it back at the dev-merge step, when the migration applies to the integration DB and the preview-deploy URL points at it.
+
+**Decision rule:** drop branch DBs when **all three** hold:
+
+1. Solo dev or two-dev where the second dev's work is non-overlapping by domain
+2. Local Supabase + pgtap CI cover schema-invariant testing
+3. `supabase gen types` runs in the local pre-commit loop (or you're disciplined about running it manually before `pk ship`)
+
+**Re-enable branch DBs (flip the Vercel integration back on) when any one of these hits:**
+
+- Adding a second developer with concurrent migration work (the original assumption returns)
+- A migration class you cannot validate via pgtap alone — e.g., complex backfill timing, multi-table data migration with intermediate states, or a migration whose correctness depends on app-code-against-new-schema interaction not covered by integration tests
+- The integration DB (`<project>-dev`) becomes load-bearing for external integration — e.g., a partner integration tests against it and can't tolerate schema-state changes mid-test
+- Compliance / audit requires per-change schema-state isolation
+
+**Asymmetric reinstatement cost:** decommissioning is fast (Vercel toggle + workflow removal). Reinstatement requires re-verifying the Vercel-Supabase integration's permissions, re-testing sync workflows on a fresh PR, and possibly re-granting Supabase project access. Before you decommission, **verify reinstatement is one-toggle** by flipping the integration off and immediately back on against a throwaway test PR. If that round-trip is clean, you've proven low-cost reinstatement. If reinstatement is finicky on your specific Vercel + Supabase plan configuration, the decommission decision shifts: the lock-in cost is real.
+
+The full decommission walkthrough (and the reinstatement-test) lives at `resources/supabase-branch-db-decommission.md`.
+
 #### Three-tier specifics (dev → beta → main)
 
 In three-tier projects, batch decisions happen at two boundaries:
