@@ -313,38 +313,61 @@ After the change: document in the project's `engineering/sop/` (or equivalent) t
 
 **Fast-cycle recovery** when you discover you're in (a) and need to close the window: run the dev → beta → main promote pair back-to-back. The beta → main merge triggers the prod migration; keep the window under a few minutes by having both PRs ready before starting.
 
-#### Solo-dev exception: when Supabase branch DBs become ceremony
+#### Solo-dev exception: making Supabase branch DBs not-ceremony
 
-Per-PR Supabase branch DBs (the "Supabase branching" row in the Setup table above) exist to isolate concurrent feature branches running mutually-exclusive migrations. The model assumes ≥ 2 developers landing schema changes against the same Supabase project in parallel. **For a solo dev, that constraint never binds** — there's only ever one in-flight migration. The branch-DB workflow then pays setup/teardown cost (per-PR provision, sync workflows, cleanup workflows, Vercel-Supabase integration churn) without delivering its core value.
+Per-PR Supabase branch DBs (the "Supabase branching" row in the Setup table above) are designed to isolate concurrent feature branches running mutually-exclusive migrations. The model assumes ≥ 2 developers landing schema changes against the same Supabase project in parallel.
 
-The trade is asymmetric in the solo-dev case:
+For a solo dev, the parallel-developer assumption never binds. But that doesn't automatically mean branch DBs are wrong — it means their value depends on whether **the branch DB is testable on arrival**. An empty branch DB (no test user, no fixture data, no known credentials) IS ceremony. A branch DB that comes up with a known test user + representative fixtures + the pending migration applied IS exactly the per-PR preview-validation surface the integration was sold on delivering.
 
-| What branch DBs cost (solo dev) | What branch DBs uniquely provide (solo dev) |
-|---|---|
-| 30s-2min branch-DB provision per PR | **Pre-merge preview-env validation with the pending migration applied** — preview deploy sees the new schema |
-| `vercel-supabase-sync.yml` + `*-cleanup.yml` workflow runtime + maintenance cost | `supabase gen types` run against the new schema at preview-build time |
-| Supabase usage per branch DB (token cost on plans that charge per branch) | (everything else is substitutable: idempotency → local `supabase db reset`; destructive-migration sandbox → local; schema invariants → pgtap CI) |
-| Mental overhead of "which DB does this preview point at?" | |
-| Per-PR cleanup race conditions when a PR is force-pushed mid-cleanup | |
+Two paths to make branch DBs not-ceremony. **Try Path A first.** Path B is the fallback if Path A is intractable on your stack.
 
-The only non-substitutable value is preview-env validation with pending migration. **For that, the rs-vault pattern (recommended setup row in the table above) substitutes via pgtap CI + local `supabase start` + post-dev-merge UAT on the integration DB.** You lose pre-merge "click around the preview deploy with new schema" but you gain it back at the dev-merge step, when the migration applies to the integration DB and the preview-deploy URL points at it.
+##### Path A — Seed branch DBs properly (recommended)
 
-**Decision rule:** drop branch DBs when **all three** hold:
+`supabase/seed.sql` is Supabase's canonical seeding hook. It runs **automatically** after migrations during `supabase db reset` (local) AND during Supabase branch DB initialization (cloud). When configured with a known test user (bcrypt'd password), representative org / entity scaffolding, and minimal sample data, every branch DB lands provisioned-and-usable in the same ~30s the integration takes anyway.
+
+Why this is preferable to Path B:
+
+- **You keep all the branch-DB value** — pre-merge preview validation with pending migration applied, schema isolation, `supabase gen types` at preview-build time
+- **The fix is one file (`supabase/seed.sql`)** plus ongoing maintenance discipline — no workflow surgery
+- **Reversible at zero cost** — `git rm supabase/seed.sql` and you're back to empty-branch state
+- **Works the same locally and in the cloud** — single seeding pattern, two contexts
+
+The trade-off Path A asks you to absorb:
+
+- **Seed maintenance** as schemas evolve — every column rename, new required field, or RLS predicate change can break the seed. Mitigation: write the seed in terms of the canonical helper functions / RPCs your app uses (e.g., `SELECT create_organization(...)` not `INSERT INTO organizations`), not raw INSERTs. Schema changes propagate through one chokepoint.
+- **Test passwords in the repo** — `testpass123` in `seed.sql` is fine in non-prod, but Vercel preview URLs are publicly accessible by default. Either enable Vercel password-protection on the Preview env, or rely on RLS to make the test user's reach inherently bounded (and verify that periodically).
+- **`auth.users` column drift across Supabase CLI versions** — the exact required columns / triggers have shifted. Verify the seed pattern against the **installed** Supabase CLI version per `pipekit-tooling.md` § Source Authority Hierarchy + § Enumerate the Surface Before Claiming Behavior. Don't copy a 2-year-old StackOverflow snippet.
+
+**The load-bearing pre-flight check:** confirm `seed.sql` auto-runs on a Supabase branch DB BEFORE investing in the seed design. Open a throwaway PR with a sentinel insert in `seed.sql` (e.g., `INSERT INTO public.config_health_check (key, value) VALUES ('seed_ran', now())`); check whether that row exists in the branch DB after provisioning. If yes, you have the hook you need. If no, your Vercel-Supabase integration version / plan doesn't run seed automatically — Path A requires a CI workflow to bridge the gap, or you fall back to Path B.
+
+Full walkthrough: `resources/supabase-branch-db-seed-strategy.md`.
+
+##### Path B — Decommission branch DBs (fallback)
+
+When to fall back here:
+
+1. Path A's Step 0 fails (seed doesn't auto-run on branch DB and a CI bridge is more work than decommissioning)
+2. Seed maintenance proves prohibitively expensive (e.g., schema churn outpaces seed updates and the seed is always stale)
+3. The Vercel-Supabase integration's per-branch DB cost on your plan is meaningful and the value isn't justifying it
+
+Substitution model: rs-vault pattern (recommended setup row in the table above) covers schema-invariant testing via pgtap CI + local `supabase start`. You lose pre-merge "click around the preview deploy with new schema" but gain it back at the dev-merge step, when the migration applies to the integration DB and the preview-deploy URL points at it.
+
+**Decision rule for Path B:** drop branch DBs when **all three** hold:
 
 1. Solo dev or two-dev where the second dev's work is non-overlapping by domain
 2. Local Supabase + pgtap CI cover schema-invariant testing
 3. `supabase gen types` runs in the local pre-commit loop (or you're disciplined about running it manually before `pk ship`)
 
-**Re-enable branch DBs (flip the Vercel integration back on) when any one of these hits:**
+**Re-enable triggers (any 1 fires → re-evaluate Path A first, then Path B if Path A still won't work):**
 
-- Adding a second developer with concurrent migration work (the original assumption returns)
-- A migration class you cannot validate via pgtap alone — e.g., complex backfill timing, multi-table data migration with intermediate states, or a migration whose correctness depends on app-code-against-new-schema interaction not covered by integration tests
+- Adding a second developer with concurrent migration work (the original parallel-dev assumption returns)
+- A migration class you cannot validate via pgtap alone — complex backfill timing, multi-table data migration with intermediate states, or migration correctness depends on app-code-against-new-schema interaction not covered by integration tests
 - The integration DB (`<project>-dev`) becomes load-bearing for external integration — e.g., a partner integration tests against it and can't tolerate schema-state changes mid-test
 - Compliance / audit requires per-change schema-state isolation
 
-**Asymmetric reinstatement cost:** decommissioning is fast (Vercel toggle + workflow removal). Reinstatement requires re-verifying the Vercel-Supabase integration's permissions, re-testing sync workflows on a fresh PR, and possibly re-granting Supabase project access. Before you decommission, **verify reinstatement is one-toggle** by flipping the integration off and immediately back on against a throwaway test PR. If that round-trip is clean, you've proven low-cost reinstatement. If reinstatement is finicky on your specific Vercel + Supabase plan configuration, the decommission decision shifts: the lock-in cost is real.
+**Asymmetric reinstatement cost:** decommissioning is fast (Vercel toggle + workflow removal). Reinstatement requires re-verifying the Vercel-Supabase integration's permissions, re-testing sync workflows on a fresh PR, and possibly re-granting Supabase project access. Before you decommission, verify reinstatement is one-toggle by flipping the integration off and immediately back on against a throwaway test PR. If that round-trip is clean, you've proven low-cost reinstatement. If reinstatement is finicky on your specific Vercel + Supabase plan configuration, Path A's tradeoff calculus shifts further in Path A's favor.
 
-The full decommission walkthrough (and the reinstatement-test) lives at `resources/supabase-branch-db-decommission.md`.
+Full walkthrough: `resources/supabase-branch-db-decommission.md`.
 
 #### Three-tier specifics (dev → beta → main)
 
