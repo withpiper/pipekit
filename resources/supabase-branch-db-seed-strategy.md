@@ -43,6 +43,26 @@
 
 ---
 
+## Step 0.5 — Verify sync-workflow reliability (polling-bound discipline)
+
+Even if `seed.sql` auto-runs on a branch DB, the **sync workflow that swaps Vercel env vars to point at the branch DB** has its own reliability characteristics — separate concern, separate failure mode. A perfectly seeded branch DB is useless if the workflow that wires it into Vercel previews flakes out on first try and requires manual `gh run rerun`.
+
+The canonical failure: a sync workflow polls Supabase API for the branch DB's status, the branch is still mid-provision (`MISSING`), the workflow's polling bound expires, the workflow fails-fast. Manual rerun ~60s later succeeds because the branch has since gone `ACTIVE`. Symptom: 1-in-N PRs need manual intervention; root cause: polling bound is set tighter than the empirical 95th-percentile provisioning time.
+
+**The discipline:** polling bounds must be set from empirical evidence, not first-PR observation.
+
+1. **Gather 5-10 throwaway PRs over a few days** — different times of day, different sizes, mix of weekday/weekend (Supabase shared-plan noise varies). Each PR is a one-line `README.md` edit + a no-op migration file so the sync workflow fires.
+2. **Log the observed provisioning times** — check workflow run durations in `gh run list --workflow=<sync-workflow>`. Note the max, p50, p95.
+3. **Set the polling bound to max-observed × 1.5** (or p95 × 2, whichever is higher). Cleaner than picking a round number; gives you margin for the cases you haven't seen yet.
+4. **Document the bound history in the workflow file's header comment.** Every adjustment should record the date, the failing PR, and the new bound. Future-you needs the context if the bound has to move again.
+5. **Add a tripwire:** if the bound has to be raised >600s (10 min) consistently, that's signal the integration is too flaky on your Vercel + Supabase plan combo. At that point reconsider Path A vs Path B — branch DBs that take >10 min to provision aren't worth the wait even when seeded.
+
+**Case study — Piper 2026-05-26:** `vercel-supabase-sync.yml` originally bounded at 120s (12 × 10s). WIT-275 PR #374 hit a provisioning tail >120s, workflow failed-fast, required manual `gh run rerun` to recover. Bound raised to 300s (30 × 10s) with a header-comment audit trail referencing the failing PR + the empirical justification. The lesson made it back to this runbook as Step 0.5 — bound-from-evidence, not bound-from-first-observation.
+
+**Why this is Step 0.5, not buried in maintenance discipline:** sync-workflow reliability is a precondition for Path A's whole value proposition. If your workflow fails 1-in-3 PRs, the per-PR validation surface is broken regardless of how well-seeded the branch DBs are. Test the workflow's reliability empirically BEFORE you invest in the seed design — same logic as Step 0 (verify seed auto-runs before designing seed).
+
+---
+
 ## Step 1 — Verify `auth.users` insert pattern against installed Supabase CLI
 
 Per `pipekit-tooling.md` § Source Authority Hierarchy + § Enumerate the Surface Before Claiming Behavior: `auth.users` columns + required triggers have shifted across Supabase CLI versions. Don't guess.
