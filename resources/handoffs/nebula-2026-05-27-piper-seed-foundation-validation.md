@@ -49,6 +49,57 @@
 - **Port 54322 collision** — WIT-419 worktree's Supabase still running. Run `supabase stop --project-id piper-WIT-419-tax-code-tax` from inside that worktree before next worktree boot.
 - **`agent isolation: "worktree"` is still a no-op on this harness** — orchestrators must `git worktree add` explicitly + pass `cwd:`. See `[[agent_isolation_worktree_broken]]`.
 
+## Pipekit Gaps Surfaced This Session
+
+Backlog candidates for upstream Pipekit work, ordered by recurrence likelihood.
+
+### 1. `pipekit-migrations.md` missing the "real-user email collision" pattern
+
+The frozen-file rule already covers schema drift. It does NOT cover the data-shape footgun where a seed migration INSERTs into `auth.users` with sentinel ids + email-shaped values, then collides with real users in any environment where someone has logged in via OAuth using the same email.
+
+Concrete failure observed today: `20260527110000_seed_dual_user_dual_entity.sql` succeeded on local + branch DBs but failed on piper-dev with `users_email_partial_key (23505)` because real `ethan@withpiper.ai` already existed from OAuth login. The `handle_new_user` trigger fired on the seed's `INSERT INTO auth.users` and tried to create a duplicate `public.users` row.
+
+**Recovery pattern (worth promoting to a runbook):**
+1. Investigate the env via Supabase MCP — find real user ids by email
+2. Write a lookup-or-create replacement migration that detects real users and reuses their ids; sentinel-creates only when no real row exists
+3. Mark the failing migration as `applied` on the shared env via INSERT into `supabase_migrations.schema_migrations` (sanctioned per migrations.md § Manual Schema Changes; requires explicit human confirmation)
+4. Merge the replacement; workflow skips the failing migration, applies the safe one
+
+**Proposed Pipekit changes:**
+- Add to `pipekit-migrations.md` § "Silent-Failure Patterns to Watch For": a new subsection "Sentinel-id seeds colliding with real users via email"
+- Add a `resources/` runbook documenting the migration-repair recovery dance (the MCP INSERT against `schema_migrations.statements`, with the fix-forward pointer comment as audit trail)
+- Same pattern will recur at beta/prod promote time on Piper unless 130000 + 140000 are the only seed migrations that run on shared envs (110000 + 120000 still need pre-marking via repair OR a different mechanism)
+
+### 2. `pk ready` hard-fails on non-`feature/<ID>-*` branches
+
+`pk ready 382` errored with "no feature branch found matching feature/382-*". The PR was on `feat/seed-pr-fixtures-skill` — a project-local methodology branch with no Linear ticket.
+
+The fallback was `gh pr ready 382` which worked instantly. So `pk ready` adds friction without adding safety for methodology PRs.
+
+**Proposed:**
+- Accept `--pr=<#>` as an explicit override that skips the branch-name match
+- OR detect the current branch's PR via `gh pr view --json number` and use that when the arg-pattern fails
+- OR scope the strict pattern to a config setting in `method.config.md` so project-local PRs can opt out
+
+### 3. Migration-repair via MCP is undocumented
+
+The recovery in Gap #1 required this:
+
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
+VALUES
+  ('20260527110000', 'seed_dual_user_dual_entity',     ARRAY['-- Marked applied via fix-forward. See 20260527130000_seed_dual_user_safe.sql for the safe-on-real-data replacement.']::text[]),
+  ('20260527120000', 'seed_dual_user_auth_identities', ARRAY['-- Marked applied via fix-forward. See 20260527130000_seed_dual_user_safe.sql.']::text[])
+ON CONFLICT (version) DO NOTHING;
+```
+
+This is the MCP equivalent of `supabase migration repair --status applied`. The CLI command requires a linked project + correct env auth; the MCP route is faster when you already have project_ref + are logged into the Supabase MCP.
+
+**Proposed:**
+- Document the MCP form in `pipekit-migrations.md` alongside the CLI form
+- Include the fix-forward pointer comment as the canonical audit-trail pattern (instead of empty `statements` array)
+- Cross-reference from `pipekit-security.md` § shared-state mutation rules
+
 ## State Locations
 
 - Piper PR #379 — https://github.com/withpiper/piper/pull/379 (branch `feat/seed-qa-budget-content` @ `48f0d9e`)
