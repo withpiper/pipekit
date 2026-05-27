@@ -45,6 +45,8 @@
 
 ## Open Threads / Watch Items
 
+- **WIT-524** (Linear, Triage): CI/CD vercel-supabase-sync.yml — migration-bearing PR previews not bound to per-PR branch DB (WIT-384 contract violation). Filed via the foundation-seed thread on 2026-05-27 after the bug blocked dev deploys for ~5 hours. Recovery: PR #393 (backfilled the missing disk file at the auto-stamped timestamp). Systemic fix still owed.
+- **PR #393** (Piper): merged 2026-05-27. Backfilled `supabase/migrations/20260527105344_wit-514_reorder_line_items_rpc.sql` directly to dev (pure rename from WIT-514's `3542e38`) to reconcile a timestamp drift between disk and remote that locked up `supabase db push`. Sample of the broader WIT-524 surface.
 - **`fix(db):` hook false-positive** in Piper — commits with valid `{type}({scope}): {desc}` format keep getting flagged. Non-blocking (commits push regardless), but worth a separate bug. Suspect heredoc body content tripping it. Same pattern across PRs #380, #381, #379.
 - **Port 54322 collision** — WIT-419 worktree's Supabase still running. Run `supabase stop --project-id piper-WIT-419-tax-code-tax` from inside that worktree before next worktree boot.
 - **`agent isolation: "worktree"` is still a no-op on this harness** — orchestrators must `git worktree add` explicitly + pass `cwd:`. See `[[agent_isolation_worktree_broken]]`.
@@ -99,6 +101,27 @@ This is the MCP equivalent of `supabase migration repair --status applied`. The 
 - Document the MCP form in `pipekit-migrations.md` alongside the CLI form
 - Include the fix-forward pointer comment as the canonical audit-trail pattern (instead of empty `statements` array)
 - Cross-reference from `pipekit-security.md` § shared-state mutation rules
+
+### 4. `mcp.apply_migration` causes silent timestamp drift between disk and remote
+
+`mcp__supabase.apply_migration` is a legitimate tool for emergency hot-fixes on shared envs, but it has a footgun the rules don't currently warn about: **the function auto-stamps the recorded version with wall-clock time at apply-moment**, not with whatever timestamp the developer intended to use for the disk file.
+
+Concrete failure observed today: a developer ran `mcp.apply_migration` against piper-dev with the WIT-514 reorder RPC. The MCP recorded it as version `20260527105344` (the wall-clock minute). Hours later, the developer committed the same RPC as a disk migration at `20260527090000` (an arbitrary "morning" timestamp). Result:
+
+- piper-dev's `schema_migrations` has entry for `20260527105344`
+- Disk has file at `20260527090000` (same name, different version)
+- Supabase CLI treats them as two distinct migrations → "Remote migration versions not found in local migrations directory" → ALL subsequent `supabase db push` deploys fail
+- Today this blocked PR #388 + PR #392 from deploying for ~5 hours; recovered via PR #393 (rename + backfill the disk file at the MCP-recorded version)
+
+**Proposed Pipekit rule** (new subsection in `pipekit-migrations.md` § Manual Schema Changes on Remote Envs):
+
+> **Never `mcp.apply_migration` for code you'll commit as a disk file.** The MCP path auto-stamps the version with wall-clock time, which will not match the disk timestamp you choose later. Use `supabase db push` against a branch DB for testing, or — if you must hot-fix a shared env — choose your disk-file timestamp FIRST, then call `mcp.apply_migration` with a `name` argument that includes that timestamp, OR follow up immediately with a `supabase migration repair` to align versions.
+>
+> Recovery pattern when drift has already occurred:
+> 1. Query the remote: `SELECT version, statements FROM supabase_migrations.schema_migrations WHERE name = '<your-migration-name>'`
+> 2. Diff the remote `statements` against your intended disk content (functional match, comments may differ)
+> 3. If functionally identical: rename your disk file to the remote's version (legitimate rename window since disk hasn't been pushed). Land on the affected env as a fix-forward PR.
+> 4. If different: write a new follow-up migration that brings the env to the intended state. Don't try to make the existing entry "correct" retroactively.
 
 ## State Locations
 
