@@ -50,6 +50,30 @@ If incident recovery forces a one-off SQL fix, follow up *immediately* with a ba
 
 The `supabase migration repair` command is the one sanctioned exception — it edits the history table to reconcile drift without touching the schema. It still requires explicit human confirmation per `pipekit-security.md` (shared-state mutation on a non-local DB).
 
+### MCP-applied migrations and disk drift
+
+<important>
+Never use `mcp.apply_migration` (Supabase MCP server's migration tool) for SQL that will also exist as a committed disk file under `supabase/migrations/`. The MCP tool auto-stamps the applied version with the server's wall-clock time, producing a timestamp that does not match the disk filename. The next `supabase db push` from CI or a human will detect drift between disk and remote history and refuse to apply any further migrations until reconciled.
+</important>
+
+The failure mode is asymmetric and load-bearing:
+
+1. Author writes `supabase/migrations/20260527150000_my_change.sql`.
+2. To "test it quickly" against a live env, they invoke `mcp.apply_migration` with the SQL body.
+3. The MCP server applies the SQL and records the version as e.g. `20260527160512` (wall-clock at apply time), not `20260527150000`. The history table now has a row the disk file does not match.
+4. The author then `git add`s the disk file and pushes the PR. CI's `supabase db push` step compares disk migrations to remote history, finds a remote version (`...160512`) that does not exist on disk and a disk version (`...150000`) that has not been applied, and fails with "Remote migration versions not found in local migrations directory" — blocking every subsequent migration PR until repaired.
+
+Recovery requires `supabase migration repair --status reverted <orphan-mcp-stamp> --status applied <disk-stamp>` against the env's history table. This is a shared-state mutation that needs human confirmation per `pipekit-security.md` and can block the entire team's deploys while it's being sorted out.
+
+**Prescribed workaround for testing a migration against a live env before merge:**
+
+- For previewing schema changes against a fresh DB: use `supabase db push` against a per-PR branch DB (or a throwaway local Supabase reset). The CLI uses the disk filename verbatim; no auto-stamping.
+- For one-off forensics that genuinely belong outside the migration chain (incident recovery): treat the change like any other Manual Schema Change above — apply via `psql` or the Supabase SQL editor, then immediately follow up with an idempotent backfill migration on disk. Never via `mcp.apply_migration` for code that also lives on disk.
+
+The MCP tool is fine for greenfield exploration (schema doesn't exist on disk yet) and read-only operations (`list_tables`, `execute_sql` on SELECT statements). The rule is specifically about the write path colliding with the disk migration chain.
+
+**Historical incident:** Piper, 2026-05-27. An author applied `20260527160000_revoke_default_public_grants.sql` via `mcp.apply_migration` on `piper-dev`. The MCP server stamped the remote history with `20260527164211` (wall-clock at apply). The disk file went into a PR with timestamp `20260527160000`. CI's `db push` on merge refused with the history-drift error. ~5h of downstream deploy lockup followed while every other in-flight migration PR was blocked. Reconciliation required `supabase migration repair` against `piper-dev`. The pattern was previously informal team knowledge; this rule makes it explicit.
+
 ## Silent-Failure Patterns to Watch For
 
 The frozen-file invariant prevents migration-history drift. These patterns prevent a different failure mode: migrations that *apply cleanly* but produce silently-wrong runtime behavior. Each one was surfaced by a real incident; check for them when authoring migrations that touch schema evolution.
