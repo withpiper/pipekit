@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.6.0.1** — Last updated: 2026-05-24  *(`pk branch` auto-allows direnv after `.envrc` symlink — closes the half-broken v2.6.0 #14 MCP-auth fix in fresh worktrees)*
+**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(`/pr-fix` is now a pluggable-engine review — pr-review-toolkit agents by default, built-in fallback — with two-axis severity×confidence triage)*
 
 ---
 
@@ -638,7 +638,7 @@ Idempotent: if the PR is already Ready, prints "No flip needed" and exits 0.
 
 After the reviewer posts findings to the PR, two skills triage them:
 
-**`/pr-fix`** — precision PR review across 4 dimensions with confidence-gated findings. Reads PR review comments + diff, scans for cross-spec handoff promises (any "X will…" reference in the spec must have landed in this PR), then lets you triage interactively (fix / reject / defer). Applies fixes as separate commits, validates the gate, force-pushes to the PR. Posts a Linear comment with the triage summary (fixed N / rejected N / deferred N).
+**`/pr-fix`** — pluggable-engine PR review: by default it fans out the `pr-review-toolkit` specialist agents (or the built-in reference-file review via `--engine=builtin`), then triages on two independent axes (severity × confidence). Reads PR review comments + diff, scans for cross-spec handoff promises (any "X will…" reference in the spec must have landed in this PR), then lets you triage interactively (fix / reject / defer). Applies fixes as separate commits, validates the gate, force-pushes to the PR. Posts a Linear comment with the triage summary (fixed N / rejected N / deferred N).
 
 **`/pr-security-review`** — security-focused antagonistic review for migrations, RLS policies, SECURITY DEFINER functions, GRANT/REVOKE, auth code, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories. Use **instead of** (or alongside) the generic reviewer when the PR touches any of those surfaces.
 

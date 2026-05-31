@@ -1,14 +1,16 @@
 # Session Management SOP
 
-> How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.7 and adapted for Pipekit's pipeline.
+> How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.8 and adapted for Pipekit's pipeline.
 
-**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `/pk-exit` as explicit session bookend in the session pattern table)*
+**v2.7.0-rc2** — Last updated: 2026-05-31  *(session boundaries reframed as cognitive-load not token scarcity; handoff & session-log content discipline section; effort table + `ultracode` row; 4.7→4.8 refresh)*
 
 ---
 
 ## Why This Matters
 
 Claude Code's context window is one million tokens, but **context rot** — degradation of model performance as context grows — kicks in well before that limit. Attention spreads thin across more tokens, and stale content distracts from current tasks. How you manage sessions shapes your results more than effort level or prompting.
+
+**Session boundaries exist for cognitive load, not token scarcity.** The 1M window and harness-persistent memory mean you rarely run *out of room* — so a boundary is never "make space," it's "drop the rot." This also means the boundaries here are distinct from the **stage-isolation** gates in `method.md` § Fresh-Chat Discipline: those are about *judgment independence* (an agent can't review work it helped produce) and are mandatory regardless of window size; the boundaries below are *hygiene* — optional, judgment calls about when stale context is hurting more than it helps.
 
 Every time Claude finishes a turn, you have five choices for what to do next:
 
@@ -94,7 +96,7 @@ Subagents aren't just for parallelism — they're for **keeping tool output nois
 | `/concept --docs` | Ingesting user documents produces long reads; only the extracted context matters |
 | `/strategy-sync` | Comparing codebase to strategy docs scans many files |
 
-**Tell Claude explicitly when to use a subagent.** Opus 4.7 defaults to fewer subagents than earlier models. Examples:
+**Tell Claude explicitly when to use a subagent.** Recent Claude models default to fewer subagents than you might expect — spell it out. Examples:
 - _"Spin up a subagent to verify the result of this work based on the following spec file."_
 - _"Spin off a subagent to read through this other codebase and summarize how it implemented the auth flow, then implement it yourself in the same way."_
 - _"Spin off a subagent to write the docs on this feature based on my git changes."_
@@ -105,7 +107,7 @@ Subagents aren't just for parallelism — they're for **keeping tool output nois
 
 ## Effort and Thinking Recommendations
 
-For Opus 4.7 running Pipekit work:
+These levels were calibrated on Opus 4.7. Treat the table as a **starting point, not a spec** — re-validate on your current model rather than assuming the mapping ports unchanged. The relative ordering (orchestration and AI-to-AI contracts want more effort than lookups and mechanical syncs) is the durable part; the specific level names may drift between releases.
 
 | Task type | Effort level | Rationale |
 |-----------|-------------|-----------|
@@ -114,8 +116,9 @@ For Opus 4.7 running Pipekit work:
 | `pk status`, `pk next`, `/phase-plan --status` | `high` | Lookup/summary tasks |
 | `/update-method` routine syncs | `medium` | Mechanical, low ambiguity |
 | `/06-linear-todo-runner` worker agents | `xhigh` | Each worker executes a full spec — needs high capability |
+| Codebase-wide audits, large migrations, multi-issue batches | `ultracode` | Claude Code's `/effort` menu option: pins `xhigh` **and** lets Claude auto-decide when to spawn a dynamic workflow (parallel subagents, verify-before-integrate). Token-heavy — reserve for work that genuinely spans many files or issues. Overlaps `/06-linear-todo-runner`'s hand-rolled parallel queue. |
 
-Don't port over old effort settings from Opus 4.6 blindly. Experiment. `xhigh` is the new default and works well for most Pipekit skills.
+Don't port effort settings between model releases blindly — experiment when you upgrade. As of the 4.7 calibration, `xhigh` worked well as the default for most Pipekit skills; confirm that still holds on your model before relying on it.
 
 ---
 
@@ -130,6 +133,25 @@ Don't port over old effort settings from Opus 4.6 blindly. Experiment. `xhigh` i
 | Resuming `/startup` next day | Close, reopen, let tracker restore | Tracker is Pipekit's curated `/clear` brief |
 | Next step generates lots of tool output you only need the conclusion from | Subagent | Intermediate output stays in the child |
 | Context approaching limit mid-startup | Commit current state, close, reopen | Don't let auto-compact corrupt the tracker |
+
+---
+
+## Handoff & Session-Log Content Discipline
+
+Handoff docs (`resources/`) and session logs (`Logs/Sessions/`) mix two kinds of content with very different shelf lives. The 1M window + harness memory carry *state* across sessions automatically — so the value of a written handoff is no longer "re-prime the next session," it's "preserve what the next session can't reconstruct on its own."
+
+Split every handoff and log on this line:
+
+| Keep (durable) | Let Linear + harness memory carry (ephemeral) |
+|---|---|
+| Decisions and the rationale behind them | Step-by-step "what to run next" |
+| Gotchas / caveats (an API that writes state early; a team-name footgun) | Current status / what's deferred |
+| Lessons learned the hard way | Command sequences the harness can regenerate |
+| Gaps and open questions worth tracking | Pre-flight checklists for a one-time task |
+
+**The test:** *would re-reading this in three months teach me something, or just recite what state things were in?* Keep the former; the latter is what Linear and harness memory already hold.
+
+This does not delete handoffs — they stay committed cross-machine artifacts. It *slims* them: a 400-line migration runbook becomes a one-page durable record once the migration has run, and the procedural body lives in git history if anyone needs to replay it. See `resources/nebula-piper-pipekit-v2.5.0.1-handoff.md` for a handoff retrofitted to this shape.
 
 ---
 

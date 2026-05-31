@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.6.0** — Last updated: 2026-05-23  *(tier system restored in `/work`; `pk ship --draft` default + `pk ready`; two-phase `pk promote`; `/pr-fix` gains `--from-review` + `--second-opinion=gemini`)*
+**v2.7.0-rc2** — Last updated: 2026-05-31  *(skill-prompt scope guidance de-versioned to be model-agnostic, not Opus-4.7-pinned)*
 
 ---
 
@@ -184,14 +184,14 @@ The state file is consumed by `pk *` commands (e.g., `pk done` reads transition 
 
 ---
 
-### Writing Skill Prompts for Opus 4.7
+### Writing Skill Prompts: Be Explicit About Scope
 
-Opus 4.7 follows instructions more literally than prior models. It won't silently generalize "update the doc" into "update all three docs" — it'll update one. Skill authors must be explicit about scope:
+Recent Claude models follow instructions more literally than older generations. The model won't silently generalize "update the doc" into "update all three docs" — it'll update one. This is good prompt hygiene regardless of which model you're on, so skill authors should always be explicit about scope:
 
 - **Quantify loops.** "For each strategy doc in the manifest" not "for strategy docs." Specify the source list (e.g., the `method.config.md` Strategy Docs table) so there's no ambiguity about which items.
 - **Name the fields.** "Populate these specific fields in method.config.md: Project name, Display name, Worktree prefix" not "update method.config.md with relevant values."
 - **Scope modifiers.** When something should apply broadly, say so: "Apply this formatting to every section in the document, not just the first one."
-- **Avoid relative qualifiers.** Words like "relevant," "appropriate," "as needed" let Opus 4.7 narrow scope. Replace with explicit criteria: "if the field is empty" rather than "update relevant fields."
+- **Avoid relative qualifiers.** Words like "relevant," "appropriate," "as needed" let the model narrow scope. Replace with explicit criteria: "if the field is empty" rather than "update relevant fields."
 - **Batch questions in the first turn.** Don't drip-feed requirements across turns — it reduces both quality and token efficiency. Collect all clarifying questions and ask them together.
 - **State acceptance criteria explicitly.** "Done when X, Y, and Z are all true" — not "when this looks good."
 

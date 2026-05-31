@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.7.0-rc1** — Last updated: 2026-05-25  *(discipline substrate — Completion Claims + Plan Gate two-tier in `pipekit-discipline.md`; source authority hierarchy + UNVERIFIED flag in `pipekit-tooling.md`; v2.7 skill frontmatter conventions on 30 skills; `/verify` full rewrite — tier-aware evidence layer writes `Logs/Verify/<date>/<id>/{evidence.txt,reality-check.md,verify-complete.md}` with per-command anchors; `pk ship` hard-fails on missing `verify-complete.md` for tier:standard|heavy, with `--force`/`PK_VERIFY_BYPASS=1`/tier:quick escape hatches; QA verdict now written by subagent via Write tool; Step 5 antagonistic review mandatory tier:heavy / opt-in `--review` tier:standard using verbatim DOUBT prompt)*
+**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(`/pr-fix` pluggable review engine — pr-review-toolkit agents native-default with fail-loud + built-in fallback — and two-axis severity×confidence triage with an INVESTIGATE bucket; Opus 4.8 framing audit across `method.md` + SOPs (stage-isolation reframe, prompt-snapshot refresh, handoff content discipline). Carries forward v2.7.0-rc1: discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -104,7 +104,7 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 | `/light-spec` | Generates structured specs as AI-to-AI contracts |
 | `/light-spec-revise` | Applies Spec Review Agent feedback surgically; detects stalemate loops |
 | `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status, dependencies against reality. Read-only. |
-| `/pr-fix` | Precision PR review across 4 dimensions with confidence-gated findings, interactive discussion, and targeted remediation. |
+| `/pr-fix` | Pluggable-engine PR review (`pr-review-toolkit` agents by default, built-in fallback) with two-axis severity×confidence triage, interactive discussion, and targeted remediation. |
 | `/pr-security-review` | Security-focused antagonistic PR review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, auth, and Server Actions on privileged tables. |
 | `/pk-bug` | Bug pipeline — intake, reproduce, regression-test-first, fix, ship, postmortem. Wraps `/work` and `pk ship` with discipline gates. |
 | `/pipekit-help` | Reads project state, recommends the next pipeline step. |

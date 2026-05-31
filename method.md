@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.6.0.1** — Last updated: 2026-05-24  *(`pk branch` auto-allows direnv after `.envrc` symlink — closes the half-broken v2.6.0 #14 MCP-auth fix in fresh worktrees)*
+**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(Opus 4.8 framing audit — Fresh-Chat Discipline reframed as stage isolation: the constraint is contaminated judgment, not lost memory, so a 1M context window does not relax it)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -303,9 +303,13 @@ AI proposes, reviews, and executes. Humans decide. AI never locks in a product d
 
 ## Fresh-Chat Discipline
 
-Pipeline stages are AI→AI contracts. The contract only holds if each stage's agent reads the prior stage's output **as a document**, not as recalled conversation. A reviewer who watched the spec get drafted is no longer an independent reviewer; a planner who absorbed the launch handoff carries assumptions the spec didn't make explicit.
+The real principle here is **stage isolation**: each stage's agent must read the prior stage's output **as a document**, not as recalled conversation. A reviewer who watched the spec get drafted is no longer an independent reviewer; a planner who absorbed the launch handoff carries assumptions the spec didn't make explicit. "Fresh chat" is the hands-on *mechanism* for achieving isolation — in auto-chained flows the same isolation is enforced by construction, because each stage runs as a separately-spawned subagent that never inherits the orchestrator's context.
 
-**Rule:** start a new conversation when crossing a stage boundary. Inside a stage, one chat is fine.
+**This is not a context-window workaround.** It would be easy to read "start fresh" as a concession to a small window — the model forgets, so we re-prime it from a document. That was never the reason, and the 1M context window plus harness-persistent memory do not relax this rule. The risk being managed is **contaminated judgment, not lost memory**: an agent that participated in producing X cannot independently review X, no matter how much of X it can hold in context. If anything, more capable and more autonomous models make independent review *more* load-bearing, because confident-wrong output scales with capability — a one-agent-does-everything session is exactly the failure mode that survives a bigger window untouched.
+
+The corollary: isolation is mandatory only where independence or a clean contract is at stake (the rows below). It is *not* a blanket "always start over" rule. Carrying context forward within a stage, or across read-only steps, costs nothing and rebuilds nothing — see "When to stay in-session."
+
+**Rule:** start a new conversation (or spawn a fresh subagent) when crossing a stage boundary that demands independence. Inside a stage, one chat is fine.
 
 ### When to start fresh
 
@@ -326,7 +330,7 @@ Pipeline stages are AI→AI contracts. The contract only holds if each stage's a
 
 ### Why this matters more than it looks
 
-The spec-as-contract principle ("no stage may introduce guesswork into the next stage") only works if the next stage is genuinely downstream. A long-running session collapses the stages into one agent making all decisions with shared context, which is the failure mode this whole pipeline exists to prevent. Fresh chats are the cheapest possible enforcement.
+The spec-as-contract principle ("no stage may introduce guesswork into the next stage") only works if the next stage is genuinely downstream. A long-running session collapses the stages into one agent making all decisions with shared context — the failure mode this whole pipeline exists to prevent. Isolation is the load-bearing constraint; fresh chats and subagent spawning are just the two mechanisms that deliver it (manual and by-construction, respectively). Both stay cheap, and neither is made redundant by a larger context window — the window changes how much an agent can *hold*, not whether it can *independently judge* work it helped produce.
 
 ---
 
