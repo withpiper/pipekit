@@ -170,6 +170,19 @@ Each agent prompt MUST carry: the diff (save to `/tmp/pr<N>.diff` once, have age
 
 > Report every candidate, including low-confidence and low-severity ones — a downstream step filters; your job is coverage, not filtering. Return each finding with (a) an impact **severity** (Critical / High / Medium / Low — how bad if real) AND (b) your **confidence** it is real (0-100). These are independent: a catastrophic-but-uncertain finding is exactly what to surface.
 
+**Pipekit historical finders — run in the same parallel wave.** The toolkit's specialists review the diff in isolation; these two add *temporal* signal the plugin agents structurally lack — how the touched code got here, and what reviewers already said about it. Spawn them as read-only subagents in the **same fan-out** as the toolkit agents (not before — they are peers, and their findings converge at 3.4 like any other). Both are dependency-free (`git` + `gh` only), so spawn them in the **builtin** path (§3.2) too.
+
+| Finder | Spawn when |
+|---|---|
+| **git-history** | The diff modifies or deletes existing lines (skip on pure greenfield adds — no blame to read) |
+| **prior-pr-comments** | A PR exists and `gh` is authenticated (best-effort; returns nothing if no prior PRs touched these files) |
+
+Both carry the same coverage-first instruction (severity + confidence, every candidate) and the same inputs (diff at `/tmp/pr<N>.diff`, the Phase 1 intent statement). Their finder-specific prompts:
+
+> **git-history finder.** For each file the diff *modifies or deletes* (ignore pure additions), run `git log --oneline -n 20 -- <file>` and `git blame` on the changed line ranges (pre-image line numbers). Look for: (a) a line this PR changes/removes that a *recent* commit added deliberately to fix a bug — flag a possible **regression** of that fix (cite the prior commit sha + subject); (b) a guard / null-check / validation being removed whose blame points to a fix or incident commit; (c) high-churn regions (same lines rewritten across several recent commits) — flag as fragile, recommend extra test coverage. Report each as a finding with `file:line`, a severity (regressing a known fix = High or above), and a confidence. If history shows nothing relevant, return an empty finding set — do not invent.
+
+> **prior-pr-comments finder.** For each changed file, find recently merged PRs that touched it: `gh pr list --state merged --limit 30 --json number,title,files --jq '.[] | select(.files[].path == "<file>") | .number'` (or `gh search prs`). For each such PR, fetch its review comments: `gh api repos/{owner}/{repo}/pulls/<N>/comments --jq '.[] | {path,line,body}'`. Check whether any past comment describes an issue that **reapplies** to the current diff at the same file/region. Report each reapplying comment as a finding: `file:line`, the original PR # + the reviewer's point, severity inferred from the comment, confidence ≈ 70 (past feedback is a lead, not proof it recurs here). Skip comments already resolved by the current code. If `gh` is unauthenticated or no prior PRs exist, return empty — never block the review.
+
 `--runs=N` (N>1): run the fan-out N times, merge in 3.4, and raise confidence on findings that recur across runs (recurrence is a reality signal); tag run-once findings `[unstable]`. Default N=1.
 
 ### 3.2 Builtin engine — reference-file review (`--engine=builtin`)
@@ -188,6 +201,8 @@ Your job here is **coverage**: surface every candidate and score it honestly —
 | Missing functionality outside the PR's stated scope | Cap at 50 |
 
 Never shade a score down to stay quiet. Filtering happens in Phase 4, not here.
+
+**Also run the two dependency-free historical finders from §3.1** (git-history, prior-pr-comments) here — they need no plugin, and their temporal signal is as valuable to the builtin path as to native.
 
 ### 3.3 `--from-review` — ingest existing PR review comments instead
 
@@ -212,7 +227,7 @@ Never collapse the two into one number — `severity=Critical, confidence=20` is
 
 Also record: **Dimension**, **Location** (`file:line` — mandatory, no vague findings), **Title**, **What** (the problem), **Why** (impact), **How** (specific fix with code example).
 
-Per engine: **native** — take each agent's severity bucket as Severity; derive Confidence from the agent's hedging language and recurrence across `--runs` (≈85 for a confidently-stated finding, lower when hedged, +10 per recurrence, cap 99). **builtin** — Severity from §4.2's impact table, Confidence from 3.2's scoring. **--from-review** — Severity parsed from the comment, Confidence 85.
+Per engine: **native** — take each agent's severity bucket as Severity; derive Confidence from the agent's hedging language and recurrence across `--runs` (≈85 for a confidently-stated finding, lower when hedged, +10 per recurrence, cap 99). The two historical finders (§3.1) report explicit severity + confidence — use them verbatim (git-history per its blame evidence; prior-pr-comments ≈70). **builtin** — Severity from §4.2's impact table, Confidence from 3.2's scoring. **--from-review** — Severity parsed from the comment, Confidence 85.
 
 ---
 
@@ -226,6 +241,7 @@ Merge findings across agents/dimensions, dedup, then triage on **two axes**.
 2. **Same root cause at different lines:** keep the higher-severity finding; reference the other location.
 3. **Test-only PRs:** if only test files changed, suppress Test Coverage findings.
 4. **Cross-agent overlap (native):** the toolkit's agents overlap (e.g. code-reviewer + silent-failure-hunter both flag error handling) — dedup by file:line + root cause, keeping the more specific write-up.
+5. **Historical corroboration (native):** when a historical finder (git-history / prior-pr-comments) flags the same file:line + root cause as a specialist, do NOT just drop it — keep the specialist's write-up but **raise its confidence** (+10, cap 99) and note the corroboration (e.g. "+ git-history: regresses fix abc123"). A finding independently surfaced by diff-review *and* history is more likely real — the recurrence-is-a-reality-signal principle applied across finders, not just across `--runs`.
 
 ### 4.2 Severity is impact, not a confidence band
 
