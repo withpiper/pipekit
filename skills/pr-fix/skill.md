@@ -1,11 +1,11 @@
 ---
 name: pr-fix
-description: Precision 4-dimension PR review with confidence-gated findings and interactive remediation. Use when a PR has reviewer comments needing structured triage. Use when pk ship --review surfaced findings. Different from /pr-security-review (security-only).
+description: Pluggable-engine PR review (pr-review-toolkit agents by default, built-in fallback) with two-axis severity×confidence triage and interactive remediation. Use when a PR needs review + structured fix triage. Use when pk ship --review surfaced findings. Use to address an existing review via --from-review. Different from /pr-security-review (security-only).
 ---
 
 # PR Fix
 
-You are a precision PR reviewer. Your job is to perform diff-based review across 4 dimensions with conditional routing, confidence scoring, deduplication, and an interactive fix workflow. You find real issues with zero noise, then fix them with user approval.
+You are a precision PR reviewer with a **pluggable review engine**: by default you fan out the `pr-review-toolkit` specialist agents; with `--engine=builtin` you run Pipekit's own reference-file dimensions. Either way you dedup, triage on two independent axes (**severity × confidence**), and drive an interactive fix workflow. You surface real issues high-signal-first — high-confidence *or* high-severity findings up front, the rest kept auditable — then fix them with user approval.
 
 ## Triggers
 
@@ -14,6 +14,8 @@ You are a precision PR reviewer. Your job is to perform diff-based review across
 - `/pr-fix --quick` — "quick fix", "auto-fix critical issues"
 - `/pr-fix --from-review` — "address the GHA review", "fix what claude-review flagged" (skip Phase 3 fresh review; ingest existing GHA review comments instead)
 - `/pr-fix --second-opinion=gemini` — "get a Gemini second opinion", "what does Gemini think" (after Phase 4, also surface a Gemini Flash review as a parallel report — opt-in only)
+- `/pr-fix --engine=builtin` — "review without the plugin", "use the built-in reviewer" (skip pr-review-toolkit; use Pipekit's reference-file review)
+- `/pr-fix --runs=2` — "double-check it", "run the review twice" (fan the native review out N times; recurrence across runs raises confidence)
 - `/pr-fix security` — "check security", "review security"
 - `/pr-fix errors tests` — "check error handling and tests"
 
@@ -24,6 +26,8 @@ You are a precision PR reviewer. Your job is to perform diff-based review across
   - `--quick` (skip discussion, auto-fix Critical + High)
   - `--from-review` (skip Phase 3 fresh review; ingest existing PR review comments — typically from `claude-review.yml` GHA — and feed them into Phase 4 aggregation)
   - `--second-opinion=gemini` (after Phase 4, invoke a Gemini Flash second-opinion review; surface its findings as a parallel report. Requires `GEMINI_API_KEY` env var. Use sparingly — counts against your Gemini quota.)
+  - `--engine=native|builtin` (which engine runs Phase 3. Default `native` = the `pr-review-toolkit` plugin agents, **fail-loud if the plugin is absent** — see §3.0. `builtin` = Pipekit's own reference-file review, no plugin dependency.)
+  - `--runs=N` (default 1; run the native fan-out N times and raise confidence on findings that recur — see §3.1)
 - **Dimensions:** `correctness`, `security`, `errors`, `tests` — overrides auto-routing, loads only named dimensions
 - **Flag interactions:**
   - `--from-review` and `--quick` compose (ingest GHA findings → auto-fix Critical + High)
@@ -135,53 +139,44 @@ Tell the user which dimensions loaded and why (one line each):
 
 ## Phase 3: Review
 
-For each loaded dimension, read its reference file and apply the checklist against the diff.
+Phase 3 produces the finding set. The review **engine** is pluggable — resolve it in 3.0, run the matching path, then everything converges at 3.4 (normalize) and feeds Phase 4.
 
-### 3.0 If `--from-review` — ingest GHA review comments instead
+### 3.0 Resolve the review engine
 
-When the `--from-review` flag is set, skip the fresh review (3.1 / 3.2 / 3.3) and ingest the existing PR review comments instead. The typical source is `templates/ci/claude-review.yml` (Path 3 reviewer), but any external reviewer comments are fair game.
+Default engine is **native** — the `pr-review-toolkit` plugin's specialist agents (deeper, multi-perspective review). Overrides:
+- `--engine=builtin` — use Pipekit's own reference-file review (3.2). Zero plugin dependency.
+- `--from-review` — skip a fresh review; ingest existing PR review comments (3.3).
 
-```bash
-PR_NUM=$(gh pr view --json number -q .number)
+**Fail loud if native is unavailable.** Before running native, confirm the toolkit agents resolve (e.g. `pr-review-toolkit:code-reviewer`). If the plugin is not installed, STOP — do not silently downgrade:
 
-# All review submissions (top-level "Approve / Request Changes / Comment").
-gh pr view "$PR_NUM" --json reviews -q '.reviews[] | select(.state != "DISMISSED")'
+> ✗ pr-review-toolkit plugin not installed — this skill's default review engine needs it.
+>   → install the plugin, OR  → re-run with `--engine=builtin`.
 
-# Inline comments tied to specific file:line.
-gh api repos/{owner}/{repo}/pulls/$PR_NUM/comments
-```
+A silent fallback to the weaker engine is itself a quiet quality regression; the user must know which engine reviewed their PR.
 
-For each review comment, build a structured finding:
+### 3.1 Native engine — pr-review-toolkit agents (default)
 
-| Source field | Becomes |
+Fan out the toolkit's specialists in parallel as **read-only** subagents (they return findings to you; they do NOT post to the PR — this skill owns the aggregated output). Map Phase 2's routing to agents:
+
+| Agent | Spawn when |
 |---|---|
-| `path` + `line` (or `original_line` if outdated) | **Location** (`file:line`) |
-| `body` | **What** + **Why** (parse the comment's structure if it follows Critical/High/Medium markers; else infer severity from tone) |
-| User of the reviewer | **Source** (e.g., `claude-review[bot]`, `semgrep[bot]`) |
-| — | **Confidence** = `85` (external reviewers we trust; not auto-elevated to 100 because they share blind spots with claude-review) |
+| `pr-review-toolkit:code-reviewer` | ALWAYS — general correctness + cross-WIT integration |
+| `pr-review-toolkit:silent-failure-hunter` | Error-handling patterns in diff, or any API / mutation / migration |
+| `pr-review-toolkit:pr-test-analyzer` | Any non-test source file changed |
+| `pr-review-toolkit:type-design-analyzer` | New or changed exported types |
+| `pr-review-toolkit:comment-analyzer` | Substantial new doc-comments / docstrings |
 
-Apply Phase 2's dimension routing to classify each finding (file path → Security / Correctness / Errors / Tests). Comments that don't fit a dimension are tagged `Correctness` by default.
+Each agent prompt MUST carry: the diff (save to `/tmp/pr<N>.diff` once, have agents read it), the Phase 1 intent statement, the project's matching `references/` file(s) (so project-specific checks still inform the native review), and the **coverage-first instruction** verbatim:
 
-Outdated comments (where the source line has changed): include with a flag `[stale-line]` next to the location.
+> Report every candidate, including low-confidence and low-severity ones — a downstream step filters; your job is coverage, not filtering. Return each finding with (a) an impact **severity** (Critical / High / Medium / Low — how bad if real) AND (b) your **confidence** it is real (0-100). These are independent: a catastrophic-but-uncertain finding is exactly what to surface.
 
-**Skip 3.1, 3.2, 3.3 entirely under `--from-review`.** Jump straight to Phase 4 with the ingested findings as the input set.
+`--runs=N` (N>1): run the fan-out N times, merge in 3.4, and raise confidence on findings that recur across runs (recurrence is a reality signal); tag run-once findings `[unstable]`. Default N=1.
 
-### 3.1 Read References
+### 3.2 Builtin engine — reference-file review (`--engine=builtin`)
 
-Read ONLY the reference files for loaded dimensions. Do not read skipped dimensions.
+The dependency-free path. Read ONLY the `references/` files for the dimensions Phase 2 loaded, get the diff (`git diff dev...HEAD`), and systematically check every checklist item against the changed lines.
 
-### 3.2 Analyze the Diff
-
-Get the full diff:
-```bash
-git diff dev...HEAD
-```
-
-For each loaded dimension, systematically check every item in the reference file's checklist against the changed lines.
-
-### 3.3 Confidence Scoring
-
-Every potential finding gets a confidence score (0-100):
+Your job here is **coverage**: surface every candidate and score it honestly — do **not** self-censor a finding before scoring it. Each potential finding gets a confidence score (0-100):
 
 | Pattern | Adjustment |
 |---|---|
@@ -189,71 +184,109 @@ Every potential finding gets a confidence score (0-100):
 | In newly added lines (not modified existing) | +10 |
 | In deleted lines | SKIP — do not report issues in removed code |
 | Requires runtime context to verify | -15 |
-| Style/preference not documented in reference files | Cap at 60 (auto-filtered) |
-| Missing functionality outside the PR's stated scope | Cap at 50 (auto-filtered) |
+| Style/preference not documented in reference files | Cap at 60 |
+| Missing functionality outside the PR's stated scope | Cap at 50 |
 
-**Threshold: Only findings scoring >= 80 survive.** Everything below is discarded. Silence is better than noise.
+Never shade a score down to stay quiet. Filtering happens in Phase 4, not here.
 
-### 3.4 Format Each Finding
+### 3.3 `--from-review` — ingest existing PR review comments instead
 
-For each surviving finding, record:
-- **Dimension** (Correctness / Security / Error Handling / Test Coverage)
-- **Severity** (Critical / High / Medium — see Phase 4)
-- **Confidence** (80-100)
-- **Location** (`file:line` — mandatory, no vague findings)
-- **Title** (one-line summary)
-- **What** (the problem)
-- **Why** (impact if not fixed)
-- **How** (specific fix with code example)
+When `--from-review` is set, skip the fresh review (native or builtin) and ingest the existing PR review comments. The typical source is `templates/ci/claude-review.yml` (Path 3 reviewer) or Semgrep — but any reviewer comments are fair game, **including a `pr-review-toolkit` run that already posted to the PR**.
+
+```bash
+PR_NUM=$(gh pr view --json number -q .number)
+gh pr view "$PR_NUM" --json reviews -q '.reviews[] | select(.state != "DISMISSED")'
+gh api repos/{owner}/{repo}/pulls/$PR_NUM/comments
+```
+
+For each comment build a finding: `path`+`line` (or `original_line` if outdated) → **Location**; `body` → **What**/**Why** (parse Critical/High/Medium markers if present, else infer severity from tone); reviewer login → **Source**; **Confidence** = `85` (trusted external reviewer, not auto-100 — shared blind spots). Classify by Phase 2 routing; default unclassifiable findings to `Correctness`; flag outdated comments `[stale-line]`. `--from-review` composes with native/builtin as an additional merge source.
+
+### 3.4 Normalize to two axes (severity + confidence)
+
+Whatever engine produced them, every finding converges to the same shape, with **two independent axes kept separate**:
+
+- **Severity** — impact if the finding is real: **Critical** (data loss / RLS bypass / auth break / financial corruption / destructive op) · **High** (must fix before merge) · **Medium** (should fix soon) · **Low** (nit). Assigned on blast radius, NOT on how sure you are.
+- **Confidence (0-100)** — likelihood the finding is real.
+
+Never collapse the two into one number — `severity=Critical, confidence=20` is a valid, important finding (catastrophic if real, merely uncertain). Phase 4 triages on both.
+
+Also record: **Dimension**, **Location** (`file:line` — mandatory, no vague findings), **Title**, **What** (the problem), **Why** (impact), **How** (specific fix with code example).
+
+Per engine: **native** — take each agent's severity bucket as Severity; derive Confidence from the agent's hedging language and recurrence across `--runs` (≈85 for a confidently-stated finding, lower when hedged, +10 per recurrence, cap 99). **builtin** — Severity from §4.2's impact table, Confidence from 3.2's scoring. **--from-review** — Severity parsed from the comment, Confidence 85.
 
 ---
 
-## Phase 4: Aggregate
+## Phase 4: Aggregate & Triage
 
-Merge findings from all dimensions into a single, deduplicated, severity-ranked report.
+Merge findings across agents/dimensions, dedup, then triage on **two axes**.
 
 ### 4.1 Deduplication Rules
 
-1. **Same file + line range (within 5 lines):** The specialist dimension wins. Priority: Security > Error Handling > Test Coverage > Correctness. The losing finding is dropped entirely.
+1. **Same file + line range (within 5 lines):** the specialist wins (Security > Error Handling > Test Coverage > Correctness); keep the higher **severity** (break ties by higher confidence). Note the dropped location.
+2. **Same root cause at different lines:** keep the higher-severity finding; reference the other location.
+3. **Test-only PRs:** if only test files changed, suppress Test Coverage findings.
+4. **Cross-agent overlap (native):** the toolkit's agents overlap (e.g. code-reviewer + silent-failure-hunter both flag error handling) — dedup by file:line + root cause, keeping the more specific write-up.
 
-2. **Same root cause at different lines:** Keep only the higher-severity finding. Add a note referencing the other location.
+### 4.2 Severity is impact, not a confidence band
 
-3. **Test-only PRs:** If the PR modifies only test files, suppress all Test Coverage findings.
+Severity = blast radius **if the finding is real**, assigned independently of confidence:
 
-### 4.2 Severity Mapping
-
-| Severity | Confidence range | Examples |
+| Severity | Means | Examples |
 |---|---|---|
-| **Critical** | 90-100 | Missing RLS, user ID invariant violation, financial calc bug, empty catch block, service role in client code |
-| **High** | 85-89 | Wrong Supabase client, missing auth check, silent failure in catch, manual query keys, non-idempotent migration |
-| **Medium** | 80-84 | Naming violations, missing channel error handler, unchecked Supabase error response |
+| **Critical** | data loss / RLS bypass / auth break / financial corruption / destructive op | missing RLS, fail-open prod guard, financial calc bug, service role in client code |
+| **High** | must fix before merge; won't break prod the instant it ships | missing auth check, silent failure swallowing a money error, non-idempotent migration |
+| **Medium** | should fix soon | unchecked Supabase error response, missing channel handler |
+| **Low** | nit / cleanup | naming, style, loose typing |
 
-### 4.3 Present Report
+A Critical finding can carry **any** confidence. Do not down-rate severity because confidence is low — that is the exact mistake this two-axis model exists to prevent.
+
+### 4.3 Triage on two axes + present
+
+|   | **confidence ≥ 80** (likely real) | **confidence < 80** (uncertain) |
+|---|---|---|
+| **severity ≥ High** | **FIX** — auto-fix-eligible (`--quick`) | **INVESTIGATE** — surface up top, do NOT auto-fix, flag "catastrophic if real — verify" |
+| **severity ≤ Medium** | **Quick-fix / nit** | **Below-threshold** coverage list |
+
+- **Surface in the main report if `confidence ≥ 80` OR `severity ≥ High`.** A Critical/High finding is never buried by low confidence. (The PR #408 fail-open guard — Critical severity, 78 confidence — surfaces here, not in the collapsed list.)
+- **Order by severity-dominant priority:** `priority = 0.7 × severity_weight + 0.3 × confidence`, where severity_weight = Critical 100 / High 80 / Medium 55 / Low 30. Sort descending.
+- **Below-threshold list = low severity AND low confidence only** — never a high-severity item.
 
 ```markdown
-## PR Review: {intent statement}
+## PR Review: {intent statement}   ·   engine: {native | builtin | from-review}
+**Scope:** {N files, +A/-D}   **Findings:** {C Critical, H High, M Medium} · {I to investigate}
 
-**Dimensions:** {list of loaded dimensions}
-**Scope:** {N files analyzed, +A/-D lines}
-**Findings:** {X Critical, Y High, Z Medium}
+### Fix / surfaced
+| # | Sev | Conf | Dim | File:Line | Finding |
+|---|-----|------|-----|-----------|---------|
+| 1 | Critical | 95 | Security | api/review/route.ts:45 | Missing internal user ID lookup |
 
-| # | Sev | Dim | File:Line | Finding | Conf |
-|---|-----|-----|-----------|---------|------|
-| 1 | Critical | Security | api/review/route.ts:45 | Missing internal user ID lookup | 95 |
-| 2 | Critical | Correctness | lib/queries/budget.ts:88 | Manual query key | 90 |
-| 3 | High | Error Handling | api/chat/route.ts:30 | Empty catch swallows Langfuse error | 87 |
-| 4 | Medium | Test Coverage | packages/utils/src/markup.ts | New edge case untested | 82 |
+### ⚠ Investigate — high severity, low confidence (verify before trusting either way)
+| # | Sev | Conf | Dim | File:Line | Finding |
+|---|-----|------|-----|-----------|---------|
+| 7 | Critical | 30 | Security | …seed.sql:38 | Prod-guard may fail open on empty env |
 ```
 
-Then expand each finding with **What / Why / How**.
+Expand each surfaced finding with **What / Why / How**. Then the collapsed low/low list:
+
+> <details><summary>{K} below-threshold findings (low severity & conf &lt; 80) — expand</summary>
+>
+> | Sev | Conf | Dim | File:Line | Finding |
+> |-----|------|-----|-----------|---------|
+> | Low | 55 | Correctness | foo.ts:12 | Possible off-by-one (needs runtime context) |
+>
+> </details>
+
+Nothing is discarded — the matrix decides prominence, not existence.
 
 ### 4.4 Acknowledge Strengths
 
 Note what is well-done in the changeset. A review that only lists problems is incomplete.
 
-### 4.5 If No Findings
+### 4.5 If Nothing Surfaces
 
-> "No issues found above the 80-confidence threshold. Reviewed {N} files across {dimensions}. The code looks ready for merge."
+> "No findings cleared the surfacing bar (confidence ≥ 80 or severity ≥ High). Reviewed {N} files across {dimensions} via the {engine} engine. The code looks ready for merge."
+
+If there are below-threshold findings, still render the collapsed coverage list from §4.3 beneath this message. "Nothing surfaced" must never read as "the model found nothing" — it means nothing cleared the bar; low-severity/low-confidence items still live in the coverage list.
 
 **If `--review` flag is set, stop here.**
 
@@ -352,10 +385,11 @@ Deferred:
 
 ### 5.4 Quick Mode (`--quick`)
 
-If `--quick` flag is set, skip this phase entirely:
-- Auto-approve all Critical and High findings
-- Skip Medium findings
-- Proceed directly to Phase 6
+If `--quick` is set, skip the interactive gate:
+- Auto-approve the **FIX** quadrant only — severity ≥ High **AND** confidence ≥ 80.
+- **Never auto-fix the INVESTIGATE quadrant** (high severity, low confidence). Applying an unverified fix to an uncertain finding can do more harm than the finding — list those, recommend verification, and stop short of editing them.
+- Skip Medium/Low and below-threshold.
+- Proceed to Phase 6 with the FIX set.
 
 ---
 
@@ -463,7 +497,7 @@ If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip 
 |---|---|
 | No PR exists | Offer to review `git diff dev...HEAD` or help create a PR |
 | Empty diff | "No changes to review." Stop. |
-| No findings >= 80 | Confirm code looks good. List what was reviewed. |
+| Nothing surfaces (no conf ≥ 80, no sev ≥ High) | Confirm code looks good; still render the below-threshold coverage list. List what was reviewed and which engine ran. |
 | User skips all findings | "Understood — no fixes made. Findings documented above for reference." |
 | User wants to fix something not in findings | Accept it — add to the fix plan manually |
 | Branch behind base | Warn before Phase 6: "Branch is N commits behind {base}. Consider rebasing first." |
@@ -474,7 +508,7 @@ If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip 
 
 ## Calibration Rules
 
-1. **Precision over recall.** A false positive erodes trust. Only report >= 80 confidence. Silence is better than noise.
+1. **Coverage when finding, two-axis triage when displaying.** Surface and score every candidate honestly — never self-censor before scoring. The main report surfaces a finding when confidence ≥ 80 **or** severity ≥ High: a false positive among the high-confidence items erodes trust, while a high-severity/low-confidence item routes to **INVESTIGATE** (surfaced, not auto-fixed). Only low-severity *and* low-confidence items stay in the collapsed coverage list — never discarded. Suppression happens at display, not at finding.
 2. **File:line is mandatory.** Every finding must include a specific location. "Consider improving error handling" is not actionable.
 3. **Reference files are the authority.** Only flag issues documented in the reference files. Do not invent new rules.
 4. **Deleted code is invisible.** Never report issues in removed lines.
