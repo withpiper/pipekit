@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(no daily-flow changes; `/pr-fix` gained a pluggable native review engine + two-axis triage — see GUIDE.md; sync-method.sh example bumped to v2.7.0-rc2)*
+**v2.7.0-rc3** — Last updated: 2026-05-31 19:01  *(no daily-flow changes; `/pr-fix` gained git-blame + prior-PR-comment historical finders, `/pipekit-update` gained plugin-dependency Phase P — see GUIDE.md; sync-method.sh example bumped to v2.7.0-rc3)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.7.0-rc2             (or latest tag)
+1. ./scripts/sync-method.sh v2.7.0-rc3             (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
