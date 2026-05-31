@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(`/pr-fix` pluggable review engine — pr-review-toolkit agents native-default with fail-loud + built-in fallback — and two-axis severity×confidence triage with an INVESTIGATE bucket; Opus 4.8 framing audit across `method.md` + SOPs (stage-isolation reframe, prompt-snapshot refresh, handoff content discipline). Carries forward v2.7.0-rc1: discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`)*
+**v2.7.0-rc3** — Last updated: 2026-05-31 19:01  *(`/pr-fix` gains two dependency-free historical finders — git-blame regression detection + prior-PR-comment reapplication — running alongside the pr-review-toolkit specialists, with a historical-corroboration confidence boost; `pr-review-toolkit` promoted to a user-scope managed dependency via new `/pipekit-update` Phase P. Carries forward rc2: pluggable `/pr-fix` engine + two-axis severity×confidence triage + Opus 4.8 framing audit; rc1: discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

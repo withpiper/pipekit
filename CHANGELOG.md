@@ -52,6 +52,33 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v2.7.0-rc3 — 2026-05-31
+
+> **`/pr-fix` gains temporal signal; `pr-review-toolkit` becomes a managed dependency.** rc2 made `/pr-fix`'s native engine the `pr-review-toolkit` specialists — but those agents only ever see the diff. rc3 adds two dependency-free **historical finders** that read *how the code got here* and *what reviewers already said*, running alongside the specialists in the same parallel wave. Separately, the plugin dependency rc2 introduced was being borrowed from a project-local install on an unrelated repo; rc3 promotes it to a user-scope managed dependency and teaches `/pipekit-update` to keep it current.
+
+### What changed
+
+**Historical finders in `/pr-fix`** (`skills/pr-fix/skill.md`)
+- Two new dependency-free finders (`git` + `gh` only) join the native fan-out (§3.1), **alongside** the toolkit specialists — peers, not a pre-pass:
+  - **git-history** — `git blame`/`git log` on modified+deleted line ranges. Flags (a) changes that regress a recent deliberate bugfix (cites the prior commit sha), (b) removed guards whose blame points to a fix/incident commit, (c) high-churn fragile regions needing extra test coverage.
+  - **prior-pr-comments** — pulls review comments from recently-merged PRs that touched the same files and flags any that **reapply** to the current diff (confidence ≈70 — past feedback is a lead, not proof).
+- Because they need no plugin, they also run in the `--engine=builtin` path (§3.2).
+- New dedup rule §4.1.5 **Historical corroboration**: a historical finder matching a specialist *raises* that finding's confidence (+10, cap 99) instead of being dropped — recurrence-is-a-reality-signal applied across finders, not just across `--runs`.
+- Ordering rationale recorded: running the finders *first* to prime the specialists was considered and rejected for this cut — it serializes the wave for marginal gain, and the corroboration rule already captures most of the benefit.
+
+**`pr-review-toolkit` as a managed dependency** (`skills/pipekit-update/skill.md`)
+- New **Phase P — Ensure Plugin Dependencies**, routed through *both* upstream (Pipekit repo) and downstream (consuming project) modes. It installs/updates `pr-review-toolkit@claude-plugins-official` at **user scope** via the `claude plugin` CLI. Plugins are not files `sync-method.sh` can copy — they live in `~/.claude/plugins/` — so Phase P calls the CLI directly; it touches harness config, never project files.
+- If the `claude` CLI is absent (e.g. a CI runner), Phase P skips with a printed note — `/pr-fix --engine=builtin` remains the dependency-free fallback. Project-scope documented as the alternative for teams wanting the dependency to travel reproducibly with a repo.
+
+**Linear-state-lag fixes** (`bin/pk`, `skills/10-strategy-sync/skill.md`)
+- Surfaced by a Piper handoff (`resources/handoffs/Handoff-Pipekit-Linear-State-Lag.md`): post-`pk ship` Linear transitions are command-driven, not merge-driven, so a merged PR can leave its issue stranded in UAT — under-reporting shipped work to `/strategy-sync`. Verified against the code: `pk promote --finish` already transitions every bundled WIT and fails loud, but `pk done` transitioned a single issue and swallowed the failure with `|| true`.
+- `pk done` now **fails loud** on a failed UAT→In <Env> transition — it warns that the issue is stranded but continues worktree cleanup (the merge already succeeded; hard-failing post-merge would strand the worktree, which is worse).
+- `/strategy-sync` Phase 1 gains a **mandatory merged-PR cross-check** (§4b): diff merged PRs on the integration branch against the Linear `Done` set and treat any merged-but-not-Done issue as shipped. Ports the guard Piper carried locally into the canonical skill so every project inherits it. The deeper root-cause fixes (a merge-driven transition Action; bundled-WIT parsing in `pk done`) remain a scoped follow-up.
+
+> **Release note:** stamped `CLAUDE.md` + `RUNBOOK.md` to `v2.7.0-rc3` (RUNBOOK has no daily-flow change — only the sync example + stamp); `method.md` / `GUIDE.md` left at their prior stamps (untouched this cut — the gap is the intended drift signal). Bumped `PK_VERSION` and the RUNBOOK sync example. **Operational note for this machine:** `pr-review-toolkit` was re-homed from a `local` install on the SiteLine project to a `user`-scope global install, so Pipekit (and every other project) no longer borrows another repo's plugin registration. The synced skill changes are portable; the plugin re-home is environment state, not shipped content.
+
+---
+
 ## v2.7.0-rc2 — 2026-05-31
 
 > **Opus 4.8 framing audit — docs reframed, one handoff slimmed, nothing lost.** An impact audit of Pipekit's artifacts against Opus 4.8 (1M context window + harness-persistent memory) found that the persistence layer those capabilities would obsolete was *already pruned in the 4.7 cycle* (`NEXT.md` retired v2.1.0, bash Stop hook retired, `Session_Management_SOP.md` already 1M-aware). No artifact was REDUNDANT-delete. The real finding was framing rot: a few docs still justified discipline as a small-window workaround. These edits correct the *why* without changing the rule, refresh the external prompt-engineering snapshot to 4.8, codify a durable-vs-ephemeral split for handoff docs (git history holds any removed runbook), and harden `pr-fix` against 4.8 recall loss (the one enforcement skill that suppressed findings at the find stage).
