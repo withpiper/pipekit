@@ -1454,7 +1454,11 @@ $commits"
   local next_state
   next_state=$(pk_first_env_state_name)
   if [ -n "$next_state" ]; then
-    pk_linear_set_state "$issue" "$next_state" "advance" || true
+    if ! pk_linear_set_state "$issue" "$next_state" "advance"; then
+      echo "⚠️  Linear: $issue — transition to '$next_state' FAILED. The merge succeeded and" >&2
+      echo "    cleanup will continue, but the issue is stranded in its current state — this is" >&2
+      echo "    the recurring Linear-state-lag class. Reconcile via the Linear UI or rerun pk done." >&2
+    fi
   fi
 
   echo "Removing worktree..."
