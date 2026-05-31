@@ -50,8 +50,35 @@ echo "Mode: $mode"
 
 Tell the user which mode was detected before proceeding. If detection is wrong (rare — a fork with a non-canonical name), the user can override by running the underlying command directly (`git pull` for upstream, `./scripts/sync-method.sh <tag>` for downstream).
 
-- **Downstream mode** → continue to Phase 1.
-- **Upstream mode** → jump to Phase U.
+Then run **Phase P** (plugin dependencies — both modes) before branching:
+
+- **Downstream mode** → Phase P, then Phase 1.
+- **Upstream mode** → Phase P, then Phase U.
+
+### Phase P — Ensure Plugin Dependencies (both modes)
+
+Pipekit's `/pr-fix` native review engine depends on the **`pr-review-toolkit`** Claude Code plugin (Anthropic first-party, `claude-plugins-official` marketplace). Unlike skills/SOPs/templates, plugins are NOT files `sync-method.sh` can copy — they live in `~/.claude/plugins/` and are managed by the `claude plugin` CLI. This phase keeps that dependency installed and current so `/pr-fix --engine=native` never fails-loud for a missing plugin, and so neither this repo nor any consuming project ends up borrowing another project's local-scope install.
+
+If the `claude` CLI is unavailable (e.g. a CI runner), skip this phase with a printed note — `/pr-fix --engine=builtin` remains the dependency-free fallback.
+
+Install-or-update at **user scope** (global — available in every project):
+
+```bash
+if command -v claude >/dev/null 2>&1; then
+  # Refresh the catalog, then install (or update) the plugin at user scope.
+  claude plugin marketplace update claude-plugins-official 2>/dev/null || true
+  claude plugin install pr-review-toolkit@claude-plugins-official --scope user 2>&1 \
+    || claude plugin update pr-review-toolkit@claude-plugins-official --scope user
+  claude plugin list 2>/dev/null | grep -A2 "pr-review-toolkit@" | grep -E "Scope|Status"
+else
+  echo "NOTE: 'claude' CLI not found — skipping plugin ensure. /pr-fix --engine=builtin still works."
+fi
+```
+
+Notes:
+- **User scope is the default** for the reason above. If your team wants the dependency to travel reproducibly with a specific repo instead, install with `--scope project` in that repo — it records the plugin in the project's config so teammates get it on checkout.
+- The plugin **requires a Claude Code restart to load** after install/update — flag this in the Phase 4e / Phase U summary.
+- This phase touches `~/.claude/plugins/` (harness config), never project files — consistent with "never touches project-specific files."
 
 ### Phase U — Upstream Update (Pipekit repo itself)
 
@@ -245,7 +272,7 @@ Startup tracker: {aligned | N items flagged}
 Action items remaining:
   - {any deferred items the user said "later" to}
 
-Restart Claude Code to load updated skills.
+Restart Claude Code to load updated skills (and any plugin installed/updated in Phase P).
 ```
 
 ### Phase 5 — Push Improvements Back (--push only)
