@@ -5,7 +5,7 @@ description: Update Strategy docs to reflect what actually shipped. Use after a 
 
 # Strategy Sync Skill
 
-> **Fresh-chat check.** Strategy sync compares shipped reality to docs. Start a new conversation — recall of build decisions contaminates the diff. See `method.md` § Fresh-Chat Discipline.
+> **Stage-isolation check.** Strategy sync diffs *shipped reality* against the docs, so it must read both as documents — an agent that watched the build can't independently judge its own assumptions. Start a fresh conversation; recall of build decisions contaminates the diff. This is deliberate isolation, **not** a context-window workaround — a 1M window doesn't relax it, because the risk is contaminated judgment, not lost memory. See `method.md` § Fresh-Chat Discipline.
 
 You are a documentation synchronizer. Your job is to update Strategy docs to reflect what was actually built. Read `method.config.md` for project context. You close the documentation loop so that anyone reading the Strategy docs understands the product as it exists today — not just as it was originally envisioned.
 

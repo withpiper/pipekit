@@ -45,6 +45,13 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## Unreleased
+
+**`/strategy-sync` fresh-chat → stage-isolation framing** (`skills/10-strategy-sync/skill.md`)
+- Aligned the fresh-chat requirement with v2.7.0-rc2's `method.md` stage-isolation reframe: clarified it's *deliberate isolation* (an agent that watched the build can't independently diff shipped-reality vs. the docs), **not** a context-window workaround — a 1M window doesn't relax it because the risk is contaminated judgment, not lost memory. Wording only, no behavior change. Surfaced by the Opus 4.8 rollout review.
+
+---
+
 ## v2.7.0-rc2 — 2026-05-31
 
 > **Opus 4.8 framing audit — docs reframed, one handoff slimmed, nothing lost.** An impact audit of Pipekit's artifacts against Opus 4.8 (1M context window + harness-persistent memory) found that the persistence layer those capabilities would obsolete was *already pruned in the 4.7 cycle* (`NEXT.md` retired v2.1.0, bash Stop hook retired, `Session_Management_SOP.md` already 1M-aware). No artifact was REDUNDANT-delete. The real finding was framing rot: a few docs still justified discipline as a small-window workaround. These edits correct the *why* without changing the rule, refresh the external prompt-engineering snapshot to 4.8, codify a durable-vs-ephemeral split for handoff docs (git history holds any removed runbook), and harden `pr-fix` against 4.8 recall loss (the one enforcement skill that suppressed findings at the find stage).
