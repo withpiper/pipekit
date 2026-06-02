@@ -47,10 +47,27 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
+_Nothing yet._
+
+---
+
+## v2.7.0-rc4 — 2026-06-02
+
+> **Two gates stop punting work back to the human.** `/verify`'s migration flag used to hand the user a raw `git show` to review themselves — it now runs the migration rubric in a subagent and carries a Hold/Approve **verdict** the user approves. And `pk branch` only ever symlinked root-level env files, so monorepo worktrees came up reading the `*.example` placeholder with no real backend — it now auto-discovers and links nested per-app env files too. Carries forward the rc3 `/pr-fix` historical finders and `pr-review-toolkit` managed dependency.
+
+### What changed
+
 **`/verify` migration flag now carries a verdict, not a bare pointer** (`skills/verify/skill.md`)
 - Step 6 Flag check A previously detected migration files in the diff and surfaced a bare `FLAG: … review for irreversibility, RLS, search_path` — handing the user a raw `git show` to review themselves, the exact analysis the skill exists to perform. It now spawns a review subagent (`pr-review-toolkit:code-reviewer`, fallback `general-purpose`) that applies `/pr-security-review`'s migration rubric (M1–M8, plus the RLS / SECURITY DEFINER / GRANT rubrics when the diff body contains those patterns), writes `migration-review.md`, and the flag carries the resulting **Hold/Approve verdict**. `reality-check.md` gained a `## Migration review` section that inlines it.
 - Runs on **every tier** (migrations are high-stakes regardless of tier) and is complementary to Step 5's generic antagonistic pass — that lens finds "what's wrong"; this one returns a structured verdict against named rubric IDs.
 - A `Hold` verdict pauses auto-ship via the flag but does **not** auto-downgrade `/verify` status to NEEDS WORK — consistent with how antagonistic findings and every other flag behave; classification stays the user's RECONCILE step. The human gate is unchanged in spirit (migrations always pause for a human eye), changed in substance: the user now approves `Hold: M3 missing backfill` or `Approve — no findings` instead of a `git show` they were never positioned to act on.
+
+**`pk branch` now symlinks nested per-app env files into the worktree** (`bin/pk`, `scripts/test-pk-env-links.sh`)
+- `pk branch` symlinked only a hardcoded **root-level** env list (`.env .env.local .envrc …`). In a monorepo, the browser client reads `apps/web/.env.local` — which is gitignored, so a fresh worktree never had it and fell back to the `*.example` placeholder (`NEXT_PUBLIC_SUPABASE_URL=your-project.supabase.co`), leaving the app with no real backend to talk to.
+- Extracted the linking into a testable `pk_link_env_files` helper and added pass (2): auto-discover every real nested env file (`.env` / `.env.local` / `.env.dev` / `.env.prod`) in the parent and symlink it at the same relative path. Exact-name match (never `*.example`), pruning `node_modules` / `.git` / `.worktrees`. Idempotent; never clobbers a real file already in the worktree.
+- **Auto-discover, not config:** a `method.config.md` env-link list was considered and rejected — the failure was that the need was *implicit* and nobody enumerated it; a config list reintroduces the same "forgot to configure it" footgun. Discovery mirrors parent reality with zero setup, so new monorepo apps are picked up automatically.
+- **Recovery for existing worktrees:** the worktree-exists path in `pk branch` falls through to the symlink step, so re-running `pk branch <ID>` (idempotent) backfills the missing links into a worktree created before this fix.
+- New `scripts/test-pk-env-links.sh` exercises the real helper (sources `bin/pk`): real-value link, `.example` exclusion, nested depth, `node_modules` prune, idempotency, no-clobber.
 
 **`/strategy-sync` fresh-chat → stage-isolation framing** (`skills/10-strategy-sync/skill.md`)
 - Aligned the fresh-chat requirement with v2.7.0-rc2's `method.md` stage-isolation reframe: clarified it's *deliberate isolation* (an agent that watched the build can't independently diff shipped-reality vs. the docs), **not** a context-window workaround — a 1M window doesn't relax it because the risk is contaminated judgment, not lost memory. Wording only, no behavior change. Surfaced by the Opus 4.8 rollout review.
