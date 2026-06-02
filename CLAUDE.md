@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.7.0-rc3** — Last updated: 2026-05-31 19:01  *(`/pr-fix` gains two dependency-free historical finders — git-blame regression detection + prior-PR-comment reapplication — running alongside the pr-review-toolkit specialists, with a historical-corroboration confidence boost; `pr-review-toolkit` promoted to a user-scope managed dependency via new `/pipekit-update` Phase P. Carries forward rc2: pluggable `/pr-fix` engine + two-axis severity×confidence triage + Opus 4.8 framing audit; rc1: discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`)*
+**v2.7.0-rc4** — Last updated: 2026-06-02 19:40  *(`/verify` migration flag now self-reviews — spawns the `/pr-security-review` migration rubric in a subagent and carries a Hold/Approve verdict instead of punting a raw `git show` to the human; `pk branch` auto-discovers and symlinks nested per-app env files into the worktree (monorepo `apps/web/.env.local`) so fresh worktrees stop coming up on the `*.example` placeholder. Carries forward rc3: `/pr-fix` historical finders + `pr-review-toolkit` managed dependency; rc2: pluggable `/pr-fix` engine + two-axis severity×confidence triage + Opus 4.8 framing audit; rc1: discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
