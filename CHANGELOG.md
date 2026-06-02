@@ -47,6 +47,11 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
+**`/verify` migration flag now carries a verdict, not a bare pointer** (`skills/verify/skill.md`)
+- Step 6 Flag check A previously detected migration files in the diff and surfaced a bare `FLAG: … review for irreversibility, RLS, search_path` — handing the user a raw `git show` to review themselves, the exact analysis the skill exists to perform. It now spawns a review subagent (`pr-review-toolkit:code-reviewer`, fallback `general-purpose`) that applies `/pr-security-review`'s migration rubric (M1–M8, plus the RLS / SECURITY DEFINER / GRANT rubrics when the diff body contains those patterns), writes `migration-review.md`, and the flag carries the resulting **Hold/Approve verdict**. `reality-check.md` gained a `## Migration review` section that inlines it.
+- Runs on **every tier** (migrations are high-stakes regardless of tier) and is complementary to Step 5's generic antagonistic pass — that lens finds "what's wrong"; this one returns a structured verdict against named rubric IDs.
+- A `Hold` verdict pauses auto-ship via the flag but does **not** auto-downgrade `/verify` status to NEEDS WORK — consistent with how antagonistic findings and every other flag behave; classification stays the user's RECONCILE step. The human gate is unchanged in spirit (migrations always pause for a human eye), changed in substance: the user now approves `Hold: M3 missing backfill` or `Approve — no findings` instead of a `git show` they were never positioned to act on.
+
 **`/strategy-sync` fresh-chat → stage-isolation framing** (`skills/10-strategy-sync/skill.md`)
 - Aligned the fresh-chat requirement with v2.7.0-rc2's `method.md` stage-isolation reframe: clarified it's *deliberate isolation* (an agent that watched the build can't independently diff shipped-reality vs. the docs), **not** a context-window workaround — a 1M window doesn't relax it because the risk is contaminated judgment, not lost memory. Wording only, no behavior change. Surfaced by the Opus 4.8 rollout review.
 
