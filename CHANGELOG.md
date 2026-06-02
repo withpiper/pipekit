@@ -47,6 +47,13 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
+**`pk branch` now symlinks nested per-app env files into the worktree** (`bin/pk`, `scripts/test-pk-env-links.sh`)
+- `pk branch` symlinked only a hardcoded **root-level** env list (`.env .env.local .envrc …`). In a monorepo, the browser client reads `apps/web/.env.local` — which is gitignored, so a fresh worktree never had it and fell back to the `*.example` placeholder (`NEXT_PUBLIC_SUPABASE_URL=your-project.supabase.co`), leaving the app with no real backend to talk to.
+- Extracted the linking into a testable `pk_link_env_files` helper and added pass (2): auto-discover every real nested env file (`.env` / `.env.local` / `.env.dev` / `.env.prod`) in the parent and symlink it at the same relative path. Exact-name match (never `*.example`), pruning `node_modules` / `.git` / `.worktrees`. Idempotent; never clobbers a real file already in the worktree.
+- **Auto-discover, not config:** a `method.config.md` env-link list was considered and rejected — the failure was that the need was *implicit* and nobody enumerated it; a config list reintroduces the same "forgot to configure it" footgun. Discovery mirrors parent reality with zero setup, so new monorepo apps are picked up automatically.
+- **Recovery for existing worktrees:** the worktree-exists path in `pk branch` falls through to the symlink step, so re-running `pk branch <ID>` (idempotent) backfills the missing links into a worktree created before this fix.
+- New `scripts/test-pk-env-links.sh` exercises the real helper (sources `bin/pk`): real-value link, `.example` exclusion, nested depth, `node_modules` prune, idempotency, no-clobber.
+
 **`/strategy-sync` fresh-chat → stage-isolation framing** (`skills/10-strategy-sync/skill.md`)
 - Aligned the fresh-chat requirement with v2.7.0-rc2's `method.md` stage-isolation reframe: clarified it's *deliberate isolation* (an agent that watched the build can't independently diff shipped-reality vs. the docs), **not** a context-window workaround — a 1M window doesn't relax it because the risk is contaminated judgment, not lost memory. Wording only, no behavior change. Surfaced by the Opus 4.8 rollout review.
 
