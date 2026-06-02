@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.7.0-rc3"
+PK_VERSION="2.7.0-rc4"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -556,6 +556,35 @@ pk_worktree_path() {
   echo "$root/.worktrees/${id}"
 }
 
+# Symlink parent env files into a worktree (idempotent). Two passes:
+#   (1) Root-level config + env files — the historical set.
+#   (2) Nested per-app env files (monorepo: apps/web/.env.local, packages/*/.env).
+# A fresh worktree checks out tracked files only; gitignored env files live in
+# the parent and never appear here, so the app falls back to its *.example
+# placeholder (e.g. NEXT_PUBLIC_SUPABASE_URL=your-project.supabase.co) and the
+# browser client has no real backend to talk to. Pass (2) mirrors every real
+# nested env file at the same relative path. Exact-name match (never *.example),
+# pruning node_modules/.git/.worktrees so we never recurse into a dependency
+# tree or a sibling worktree.
+pk_link_env_files() {
+  local root="$1" wt_path="$2" envf abs rel
+  for envf in .env .env.local .env.dev .env.prod .envrc .mcp.json .sentryclirc; do
+    if [ -f "$root/$envf" ] && [ ! -e "$wt_path/$envf" ]; then
+      ln -sf "$root/$envf" "$wt_path/$envf"
+    fi
+  done
+  while IFS= read -r abs; do
+    [ -n "$abs" ] || continue
+    rel="${abs#"$root"/}"
+    case "$rel" in */*) ;; *) continue ;; esac   # root-level handled above
+    if [ ! -e "$wt_path/$rel" ]; then
+      mkdir -p "$wt_path/$(dirname "$rel")"
+      ln -sf "$abs" "$wt_path/$rel"
+    fi
+  done < <(find "$root" \( -name node_modules -o -name .git -o -name .worktrees \) -prune \
+             -o -type f \( -name .env -o -name .env.local -o -name .env.dev -o -name .env.prod \) -print 2>/dev/null)
+}
+
 # Slugify issue title — lowercase, replace non-alnum with -, collapse, trim,
 # keep first 3 words. Short slugs keep status bars and worktree paths sane.
 # Stop words removed up-front (and, the, of, for, in, on, to, with) so the
@@ -981,12 +1010,8 @@ cmd_branch() {
     fi
   fi
 
-  # Symlink env files (idempotent)
-  for envf in .env .env.local .env.dev .env.prod .envrc .mcp.json .sentryclirc; do
-    if [ -f "$root/$envf" ] && [ ! -e "$wt_path/$envf" ]; then
-      ln -sf "$root/$envf" "$wt_path/$envf"
-    fi
-  done
+  # Symlink env files from the parent (root-level + nested per-app). Idempotent.
+  pk_link_env_files "$root" "$wt_path"
 
   # Auto-allow direnv when .envrc was symlinked (v2.6.0.1). Direnv treats
   # the worktree path as a new .envrc and blocks it until allowed — but

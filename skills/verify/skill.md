@@ -383,20 +383,82 @@ After the gate, QA, and antagonistic review (if run), enumerate any **human-deci
 
 Run these checks in order. Surface every match. For `TIER != quick`, also append each surfaced flag as a `FLAG: ...` line to `$VERIFY_DIR/evidence.txt`.
 
-### Flag check A — Migration files in diff
+### Flag check A — Migration files in diff (auto-reviewed)
 
 ```bash
 MIGRATION_DIR=$(pk config "Migration dir" "")
+MIGRATION_FILES=""
 if [ -n "$MIGRATION_DIR" ]; then
   MIGRATION_FILES=$(git diff --name-only "origin/$INTEGRATION...HEAD" -- "$MIGRATION_DIR" 2>/dev/null)
-  if [ -n "$MIGRATION_FILES" ]; then
-    echo "FLAG: migration files in diff — review for irreversibility, RLS, search_path"
-    [ "$TIER" != "quick" ] && printf 'FLAG: migration files in diff: %s\n' "$(echo "$MIGRATION_FILES" | tr '\n' ' ')" >> "$VERIFY_DIR/evidence.txt"
-  fi
 fi
 ```
 
-Migrations are high-stakes and always warrant a human eye, regardless of QA verdict. Even a "trivial column add" can ship a destructive default backfill or a missing `search_path` on a `SECURITY DEFINER` function.
+If `MIGRATION_FILES` is non-empty, **never surface a bare pointer.** Migrations are high-stakes and always warrant a human eye regardless of QA verdict — but the human's job is to *approve a verdict*, not to perform the review. A "trivial column add" can ship a destructive default backfill or a missing `search_path` on a `SECURITY DEFINER` function, and handing the user a raw `git show` asks them to catch exactly the class of issue this skill exists to catch. So when migration files are present, spawn a review subagent and attach its verdict to the flag.
+
+#### Spawn the migration-review subagent
+
+Fires whenever `MIGRATION_FILES` is non-empty, on **every tier** (migrations are high-stakes regardless of tier). Complementary to Step 5's antagonistic review — that pass is a generic "find what's wrong" lens; this one applies the structured migration rubric and returns a Hold/Approve verdict against named rubric IDs.
+
+Backend-pluggable:
+- prefer `subagent_type: "pr-review-toolkit:code-reviewer"` (the same specialist `/pr-security-review` uses)
+- fall back to `general-purpose` if the toolkit isn't installed (warn, mirroring the QA fallback in the Failure model)
+
+Configure `allowed-tools: Read, Bash, Write`, `model: opus`. Use the Task tool with:
+
+- `description: "Migration review of <ISSUE-ID>"`
+- Prompt:
+  ```
+  Write target: <VERIFY_DIR>/migration-review.md
+    (if $VERIFY_DIR is unset — tier:quick — skip the file and return the verdict block inline).
+    Return only a one-line confirmation: "Migration review written: <verdict>".
+
+  Apply the migration rubric from the /pr-security-review skill. Read it first — it lives at
+  `.claude/skills/pr-security-review/skill.md` (consuming projects) or
+  `skills/pr-security-review/skill.md` (Pipekit itself) — read § "Migration rubric (M1–M8)"
+  and apply every item. ALSO apply, only when the diff body contains the triggering pattern:
+    - RLS rubric (R1–R6)            — diff contains CREATE POLICY / ALTER POLICY / ENABLE ROW LEVEL SECURITY
+    - SECURITY DEFINER rubric (S1–S8) — diff contains SECURITY DEFINER
+    - GRANT/REVOKE rubric (G1–G3)   — diff contains GRANT / REVOKE
+  If you cannot read the skill file, fall back to checking these categories directly:
+  idempotency; destructive DDL without a data-migration plan; NOT NULL columns without
+  default/backfill; FK ON DELETE behavior; RLS enablement + at least one policy;
+  search_path on SECURITY DEFINER functions; type regeneration present in the diff;
+  timestamp ordering of the migration filename.
+
+  Anchor-emit discipline: cite every finding as `<file>:<line>`. No vague refs.
+
+  Write exactly this shape:
+
+  ## Migration review — <ISSUE>
+
+  **Verdict:** Hold | Approve with notes | Approve
+  **Files:** <migration files reviewed>
+  **Findings:** N Critical · N High · N Medium · N Low · N Nit
+
+  | # | Sev | Rubric | File:line | Finding | Remediation |
+  |---|---|---|---|---|---|
+  | 1 | High | M3 | `<file>:<line>` | <issue> | <action> |
+
+  (or, if clean: "No issues found after thorough examination — Verdict: Approve.")
+
+  Verdict rule: any Critical or High finding → Hold. Medium/Low/Nit only → Approve with notes.
+  No findings → Approve.
+
+  ARTIFACT:
+  <output of: git diff "origin/$INTEGRATION...HEAD" -- "$MIGRATION_DIR">
+
+  CONTRACT:
+  <full Linear issue description — the AC list>
+  ```
+
+After the subagent returns, read `<VERIFY_DIR>/migration-review.md` (or the inline block on tier:quick), grep the **Verdict:** line into `MIGRATION_VERDICT`, then surface the flag carrying the verdict — never a bare pointer:
+
+```bash
+echo "FLAG: migration review — ${MIGRATION_VERDICT} — see migration-review.md ($(echo "$MIGRATION_FILES" | tr '\n' ' '))"
+[ "$TIER" != "quick" ] && printf 'FLAG: migration review: %s — files: %s\n' "$MIGRATION_VERDICT" "$(echo "$MIGRATION_FILES" | tr '\n' ' ')" >> "$VERIFY_DIR/evidence.txt"
+```
+
+The verdict — `Hold` included — is surfaced for the user to RECONCILE; it does **not** auto-downgrade the `/verify` status, consistent with how antagonistic findings and every other flag behave (Step 8). The migration flag still pauses auto-ship (Step 9). The only thing that changed: the user now approves `Hold: M3 missing backfill on line 14` or `Approve — no findings`, instead of a `git show` they were never positioned to act on.
 
 ### Flag check B — QA Pass with non-empty sub-sections
 
@@ -490,6 +552,10 @@ For `TIER != quick`, render `$VERIFY_DIR/reality-check.md` with this structure:
 ## Antagonistic review
 
 <inline contents of `$VERIFY_DIR/adversarial.md`, or "Not run (tier:<TIER>, no --review).">
+
+## Migration review
+
+<inline contents of `$VERIFY_DIR/migration-review.md`, or "No migration files in diff.">
 
 ## Flags surfaced
 
