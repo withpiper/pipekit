@@ -169,7 +169,7 @@ Derived tier: tier:heavy  (from "Complexity: High (~16-22h)")
    - `team`: `{team from method.config.md}`
    - `title`: concise spec title (prefix with domain if useful, e.g., "Budget: Multi-currency support")
    - `description`: the full light spec (markdown)
-   - `state`: `Specced` (light spec applied, awaiting human review)
+   - `state`: the configured **`Spec ready state`** — read it with `pk config "Spec ready state" "Specced"` (default `Specced`). This is the state `pk spec-cycle` requires on entry (Phase 6), so publishing to it keeps the interlock intact on **any** board. Projects whose Linear workflow has no `Specced` column set `Spec ready state` to a state they *do* have (e.g. `Needs Spec`); hardcoding `Specced` here would try to set a nonexistent state and break the cycle.
    - `priority`: ask user (default 0/None if unsure)
    - `project`: suggest based on Phase 2 findings, confirm with user
    - `labels`: **merged list**: `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
@@ -207,7 +207,7 @@ loop:
                    - pass >= 2: show the agent's blocker count and readiness
                      score, then prompt: "Continue to /02? [Y/n/o]"
                        Y → invoke /02
-                       n → exit, leave issue in Specced
+                       n → exit, leave issue in the spec-ready state
                        o → invoke /02 with override directive (the user wants
                            to override the agent verdict, not patch the spec)
 

@@ -113,7 +113,7 @@ Read the resulting state from brainstorm's output (or `pk` Linear lookup). Don't
 
 Invoke `/light-spec <ID>` (Skill tool, `skill="light-spec"`). It drafts the spec, derives the tier (Phase 3.6, prints `Derived tier: tier:<x>`), publishes the spec, and **auto-enters the spec-review cycle**.
 
-> **Config precondition:** `/light-spec` publishes the spec and then calls `pk spec-cycle`, which only triggers when the issue is in the configured `Spec ready state`. For this interlock to hold, `Spec ready state` must be the state `/light-spec` publishes to (the default, `Specced`). If a project sets `Spec ready state` to a value `/light-spec` never transitions into, the cycle errors immediately — that's a `method.config.md` bug, not a pk-express one; surface it and stop.
+> **Config note:** `/light-spec` publishes to the configured `Spec ready state` and `pk spec-cycle` requires that same state on entry, so the interlock holds on any board — the only requirement is that `Spec ready state` names a state your Linear workflow actually has. If the publish fails because the configured state doesn't exist, surface it and stop (gate-style); it's a `method.config.md` ↔ workflow mismatch, not a pk-express fault.
 
 **Express overrides for this invocation:**
 - **Tier guard (gate 2):** as soon as the derived tier is known and it is `tier:heavy`, **stop** — the spec is published and useful, but do not auto-cycle/branch/work it. (For `tier:quick`/`tier:standard`, continue.)
