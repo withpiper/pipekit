@@ -585,6 +585,28 @@ pk_link_env_files() {
              -o -type f \( -name .env -o -name .env.local -o -name .env.dev -o -name .env.prod \) -print 2>/dev/null)
 }
 
+# Classify whether a WIT identifier has real implementation evidence in git
+# history reachable from <ref> (default HEAD). Echoes: built | docs-only | none.
+# Doc-only paths (*.md, Logs/, docs/, Strategy/, CHANGELOG) do not count as
+# implementation. Heuristic: assumes commits/merges reference the WIT id
+# (Pipekit's feature/<ID>-slug convention puts it in the merge commit). Used by
+# `pk doctor` to flag false-ships — issues the board calls Done/UAT but git
+# never built. The id-boundary `([^0-9]|$)` stops WIT-49 matching WIT-497.
+pk_git_build_evidence() {
+  local id="$1" ref="${2:-HEAD}" files nondoc
+  files=$(git log "$ref" -E --grep="${id}([^0-9]|$)" --name-only --pretty=format: 2>/dev/null \
+    | grep -v '^$' | sort -u || true)
+  if [ -z "$files" ]; then
+    echo "none"; return 0
+  fi
+  nondoc=$(echo "$files" | grep -vE '\.md$|^Logs/|^docs/|^Strategy/|CHANGELOG' || true)
+  if [ -z "$nondoc" ]; then
+    echo "docs-only"
+  else
+    echo "built"
+  fi
+}
+
 # Slugify issue title — lowercase, replace non-alnum with -, collapse, trim,
 # keep first 3 words. Short slugs keep status bars and worktree paths sane.
 # Stop words removed up-front (and, the, of, for, in, on, to, with) so the
@@ -2390,6 +2412,7 @@ EOF
 cmd_doctor() {
   local fail=0
   local warn=0
+  local linear_ok=false
   echo "── pk doctor ──"
   echo ""
   # Repo
@@ -2452,6 +2475,7 @@ cmd_doctor() {
     viewer=$(echo "$resp" | jq -r '.data.viewer.name // empty' 2>/dev/null)
     if [ -n "$viewer" ]; then
       echo "  ✓ Linear API reachable (viewer: $viewer)"
+      linear_ok=true
     else
       local err_msg
       err_msg=$(echo "$resp" | jq -r '.errors[0]?.extensions?.userPresentableMessage // .errors[0]?.message // empty' 2>/dev/null)
@@ -2487,6 +2511,54 @@ cmd_doctor() {
     echo "  ⚠ stale scripts/pipekit-journal-hook.sh — retired in v2.1.2; safe to delete"
     warn=$((warn+1))
   fi
+
+  # --- Linear↔git integrity (false-ship detection) -----------------------
+  # For WITs the board calls built/shipped (UAT, Done), confirm git history
+  # actually contains implementation referencing the id. A Done/UAT issue with
+  # no commits — or only docs commits — is a likely false-ship (marked complete
+  # but never built). Advisory: this is a grep heuristic that assumes commits/
+  # merges reference the WIT id (feature/<ID>-slug convention), so it surfaces
+  # candidates for human review and never hard-fails. Mirror of /strategy-sync
+  # 4b, which catches the opposite drift (merged-but-not-Done).
+  if [ "$linear_ok" = true ] && [ -n "$root" ]; then
+    echo ""
+    echo "── Linear↔git integrity (built-state cross-check) ──"
+    local integ ref st issues ids id ev checked=0 suspect=0
+    integ=$(pk_integration_branch)
+    ref="HEAD"
+    if [ -n "$integ" ]; then
+      if git rev-parse --verify --quiet "origin/$integ" >/dev/null 2>&1; then
+        ref="origin/$integ"
+      elif git rev-parse --verify --quiet "$integ" >/dev/null 2>&1; then
+        ref="$integ"
+      fi
+    fi
+    echo "  (commits reachable from $ref)"
+    for st in "UAT" "Done"; do
+      issues=$(pk_linear_issues_in_state "$st" 2>/dev/null || echo "[]")
+      ids=$(echo "$issues" | jq -r '.[].identifier // empty' 2>/dev/null || true)
+      [ -n "$ids" ] || continue
+      while IFS= read -r id; do
+        [ -n "$id" ] || continue
+        checked=$((checked+1))
+        ev=$(pk_git_build_evidence "$id" "$ref")
+        case "$ev" in
+          none)      echo "  ⚠ $st $id — no commits reference it on $ref (possible false-ship)"; suspect=$((suspect+1)) ;;
+          docs-only) echo "  ⚠ $st $id — only docs commits reference it (no implementation found)"; suspect=$((suspect+1)) ;;
+        esac
+      done <<< "$ids"
+    done
+    if [ "$checked" -eq 0 ]; then
+      echo "  • no UAT/Done issues to check"
+    elif [ "$suspect" -eq 0 ]; then
+      echo "  ✓ all $checked built-state issue(s) have implementation commits"
+    else
+      echo "  → $suspect of $checked flagged. Heuristic (assumes commits reference the id);"
+      echo "    verify with: git log --all --grep=<ID> before reopening."
+      warn=$((warn+1))
+    fi
+  fi
+
   echo ""
   if [ $fail -gt 0 ]; then
     echo "Result: $fail error(s), $warn warning(s). Fix errors before using pk."
