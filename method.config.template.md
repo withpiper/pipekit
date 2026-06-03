@@ -149,6 +149,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Backend** | `vbw` \| `native` \| `auto` | `vbw` | `/work` — chooses agent dispatch path. `auto` routes per plan complexity: ≤3 files + no migration → native, otherwise → vbw |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
+| **Deploy command** | shell command | (none) | `pk done` — for **script-deploy** projects (deploy is a script, not branch promotion). Surfaced as a reminder after merge so "Done" can't be reached without a deploy ("merged ≠ deployed"). Advisory; never auto-run. Leave blank for branch-per-env projects that use `pk promote`. |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` (auto-spawns QA subagent if `true`) |
 | **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
