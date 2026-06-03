@@ -51,6 +51,26 @@ _Nothing yet._
 
 ---
 
+## v2.7.0-rc6 — 2026-06-03
+
+> **`/pk-express` — an idea→Draft-PR autopilot for *simple* WITs.** Takes an existing brainstormed WIT (or a raw idea) and drives it through the four stages that already self-drive — `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship) — advancing on each stage's success signal and stopping only at genuine attention gates. Quick/Standard tier only; refuses heavy work. Validated end-to-end on a live SiteLine WIT (POC-14): it correctly split off the heavy half as a follow-up, drove the simple half to a merged PR, and stopped at the tier guard the first time around.
+
+### What changed
+
+**`/pk-express` idea→PR autopilot** (`skills/pk-express/skill.md`, indexed in `Skills_SOP.md` + `CLAUDE.md`)
+- New orchestrator skill. `/pk-express <ISSUE-ID>` (primary) takes a brainstormed WIT to a Draft PR; `/pk-express "<idea>"` prepends brainstorm. Resume routing reads the issue's Linear state and joins at the right stage.
+- **Auto-advances** on success signals (brainstorm Now, spec Approved, branch ok, verify Pass+0-flags) and **stops + notifies** at exactly five gates: brainstorm not-Now, **`tier:heavy` (refuses heavy)**, spec stalemate, `/verify` flags, and the Draft-PR/UAT handoff. Never runs `pk ready`/`pk done`/`pk promote`.
+- Express mode collapses only the low-judgment friction (between-stage typing, the Now/Later/Kill prompt, spec passes 2–3); the `/verify` gate and human PR/merge gates stay intact.
+- Handles the **Quick→Approved spec-skip path** (a Quick item brainstorm sends straight to Approved skips the spec stage).
+
+**`/light-spec` publishes to the configured `Spec ready state`, not hardcoded `Specced`** (`skills/01-light-spec/skill.md`)
+- `/light-spec` hardcoded moving the issue to `Specced`, but `pk spec-cycle`'s entry precondition is config-driven (`Spec ready state`) — two halves of one interlock, only one read config. On a board without a `Specced` state (e.g. SiteLine's Piper-poc: `Needs Spec → Approved`), `/light-spec` tried to set a nonexistent state and broke the cycle. Now it publishes to the configured ready state (default `Specced` — no change for canonical boards), so the interlock holds on any workflow. The skill's own line 239 already stated this intent; the implementation now matches.
+
+**`pipekit-cmux`: watch worker turn-end, not narration keywords** (`templates/rules/pipekit-cmux.md`)
+- New orchestration subsection + anti-pattern: when master control watches a worker Claude via `read-screen`, detecting gates/completion by grepping for keywords false-fires on the worker *narrating its own plan*. Detect the **turn ending** (live present-tense spinner gone across 2 polls — never the past-tense completion marker) or wire `Stop`/`Notification` hooks to `cmux notify`. Earned watching the `/pk-express` validation run.
+
+---
+
 ## v2.7.0-rc5 — 2026-06-03
 
 > **Log-mining release: ten fixes surfaced by Piper + SiteLine session logs.** The dominant signal across both projects was *"Done" overstating reality* — issues marked built/shipped that git never built, and merges that never deployed. rc5 adds a `pk doctor` integrity check for the false-ship case, completes `pk done`'s finish (process/branch teardown + a deploy reminder for script-deploy projects), hardens migration pre-merge coordination, and adds four discipline lines. (The SHA-aware `verify-complete.md` gate was scoped out — it's a behavior change, deferred to its own cut.)
