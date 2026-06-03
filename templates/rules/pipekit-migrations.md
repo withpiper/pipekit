@@ -39,6 +39,15 @@ When two feature branches each add migrations targeting the same remote DB on me
    ```
 2. Pick a timestamp **strictly later** than every applied-to-remote migration.
 3. If you discover a collision after the fact (your branch's migration timestamp is earlier than a migration that landed on the base branch while you were working), **rename the file** *before* the migration is applied anywhere — including local Supabase. This is a legitimate rename window, before the freeze begins.
+4. **Re-check right before merge, not only at creation.** A long-lived branch can be overtaken: another branch may land a same-day migration on the base branch *after* you picked your timestamp. The collision is invisible in your worktree — it passes local validation and `/verify`, because both only ever see your branch's tree. Immediately before merge, fetch the base branch and re-compare your new migrations against its current tail:
+   ```bash
+   git fetch origin <integration-branch>
+   # your branch's new migration timestamps:
+   git diff --name-only "origin/<integration-branch>...HEAD" -- supabase/migrations/ | sort
+   # the base branch's current migration tail:
+   git ls-tree -r --name-only "origin/<integration-branch>" -- supabase/migrations/ | sort | tail -5
+   ```
+   If your earliest new migration is not strictly later than the base tail, rename now — pre-merge is still before the freeze on the base DB — per step 3. (Anchor: Piper WIT-550, 2026-06-02 — a same-day migration merged to `dev` mid-session collided on merge after passing all local checks.)
 
 ## Manual Schema Changes on Remote Envs
 

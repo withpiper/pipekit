@@ -98,7 +98,7 @@ cmux doesn't change the blast radius of dangerous commands. `rm -rf`, `git reset
 
 ## Orchestrating other Claude sessions
 
-When master control is driving other Claude sessions in worker panes (the parallel-batch pattern), two extra rules apply that don't apply to non-Claude panes:
+When master control is driving other Claude sessions in worker panes (the parallel-batch pattern), three extra rules apply that don't apply to non-Claude panes:
 
 ### Never send `<digit>\n` to a Claude interactive menu
 
@@ -135,6 +135,14 @@ cmux read-screen --surface "$WORKER" --lines 20
 # If state hasn't moved, fall back to explicit cmux send "<command>"$'\n'
 ```
 
+### When a worker surface ref goes stale, fall back to git/Linear/`gh` as ground truth
+
+<important>
+Worker surface refs go stale the moment a worker session completes — and a busy cmux can host ~10 cross-project sessions, so a dead ref may now resolve to a different session entirely. Do not keep polling a surface to learn a worker's outcome.
+</important>
+
+Once a worker is done (or its surface stops responding), stop asking the pane and ask the durable state instead: `git log` / merged PRs (`gh pr list --state merged`), Linear issue state, and the live DB are the authoritative record of what a worker actually did. The pane is a view, not the truth. This is the orchestration-layer application of "track long-running work by process, not by scrollback" above — for a completed worker, git/Linear/`gh` *is* the process you track.
+
 ## Anti-patterns to avoid
 
 - Backgrounding a long-running command with `&` instead of spawning a pane — the process is invisible and you can't see its output without `tee`/log-tailing tricks.
@@ -144,3 +152,4 @@ cmux read-screen --surface "$WORKER" --lines 20
 - Calling `cmux rpc surface.send_text` for any reason — the routing bug is unfixed at this writing.
 - Sending `<digit>\n` to a Claude menu from a master orchestrator — numeric mapping is ambiguous when "Type something" / "Chat about this" rows are interleaved with numbered options. Use arrow-key navigation + Enter.
 - Reading the screen immediately after `send-key enter` — wait 2-3s for the worker to repaint.
+- Polling a completed worker's surface to learn its outcome — the ref is stale; read git/Linear/`gh` instead.
