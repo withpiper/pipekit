@@ -79,14 +79,20 @@ Next:   <the single command or decision to unblock>
 
 ### Stage 0 — Resolve entry
 
-- `/pk-express "<idea>"` → start at Stage 1.
-- `/pk-express <ISSUE-ID>` → read the issue's Linear state and jump in:
-  - `Triage` / `Ideas` / untriaged → run brainstorm's disposition only, then Stage 2.
-  - `Needs Spec` → Stage 2.
-  - `Specced` → resume the spec cycle (Stage 2's loop).
-  - `Approved` → Stage 3 (tier guard, then branch).
-  - `In Progress` (worktree exists) → Stage 4.
-  - `UAT` or later → already past the lane; report and stop (gate 5).
+**`/pk-express <ISSUE-ID>` (take an existing WIT through to completion) is the primary form** — you've already brainstormed/captured the idea; this drives it from wherever it is to a Draft PR. `/pk-express "<idea>"` is the convenience form that prepends the brainstorm step.
+
+Read the issue's current Linear state and jump in:
+
+| Current state | Enter at | Notes |
+|---|---|---|
+| `Triage` / `Ideas` / untriaged | Stage 1 (brainstorm disposition only, no re-file) | then follow Stage 1's state-branch (Approved → Stage 3, Spec-ready-state → Stage 2) |
+| `Needs Spec` (the `Spec ready state`) | Stage 2 | needs a spec |
+| `Specced` (mid-cycle) | Stage 2's cycle loop | resume reviewing |
+| `Approved` (the `Spec approved state`) | **Stage 3** | spec done/skipped → branch + work. **The clean WIT path.** |
+| `In Progress` (worktree exists) | Stage 4 | resume work |
+| `UAT` or later | — | already past the lane; report and **stop (gate 5)** |
+
+For `/pk-express "<idea>"` (no ID), start at Stage 1.
 
 ### Stage 1 — Brainstorm (Express: auto-accept a clear "Now")
 
