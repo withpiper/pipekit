@@ -51,6 +51,29 @@ _Nothing yet._
 
 ---
 
+## v2.7.0-rc5 — 2026-06-03
+
+> **Log-mining release: ten fixes surfaced by Piper + SiteLine session logs.** The dominant signal across both projects was *"Done" overstating reality* — issues marked built/shipped that git never built, and merges that never deployed. rc5 adds a `pk doctor` integrity check for the false-ship case, completes `pk done`'s finish (process/branch teardown + a deploy reminder for script-deploy projects), hardens migration pre-merge coordination, and adds four discipline lines. (The SHA-aware `verify-complete.md` gate was scoped out — it's a behavior change, deferred to its own cut.)
+
+### What changed
+
+**`pk doctor` flags false-ships via Linear↔git cross-check** (`bin/pk`, `scripts/test-pk-doctor-integrity.sh`)
+- New testable helper `pk_git_build_evidence` (`built | docs-only | none`) plus a `pk doctor` section: for WITs the board calls UAT/Done, confirm git history on the integration branch actually contains implementation referencing the id. No commits — or only docs commits — flags a likely false-ship. The leading-direction mirror of `/strategy-sync` 4b (which catches merged-but-not-Done). Advisory + heuristic (assumes commits reference the WIT id); surfaces candidates, never hard-fails.
+
+**`pk done` finish completed** (`bin/pk`, `method.config.template.md`)
+- **Deploy reminder** (new optional `Deploy command` config): for script-deploy projects where `pk promote` is disabled, `pk done` surfaces the deploy command after merge so "merged ≠ deployed" can't pass silently. Advisory — never auto-runs a deploy.
+- **Parent-branch reset:** when the parent repo is sitting on the just-merged feature branch, `pk done` returns it to the integration branch (clean-tree guarded) before deleting — you can't delete the branch you're on, and parking there was recurring friction.
+- **Stack advisory:** notes that a worktree's local Supabase stack / dev server keeps running after teardown (`pk done` won't stop it — may be shared).
+- **Softened migration check:** the post-merge "not on remote" check is now an explicit advisory that notes a collision-rename can cause a false mismatch (ground truth: `supabase migration list` / the live DB), instead of a bare scary warning.
+
+**Discipline rules — four log-mined additions** (`templates/rules/`)
+- `pipekit-migrations`: re-check migration timestamps against the base-branch tail right *before merge*, not only at creation (long-lived branches get overtaken; the collision is invisible in the worktree).
+- `pipekit-cmux`: when a worker surface ref goes stale, treat git/Linear/`gh` as ground truth instead of polling a dead pane.
+- `pipekit-discipline`: red flag — a vendor-UI affirmative state (green check, "disabled") is a claim to verify, not evidence of effect.
+- `pipekit-tooling`: project-critical MCP servers must live in committed `.mcp.json`, or they're invisible inside `pk branch` worktrees.
+
+---
+
 ## v2.7.0-rc4 — 2026-06-02
 
 > **Two gates stop punting work back to the human.** `/verify`'s migration flag used to hand the user a raw `git show` to review themselves — it now runs the migration rubric in a subagent and carries a Hold/Approve **verdict** the user approves. And `pk branch` only ever symlinked root-level env files, so monorepo worktrees came up reading the `*.example` placeholder with no real backend — it now auto-discovers and links nested per-app env files too. Carries forward the rc3 `/pr-fix` historical finders and `pr-review-toolkit` managed dependency.
