@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="2.7.0-rc4"
+PK_VERSION="2.7.0-rc5"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -583,6 +583,28 @@ pk_link_env_files() {
     fi
   done < <(find "$root" \( -name node_modules -o -name .git -o -name .worktrees \) -prune \
              -o -type f \( -name .env -o -name .env.local -o -name .env.dev -o -name .env.prod \) -print 2>/dev/null)
+}
+
+# Classify whether a WIT identifier has real implementation evidence in git
+# history reachable from <ref> (default HEAD). Echoes: built | docs-only | none.
+# Doc-only paths (*.md, Logs/, docs/, Strategy/, CHANGELOG) do not count as
+# implementation. Heuristic: assumes commits/merges reference the WIT id
+# (Pipekit's feature/<ID>-slug convention puts it in the merge commit). Used by
+# `pk doctor` to flag false-ships — issues the board calls Done/UAT but git
+# never built. The id-boundary `([^0-9]|$)` stops WIT-49 matching WIT-497.
+pk_git_build_evidence() {
+  local id="$1" ref="${2:-HEAD}" files nondoc
+  files=$(git log "$ref" -E --grep="${id}([^0-9]|$)" --name-only --pretty=format: 2>/dev/null \
+    | grep -v '^$' | sort -u || true)
+  if [ -z "$files" ]; then
+    echo "none"; return 0
+  fi
+  nondoc=$(echo "$files" | grep -vE '\.md$|^Logs/|^docs/|^Strategy/|CHANGELOG' || true)
+  if [ -z "$nondoc" ]; then
+    echo "docs-only"
+  else
+    echo "built"
+  fi
 }
 
 # Slugify issue title — lowercase, replace non-alnum with -, collapse, trim,
@@ -1443,13 +1465,19 @@ cmd_done() {
           mname=$(basename "$mfile" .sql)
           if ! echo "$remote_list" | grep -qF "$mname"; then
             all_applied=false
-            echo "  ⚠ not on remote: $mname"
+            echo "  ⚠ not matched in 'supabase migration list': $mname"
           fi
         done <<< "$new_migrations"
         if [ "$all_applied" = true ]; then
           echo "  ✓ all ${migration_count} migration(s) applied to remote"
         else
-          echo "  → run: supabase db push"
+          # Advisory only — this is a filename-basename heuristic, not proof of drift.
+          # A legitimate collision-rename leaves the remote history holding the OLD
+          # filename, so a real-and-applied migration shows as unmatched here.
+          echo "  ℹ Filename heuristic — advisory, not a failure. If you recently"
+          echo "    renamed a migration (collision fix), the remote may hold the old"
+          echo "    name and this is a false alarm. Ground truth: 'supabase migration"
+          echo "    list' or the live DB. If genuinely unapplied → run: supabase db push"
         fi
       else
         echo "  ⚠ supabase CLI not found — verify migrations manually: supabase migration list"
@@ -1490,6 +1518,26 @@ $commits"
   if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
     git worktree remove "$wt_path" --force 2>/dev/null || rm -rf "$wt_path"
   fi
+
+  # If the parent repo is sitting on the just-merged feature branch, return it to
+  # the integration branch before deleting it. You can't delete the branch you're
+  # on (the delete below would silently no-op), and leaving the parent parked on a
+  # merged branch is the recurring "needs git checkout dev" friction. Guard on a
+  # clean tree — never discard uncommitted work.
+  local integration_branch on_branch
+  integration_branch=$(pk_integration_branch)
+  on_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+  if [ -n "$integration_branch" ] && [ "$on_branch" = "$current" ]; then
+    if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
+      if git checkout "$integration_branch" --quiet 2>/dev/null; then
+        echo "Returned parent repo to $integration_branch (was on merged branch $current)."
+      fi
+    else
+      echo "⚠️  Parent repo is on merged branch $current with uncommitted changes — not switching."
+      echo "    When ready: git stash && git checkout $integration_branch"
+    fi
+  fi
+
   echo "Deleting local branch $current..."
   git branch -D "$current" 2>/dev/null || true
 
@@ -1527,6 +1575,28 @@ $commits"
     echo "VBW: marked plan complete + wrote summary"
     echo "$plan_touched" | sed 's/^/  → /'
     echo "  Commit when ready: git add .vbw-planning/ && git commit"
+  fi
+
+  # Deploy reminder (non-branch-per-env projects). When a project deploys via a
+  # script rather than branch promotion, `pk promote` is disabled and nothing in
+  # the loop ensures the merged code reached an environment ("merged ≠ deployed").
+  # If method.config.md sets a Deploy command, surface it so Done can't be silently
+  # reached without a deploy. Advisory — never auto-run a deploy (outward-facing).
+  local deploy_cmd
+  deploy_cmd=$(pk_config "Deploy command" "")
+  if [ -n "$deploy_cmd" ]; then
+    echo ""
+    echo "🚀 Deploy step — this project deploys by script, not branch promotion."
+    echo "   Merged ≠ deployed. Run when ready:  $deploy_cmd"
+  fi
+
+  # Advisory: a local Supabase stack / dev server started inside the worktree
+  # keeps running after teardown. pk done does NOT stop it — a local stack may be
+  # shared across worktrees, so killing it blindly is unsafe. Just remind.
+  if command -v supabase >/dev/null 2>&1 && [ -d "$root/supabase" ]; then
+    echo ""
+    echo "ℹ If you started a local Supabase stack / dev server in the worktree, it's still running."
+    echo "  pk done won't stop it (may be shared). If idle:  supabase stop  (and kill any dev server)."
   fi
 
   echo "Done."
@@ -2342,6 +2412,7 @@ EOF
 cmd_doctor() {
   local fail=0
   local warn=0
+  local linear_ok=false
   echo "── pk doctor ──"
   echo ""
   # Repo
@@ -2404,6 +2475,7 @@ cmd_doctor() {
     viewer=$(echo "$resp" | jq -r '.data.viewer.name // empty' 2>/dev/null)
     if [ -n "$viewer" ]; then
       echo "  ✓ Linear API reachable (viewer: $viewer)"
+      linear_ok=true
     else
       local err_msg
       err_msg=$(echo "$resp" | jq -r '.errors[0]?.extensions?.userPresentableMessage // .errors[0]?.message // empty' 2>/dev/null)
@@ -2439,6 +2511,54 @@ cmd_doctor() {
     echo "  ⚠ stale scripts/pipekit-journal-hook.sh — retired in v2.1.2; safe to delete"
     warn=$((warn+1))
   fi
+
+  # --- Linear↔git integrity (false-ship detection) -----------------------
+  # For WITs the board calls built/shipped (UAT, Done), confirm git history
+  # actually contains implementation referencing the id. A Done/UAT issue with
+  # no commits — or only docs commits — is a likely false-ship (marked complete
+  # but never built). Advisory: this is a grep heuristic that assumes commits/
+  # merges reference the WIT id (feature/<ID>-slug convention), so it surfaces
+  # candidates for human review and never hard-fails. Mirror of /strategy-sync
+  # 4b, which catches the opposite drift (merged-but-not-Done).
+  if [ "$linear_ok" = true ] && [ -n "$root" ]; then
+    echo ""
+    echo "── Linear↔git integrity (built-state cross-check) ──"
+    local integ ref st issues ids id ev checked=0 suspect=0
+    integ=$(pk_integration_branch)
+    ref="HEAD"
+    if [ -n "$integ" ]; then
+      if git rev-parse --verify --quiet "origin/$integ" >/dev/null 2>&1; then
+        ref="origin/$integ"
+      elif git rev-parse --verify --quiet "$integ" >/dev/null 2>&1; then
+        ref="$integ"
+      fi
+    fi
+    echo "  (commits reachable from $ref)"
+    for st in "UAT" "Done"; do
+      issues=$(pk_linear_issues_in_state "$st" 2>/dev/null || echo "[]")
+      ids=$(echo "$issues" | jq -r '.[].identifier // empty' 2>/dev/null || true)
+      [ -n "$ids" ] || continue
+      while IFS= read -r id; do
+        [ -n "$id" ] || continue
+        checked=$((checked+1))
+        ev=$(pk_git_build_evidence "$id" "$ref")
+        case "$ev" in
+          none)      echo "  ⚠ $st $id — no commits reference it on $ref (possible false-ship)"; suspect=$((suspect+1)) ;;
+          docs-only) echo "  ⚠ $st $id — only docs commits reference it (no implementation found)"; suspect=$((suspect+1)) ;;
+        esac
+      done <<< "$ids"
+    done
+    if [ "$checked" -eq 0 ]; then
+      echo "  • no UAT/Done issues to check"
+    elif [ "$suspect" -eq 0 ]; then
+      echo "  ✓ all $checked built-state issue(s) have implementation commits"
+    else
+      echo "  → $suspect of $checked flagged. Heuristic (assumes commits reference the id);"
+      echo "    verify with: git log --all --grep=<ID> before reopening."
+      warn=$((warn+1))
+    fi
+  fi
+
   echo ""
   if [ $fail -gt 0 ]; then
     echo "Result: $fail error(s), $warn warning(s). Fix errors before using pk."

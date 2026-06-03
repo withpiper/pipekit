@@ -114,3 +114,13 @@ If the gate has drifted from what's actually enforced in CI, that's its own bug 
 ## CLI Commands
 
 Use commands defined in `package.json` scripts, not ad-hoc invocations. If you need to run `tsc --noEmit`, check `package.json` for an existing `check-types` or `typecheck` script first — using the project's alias keeps your invocation consistent with CI.
+
+## MCP Server Configuration
+
+<important>
+Project-critical MCP servers must be declared in the version-controlled `.mcp.json` at the repo root — never only in the global per-project block of `~/.claude.json`.
+</important>
+
+`pk branch` creates a **git worktree** for each issue. A worktree checks out the repo's tracked files, so an MCP server in committed `.mcp.json` is visible inside it. An MCP server configured in the per-path block of `~/.claude.json` is keyed to the main repo path and is **invisible in every worktree** — which is exactly where `/work` runs. The failure mode is silent: the tool the work depends on simply isn't there, and the session may not notice the MCP is missing until mid-task.
+
+Rule: if a server is required to do the work (a data-grid helper, the project's Supabase/Linear integration, a domain API), put it in `.mcp.json`. Reserve the global per-project block for personal, non-load-bearing tools.

@@ -14,6 +14,7 @@ If you catch yourself thinking one of these, follow the full workflow *more* str
 | "The user said to just do it" | They still need to see what changed before you commit. One-sentence confirmation is not a blocker. |
 | "This error is probably fine to catch and ignore" | You're about to create a silent failure. Fail loudly or fix the cause. |
 | "The existing code does X so I'll mirror it" | The existing code may be wrong. Verify X is correct before replicating. |
+| "The dashboard/UI shows it's done (green check, toggle off, status: disabled)" | A vendor-UI affirmative state is a *claim*, not evidence of effect. Confirm the actual behavior changed — closing a WIT on a green checkbox you never exercised is a false-ship. |
 
 Add project-specific red flags below this line — situations where your past sessions went sideways.
 
