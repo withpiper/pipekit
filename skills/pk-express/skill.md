@@ -90,13 +90,24 @@ Next:   <the single command or decision to unblock>
 
 ### Stage 1 — Brainstorm (Express: auto-accept a clear "Now")
 
-Invoke the `/brainstorm` skill (Skill tool, `skill="brainstorm"`) with the idea. Run its feasibility analysis and filing. **Override its interactive HOLD prompt:** if the disposition is a clear **Now**, route the issue to **Needs Spec** and proceed automatically — do not prompt. If the disposition is **Later/Kill** or genuinely ambiguous, **stop (gate 1)**.
+Invoke the `/brainstorm` skill (Skill tool, `skill="brainstorm"`) with the idea. Run its feasibility analysis and filing. **Override its interactive HOLD prompt:** if the disposition is a clear **Now**, proceed automatically — do not prompt. If the disposition is **Later/Kill** or genuinely ambiguous, **stop (gate 1)**.
 
 Capture the issue identifier brainstorm reports; it is the `<ID>` for every downstream stage.
 
-### Stage 2 — Spec to Approved (Express: no pass-2/3 prompts)
+**Branch on where brainstorm routed the issue** — a "Now" item lands in one of two states, and they take different paths:
 
-Invoke `/light-spec <ID>` (Skill tool, `skill="light-spec"`). It drafts the spec, derives the tier (Phase 3.6, prints `Derived tier: tier:<x>`), publishes (state → Specced), and **auto-enters the spec-review cycle**.
+- **Approved** — brainstorm classified it **Quick/Low ("no spec needed")** and sent it straight to the spec-approved state. **Skip Stage 2 entirely** → go to Stage 3. (Quick is by definition not heavy, so the tier guard is satisfied; there is no spec to cycle.)
+- **Spec ready state** (the configured `Spec ready state`, e.g. `Needs Spec`) — brainstorm classified it **Standard/Heavy** → it needs a spec → go to **Stage 2**.
+
+Read the resulting state from brainstorm's output (or `pk` Linear lookup). Don't force a state — honor whichever brainstorm set.
+
+### Stage 2 — Spec to Approved (Express: no pass-2/3 prompts; skipped for Quick items)
+
+> Only runs when Stage 1 left the issue in the `Spec ready state`. Quick items routed to Approved skip straight to Stage 3.
+
+Invoke `/light-spec <ID>` (Skill tool, `skill="light-spec"`). It drafts the spec, derives the tier (Phase 3.6, prints `Derived tier: tier:<x>`), publishes the spec, and **auto-enters the spec-review cycle**.
+
+> **Config precondition:** `/light-spec` publishes the spec and then calls `pk spec-cycle`, which only triggers when the issue is in the configured `Spec ready state`. For this interlock to hold, `Spec ready state` must be the state `/light-spec` publishes to (the default, `Specced`). If a project sets `Spec ready state` to a value `/light-spec` never transitions into, the cycle errors immediately — that's a `method.config.md` bug, not a pk-express one; surface it and stop.
 
 **Express overrides for this invocation:**
 - **Tier guard (gate 2):** as soon as the derived tier is known and it is `tier:heavy`, **stop** — the spec is published and useful, but do not auto-cycle/branch/work it. (For `tier:quick`/`tier:standard`, continue.)
