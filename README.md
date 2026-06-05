@@ -33,6 +33,16 @@ Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pi
 
 **No stage may introduce guesswork into the next stage.**
 
+## Why Enforcement, Not Memory
+
+Frontier models keep getting better at holding context. Larger windows and native memory mean an agent can carry a whole project in its head and remember what it did last session. That erodes the value of tools whose main job was persistence: tracking what to do next, storing state between runs, re-priming a forgetful model.
+
+Pipekit does not bet on persistence. It bets on enforcement.
+
+The failure mode that grows with model capability is not forgetting. It is confident-wrong output. A more capable model produces more plausible mistakes, and one agent doing everything in a single long session has no independent check on its own judgment. The gates exist for exactly that: a spec a separate reviewer must pass, a plan an independent agent stress-tests, a verify step that reads the goals rather than the executor's narration, an antagonistic review that approaches the diff cold.
+
+A bigger context window changes how much an agent can hold. It does not change whether an agent can independently judge work it helped produce. That constraint is what Pipekit is built around, and it does not relax as models improve. If anything, it matters more.
+
 ## The Pipeline
 
 **Stage 0: Foundation** (a contract — see [Entry Modes](#entry-modes) for greenfield/brownfield/inherited routing)

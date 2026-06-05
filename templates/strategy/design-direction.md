@@ -75,7 +75,7 @@ Captures the visual identity and design preferences for this project. This doc i
 - Cookie-cutter card layouts
 - Overused component library defaults without customization
 
-**Known AI defaults to actively avoid** (Opus 4.7 tends to produce these without explicit counter-direction):
+**Known AI defaults to actively avoid** (current frontier models tend to produce these without explicit counter-direction):
 - Warm cream/off-white backgrounds (~`#F4F1EA`)
 - Serif display fonts like Georgia, Fraunces, Playfair
 - Italic word-accents on marketing copy
@@ -91,7 +91,7 @@ If your aesthetic leans into any of these, say so explicitly above — otherwise
 
 ## Build-Time Variation Protocol
 
-When implementing new UI, development agents should **propose 4 distinct visual directions tailored to this brief** before building, each as: `bg hex / accent hex / typeface — one-line rationale`. User picks one, then the agent implements only that direction. This breaks Opus 4.7's tendency to converge on default aesthetics across generations.
+When implementing new UI, development agents should **propose 4 distinct visual directions tailored to this brief** before building, each as: `bg hex / accent hex / typeface — one-line rationale`. User picks one, then the agent implements only that direction. This breaks the model's tendency to converge on default aesthetics across generations.
 
 Skip this protocol only when the direction is already locked (e.g., established brand system, existing component library).
 

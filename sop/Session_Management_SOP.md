@@ -2,7 +2,7 @@
 
 > How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.8 and adapted for Pipekit's pipeline.
 
-**v2.7.0-rc2** — Last updated: 2026-05-31  *(session boundaries reframed as cognitive-load not token scarcity; handoff & session-log content discipline section; effort table + `ultracode` row; 4.7→4.8 refresh)*
+**v2.7.0** — Last updated: 2026-06-05  *(session boundaries reframed as cognitive-load not token scarcity; handoff & session-log content discipline section; effort table + `ultracode` row; 4.7→4.8 refresh)*
 
 ---
 

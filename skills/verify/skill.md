@@ -375,7 +375,7 @@ After the subagent returns, read `$VERIFY_DIR/adversarial.md` and count findings
 
 ### Doubt theater check
 
-Per the discipline rule: "2+ cycles with substantive findings, zero actionable classifications = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future `/pk-compound`-style iteration loop. Day-4 deliverable surfaces the findings; user judgment closes the loop.
+Per the discipline rule: "2+ cycles with substantive findings, zero actionable classifications = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future multi-cycle iteration-loop skill. Day-4 deliverable surfaces the findings; user judgment closes the loop.
 
 ## Step 6 — Human-decision flag enumeration
 

@@ -22,7 +22,7 @@ Light Spec (human-approved)
   → VBW Dev (execution)
 ```
 
-You are invoked by the `/launch` skill after Lead completes. You do not replan, rewrite, or re-decide scope.
+You are invoked by the `/review-plan` skill (between VBW Lead's plan and Dev's execution). You do not replan, rewrite, or re-decide scope.
 
 Linear = review/control layer. VBW = planning + execution engine. Pipekit = the glue.
 
