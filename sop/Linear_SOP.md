@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` — WITs stay in source state until `pk promote <env> --finish` runs after the promote PR merges; `pk ship` opens Draft by default + new `pk ready` flip command)*
+**v2.7.0** — Last updated: 2026-06-05  *(documents the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — and notes the `Specced` state is the config-driven `Spec ready state`; carries v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -89,7 +89,7 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **Future Phases** | backlog | -- | Pre-pipeline | Belongs to a known future stage. Not in scope for current or next phase. |
 | **On Deck** | backlog | Scanning | Pre-pipeline | Next phase's batch. Start getting eyes on these, light-spec proactively if you get ahead. |
 | **Needs Spec** | backlog | You + Claude | Step 1 ready | Current phase. Needs `/light-spec` applied. |
-| **Specced** | unstarted | You | Steps 2-3 | Light spec applied, agent reviewed. Awaiting your sign-off. |
+| **Specced** | unstarted | You | Steps 2-3 | Light spec applied, agent reviewed. Awaiting your sign-off. **Config-driven (v2.7.0+):** this is the default `Spec ready state`, but the state `/light-spec` publishes to and `pk spec-cycle` requires is whatever `method.config.md` § `Spec ready state` names. Two-state boards with no `Specced` state set it to `Needs Spec`. |
 | **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
 | **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
 | **Building** | started | VBW | Steps 4-7 | VBW planning + execution + QA. Current-phase execution queue only. |
@@ -203,7 +203,19 @@ The issue prefix is defined in your project's `method.config.md`.
 |---|---|
 | Client Request | Client/prospect asked for this |
 
-Domain and Tier labels are project-specific — define them in your Linear workspace to match your product areas and stage structure.
+### Tier (3 labels)
+
+Tier shapes *which gates apply* to an issue. `/work` and `/verify` infer the tier from these labels but **always confirm with the human** before proceeding — automatic escalation/de-escalation is disallowed by design.
+
+| Label | Purpose |
+|---|---|
+| `tier:quick` | 1–3 stories, single PR, AC fits in head. Skips spec review, plan review, and evidence-gated verify. |
+| `tier:standard` | Default. Normal feature work, full gate stack. |
+| `tier:heavy` | Multi-phase, security-sensitive, or cross-strategy-doc. Adds security review + mandatory `/strategy-sync` before close. **`/pk-express` refuses `tier:heavy`** — heavy work needs the full planning + antagonistic gates. |
+
+Per-project tier configuration lives in `method.config.md` § Tiers (a tier can be disabled by removing its row; Standard is the non-removable fallback).
+
+Domain labels are project-specific — define them in your Linear workspace to match your product areas.
 
 ---
 

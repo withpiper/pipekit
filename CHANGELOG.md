@@ -68,6 +68,7 @@ The 2.7.0 arc, by release (detailed sections below):
 
 - `PK_VERSION` → `2.7.0`; CHANGELOG `Unreleased` finalized into this section; `CLAUDE.md` + `RUNBOOK.md` stamps and the `sync-method.sh` example bumped to `v2.7.0`.
 - Re-validated `/pr-fix --engine=builtin` (the rc2 restructure + rc3 historical-finder widening) — PASS. No code change; the gate that was blocking the final tag is cleared.
+- **Documentation content pass** — brought the constitutional + reference docs current with the whole rc3→rc6 feature set (they had lagged at rc2/older): `GUIDE.md` and `method.md` (→ v2.7.0) now document `/pk-express`, the `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk branch` nested env symlinks, `pk doctor` false-ship check, `pk done` rc5 finish, `/pipekit-update` Phase P, and `/light-spec`'s configured `Spec ready state`; `sop/Skills_SOP.md`, `sop/Linear_SOP.md` (tier labels), `STARTUP.md` (V2 config-key reference), and `README.md` updated to match. `method.md`/`GUIDE.md` stamps move rc2 → v2.7.0; `method.config.template.md` left unstamped (content already complete — the version gap is the intended drift signal).
 
 ---
 

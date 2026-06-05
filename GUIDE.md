@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(`/pr-fix` is now a pluggable-engine review — pr-review-toolkit agents by default, built-in fallback — with two-axis severity×confidence triage)*
+**v2.7.0** — Last updated: 2026-06-05 09:10  *(v2.7.0 final content pass: `/pk-express` idea→Draft-PR autopilot documented; `/pr-fix` historical finders (git-history + prior-PR-comments) added to the pluggable-engine review; `/verify` migration self-review verdict; `pk branch` nested per-app env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish semantics; `/pipekit-update` Phase P managed dependency; `/light-spec` publishes to the configured `Spec ready state`)*
 
 ---
 
@@ -505,6 +505,8 @@ After the spec is written, the Spec Review Agent evaluates it for planning readi
 
 If the verdict is **Revise**, the spec goes back to `/light-spec` for iteration. This loop continues until the agent passes.
 
+**Config note (v2.7.0+):** `/light-spec` publishes the spec to the configured **`Spec ready state`** in `method.config.md` — not a hardcoded `Specced`. `pk spec-cycle` requires that same state on entry, so the interlock holds on any board: a two-state workflow (e.g. `Needs Spec → Approved`, no `Specced` state) just sets `Spec ready state: Needs Spec`. If publishing fails because the configured state doesn't exist in Linear, that's a `method.config.md` ↔ workflow mismatch to fix, not a skill bug.
+
 ### Human Review
 
 **Tool:** You, in Linear
@@ -535,7 +537,7 @@ After agent review passes, you review the spec in Linear. This is where product 
 
 - Creates `feature/<ID>-<3-word-slug>` (slug derived from issue title)
 - Worktree at `.worktrees/<ID>-<slug>`
-- Symlinks `.env` / `.env.local` / `.mcp.json` into the worktree
+- Symlinks `.env` / `.env.local` / `.mcp.json` into the worktree — plus **nested per-app env files** (v2.7.0+): auto-discovers and links real nested env files (e.g. `apps/web/.env.local`, `packages/*/.env`) at the same relative path, so monorepo worktrees don't come up reading the `*.example` placeholder. Exact-name match (never `*.example`), idempotent, never clobbers a real file already in the worktree.
 - Copies parent's `bin/pk` so v2 commands work from inside the worktree
 - Linear: Approved → In Progress
 
@@ -598,6 +600,8 @@ If the plan fails review, it goes back to vbw-lead for rework. Once the plan pas
 - Per-AC table (which acceptance criteria are satisfied, which aren't)
 - If `Require QA review: true` in `method.config.md`, also spawns the QA subagent for goal-backward verification (starts from AC, works backward)
 
+**Migration self-review (v2.7.0+).** When the diff touches the configured `Migration dir`, `/verify`'s migration flag no longer hands you a raw `git show` — it spawns a review subagent (`pr-review-toolkit:code-reviewer`, falling back to `general-purpose`) that applies `/pr-security-review`'s migration rubric (M1–M8, plus RLS / SECURITY DEFINER / GRANT rubrics when those patterns appear), writes `migration-review.md`, and the flag carries a **Hold / Approve verdict**. Runs on every tier. A `Hold` pauses auto-ship but does **not** auto-downgrade the verify status — you RECONCILE the verdict (approve `Hold: M3 missing backfill` or `Approve — no findings`) rather than re-deriving the review yourself.
+
 If verify fails → fix the gaps in the worktree (often by re-invoking `/work` with feedback) and rerun. If verify passes → ship.
 
 ### Ship
@@ -638,7 +642,7 @@ Idempotent: if the PR is already Ready, prints "No flip needed" and exits 0.
 
 After the reviewer posts findings to the PR, two skills triage them:
 
-**`/pr-fix`** — pluggable-engine PR review: by default it fans out the `pr-review-toolkit` specialist agents (or the built-in reference-file review via `--engine=builtin`), then triages on two independent axes (severity × confidence). Reads PR review comments + diff, scans for cross-spec handoff promises (any "X will…" reference in the spec must have landed in this PR), then lets you triage interactively (fix / reject / defer). Applies fixes as separate commits, validates the gate, force-pushes to the PR. Posts a Linear comment with the triage summary (fixed N / rejected N / deferred N).
+**`/pr-fix`** — pluggable-engine PR review: by default it fans out the `pr-review-toolkit` specialist agents (`--engine=native`, fail-loud if the plugin is absent), or the built-in reference-file review via `--engine=builtin` (zero plugin dependency — the portable fallback). Either engine also runs two **dependency-free historical finders** (v2.7.0): **git-history** (git-blame regression detection — flags a change that removes or rewrites a line a recent commit added to fix a bug) and **prior-pr-comments** (reapplication — flags past reviewer feedback on the same file/region that recurs in this diff). Findings from all sources converge and triage on two independent axes (**severity × confidence**), kept separate so a catastrophic-but-uncertain finding routes to **INVESTIGATE** (surfaced, not auto-fixed) rather than being buried by low confidence; when a historical finder corroborates a specialist at the same location, confidence is raised. Reads PR review comments + diff, scans for cross-spec handoff promises (any "X will…" reference in the spec must have landed in this PR), then lets you triage interactively (fix / reject / defer). Applies fixes as separate commits, validates the gate, force-pushes to the PR. Posts a Linear comment with the triage summary (fixed N / rejected N / deferred N). `--runs=N` fans the review out N times and raises confidence on findings that recur.
 
 **`/pr-security-review`** — security-focused antagonistic review for migrations, RLS policies, SECURITY DEFINER functions, GRANT/REVOKE, auth code, and Server Actions on privileged tables. 30+ rubric items across 6 surface categories. Use **instead of** (or alongside) the generic reviewer when the PR touches any of those surfaces.
 
@@ -652,9 +656,39 @@ Skip PR review for pure copy/UI tweaks and internal-only refactors with no exter
 
 Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`), auto-pulls the integration branch (v2.6.0+), and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (v2.6.0+; skipped silently when no VBW). Or pass `--merge` and let `pk done` run `gh pr merge` for you.
+**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`, or → `Done` for 1-tier projects), auto-pulls the integration branch (v2.6.0+), and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (v2.6.0+; skipped silently when no VBW). Or pass `--merge` and let `pk done` run `gh pr merge` for you. v2.7.0+ also resets the parent branch after worktree teardown, prints a stack advisory (a local dev server / Supabase keeps running), and — for script-deploy projects with a `Deploy command` set in `method.config.md` — reminds you to deploy (the merge doesn't auto-ship the app).
 
 **Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
+
+---
+
+## The Express Lane: `/pk-express`
+
+**Skill:** `/pk-express <ISSUE-ID>` (primary) or `/pk-express "<idea>"` (prepends brainstorm)
+**Input:** A brainstormed WIT, or a raw one-line idea
+**Output:** An open **Draft PR** (Linear → UAT) — or a pause at one of five gates
+
+For *simple* WITs, `/pk-express` collapses Stages 1–3 into a single hands-off pass. It is connective glue over four stages that already self-drive — it removes the between-stage typing and the two interactive triage/confirm prompts, nothing more:
+
+```
+/brainstorm "<idea>"  →  /light-spec <ID>  →  pk branch <ID>  →  /work <ID>
+   (file the WIT)         (auto-cycle to        (worktree)         (execute → auto /verify
+                           Approved)                                  → auto pk ship → Draft PR)
+```
+
+It is **express, not reckless** — the gates that protect real risk stay intact. The lane auto-advances on each stage's success signal and **stops to tag you at exactly five points**:
+
+| # | Stop | Why it's yours |
+|---|------|----------------|
+| 1 | `/brainstorm` verdict is **Later / Kill**, or the idea is too vague to scope | the premise is a judgment call |
+| 2 | Derived tier is **`tier:heavy`** | heavy work needs the full planning + antagonistic gates; the spec is preserved, but the lane refuses to drive it |
+| 3 | Spec **stalemate** (3 review cycles, no Pass) | the reviewer and the spec disagree — you decide override vs. rework |
+| 4 | `/verify` raises **any flag** or a non-Pass verdict | a migration verdict, QA finding, or gate failure — your RECONCILE call |
+| 5 | **Draft PR opened** (terminal success) | the downstream gates are deliberately yours: `pk ready` → reviewers + UAT → `pk done` → `pk promote` |
+
+Use it when the idea is genuinely small (Quick/Standard tier) and you want it built without babysitting each stage. **Do not** use it for anything you suspect is `tier:heavy` (it refuses — gate 2), for bugs (use `/pk-bug` for regression-test-first discipline), or for work that already has an Approved spec (just `pk branch` + `/work`). It stores no local state — `/pk-express <ID>` reads the issue's Linear state and rejoins the lane at the right stage, so it's safe to resume in a fresh session.
+
+It never runs `pk ready`, `pk done`, or `pk promote` — those are the human gates it hands back at gate 5.
 
 ---
 
@@ -1140,6 +1174,13 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
 | Plan Review | `/review-plan` | Spawn `plan-reviewer` against `PLAN.md` (vbw backend only) |
 
+### Fast lanes (autopilots over the loop)
+
+| Skill | Invocation | What It Does |
+|-------|------------|-------------|
+| Express | `/pk-express <ISSUE-ID>` (or `"<idea>"`) | Idea→Draft-PR autopilot for **simple** WITs (Quick/Standard only). Chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship). Stops only at 5 gates: not-Now, tier:heavy refusal, spec stalemate, verify flag, Draft PR opened. Resumes from Linear state. |
+| Bug | `/pk-bug` | Bug pipeline with regression-test-first discipline: intake → reproduce → failing test → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. |
+
 ### Stage 3: Verify + Ship
 
 | Command / Skill | Invocation | What It Does |
@@ -1149,14 +1190,14 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Ship Ready | `pk ship --ready` | Open Ready immediately (v2.6.0+; one-shot tiny WITs) |
 | Ready flip | `pk ready [<ID>]` | Flip Draft → Ready (v2.6.0+); fires outside reviewers |
 | Ship + Review | `pk ship --review` | Adds Linear "review-in-flight" comment + reviewer invocation printed |
-| PR Fix | `/pr-fix` | Triage PR review findings (fix / reject / defer); posts Linear summary. v2.6.0+: `--from-review` ingests GHA review; `--second-opinion=gemini` adds parallel Gemini Flash read. |
+| PR Fix | `/pr-fix` | Pluggable-engine review (`--engine=native` pr-review-toolkit, default · `--engine=builtin` portable fallback) + git-history/prior-PR-comment historical finders (v2.7.0); two-axis severity×confidence triage with INVESTIGATE quadrant; fix / reject / defer; posts Linear summary. `--from-review` ingests GHA review; `--runs=N` raises confidence on recurrence; `--second-opinion=gemini` adds a parallel Gemini Flash read. |
 | PR Security Review | `/pr-security-review` | Antagonistic security review for migrations / RLS / SECURITY DEFINER / auth |
 
 ### Stage 4: Release
 
 | Command | Invocation | What It Does |
 |---------|------------|-------------|
-| Cleanup | `pk done <ID> [--merge]` | Post-merge: verify merge, cleanup worktree+branch, post commits/diffstat to Linear, transition UAT → In `<FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. |
+| Cleanup | `pk done <ID> [--merge]` | Post-merge: verify merge, cleanup worktree+branch, post commits/diffstat to Linear, transition UAT → In `<FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. v2.7.0+: resets the parent branch, prints a stack advisory, and reminds you to deploy when a `Deploy command` is configured (script-deploy projects). |
 | Promote — open | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR. WITs stay in source state. PR body embeds bundled-WIT tracker. 2-tier: `pk promote` with no arg picks the only hop. |
 | Promote — finish | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions matching issues → `In <Env>` (intermediate) or → Done (final). |
 
@@ -1177,14 +1218,14 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
 | Status | `pk status` | Full unscoped Linear board view |
-| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts |
+| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence) |
 | Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
 | Sync Linear | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
 | Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
 | Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
 | Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
-| Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project |
+| Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project. **Phase P** (v2.7.0) also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |
 | Update + Push | `/pipekit-update --push` | Push improvements back to method repo |
 
 ---
