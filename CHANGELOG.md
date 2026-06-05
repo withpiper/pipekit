@@ -47,7 +47,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
-_Nothing yet._
+- **`templates/ci/linear-transition.yml`** — merge-driven Linear transition (the real fix for the state-lag gap, `resources/linear-state-lag.md` item #1). A GitHub Action on `pull_request: closed` + `merged` against the integration branch extracts every `<PREFIX>-NNN` from the branch name + PR title + body and advances each issue to the configured `TARGET_STATE` (`In <FirstEnv>` multi-tier, `Done` single-tier) via the Linear GraphQL API — same auth + `workflowStates`/`issueUpdate` shapes as `bin/pk`. Removes the dependency on a human running `pk done` after a GitHub-UI merge, which silently stranded issues in their pre-merge state and made `/strategy-sync` under-report shipped work (bit three consecutive runs). Idempotent (skips a WIT already at target — harmless alongside `pk done`) and forward-only (a configurable `PRE_MERGE_STATES` allowlist means it never pulls a promoted/`Done` WIT backward and never leap-frogs an Approved WIT that bypassed UAT). Per-project setup (team/prefix/target-state `env` block + `LINEAR_API_KEY` secret) documented in `templates/ci/README.md`. Does not replace `pk done`/`pk promote --finish` — it's the safety net for when they're skipped.
 
 ---
 

@@ -1,0 +1,170 @@
+# Merge-driven Linear transition — closes the state-lag gap.
+#
+# The problem (Pipekit "Linear state lags merged PRs", v2.7.0):
+# every Linear transition after `pk ship` is command-driven and manual
+# (`pk done`, `pk promote --finish`). If a PR is merged via the GitHub
+# UI — the common path — or those commands are skipped, the code lands
+# on the integration branch but the issue never advances. Skills that
+# ask Linear "what's Done?" to decide "what shipped?" then under-report
+# (this bit three consecutive /strategy-sync runs).
+#
+# This workflow drives the transition off the MERGE EVENT instead of a
+# human remembering a command. On a merged PR into the integration
+# branch, it extracts every <PREFIX>-NNN it can find (branch name + PR
+# title + body) and advances each issue to TARGET_STATE — idempotent
+# and forward-only, so it never fights `pk done` or pulls a WIT back.
+#
+# It does NOT replace `pk done`/`pk promote --finish` (those also clean
+# up worktrees, post commits, write VBW SUMMARY). It's the safety net
+# for when they're skipped: both end at the same Linear state, and the
+# idempotent skip means running both is harmless.
+#
+# ── SETUP (per consuming project) ─────────────────────────────────────
+# 1. Edit the `env:` block below to match method.config.md.
+# 2. Add a repo secret LINEAR_API_KEY (Settings → Secrets → Actions) —
+#    a Linear personal API key (linear.app → Settings → API) or an
+#    OAuth token scoped to issue writes.
+# 3. For a multi-tier project, copy this file per hop (one watching the
+#    `dev` merge → "In Dev", one watching `beta` → "In Beta", etc.), or
+#    extend the `branches:` + TARGET_STATE per hop. See README.
+# ──────────────────────────────────────────────────────────────────────
+
+name: Linear Transition on Merge
+
+on:
+  pull_request:
+    types: [closed]
+    # Integration branch — method.config.md → "Integration branch".
+    # For a single-tier project this is `main`; set TARGET_STATE: "Done".
+    branches:
+      - dev
+      # - beta   # multi-tier: add a hop (or a sibling workflow) with its own TARGET_STATE
+
+# One run per PR; a re-fired close event supersedes an in-flight run.
+concurrency:
+  group: linear-transition-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  transition:
+    # Only on a real merge — a closed-without-merge PR must not transition anything.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      # ── Per-project config (edit these to match method.config.md) ──────
+      LINEAR_TEAM_NAME: "YOUR_TEAM_NAME"   # method.config.md → "Team name"
+      ISSUE_PREFIX: "PROJ"                  # method.config.md → "Issue prefix"
+      # The state merged WITs advance to. Multi-tier: "In <FirstEnv>" (e.g.
+      # "In Dev") when this watches the integration-branch merge. Single-tier
+      # (integration branch == main): "Done".
+      TARGET_STATE: "In Dev"
+      # Safety: only transition a WIT that is CURRENTLY in one of these
+      # pre-merge states. Prevents pulling a Done/promoted WIT backward and
+      # prevents leap-frogging an Approved WIT that landed in a bundle without
+      # going through UAT. Comma-separated, names must match your workflow.
+      PRE_MERGE_STATES: "UAT,In Progress,Building,In Review"
+      # ───────────────────────────────────────────────────────────────────
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # PR-supplied text is untrusted — pass via env, never interpolate into
+      # the shell script body (injection-safe). Read with $VARS in bash.
+      PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+    steps:
+      - name: Transition merged WITs in Linear
+        run: |
+          set -uo pipefail
+
+          if [ -z "${LINEAR_API_KEY:-}" ]; then
+            echo "::error::LINEAR_API_KEY secret is not set — add it in Settings → Secrets → Actions."
+            exit 1
+          fi
+
+          API="https://api.linear.app/graphql"
+
+          # gql <query> <variables-json> → raw response. Mirrors bin/pk's
+          # pk_linear_gql: raw API key in Authorization, no "Bearer" prefix.
+          gql() {
+            curl -sS -X POST "$API" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              --data "$(jq -n --arg q "$1" --argjson v "$2" '{query:$q, variables:$v}')"
+          }
+
+          # ── Extract every <PREFIX>-NNN from branch + title + body, dedupe ──
+          # while-read fill (not mapfile) so this runs on bash 3.2+ too.
+          haystack="${PR_HEAD_REF}"$'\n'"${PR_TITLE}"$'\n'"${PR_BODY}"
+          IDS=()
+          while IFS= read -r _id; do
+            [ -n "$_id" ] && IDS+=("$_id")
+          done < <(printf '%s' "$haystack" | grep -oE "${ISSUE_PREFIX}-[0-9]+" | sort -u)
+
+          if [ "${#IDS[@]}" -eq 0 ]; then
+            echo "No ${ISSUE_PREFIX}-NNN reference found in branch/title/body — nothing to transition."
+            exit 0
+          fi
+          echo "Found WIT(s): ${IDS[*]}"
+
+          # ── Resolve the TARGET_STATE workflow-state id once ───────────────
+          state_q='query($team: String!, $name: String!) { workflowStates(filter: {team: {name: {eq: $team}}, name: {eq: $name}}) { nodes { id name } } }'
+          target_state_id=$(gql "$state_q" \
+            "$(jq -n --arg team "$LINEAR_TEAM_NAME" --arg name "$TARGET_STATE" '{team:$team, name:$name}')" \
+            | jq -r '.data.workflowStates.nodes[0].id // empty')
+          if [ -z "$target_state_id" ]; then
+            echo "::error::Target state '${TARGET_STATE}' not found in team '${LINEAR_TEAM_NAME}'. Check the env block matches your Linear workflow."
+            exit 1
+          fi
+
+          # PRE_MERGE_STATES → newline list for matching.
+          allowed=$(printf '%s' "$PRE_MERGE_STATES" | tr ',' '\n' | sed 's/^ *//;s/ *$//')
+
+          failures=0
+          for id in "${IDS[@]}"; do
+            # Look up the issue's UUID + current state (Linear accepts the
+            # identifier string for issue(id:), same as bin/pk).
+            issue_q='query($id: String!) { issue(id: $id) { id identifier state { name } } }'
+            resp=$(gql "$issue_q" "$(jq -n --arg id "$id" '{id:$id}')")
+            uuid=$(printf '%s' "$resp" | jq -r '.data.issue.id // empty')
+            current=$(printf '%s' "$resp" | jq -r '.data.issue.state.name // empty')
+
+            if [ -z "$uuid" ]; then
+              echo "::warning::$id not found in Linear — skipping (referenced in PR but no such issue?)."
+              continue
+            fi
+
+            # Idempotent: already at target (e.g. `pk done` already ran).
+            if [ "$current" = "$TARGET_STATE" ]; then
+              echo "  $id already in '$TARGET_STATE' — skip."
+              continue
+            fi
+
+            # Forward-only guard: only advance a WIT that is currently in a
+            # pre-merge state. A WIT already past this hop (promoted/Done) or
+            # one that never reached UAT (leap-frog) is left for a human.
+            if ! printf '%s\n' "$allowed" | grep -qxF "$current"; then
+              echo "::warning::$id is in '$current' (not a pre-merge state) — leaving for manual review, not transitioning to '$TARGET_STATE'."
+              continue
+            fi
+
+            mutation='mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: {stateId: $state}) { success } }'
+            ok=$(gql "$mutation" \
+              "$(jq -n --arg id "$uuid" --arg state "$target_state_id" '{id:$id, state:$state}')" \
+              | jq -r '.data.issueUpdate.success // false')
+            if [ "$ok" = "true" ]; then
+              echo "  $id: $current → $TARGET_STATE"
+            else
+              echo "::warning::$id: transition to '$TARGET_STATE' failed (Linear API returned no success)."
+              failures=$((failures + 1))
+            fi
+          done
+
+          # Fail loud so a stranded transition is visible in the Actions tab —
+          # but the merge already succeeded, so this never blocks anything.
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::$failures Linear transition(s) failed — reconcile manually (pk done <ID> or the Linear UI)."
+            exit 1
+          fi
+          echo "Done — ${#IDS[@]} WIT(s) processed."
