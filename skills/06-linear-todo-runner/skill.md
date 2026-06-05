@@ -46,7 +46,7 @@ Read all state IDs from your project's `method.config.md` under "Workflow State 
 
 1. **Fetch candidate issues** from Linear using `mcp__linear-server__list_issues`:
    - Primary: `team: "{team from method.config.md}"`, `state: "Approved"`
-   - Overflow: `team: "{team from method.config.md}"`, `state: "Specced"`
+   - Overflow: `team: "{team from method.config.md}"`, `state: "{Spec ready state from method.config.md — default Specced; never hardcode, two-state boards use Needs Spec}"`
    - Apply `--project` or `--cycle` filters if provided
    - **Paginate**: if `hasNextPage` is true, fetch subsequent pages using the `cursor` parameter until all issues are retrieved
    - **Filter out archived issues**: skip any issue where `archivedAt` is non-null

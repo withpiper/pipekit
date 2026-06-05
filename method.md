@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.7.0-rc2** — Last updated: 2026-05-31 12:55  *(Opus 4.8 framing audit — Fresh-Chat Discipline reframed as stage isolation: the constraint is contaminated judgment, not lost memory, so a 1M context window does not relax it)*
+**v2.7.0** — Last updated: 2026-06-05 09:10  *(v2.7.0 final content pass — `/pk-express` express lane, `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk done` rc5 finish, `/pipekit-update` Phase P, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state` all reflected in the pipeline + tooling tables. Carries rc2's stage-isolation reframe of Fresh-Chat Discipline — the constraint is contaminated judgment, not lost memory, so a 1M context window does not relax it)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -98,6 +98,8 @@ Stage 0 is the foundation contract — a set of artifacts, not a script. The gre
 
 > **Optional pre-step:** `/brainstorm` — for exploring feature-level ideas within an existing project. For project-level ideation, use `/concept`.
 
+> **Express lane (`/pk-express`):** for *simple* WITs (Quick/Standard tier), `/pk-express <ISSUE-ID>` collapses Stages 1–3 into one hands-off pass — chaining `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship) and stopping only at five attention gates (brainstorm not-Now, `tier:heavy` refusal, spec stalemate, `/verify` flag, Draft PR opened). It removes between-stage typing and the two triage prompts, nothing that protects real risk. It is a **portable skill, not a `Workflow`** — sequential and human-gated; a portable methodology cannot depend on the plan-gated `Workflow` primitive. It never runs `pk ready` / `pk done` / `pk promote` — those stay the human gates. Not for `tier:heavy` (it refuses), bugs (`/pk-bug`), or work with an Approved spec (`pk branch` + `/work` directly).
+
 ---
 
 ## Foundation Contract
@@ -178,7 +180,8 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 **Tools:** `/light-spec`, `pk spec-cycle`, `/light-spec-revise`, Spec Review Agent, Human
 
 - `/light-spec` explores the codebase, reads reference material and Strategy docs, and generates a structured spec as an AI→AI contract
-- `/light-spec` Phase 6 then runs the **review cycle** automatically: invokes `pk spec-cycle` (which posts the agent trigger, polls Linear for the verdict, and transitions the issue to **Approved** on Pass), and on Revise auto-invokes `/light-spec-revise` for surgical patches before the next cycle pass
+- `/light-spec` publishes the spec to the configured **`Spec ready state`** in `method.config.md` (not a hardcoded `Specced` — v2.7.0+), so two-state boards (e.g. `Needs Spec → Approved`, no `Specced` state) work without modification. `pk spec-cycle` requires that same state on entry, so the interlock holds on any board.
+- `/light-spec` Phase 6 then runs the **review cycle** automatically: invokes `pk spec-cycle` (which posts the agent trigger, polls Linear for the verdict, and transitions the issue to the configured **`Spec approved state`** — default `Approved` — on Pass), and on Revise auto-invokes `/light-spec-revise` for surgical patches before the next cycle pass
 - The cycle is hard-capped at 3 passes. On passes 2 and 3 the user is prompted `[Y/n/o]` (continue / bail / drop into `/light-spec-revise`'s override path) so a stalemating agent can't drive infinite revision
 - Spec Review Agent enforces planning readiness (Pass/Revise with blocking issues identified)
 - Human validates product decisions, scope, and priority
@@ -443,17 +446,20 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `pk next` | Phase-aware: groups Linear results by status with per-group hints |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) |
 | `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. Per-invocation override via `--backend=`. |
-| `/verify` | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
+| `/pk-express <ISSUE-ID>` | Express lane — idea→Draft-PR autopilot for **simple** WITs (Quick/Standard only). Chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship); stops at 5 gates (not-Now, tier:heavy, spec stalemate, verify flag, Draft PR). Resumes from Linear state. Skill, not a Workflow. |
+| `/verify` | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true`. v2.7.0+: when the diff touches `Migration dir`, spawns a migration-review subagent (`/pr-security-review` rubric M1–M8 + RLS/SECURITY DEFINER/GRANT) and the flag carries a **Hold/Approve verdict** instead of a raw `git show`. Runs every tier; a Hold pauses auto-ship without auto-downgrading status. |
 | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. |
 | `pk ready [<ID>]` | Flip a Draft PR to Ready (v2.6.0+). Fires `ready_for_review` GH event → outside reviewers (Semgrep + claude-review templates) run. No Linear state change. |
-| `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary. v2.6.0+: `--from-review` ingests existing GHA review comments; `--second-opinion=gemini` adds parallel Gemini Flash review. |
+| `/pr-fix` | Pluggable-engine PR review (`--engine=native` pr-review-toolkit default · `--engine=builtin` portable fallback, fail-loud) + dependency-free historical finders (git-history blame-regression + prior-PR-comments reapplication — v2.7.0, run in both engines); two-axis severity×confidence triage with INVESTIGATE quadrant; fixed / rejected / deferred + Linear summary. `--from-review` ingests GHA comments; `--runs=N` raises confidence on recurrence; `--second-opinion=gemini` adds a parallel Gemini Flash read. |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth |
-| `pk done <ID> [--merge]` | After PR merge: cleanup worktree+branch, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration branch and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (skipped silently when no VBW). `--merge` lets pk run `gh pr merge` first. `--confirmed` accepted for backward compat (no-op). |
+| `pk done <ID> [--merge]` | After PR merge: cleanup worktree+branch, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration branch and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (skipped silently when no VBW). v2.7.0+: resets the parent branch, prints a stack advisory, and reminds you to deploy when a `Deploy command` is set (script-deploy projects). `--merge` lets pk run `gh pr merge` first. `--confirmed` accepted for backward compat (no-op). |
 | `pk promote <env>` | **Phase 1** (v2.6.0+): opens promote PR along `Ship environments`. WITs stay in source state. Refuses if any bundled issue is in `UAT`; `--confirmed` bypasses after env-UAT signoff. 2-tier: no arg picks the only hop. |
 | `pk promote <env> --finish` | **Phase 2** (v2.6.0+): after the promote PR merges, transitions bundled WITs → `In <Env>` (intermediate) or → Done (final). Reads the marker from the merged PR body; falls back to PR commits if absent. |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Last command of every Claude session. |
 | `pk status` | Full unscoped Linear board view |
+| `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts. v2.7.0+: **false-ship cross-check** — flags UAT/Done WITs with no real commits on the integration branch (git evidence). |
 | `/pipekit-help` | Read project state, recommend the next pipeline step. |
+| `/pipekit-update` | Pull latest Pipekit from GitHub into the project (`--push` round-trips improvements back). v2.7.0 **Phase P** also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |
 | `/review-plan {phase-slug}` | Run plan-reviewer agent against PLAN.md (vbw backend). Run between vbw-lead's plan and vbw-dev's execution. |
 | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
 | `/strategy-sync` | Post-pipeline: update Strategy docs to reflect shipped features |

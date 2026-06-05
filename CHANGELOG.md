@@ -51,6 +51,29 @@ _Nothing yet._
 
 ---
 
+## v2.7.0 — 2026-06-05
+
+> **The enforcement-substrate release, stabilized.** v2.7.0 hardened the gates that protect a ship — `/verify` and `/pr-fix` stop punting judgment back to the human and instead carry a verdict — and added `/pk-express`, an idea→Draft-PR autopilot for simple WITs. This final tag is the rc6 tree with no new behavior: the last gate before cutting was re-validating the portable `/pr-fix --engine=builtin` fallback (the engine every consuming project without the `pr-review-toolkit` plugin lands on), which passed end-to-end including the rc3 historical finders (git-history + prior-pr-comments) firing in the builtin path.
+
+The 2.7.0 arc, by release (detailed sections below):
+
+- **rc1** — discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`.
+- **rc2** — pluggable-engine `/pr-fix` (pr-review-toolkit agents by default, built-in fallback) + two-axis severity×confidence triage; Opus 4.8 framing audit (Fresh-Chat → stage-isolation).
+- **rc3** — `/pr-fix` dependency-free historical finders (git-blame regression + prior-PR-comment reapplication); `/pipekit-update` Phase P (pr-review-toolkit as a managed dependency); first Linear-state-lag fixes.
+- **rc4** — `/verify` migration flag self-reviews via subagent (Hold/Approve verdict, not a raw `git show`); `pk branch` auto-discovers and symlinks nested per-app env files into worktrees.
+- **rc5** — `pk doctor` false-ship cross-check; completed `pk done` finish (parent-branch reset, stack advisory, script-deploy `Deploy command` reminder); migration pre-merge re-check; discipline lines.
+- **rc6** — `/pk-express` idea→Draft-PR autopilot (tier-guarded; quick/standard only), validated live on SiteLine POC-14; load-bearing `/light-spec` fix (publish to configured `Spec ready state`, not hardcoded `Specced`); `pipekit-cmux` turn-end-detection lesson.
+
+### What changed since rc6
+
+- `PK_VERSION` → `2.7.0`; CHANGELOG `Unreleased` finalized into this section; `CLAUDE.md` + `RUNBOOK.md` stamps and the `sync-method.sh` example bumped to `v2.7.0`.
+- Re-validated `/pr-fix --engine=builtin` (the rc2 restructure + rc3 historical-finder widening) — PASS. No code change; the gate that was blocking the final tag is cleared.
+- **Documentation content pass** — brought the constitutional + reference docs current with the whole rc3→rc6 feature set (they had lagged at rc2/older): `GUIDE.md` and `method.md` (→ v2.7.0) now document `/pk-express`, the `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk branch` nested env symlinks, `pk doctor` false-ship check, `pk done` rc5 finish, `/pipekit-update` Phase P, and `/light-spec`'s configured `Spec ready state`; `sop/Skills_SOP.md`, `sop/Linear_SOP.md` (tier labels), `STARTUP.md` (V2 config-key reference), and `README.md` updated to match. `method.md`/`GUIDE.md` stamps move rc2 → v2.7.0; `method.config.template.md` left unstamped (content already complete — the version gap is the intended drift signal).
+- **Full-release drift sweep** — ran `drift-check.sh` + five parallel deep audits across every template, SOP, skill, CI/config template, and a cross-cutting consistency pass. Fixes: `agents/plan-reviewer.md` referenced the retired v1 `/launch` as its invoker (→ `/review-plan`); `skills/06-linear-todo-runner/skill.md` hardcoded the `Specced` overflow-fetch state (→ configured `Spec ready state` — the same two-state-board bug the rc6 `/light-spec` fix closed); `skills/verify/skill.md` dropped a phantom `/pk-compound` forward-ref; `templates/strategy/design-direction.md` de-pinned two `Opus 4.7` model references to be model-agnostic; `sop/Session_Management_SOP.md` stamp rc2 → v2.7.0 (content was already final). The remaining drift-check hits are illustrative example paths and correctly-labelled v1-historical mentions, left as-is.
+- **Positioning** — `README.md` gains a "Why Enforcement, Not Memory" section making the enforcement-over-persistence thesis legible: Pipekit bets on independent-judgment gates, not context persistence, because confident-wrong output scales with model capability while a larger window does not make an agent able to review its own work.
+
+---
+
 ## v2.7.0-rc6 — 2026-06-03
 
 > **`/pk-express` — an idea→Draft-PR autopilot for *simple* WITs.** Takes an existing brainstormed WIT (or a raw idea) and drives it through the four stages that already self-drive — `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship) — advancing on each stage's success signal and stopping only at genuine attention gates. Quick/Standard tier only; refuses heavy work. Validated end-to-end on a live SiteLine WIT (POC-14): it correctly split off the heavy half as a follow-up, drove the simple half to a merged PR, and stopped at the tier guard the first time around.

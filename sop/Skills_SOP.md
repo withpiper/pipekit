@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.7.0-rc2** — Last updated: 2026-05-31  *(skill-prompt scope guidance de-versioned to be model-agnostic, not Opus-4.7-pinned)*
+**v2.7.0** — Last updated: 2026-06-05  *(v2.7.0 final: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
 
 ---
 
@@ -37,7 +37,7 @@ These skills work across any project that follows the method. They read `method.
 | `/roadmap-review` | Pre-pipeline health check (Stage 0 gate) | Stage 0 → Stage 1 gate |
 | `/brainstorm` | Feature-level feasibility exploration | Stage 1: Spec |
 | `/brainstorm-review` | Triage untriaged Linear issues | Stage 1: Spec |
-| `/light-spec` | Structured spec generation with auto-cycled agent review (Phase 6 invokes `pk spec-cycle` + `/light-spec-revise` internally, max 3 passes) | Stage 1: Spec |
+| `/light-spec` | Structured spec generation with auto-cycled agent review (Phase 6 invokes `pk spec-cycle` + `/light-spec-revise` internally, max 3 passes). v2.7.0+: publishes to the configured `Spec ready state` (not a hardcoded `Specced`), so two-state boards (e.g. `Needs Spec → Approved`) work. | Stage 1: Spec |
 | `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops. Usually invoked by `/light-spec` Phase 6, can also run standalone. | Stage 1: Spec |
 | `pk spec-cycle <ID>` | Trigger Spec Review Agent v5, poll Linear for verdict, transition to Approved on Pass. Bash-side helper used by `/light-spec`'s cycle — keeps polling out of Claude's context. | Stage 1: Spec |
 | `/spec-preflight` | Empirical pre-flight checks on a specced Linear issue (file paths, line refs, phase-detect baseline, Linear status). Read-only. | Stage 1 → Stage 2 gate |
@@ -45,10 +45,10 @@ These skills work across any project that follows the method. They read `method.
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) | Stage 2: Plan + Build |
 | `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. | Stage 2: Plan + Build |
 | `/review-plan` | Spawns `plan-reviewer` agent against `PLAN.md` (vbw backend). | Stage 2: Plan + Build |
-| `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` | Stage 3: Verify + Ship |
+| `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true`. v2.7.0+: migration-touching diffs get a self-review subagent (M1–M8 rubric) carrying a Hold/Approve verdict, not a raw `git show`. | Stage 3: Verify + Ship |
 | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
 | `pk ready [<ID>]` | Flip Draft PR to Ready (v2.6.0+). Fires `ready_for_review` → outside reviewers (Semgrep + claude-review per `templates/ci/`) run. No Linear state change. | Stage 3: Verify + Ship |
-| `/pr-fix` | Triage PR review findings: fixed / rejected / deferred, with Linear summary. v2.6.0+: `--from-review` ingests existing GHA review comments; `--second-opinion=gemini` adds parallel Gemini Flash read. | Stage 3: Verify + Ship |
+| `/pr-fix` | Pluggable-engine PR review (`--engine=native` pr-review-toolkit default · `--engine=builtin` dependency-free fallback, fail-loud) + historical finders (git-history blame-regression + prior-PR-comments reapplication, v2.7.0, both engines); two-axis severity×confidence triage with INVESTIGATE quadrant; fixed / rejected / deferred + Linear summary. `--from-review` ingests GHA comments; `--runs=N` raises confidence on recurrence; `--second-opinion=gemini` adds a parallel Gemini Flash read. | Stage 3: Verify + Ship |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
 | `/pk-express` | Idea→Draft-PR autopilot for **simple** WITs: chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify+ship), advancing on success and stopping only at attention gates (not-Now, tier:heavy, spec stalemate, verify flags, Draft PR). Quick/Standard tier only. | Anytime (express lane) |

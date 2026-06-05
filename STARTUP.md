@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v2.6.0** — Last updated: 2026-05-23  *(tier system restored + Path 3 reviewer pipeline + two-phase `pk promote` — see CHANGELOG.md)*
+**v2.7.0** — Last updated: 2026-06-05  *(adds the V2 `method.config.md` key reference to Step 3, flagging `Spec ready state` / `Spec approved state` as the load-bearing `/light-spec` ↔ `pk spec-cycle` interlock — see CHANGELOG.md)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -184,9 +184,26 @@ Configure in `.mcp.json` with `${VAR}` interpolation for secrets.
     curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
     chmod +x scripts/sync-method.sh
 [ ] Run: ./scripts/sync-method.sh
-[ ] Fill in method.config.md with project-specific values
+[ ] Fill in method.config.md with project-specific values (see V2 keys below)
 [ ] Commit synced method files
 ```
+
+**V2 `method.config.md` keys the `pk` daily loop reads.** Copy these from `method.config.template.md` and set each one — the daily loop and portable skills read them at runtime:
+
+| Key | What it controls |
+|-----|------------------|
+| `Backend` | `/work` dispatch: `vbw`, `native`, or `auto` (routes per plan complexity). |
+| `Integration branch` | The base `pk ship` opens PRs against (`dev` or `main`). |
+| `Promote to main` | Whether `pk promote` is enabled (`false` for single-tier projects). |
+| `Ship environments` | The chain `pk promote` walks (`prod`, `dev,main`, `dev,beta,main`, …). |
+| `Spec ready state` | **Load-bearing.** The Linear state `/light-spec` publishes to and `pk spec-cycle` requires on entry. Must name a state your workflow actually has (e.g. `Specced`, or `Needs Spec` on two-state boards). A mismatch breaks the spec cycle. |
+| `Spec approved state` | The state `pk spec-cycle` transitions to on a Pass verdict (default `Approved`). |
+| `Migration dir` | Where migrations live; drives `/verify`'s migration self-review. |
+| `Require QA review` | Whether `/verify` spawns the QA subagent. |
+| `Deploy command` | Script-deploy projects only: the command `pk done` reminds you to run after merge. |
+| `Linear API key env var` | Name of the env var holding the Linear token (`pk` reads it from the shell). |
+
+`Spec ready state` and `Spec approved state` are not optional cosmetics — they are the interlock between `/light-spec` and `pk spec-cycle`. If they don't match your Linear workflow's state names exactly, speccing fails. See `method.config.template.md` for the full key list with examples.
 
 ---
 

@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.4.3.2** — Last updated: 2026-05-14  *(doc-polish release — `--confirmed` flag in daily-loop table, `/pk-exit` per-session discipline, versioning example refresh)*
+**v2.7.0** — Last updated: 2026-06-05  *(v2.7.0 sync: adds the `/pk-express` express lane, names the `/pr-fix` and `/pr-security-review` enforcement gates, refreshes the versioning example)*
 
 A structured AI-assisted software delivery system. Wraps [VBW](https://github.com/dnakov/claude-code-vbw) in a visibility and project management layer — from idea to production with quality gates at every stage.
 
@@ -32,6 +32,16 @@ Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pi
 ## Core Principle
 
 **No stage may introduce guesswork into the next stage.**
+
+## Why Enforcement, Not Memory
+
+Frontier models keep getting better at holding context. Larger windows and native memory mean an agent can carry a whole project in its head and remember what it did last session. That erodes the value of tools whose main job was persistence: tracking what to do next, storing state between runs, re-priming a forgetful model.
+
+Pipekit does not bet on persistence. It bets on enforcement.
+
+The failure mode that grows with model capability is not forgetting. It is confident-wrong output. A more capable model produces more plausible mistakes, and one agent doing everything in a single long session has no independent check on its own judgment. The gates exist for exactly that: a spec a separate reviewer must pass, a plan an independent agent stress-tests, a verify step that reads the goals rather than the executor's narration, an antagonistic review that approaches the diff cold.
+
+A bigger context window changes how much an agent can hold. It does not change whether an agent can independently judge work it helped produce. That constraint is what Pipekit is built around, and it does not relax as models improve. If anything, it matters more.
 
 ## The Pipeline
 
@@ -66,6 +76,15 @@ Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pi
 | 11b | Promote — finish | `pk promote <env> --finish` | **Phase 2** (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate) or → `Done` (final). |
 | 12 | Session log | `/pk-exit` | Narrative log to `Logs/Sessions/<date>_<HHMM>.md`. **Per-session, not per-issue** — run manually as the last command of every Claude Code session regardless of where the current issue stands. Never auto-chained from another skill. |
 | 13 | Strategy Sync | `/strategy-sync` | Update docs to match what was built (post-ship) |
+
+**Fast lanes over the loop:**
+
+| Skill | What it does |
+|-------|--------------|
+| `/pk-express <ISSUE-ID>` | Idea-to-Draft-PR autopilot for simple WITs (Quick/Standard tier). Chains spec, branch, work, verify, and ship in one hands-off pass, pausing only at five attention gates. |
+| `/pk-bug` | Bug pipeline with regression-test-first discipline: reproduce, write a failing test, fix, ship, postmortem. |
+| `/pr-fix` | Pluggable-engine PR review (pr-review-toolkit specialists, or a dependency-free builtin fallback) with two-axis severity-by-confidence triage and interactive fixes. |
+| `/pr-security-review` | Security-focused antagonistic review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, and auth surfaces. |
 
 ## Entry Modes
 
@@ -266,7 +285,7 @@ pipekit/
 Tag releases when stable. Projects can pin to a specific version:
 
 ```bash
-./scripts/sync-method.sh v2.4.3.1   # or any tag listed in CHANGELOG.md
+./scripts/sync-method.sh v2.7.0   # or any tag listed in CHANGELOG.md
 ```
 
 Versioning is semver-ish — minor bumps for new capability, patch for fixes/docs only. Tags are created automatically on merge to `main` via `.github/workflows/auto-tag-release.yml` when the PR title contains a `vX.Y.Z` token.
