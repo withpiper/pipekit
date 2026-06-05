@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.7.0** — Last updated: 2026-06-05 09:10  *(v2.7.0 final content pass — `/pk-express` express lane, `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk done` rc5 finish, `/pipekit-update` Phase P, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state` all reflected in the pipeline + tooling tables. Carries rc2's stage-isolation reframe of Fresh-Chat Discipline — the constraint is contaminated judgment, not lost memory, so a 1M context window does not relax it)*
+**v2.7.1** — Last updated: 2026-06-05 14:00  *(v2.7.1: documents optional `templates/ci/linear-transition.yml` — merge-driven Linear transition — in Stage 4 auto-machinery. Carries the v2.7.0 content pass: `/pk-express` express lane, `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk done` rc5 finish, `/pipekit-update` Phase P, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`. Carries rc2's stage-isolation reframe of Fresh-Chat Discipline — the constraint is contaminated judgment, not lost memory, so a 1M context window does not relax it)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -255,6 +255,7 @@ Every step forward is a PR. No direct merges between long-lived branches. Promot
 - **CI** enforces the pre-deploy gate at each PR.
 - **Vercel** deploys preview on PR open and prod on main merge.
 - **GitHub Actions** (Supabase projects only): `db-pr-check.yml` validates migrations on PR open against ephemeral postgres; `db-migrate.yml` applies them on main merge. Lift the workflow pair from rs-vault if your project doesn't have them yet.
+- **Linear transition** (optional, v2.7.1): `templates/ci/linear-transition.yml` advances a merged WIT's Linear state on integration-branch merge — the safety net for a `pk done` skipped via a GitHub-UI merge. Forward-only + idempotent; see `templates/ci/README.md` (incl. the relationship with Linear's native GitHub integration — off for multi-tier, where this workflow is the ladder-aware mechanism).
 
 **Output:** Production release.
 

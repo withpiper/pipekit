@@ -11,6 +11,14 @@ GitHub Actions workflow templates for the **Path 3 reviewer model** shipped in v
 
 Together they implement Pipekit's outside-reviewer model: Semgrep catches the classes it's specifically tuned for (injection, XSS, hardcoded secrets, dependency risks, OWASP top ten), Claude catches the semantic / cross-file pattern issues Semgrep can't see.
 
+A third template does something different — state automation, not review:
+
+| File | Purpose | Type |
+|------|---------|------|
+| `linear-transition.yml` | Advance a merged WIT's Linear state automatically | Merge-event automation |
+
+See [Merge-driven Linear transition](#merge-driven-linear-transition-linear-transitionyml) below.
+
 Held back for v2.6.x: GitHub Copilot, GPT-4-based reviewers, and Codex GHAs — disqualified on the **IP-absorption pattern** (see `resources/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"), not on quality grounds.
 
 ## Installation
@@ -95,6 +103,70 @@ This is a workflow-shape decision, not a Pipekit code change — but it's worth 
 - `pk ship --ready` — opens PR Ready immediately (fires reviewers; use for one-shot tiny WITs).
 - `pk ready <ID>` — flips Draft → Ready (fires reviewers).
 - `/pr-fix --second-opinion=gemini` — opt-in local second opinion via Gemini Flash (covered in `pr-fix` skill, v2.6.0+). Use when you want a non-Claude, non-OpenAI-stack second read on a specific PR without standing up a GHA.
+
+## Merge-driven Linear transition (`linear-transition.yml`)
+
+Closes the **state-lag gap**: every Linear transition after `pk ship` is command-driven and manual (`pk done`, `pk promote --finish`). When a PR is merged through the GitHub UI — the common path — or those commands are skipped, the code lands on the integration branch but the issue never advances. Any skill that asks Linear "what's `Done`?" to decide "what shipped?" then under-reports (this bit three consecutive `/strategy-sync` runs; see `resources/linear-state-lag.md`).
+
+This workflow drives the transition off the **merge event** instead of a human remembering a command. On a merged PR into the integration branch, it extracts every `<PREFIX>-NNN` from the branch name + PR title + body and advances each issue to `TARGET_STATE`.
+
+It does **not** replace `pk done` / `pk promote --finish` — those also clean up the worktree, post commits to Linear, and write the VBW SUMMARY. It's the **safety net** for when they're skipped. Both paths end at the same Linear state, and the transition is idempotent (it skips a WIT already at the target), so running both is harmless.
+
+### Install
+
+```bash
+cp pipekit/templates/ci/linear-transition.yml .github/workflows/
+```
+
+Then:
+
+1. **Edit the `env:` block** at the top of the job to match `method.config.md`:
+   - `LINEAR_TEAM_NAME` → your `Team name`
+   - `ISSUE_PREFIX` → your `Issue prefix`
+   - `TARGET_STATE` → the state merged WITs move to: `In <FirstEnv>` (e.g. `In Dev`) for a multi-tier project, or `Done` for a single-tier project (integration branch == `main`)
+   - `PRE_MERGE_STATES` → the states a WIT may currently be in for the transition to fire (safety guard, see below)
+2. **Set the `branches:` trigger** to your integration branch (`method.config.md` → `Integration branch`).
+3. **Add a `LINEAR_API_KEY` repo secret** (Settings → Secrets and variables → Actions). Use a Linear personal API key (linear.app → Settings → API) or an OAuth token scoped to issue writes. The workflow sends it as the raw `Authorization` header, matching `bin/pk`.
+
+### Forward-only safety guard
+
+The workflow only transitions a WIT **currently in one of `PRE_MERGE_STATES`** (default `UAT, In Progress, Building, In Review`). This is deliberate:
+
+- A WIT already **past** this hop (promoted, `Done`) is left alone — the Action never pulls state backward.
+- A WIT that landed in the merge **without going through UAT** (a bundled leap-frog) is surfaced as a warning and left for a human, not silently jumped to a post-merge state.
+
+If a WIT is already at `TARGET_STATE` (e.g. `pk done` already ran), it's skipped. Genuine API failures emit `::error::` and fail the job so a stranded transition is visible in the Actions tab — but since the merge already succeeded, the failure never blocks anything.
+
+### Multi-tier projects
+
+This template watches **one** hop — the integration-branch merge → `In <FirstEnv>`. For downstream hops (promote PRs merging `dev → beta`, `beta → main`), either:
+
+- copy the file per hop, each with its own `branches:` + `TARGET_STATE` (e.g. one watching `beta` → `In Beta`, one watching `main` → `Done`), or
+- if your promote PRs carry the bundled-WIT tracker, keep using `pk promote <env> --finish` for those hops and let this workflow cover only the high-traffic integration-branch merges.
+
+`pk promote --finish` already transitions every bundled `<PREFIX>-NNN` and fails loud, so it remains the recommended path for promote hops; the Action's leverage is highest on the integration-branch merge, which is the one most often done via the GitHub UI.
+
+### Relationship with Linear's native GitHub integration
+
+Linear ships its own GitHub integration that auto-transitions a linked issue on PR open and merge. **Before installing this workflow, check whether your Linear workspace has it enabled** (Linear → Settings → Integrations → GitHub) — the two can overlap.
+
+If the native integration is **on**, it already moves a merged issue toward a "completed" state, so this workflow becomes a harmless idempotent safety net (it sees the issue already at target and skips). But the native integration has two limitations this workflow is built to avoid:
+
+- **It doesn't understand Pipekit's state ladder.** Empirically (SiteLine, 2026-06-05 live test), the native integration moved a WIT `UAT → In Progress` on PR-open — *backward* in the Pipekit model (In Progress is pre-ship/ad-hoc; UAT is post-ship). This workflow is **forward-only**: its `PRE_MERGE_STATES` guard refuses to pull a WIT backward.
+- **It can't do per-env hops.** On a multi-tier project the native integration jumps a `dev`-merge straight to its single configured "done" state, skipping `In Dev` / `In Beta`. This workflow targets the correct `<FirstEnv>` state per hop.
+
+**Recommended posture:**
+
+| Project shape | Native integration | This workflow |
+|---|---|---|
+| Single-tier (merge to `main` → `Done`) | fine to leave on | optional safety net (idempotent, harmless) |
+| Multi-tier (env ladder) | turn **off** — it skips the ladder | **the** transition mechanism (one per hop, ladder-aware) |
+
+The original state-lag this workflow fixes (`resources/linear-state-lag.md`) was observed on a **multi-tier** project, where the native integration is the wrong tool and manual `pk done` was the only path — exactly the gap this closes.
+
+### Validation
+
+Live-validated end-to-end on SiteLine, 2026-06-05: a real `POC-NNN` WIT in `UAT`, merged via a real PR, transitioned to `Done` by this workflow in CI (`UAT → Done` in the run log), with the idempotent skip confirmed on a second pass. The forward-only guard and ID extraction were exercised against the live Linear GraphQL API.
 
 ## Custom Semgrep rules
 

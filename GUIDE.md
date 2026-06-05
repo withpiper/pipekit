@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.7.0** — Last updated: 2026-06-05 09:10  *(v2.7.0 final content pass: `/pk-express` idea→Draft-PR autopilot documented; `/pr-fix` historical finders (git-history + prior-PR-comments) added to the pluggable-engine review; `/verify` migration self-review verdict; `pk branch` nested per-app env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish semantics; `/pipekit-update` Phase P managed dependency; `/light-spec` publishes to the configured `Spec ready state`)*
+**v2.7.1** — Last updated: 2026-06-05 14:00  *(v2.7.1: documents optional `templates/ci/linear-transition.yml` — merge-driven Linear transition — in Stage 4 auto-machinery. Carries the v2.7.0 final content pass: `/pk-express` idea→Draft-PR autopilot; `/pr-fix` historical finders (git-history + prior-PR-comments) on the pluggable-engine review; `/verify` migration self-review verdict; `pk branch` nested per-app env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish semantics; `/pipekit-update` Phase P managed dependency; `/light-spec` publishes to the configured `Spec ready state`)*
 
 ---
 
@@ -726,6 +726,7 @@ feature/* → pk ship (Draft) → pk ready → pk done (UAT→In Dev)
 - **CI** enforces the pre-deploy gate at every PR. If types, lint, or tests fail, the merge is blocked.
 - **Vercel** deploys preview on PR open and prod on main merge.
 - **GitHub Actions** (Supabase projects only): `db-pr-check.yml` validates migrations on PR open against ephemeral postgres; `db-migrate.yml` applies them on main merge. Lift the workflow pair from rs-vault if your project doesn't have them yet.
+- **Linear transition** (optional, v2.7.1): `templates/ci/linear-transition.yml` advances a merged WIT's Linear state automatically on integration-branch merge — the safety net for when `pk done` is skipped (e.g. a GitHub-UI merge). Forward-only and idempotent. See `templates/ci/README.md` for setup and the note on Linear's native GitHub integration (turn native off on multi-tier projects; this workflow is ladder-aware where native isn't).
 
 ---
 
