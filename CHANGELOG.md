@@ -47,7 +47,18 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
-- **`templates/ci/linear-transition.yml`** — merge-driven Linear transition (the real fix for the state-lag gap, `resources/linear-state-lag.md` item #1). A GitHub Action on `pull_request: closed` + `merged` against the integration branch extracts every `<PREFIX>-NNN` from the branch name + PR title + body and advances each issue to the configured `TARGET_STATE` (`In <FirstEnv>` multi-tier, `Done` single-tier) via the Linear GraphQL API — same auth + `workflowStates`/`issueUpdate` shapes as `bin/pk`. Removes the dependency on a human running `pk done` after a GitHub-UI merge, which silently stranded issues in their pre-merge state and made `/strategy-sync` under-report shipped work (bit three consecutive runs). Idempotent (skips a WIT already at target — harmless alongside `pk done`) and forward-only (a configurable `PRE_MERGE_STATES` allowlist means it never pulls a promoted/`Done` WIT backward and never leap-frogs an Approved WIT that bypassed UAT). Per-project setup (team/prefix/target-state `env` block + `LINEAR_API_KEY` secret) documented in `templates/ci/README.md`. Does not replace `pk done`/`pk promote --finish` — it's the safety net for when they're skipped.
+_Nothing yet._
+
+---
+
+## v2.7.1 — 2026-06-05
+
+> **Merge-driven Linear transition — the real fix for the state-lag gap.** Closes `resources/linear-state-lag.md` item #1, the highest-leverage open item after v2.7.0.
+
+- **`templates/ci/linear-transition.yml`** — a GitHub Action on `pull_request: closed` + `merged` against the integration branch extracts every `<PREFIX>-NNN` from the branch name + PR title + body and advances each issue to the configured `TARGET_STATE` (`In <FirstEnv>` multi-tier, `Done` single-tier) via the Linear GraphQL API — same auth + `workflowStates`/`issueUpdate` shapes as `bin/pk`. Removes the dependency on a human running `pk done` after a GitHub-UI merge, which silently stranded issues in their pre-merge state and made `/strategy-sync` under-report shipped work (bit three consecutive runs). Idempotent (skips a WIT already at target — harmless alongside `pk done`) and forward-only (a configurable `PRE_MERGE_STATES` allowlist means it never pulls a promoted/`Done` WIT backward and never leap-frogs an Approved WIT that bypassed UAT). PR-supplied text is passed via `env`, never interpolated into the shell (injection-safe); portable to bash 3.2+.
+- **Live-validated on SiteLine (2026-06-05):** a real `POC-NNN` WIT in `UAT`, merged via a real PR, transitioned to `Done` by the workflow in CI, with the idempotent skip confirmed on a second pass.
+- **Documented the relationship with Linear's native GitHub integration** (`templates/ci/README.md`). The native integration overlaps but can't respect Pipekit's state ladder — the SiteLine test caught it pulling a WIT `UAT → In Progress` (backward) on PR-open. Recommended posture: single-tier projects may leave native on (this workflow is then a harmless idempotent net); multi-tier projects should turn native **off** and use this workflow per hop (it's ladder-aware and forward-only). The original lag was on a multi-tier project — native's exact blind spot.
+- Known limitations (tracked in the source doc): commit messages are not yet parsed for IDs (only branch + title + body); one workflow watches one hop (downstream promote hops need a sibling file or stay on `pk promote --finish`).
 
 ---
 

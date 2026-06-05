@@ -146,6 +146,28 @@ This template watches **one** hop — the integration-branch merge → `In <Firs
 
 `pk promote --finish` already transitions every bundled `<PREFIX>-NNN` and fails loud, so it remains the recommended path for promote hops; the Action's leverage is highest on the integration-branch merge, which is the one most often done via the GitHub UI.
 
+### Relationship with Linear's native GitHub integration
+
+Linear ships its own GitHub integration that auto-transitions a linked issue on PR open and merge. **Before installing this workflow, check whether your Linear workspace has it enabled** (Linear → Settings → Integrations → GitHub) — the two can overlap.
+
+If the native integration is **on**, it already moves a merged issue toward a "completed" state, so this workflow becomes a harmless idempotent safety net (it sees the issue already at target and skips). But the native integration has two limitations this workflow is built to avoid:
+
+- **It doesn't understand Pipekit's state ladder.** Empirically (SiteLine, 2026-06-05 live test), the native integration moved a WIT `UAT → In Progress` on PR-open — *backward* in the Pipekit model (In Progress is pre-ship/ad-hoc; UAT is post-ship). This workflow is **forward-only**: its `PRE_MERGE_STATES` guard refuses to pull a WIT backward.
+- **It can't do per-env hops.** On a multi-tier project the native integration jumps a `dev`-merge straight to its single configured "done" state, skipping `In Dev` / `In Beta`. This workflow targets the correct `<FirstEnv>` state per hop.
+
+**Recommended posture:**
+
+| Project shape | Native integration | This workflow |
+|---|---|---|
+| Single-tier (merge to `main` → `Done`) | fine to leave on | optional safety net (idempotent, harmless) |
+| Multi-tier (env ladder) | turn **off** — it skips the ladder | **the** transition mechanism (one per hop, ladder-aware) |
+
+The original state-lag this workflow fixes (`resources/linear-state-lag.md`) was observed on a **multi-tier** project, where the native integration is the wrong tool and manual `pk done` was the only path — exactly the gap this closes.
+
+### Validation
+
+Live-validated end-to-end on SiteLine, 2026-06-05: a real `POC-NNN` WIT in `UAT`, merged via a real PR, transitioned to `Done` by this workflow in CI (`UAT → Done` in the run log), with the idempotent skip confirmed on a second pass. The forward-only guard and ID extraction were exercised against the live Linear GraphQL API.
+
 ## Custom Semgrep rules
 
 Pipekit ships starter Semgrep rules at `templates/ci/semgrep-rules/`. Currently:
