@@ -625,6 +625,15 @@ CHLOG
 
   echo ""
   echo "Changelog written to: pipekit/.sync-changelog.md"
+
+  # Self-heal: ensure the transient changelog is gitignored. It's regenerated
+  # on every sync, so committing it is pure history noise (the method content
+  # itself stays committed — worktrees + reproducibility depend on that).
+  GITIGNORE="$PROJECT_ROOT/.gitignore"
+  if [ -f "$GITIGNORE" ] && ! grep -qxF 'pipekit/.sync-changelog.md' "$GITIGNORE"; then
+    printf '\n# Pipekit sync changelog (regenerated each sync; not version-controlled)\npipekit/.sync-changelog.md\n' >> "$GITIGNORE"
+    echo "Added pipekit/.sync-changelog.md to .gitignore"
+  fi
 fi
 
 # Clean up snapshot

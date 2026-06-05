@@ -47,7 +47,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
-_Nothing yet._
+- **`sync-method.sh` now gitignores `pipekit/.sync-changelog.md`** (idempotent self-heal). The sync changelog is regenerated on every run, so committing it was pure history noise — it had been landing in consuming-project sync commits. The sync now appends the ignore line to `.gitignore` if missing; the method content itself stays committed (worktrees check out tracked files only, so skills/rules/templates must be tracked — only this transient artifact is ignored).
 
 ---
 
