@@ -51,6 +51,26 @@ _Nothing yet._
 
 ---
 
+## v2.7.0 — 2026-06-05
+
+> **The enforcement-substrate release, stabilized.** v2.7.0 hardened the gates that protect a ship — `/verify` and `/pr-fix` stop punting judgment back to the human and instead carry a verdict — and added `/pk-express`, an idea→Draft-PR autopilot for simple WITs. This final tag is the rc6 tree with no new behavior: the last gate before cutting was re-validating the portable `/pr-fix --engine=builtin` fallback (the engine every consuming project without the `pr-review-toolkit` plugin lands on), which passed end-to-end including the rc3 historical finders (git-history + prior-pr-comments) firing in the builtin path.
+
+The 2.7.0 arc, by release (detailed sections below):
+
+- **rc1** — discipline substrate, source-authority hierarchy, evidence-gated `/verify`, `pk ship` hard-fail on missing `verify-complete.md`.
+- **rc2** — pluggable-engine `/pr-fix` (pr-review-toolkit agents by default, built-in fallback) + two-axis severity×confidence triage; Opus 4.8 framing audit (Fresh-Chat → stage-isolation).
+- **rc3** — `/pr-fix` dependency-free historical finders (git-blame regression + prior-PR-comment reapplication); `/pipekit-update` Phase P (pr-review-toolkit as a managed dependency); first Linear-state-lag fixes.
+- **rc4** — `/verify` migration flag self-reviews via subagent (Hold/Approve verdict, not a raw `git show`); `pk branch` auto-discovers and symlinks nested per-app env files into worktrees.
+- **rc5** — `pk doctor` false-ship cross-check; completed `pk done` finish (parent-branch reset, stack advisory, script-deploy `Deploy command` reminder); migration pre-merge re-check; discipline lines.
+- **rc6** — `/pk-express` idea→Draft-PR autopilot (tier-guarded; quick/standard only), validated live on SiteLine POC-14; load-bearing `/light-spec` fix (publish to configured `Spec ready state`, not hardcoded `Specced`); `pipekit-cmux` turn-end-detection lesson.
+
+### What changed since rc6
+
+- `PK_VERSION` → `2.7.0`; CHANGELOG `Unreleased` finalized into this section; `CLAUDE.md` + `RUNBOOK.md` stamps and the `sync-method.sh` example bumped to `v2.7.0`.
+- Re-validated `/pr-fix --engine=builtin` (the rc2 restructure + rc3 historical-finder widening) — PASS. No code change; the gate that was blocking the final tag is cleared.
+
+---
+
 ## v2.7.0-rc6 — 2026-06-03
 
 > **`/pk-express` — an idea→Draft-PR autopilot for *simple* WITs.** Takes an existing brainstormed WIT (or a raw idea) and drives it through the four stages that already self-drive — `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship) — advancing on each stage's success signal and stopping only at genuine attention gates. Quick/Standard tier only; refuses heavy work. Validated end-to-end on a live SiteLine WIT (POC-14): it correctly split off the heavy half as a follow-up, drove the simple half to a merged PR, and stopped at the tier guard the first time around.
