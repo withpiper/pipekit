@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.7.1** — Last updated: 2026-06-05 14:00  *(adds `templates/ci/linear-transition.yml` — merge-driven Linear transition, the real fix for the state-lag gap: a GitHub Action advances a merged WIT's Linear state on integration-branch merge, removing the dependency on a human running `pk done`. Forward-only + idempotent; live-validated on SiteLine. Documents the relationship with Linear's native GitHub integration (off for multi-tier — it can't do the env ladder). Carries v2.7.0: enforcement-substrate hardening, `/pk-express`, `/pr-fix` pluggable engine + historical finders, `pk branch` nested env symlinks, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`)*
+**v2.8.0-rc1** — Last updated: 2026-06-06 10:00  *(new portable `/financial-review` skill — finance/calculation-accuracy review via the framework + checks-file split, generalized from SiteLine; new config keys `Financial review WIT` + `Financial review checks`. Plus `sync-method.sh` self-heal gitignoring the transient `pipekit/.sync-changelog.md`. Carries v2.7.1: `templates/ci/linear-transition.yml` merge-driven Linear transition; and v2.7.0: enforcement-substrate hardening, `/pk-express`, `/pr-fix` pluggable engine + historical finders, `pk branch` nested env symlinks, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
