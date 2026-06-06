@@ -47,6 +47,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
+- **New portable skill `/financial-review`** — periodic financial-accuracy review for finance/calculation-heavy projects: cross-layer parity audit (DB view ↔ server/client calc ↔ UI footer; delta > tolerance = finding), baseline tests, parallel sub-agent audit, regression scan, severity-ranked report, and a recurring-WIT Linear lifecycle (In Progress → In Review → Done, transitions by **state name** via `pk` — no hardcoded UUIDs). Generalized from SiteLine's project-specific version using the **framework + checks-file** split: the skill ships the discipline + report shape; each project supplies its concrete checks (test cmd, calc files, DB-integrity SQL, parity formulas) in `resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`. No-op on projects without a checks file. New `method.config.md` keys: `Financial review WIT` (blank disables the Linear lifecycle) + `Financial review checks` (path). Indexed in `Skills_SOP.md`.
 - **`sync-method.sh` now gitignores `pipekit/.sync-changelog.md`** (idempotent self-heal). The sync changelog is regenerated on every run, so committing it was pure history noise — it had been landing in consuming-project sync commits. The sync now appends the ignore line to `.gitignore` if missing; the method content itself stays committed (worktrees check out tracked files only, so skills/rules/templates must be tracked — only this transient artifact is ignored).
 
 ---

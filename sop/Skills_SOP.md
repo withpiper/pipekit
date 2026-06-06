@@ -65,6 +65,7 @@ These skills work across any project that follows the method. They read `method.
 | `/pipekit-help` | Read project state, recommend next pipeline step | Anytime |
 | `/spec-validator` | Validate spec completeness | Stage 1: Spec |
 | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) | Anytime |
+| `/financial-review` | Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable **framework**; concrete checks live in a per-project checks file (`resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`). No-op on projects without a checks file. | Anytime (domain: finance) |
 | `/skill-index` | Sync skill index after changes | Anytime |
 | `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
