@@ -160,6 +160,8 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Spec approved state** | Linear state name | `Approved` | `pk spec-cycle` (transitions issue to this state on a Pass verdict) |
 | **Self-reference check** | `enabled` \| `disabled` | `disabled` | `pk verify` — runs `scripts/check-no-self-references.sh`; fails if current branch's source still references its own ticket ID (e.g. `RS-29`) in any file the branch did not edit. Catches predecessor-placeholder integration misses (RS-29 rs-vault, 2026-05-05). Bypass on a per-run basis with `AGREED_PLACEHOLDER=1 pk verify` after surfacing matches in the hand-off summary. |
 | **Source root** | path | `src/` | `scripts/check-no-self-references.sh` (where to grep) |
+| **Financial review WIT** | Linear issue id, or blank | (blank) | `/financial-review` — recurring WIT moved In Progress → In Review → Done each cycle; **blank disables the Linear lifecycle** (run + report only). Finance/calculation-heavy projects only. |
+| **Financial review checks** | path | `resources/financial-review-checks.md` | `/financial-review` — project checks file (test cmd, calc files, DB-integrity SQL, parity formulas). Scaffold from `pipekit/templates/financial-review-checks.template.md`. |
 
 ### Example (rs-vault)
 
