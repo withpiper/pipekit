@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.7.1** — Last updated: 2026-06-05 14:00  *(v2.7.1: documents optional `templates/ci/linear-transition.yml` — merge-driven Linear transition — in Stage 4 auto-machinery. Carries the v2.7.0 final content pass: `/pk-express` idea→Draft-PR autopilot; `/pr-fix` historical finders (git-history + prior-PR-comments) on the pluggable-engine review; `/verify` migration self-review verdict; `pk branch` nested per-app env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish semantics; `/pipekit-update` Phase P managed dependency; `/light-spec` publishes to the configured `Spec ready state`)*
+**v2.8.0-rc1** — Last updated: 2026-06-06 10:00  *(adds portable `/financial-review` to the skill quick reference — finance/calculation-accuracy review, framework + checks-file. Carries v2.7.1 `templates/ci/linear-transition.yml` and the v2.7.0 final content pass: `/pk-express`; `/pr-fix` pluggable engine + historical finders; `/verify` migration self-review verdict; `pk branch` nested env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish; `/pipekit-update` Phase P; `/light-spec` configured `Spec ready state`)*
 
 ---
 
@@ -1225,6 +1225,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
 | Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
+| Financial Review | `/financial-review` | Periodic financial-accuracy review (finance/calculation-heavy projects) — cross-layer parity audit + severity report. Portable framework; project checks in `resources/financial-review-checks.md`. No-op without a checks file. |
 | Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
 | Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project. **Phase P** (v2.7.0) also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |
 | Update + Push | `/pipekit-update --push` | Push improvements back to method repo |
