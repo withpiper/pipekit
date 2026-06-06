@@ -26,22 +26,25 @@ Different from `/security-review` (repo-wide security audit) and `/pr-security-r
 | **Reports path** | Where to write the review report | `Reports/` |
 | **Spec ready state** / state names | Linear state names for transitions (see below) | per board |
 
-**Linear transitions are by state NAME via `pk`**, never hardcoded UUIDs: use `pk_linear_set_state "<WIT>" "<State>"` (or the project's Linear MCP with a name lookup). The three states this skill moves through are **In Progress**, **In Review**, **Done** — they must exist in the team's workflow.
+**Linear transitions are by state NAME, never hardcoded UUIDs.** Use the project's Linear MCP: look up the workflow-state id by name (the team's workflow states), then update the issue's state. Exact tool names vary per project's Linear integration (e.g. a `getWorkflowStates`/`save_issue` pair, or `update-issue`) — use whatever the project exposes; do not assume a specific tool name. The three states this skill moves through are **In Progress**, **In Review**, **Done** — they must exist in the team's workflow.
 
 ## Step 0 — Load the checks file (gate)
 
 Read the checks file at `Financial review checks` (default `resources/financial-review-checks.md`).
 
 - **If it doesn't exist**, STOP and tell the user:
-  > No financial-review checks file found at `<path>`. This skill is the framework; the project supplies the checks. Scaffold one from `pipekit/templates/financial-review-checks.template.md` (copy it to `<path>` and fill in your test command, calculation files, DB-integrity queries, and parity formulas), then re-run.
-  Offer to scaffold it from the template.
+  > No financial-review checks file found at `<path>`. This skill is the framework; the project supplies the checks.
+  Then scaffold one and stop for the user to fill it in:
+  - If `pipekit/templates/financial-review-checks.template.md` exists (synced projects), copy it to `<path>`.
+  - Otherwise create `<path>` directly with these sections, each filled for the project: **Test command**, **Calculation source files**, **DB integrity queries**, **Client↔server parity**, **Margin / footer / derived**, **Snapshot / version integrity** (optional), **Regression-watch paths**, **Known gaps**.
+  Do not invent project specifics — leave clearly-marked placeholders for the user.
 
 The checks file defines, for this project: the **test command**, the **calculation source files**, the **DB-integrity queries**, the **client↔server parity formulas**, the **margin/footer checks**, and the **regression-watch paths**. Everything below executes *that project's* checks — this skill provides the discipline and the report shape, the checks file provides the substance.
 
 ## Step 1 — Open the review (Linear lifecycle)
 
 If `Financial review WIT` is set:
-- Move it to **In Progress**: `pk_linear_set_state "<WIT>" "In Progress"`
+- Move it to **In Progress** via the Linear MCP (state lookup by name → update issue; see Config above).
 - Post a comment: `"Starting financial accuracy review — {YYYY-MM-DD}"`
 
 If blank, skip — proceed straight to the audit and just produce the report.
@@ -58,7 +61,7 @@ If blank, skip — proceed straight to the audit and just produce the report.
 
 Run the checks file's audit groups as parallel read-only sub-agents. The canonical groups (each project's checks file fills in the specifics):
 
-1. **DB integrity** — run the checks file's SQL against the configured DB (via the project's DB MCP / `execute_sql`). Any row returned where a stored/view total disagrees with the recomputed total by more than the tolerance (default `> 0.01`) is a **Critical** discrepancy.
+1. **DB integrity** — run the checks file's SQL against the configured DB (via the project's DB MCP / `execute_sql`). Any row returned where a stored/view total disagrees with the recomputed total beyond the tolerance defined in the checks file (checks own their thresholds; the example checks use `> 0.01`) is a **Critical** discrepancy.
 2. **Client↔server parity** — compare the server/DB formulas (e.g. `GENERATED ALWAYS AS` columns, RPCs) against the client calculation implementation named in the checks file. A formula mismatch is **High** (UI shows a different number than the source of truth).
 3. **Margin / footer / derived metrics** — verify inline/derived calculations (margins, fees, contingency) per the checks file, including divide-by-zero guards and rounding accumulation.
 4. **Snapshot / version integrity** (if applicable) — verify version-comparison math and sign conventions per the checks file.
