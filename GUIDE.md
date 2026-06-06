@@ -562,7 +562,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 | Backend | What `/work` does |
 |---------|-------------------|
 | `vbw` | Spawns `vbw-lead` to generate `PLAN.md`, then `vbw-dev` to execute. PLAN.md captures task decomposition with verify/done criteria per task. Each task gets one atomic commit. |
-| `native` | Plans + executes in your current Claude session. Uses parallel `Agent` calls only for grounding (codebase reads, doc lookups). No PLAN.md artifact. |
+| `native` | Plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). |
 
 `--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
 
@@ -571,7 +571,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 ### Plan Review (vbw backend)
 
 **Skill:** `/review-plan` (spawns `plan-reviewer` agent at `model: opus`)
-**Input:** `PLAN.md` (vbw backend only — native backend has no PLAN.md to review)
+**Input:** `PLAN.md` (vbw backend). Native now also emits a task DAG at `.pk-work/<ID>-PLAN.md`, but `/review-plan` currently targets VBW's `.vbw-planning/.../PLAN.md` path; wiring it to the native artifact is a follow-up.
 **Output:** Validated plan or revision requests
 
 Run between `vbw-lead`'s plan generation and `vbw-dev`'s execution. The plan reviewer stress-tests:
@@ -981,7 +981,7 @@ VBW (Vibe-Based Workflow) is the planning and execution engine. Here's where its
 
 ### Keeping VBW Updated
 
-When `/work` runs against Low-complexity issues with `Backend: native` (in-context plan + execute, no PLAN.md), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
+When `/work` runs with `Backend: native` (plan + execute in-context; task DAG and run trail land in gitignored `.pk-work/`, not `.vbw-planning/`), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
 
 ---
 

@@ -202,7 +202,7 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 - **`pk branch <ID>`** sets up the worktree + branch and transitions Linear to In Progress. Idempotent — rerun is safe.
 - **`/work <ID>`** does plan + execute in one skill, gated by a **verdict** (`proceed` / `revise: <feedback>` / `abort`) before any code is written. Tier (Quick / Standard / Heavy) is human-confirmed before the verdict step. Backend dispatch is per `method.config.md`:
   - `Backend: vbw` → `/work` spawns `vbw-lead` (plan) and `vbw-dev` (execute) with `PLAN.md` as the contract.
-  - `Backend: native` → `/work` plans + executes in your current Claude session, using parallel `Agent` calls only for grounding.
+  - `Backend: native` → `/work` plans in your current Claude session (parallel `Agent` calls for grounding), writes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the **Workflow primitive** — one atomic commit per task with verify-before-integrate, run trail in `.pk-work/<ID>-SUMMARY.md`. Trivial plans run inline. Scope is the executor contract only (no UAT/known-issue/sprint state — that stays VBW's).
 - **`/review-plan`** *(vbw backend, optional)* spawns the `plan-reviewer` agent against `PLAN.md` between `vbw-lead`'s output and `vbw-dev`'s execution — independent stress-test of scope, atomicity, dependencies, success criteria, and risks.
 
 **Output:** Code committed against verify/done criteria (or `PLAN.md` + execution for the `vbw` backend)

@@ -379,33 +379,61 @@ Wait for the subagent to return.
 
 ### native backend
 
-Heuristic: dispatch a subagent if the plan touches >3 files OR includes any unfamiliar package OR includes a schema migration. Else execute inline (Edit/Write/Bash directly).
+Native execution is **Workflow-primitive-driven** for multi-task plans and **inline** for trivial ones. Both paths produce the same executor contract: a PLAN artifact, atomic commits with verify-before-integrate, and a SUMMARY trail. The scope is *only* that contract — PLAN → atomic tasks → verify-before-integrate → SUMMARY. Do **not** add UAT, known-issue registries, or sprint/retro state; that is VBW's surface, not the executor's. The full Pre-Deploy Gate still runs once at the end via the Step 7 `/verify` rollover.
 
-**Subagent path** — use Task tool with:
-- `subagent_type: "general-purpose"`
-- `description: "Execute plan for <ISSUE-ID>"`
-- Prompt template:
-  ```
-  Execute this plan in the current worktree. The branch is already created.
+#### Step 5n.0 — Materialize the PLAN artifact (the executor contract)
 
-  Discipline:
-  - Make atomic commits — one logical change per commit
-  - Use conventional commits format (feat/fix/refactor/docs)
-  - Run the test command after each significant change (read § Pre-Deploy Gate from method.config.md)
-  - Stop and surface if you hit a blocker — do not loop
+Convert the Step 3b plan into a structured task DAG and write it to `.pk-work/<ISSUE-ID>-PLAN.md` before executing. This is the contract the executor consumes and the durable record downstream tooling (and any plan review) reads. `.pk-work/` is gitignored at the repo root (same directory as the Step 6.5 flag markers).
 
-  Plan:
-  <full plan from step 3b>
+```bash
+mkdir -p .pk-work
+```
 
-  Spec:
-  <full spec from step 2>
+Format — one entry per atomic task, each independently verifiable:
 
-  Project conventions: read CLAUDE.md and any Strategy/* docs the spec references.
-  ```
+```
+# PLAN — <ISSUE-ID> <title>
+Backend: native  ·  Mode: <inline|workflow>  ·  Generated: <date>
 
-Wait for the subagent to return.
+## T1 — <short imperative title>
+- deps: <none | T-ids this task requires>
+- files: `path/a`, `path/b`        # the exact file set this task writes
+- change: <one line — the logical change>
+- verify: <task-scoped check — a test command, a grep, a type-check>
+- done: <observable condition that proves the AC slice is met>
 
-**Inline path** — work through the plan directly using Edit, Write, Read, Bash. Same discipline (atomic commits, test after change, surface blockers). Use a TaskCreate with one task per "Files to touch" item to track your own progress.
+## T2 — ...
+- deps: T1
+- ...
+```
+
+Rules for the DAG:
+- One logical change per task → one atomic commit. If a task can't be described in one `change:` line, split it.
+- `deps` encodes ordering. `files` encodes conflict: two tasks may run concurrently **only** if their `files` sets are disjoint.
+- Every task has a `verify` that can run in isolation. A task with no meaningful verify is a smell — fold it into a sibling or add a real check.
+
+#### Step 5n.1 — Choose execution mode
+
+- **Inline mode** — plan has ≤2 tasks AND touches ≤2 files AND no migration. Execute directly with Edit/Write/Bash: one atomic commit per task, run that task's `verify` immediately after the change and before the commit, surface blockers without looping. Spinning up a Workflow for a one-liner is waste.
+- **Workflow mode** — everything else. Orchestrate via the Workflow primitive (Step 5n.2).
+
+Record the chosen mode in the PLAN's `Mode:` header line.
+
+#### Step 5n.2 — Workflow execution (verify-before-integrate)
+
+Drive execution with the **Workflow tool**. The workflow:
+
+1. Reads the task DAG from `.pk-work/<ISSUE-ID>-PLAN.md`.
+2. Executes tasks in dependency order. Tasks at the same dependency level with **disjoint `files` sets** may run in parallel; tasks whose `files` sets intersect MUST be serialized — a single shared worktree cannot take concurrent writers. When in doubt, serialize.
+3. **Verify-before-integrate:** each task agent makes its change, runs the task's `verify`, and commits (atomic, conventional `feat/fix/refactor/docs` format) **only if verify passes**. A failing verify does not loop and does not get papered over — the task returns its failure to the orchestrator.
+4. Appends each task's result (commit SHA, verify verdict, elapsed) to `.pk-work/<ISSUE-ID>-SUMMARY.md`.
+5. If any task fails verify or hits a blocker (permission denial, unfixable hook failure, plan-contradicting type error), **stop and surface** — do not auto-revise the plan unilaterally.
+
+> **Worktree-isolation invariant:** `Agent isolation: "worktree"` is a no-op on this harness — parallel agents share the working directory. The orchestrator therefore relies entirely on the disjoint-`files` rule above to keep parallel tasks from trampling each other. Any task whose file set overlaps another's runs sequentially, full stop.
+
+> **Portability fallback:** if the Workflow tool is unavailable in the host, degrade to sequential `Task`-tool dispatch — one Task per atomic task in dependency order, each carrying the same verify-before-integrate discipline and writing to the same SUMMARY trail. Degrade loudly: print `Workflow tool unavailable — native backend running sequential fallback.` Never silently collapse to the old single-blob-subagent behavior.
+
+Each task agent's prompt carries: the single task entry (title, files, change, verify, done), the relevant spec slice, and the discipline (atomic commit, conventional format, surface-don't-loop). It does **not** carry the whole plan — task scope is the task, the orchestrator owns the DAG.
 
 ## Step 6 — Security review (tier-aware)
 
