@@ -4,9 +4,13 @@
 # deterministic outside reviewer; claude-review.yml is the semantic one.
 # Free Community Rules, no SEMGREP_APP_TOKEN required.
 #
-# Triggers: `opened` and `ready_for_review` only — matches Pipekit's
-# Draft-PR lifecycle (open as Draft, iterate freely, `pk ready <ID>`
-# to flip when shipping). Avoids the per-push credit burn of `synchronize`.
+# Triggers: `opened`, `ready_for_review`, and `synchronize`. The first
+# two match Pipekit's Draft-PR lifecycle (open as Draft, iterate freely,
+# `pk ready <ID>` to flip when shipping). `synchronize` (every push to a
+# Ready PR) is included so analysis re-runs on each push and failed runs
+# self-heal — and unlike claude-review, Semgrep is free (Community Rules),
+# so there is no per-push credit to conserve. Draft PRs still skip via the
+# job guard below.
 #
 # Tune the `branches` list to your project's release-class branches
 # (the ones that hit deploy gates). 2-tier: typically `main`. 3-tier:
@@ -17,7 +21,7 @@ name: Semgrep
 
 on:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, ready_for_review, synchronize]
     # Release-class branches only — match method.config.md `Ship environments`.
     branches:
       - main
