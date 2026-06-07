@@ -411,6 +411,7 @@ Rules for the DAG:
 - One logical change per task → one atomic commit. If a task can't be described in one `change:` line, split it.
 - `deps` encodes ordering. `files` encodes conflict: two tasks may run concurrently **only** if their `files` sets are disjoint.
 - Every task has a `verify` that can run in isolation. A task with no meaningful verify is a smell — fold it into a sibling or add a real check.
+- **Author the tests the spec/PLAN calls for — don't just run the existing suite.** If an AC or a task's `done` implies coverage (a new RLS/authz path, a calculation, a state transition), the task's `change` MUST include *writing* that test, and `verify` runs it. Running the pre-existing suite green is necessary but never sufficient: a security- or correctness-critical path that ships with no *new* test is an incomplete task, not a passing one. Prefer test-first — author the failing test, then the code that makes it pass. (This is the gap a native-vs-VBW pilot surfaced: native built a correct security guard but shipped it *unverified* because it ran existing tests instead of authoring the one that proved the guard.)
 
 #### Step 5n.1 — Choose execution mode
 
@@ -424,8 +425,8 @@ Record the chosen mode in the PLAN's `Mode:` header line.
 Drive execution with the **Workflow tool**. The workflow:
 
 1. Reads the task DAG from `.pk-work/<ISSUE-ID>-PLAN.md`.
-2. Executes tasks in dependency order. Tasks at the same dependency level with **disjoint `files` sets** may run in parallel; tasks whose `files` sets intersect MUST be serialized — a single shared worktree cannot take concurrent writers. When in doubt, serialize.
-3. **Verify-before-integrate:** each task agent makes its change, runs the task's `verify`, and commits (atomic, conventional `feat/fix/refactor/docs` format) **only if verify passes**. A failing verify does not loop and does not get papered over — the task returns its failure to the orchestrator.
+2. Executes tasks in dependency order, **sequentially by default** — one task fully done (verified + committed) before the next. Parallelism is opt-in, not the default: fan out tasks at the same dependency level with **disjoint `files` sets** *only when there is rate-limit headroom*. On a rate-capped plan (e.g. Claude Max), aggressive fan-out self-saturates the API limit and serializes into long waits anyway — and uncontrolled nested fan-out is precisely what makes the heavier alternative backend expensive. So sequential-with-verify-gates is the default; parallel is a deliberate optimization, not a reflex. Tasks whose `files` sets intersect MUST be serialized regardless — a shared worktree can't take concurrent writers. When in doubt, serialize.
+3. **Verify-before-integrate:** each task agent makes its change (**including authoring the tests the task calls for**, per the DAG rules above), runs the task's `verify` (which executes those new tests), and commits (atomic, conventional `feat/fix/refactor/docs` format) **only if verify passes**. A failing verify does not loop and does not get papered over — the task returns its failure to the orchestrator.
 4. Appends each task's result (commit SHA, verify verdict, elapsed) to `.pk-work/<ISSUE-ID>-SUMMARY.md`.
 5. If any task fails verify or hits a blocker (permission denial, unfixable hook failure, plan-contradicting type error), **stop and surface** — do not auto-revise the plan unilaterally.
 
