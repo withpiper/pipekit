@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2.8.0-rc1** — Last updated: 2026-06-06 10:00  *(new portable `/financial-review` skill — finance/calculation-accuracy review via the framework + checks-file split, generalized from SiteLine; new config keys `Financial review WIT` + `Financial review checks`. Plus `sync-method.sh` self-heal gitignoring the transient `pipekit/.sync-changelog.md`. Carries v2.7.1: `templates/ci/linear-transition.yml` merge-driven Linear transition; and v2.7.0: enforcement-substrate hardening, `/pk-express`, `/pr-fix` pluggable engine + historical finders, `pk branch` nested env symlinks, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`)*
+**v2.8.0-rc2** — Last updated: 2026-06-07 14:30  *(CI reviewer-trigger hardening — `claude-review.yml`/`semgrep.yml` add the `synchronize` event (failed reviews self-heal on next push), and `claude-review.yml` + `templates/ci/README.md` warn that editing the workflow file on a feature branch 401s the app-token exchange (`ANTHROPIC_API_KEY: empty` is a red herring). Plus a `/pk-bug` checkout guard refusing main-anchored phases from the wrong branch. Carries v2.8.0-rc1 `/financial-review` + `.sync-changelog.md` self-heal; v2.7.1 `templates/ci/linear-transition.yml`; v2.7.0 enforcement-substrate hardening, `/pk-express`, `/pr-fix` pluggable engine + historical finders, `pk branch` nested env symlinks, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

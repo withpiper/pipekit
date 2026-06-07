@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.8.0-rc1** — Last updated: 2026-06-06 10:00  *(adds portable `/financial-review` to the tooling table — finance/calculation-accuracy review, framework + checks-file. Carries v2.7.1 `templates/ci/linear-transition.yml` and the v2.7.0 content pass: `/pk-express`, `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk done` rc5 finish, `/pipekit-update` Phase P, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`; rc2's stage-isolation reframe of Fresh-Chat Discipline)*
+**v2.8.0-rc2** — Last updated: 2026-06-07 14:30  *(no methodology change — CI reviewer-trigger hardening (`synchronize` self-heal + workflow-validation 401 warning on `claude-review.yml`/`semgrep.yml`) and a `/pk-bug` checkout guard, both fixes/docs. Carries v2.8.0-rc1 `/financial-review` and the v2.7.x content pass: `/pk-express`, `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk done` rc5 finish, `/pipekit-update` Phase P, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
