@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v2.8.0-rc2** — Last updated: 2026-06-07 14:30  *(CI reviewer-trigger hardening — `claude-review.yml`/`semgrep.yml` add `synchronize` (self-healing reviews), `claude-review.yml` warns about the workflow-validation 401 — plus a `/pk-bug` checkout guard. No daily-flow change. Carries v2.8.0-rc1 `/financial-review` and the v2.7.x substrate — see CHANGELOG; sync-method.sh example bumped to v2.8.0-rc2)*
+**v2.8.0-rc3** — Last updated: 2026-06-07 16:00  *(`/security-review` gains finding-stage coverage + an adversarial verification pass, generalized from a downstream override. No daily-flow change. Carries v2.8.0-rc2 CI reviewer-trigger hardening + `/pk-bug` guard, rc1 `/financial-review`, and the v2.7.x substrate — see CHANGELOG; sync-method.sh example bumped to v2.8.0-rc3)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v2.8.0-rc2             (or latest tag)
+1. ./scripts/sync-method.sh v2.8.0-rc3             (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

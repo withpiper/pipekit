@@ -51,7 +51,11 @@ _Nothing yet._
 
 ---
 
-## v2.8.0-rc2 — 2026-06-07
+## v2.8.0-rc3 — 2026-06-07
+
+> **`/security-review` finding-stage discipline.** Folds review-quality guidance — proven in a downstream project's override — into the portable upstream skill so every project gets it. Skill-only; continues the rc cycle.
+
+- **`/security-review` gains finding-stage coverage + an adversarial verification pass.** Three additions, all stack-agnostic: (1) a "Running this review" preamble (high reasoning effort; dynamic-workflow/`ultracode` fit; **grounded reads** — cite `file:line`, never infer a vuln or an all-clear from a filename); (2) a **finding-stage coverage** rule in the audit step (surface every finding tagged with confidence + severity, do not self-filter — capable models otherwise investigate deeply but under-report); (3) an **adversarial verification pass** after the agents report (try to *refute* each candidate against real auth/RLS/call-sites; mark confirmed/refuted/needs-info; only confirmed + needs-info feed the score). Plus Key Principle #5 (coverage before filtering). Generalized from SiteLine's project-specific override, which is being retired in favor of this upstream version (no more override drift).
 
 > **Reviewer-trigger hardening + `/pk-bug` branch guard.** CI review templates now re-run on every push (self-healing) and carry a loud warning about the workflow-validation 401 that masquerades as a secrets failure; `/pk-bug` refuses to run its main-anchored phases from the wrong checkout. All fixes/docs — no new capability. Continues the rc cycle.
 
