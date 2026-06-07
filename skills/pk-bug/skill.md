@@ -36,11 +36,28 @@ Read `method.config.md` for:
 - Pre-deploy gate commands
 - Backend (`vbw` or `native`) — passed through to `/work`
 
+## Preflight — checkout guard  *(applies to Phases 1–4 only)*
+
+Phases 1–4 are **main-anchored**: intake, reproduce, diagnose, and the failing regression test are authored on the integration-branch checkout (`main` or the configured integration branch), with the test left *uncommitted* until `pk branch` cuts the worktree in Phase 4. Phase 4's `pk branch <ID>` always cuts the worktree off `origin/<integration>` (see `bin/pk`) — so a test written on **any other branch is orphaned**, not carried into the new worktree. Running these phases from a feature branch or an existing `pk branch` worktree silently breaks the handoff.
+
+Before entering Phase 1 (new bug), or any resume that routes to Phases 2–4, check the current checkout:
+
+```bash
+current=$(git rev-parse --abbrev-ref HEAD)
+# integration = `Integration branch` from method.config.md (pk falls back to origin/dev, else origin/HEAD)
+```
+
+- `current` is the integration branch (and you're in the repo-root checkout, not a worktree) → **proceed.**
+- `current` is any other branch, or you are inside a `pk branch` worktree → **STOP.** Do not write the test here; it will not survive the Phase 4 handoff. Tell the user:
+  > `/pk-bug` Phases 1–4 must run from the `<integration>` checkout. You're on `<current>`. Return to the repo-root checkout (`cd <repo-root>` && `git switch <integration>`) and re-invoke, or finish/park the current branch first. (To resume a bug already past Phase 4, pass its `<ISSUE-ID>` — that routes straight into the worktree phases and skips this guard.)
+
+This guard does **not** apply to resume routing into Phases 5–8 — by then the worktree exists and running from inside it (`statusType=started`) is the correct location.
+
 ## Resume routing
 
 When invoked with an existing `<ISSUE-ID>`, query Linear and enter the phase below:
 
-Routing keys off Linear's `statusType` (not display name) so projects with custom statuses like `Parked` route correctly.
+Routing keys off Linear's `statusType` (not display name) so projects with custom statuses like `Parked` route correctly. **If the resolved phase is 1–4, run the Preflight checkout guard above first;** phases 5–8 skip it (the worktree already exists).
 
 | Linear state                                                            | Enter phase |
 |------------------------------------------------------------------------|-------------|
@@ -225,6 +242,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 
 | Rule | Enforcement |
 |------|-------------|
+| Phases 1–4 run only from the integration checkout | Preflight guard; STOP + redirect on any other branch/worktree |
 | No fix code before failing test exists | Phase 3 gate; Phase 4 commits test first |
 | Cannot repro → STOP | Phase 2 gate; mark `needs-info`, exit |
 | Linear is the source of truth | Resume always re-reads Linear, never local state |
