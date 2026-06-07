@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.8.0-rc2** — Last updated: 2026-06-07 14:30  *(no instruction-manual change — CI reviewer-trigger hardening (`synchronize` self-heal + workflow-validation 401 warning) and a `/pk-bug` checkout guard, both fixes/docs. Carries v2.8.0-rc1 `/financial-review` and the v2.7.0 final content pass: `/pk-express`; `/pr-fix` pluggable engine + historical finders; `/verify` migration self-review verdict; `pk branch` nested env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish; `/pipekit-update` Phase P; `/light-spec` configured `Spec ready state`)*
+**v2.8.0-rc3** — Last updated: 2026-06-07 16:00  *(no instruction-manual change — `/security-review` finding-stage coverage + adversarial verification pass (generalized from a downstream override). Carries v2.8.0-rc2 CI reviewer-trigger hardening + `/pk-bug` guard, rc1 `/financial-review`, and the v2.7.0 final content pass: `/pk-express`; `/pr-fix` pluggable engine + historical finders; `/verify` migration self-review verdict; `pk branch` nested env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish; `/pipekit-update` Phase P; `/light-spec` configured `Spec ready state`)*
 
 ---
 
