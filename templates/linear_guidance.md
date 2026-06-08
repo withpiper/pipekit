@@ -1,4 +1,4 @@
-# Linear Agent Guidance (v5)
+# Linear Agent Guidance (v5.2)
 
 ## Purpose
 
@@ -9,7 +9,7 @@ It is used to:
 - enforce quality before planning
 - provide audit trail for decisions
 
-VBW is the execution engine.
+Claude Code (`/work`) is the planning + execution engine — `native` on the Workflow primitive by default, `vbw` optional. This review is **upstream of backend dispatch** and executor-agnostic: review for planning safety, not for any one executor.
 
 ---
 
@@ -52,7 +52,9 @@ Do NOT over-optimise for completeness or prose polish.
 
 Pipeline:
 
-Feature → Spec → Review → VBW Plan → Execution
+Feature → Spec → Review → Plan → Execution
+
+(`/work` plans inline before executing, regardless of backend.)
 
 Specs are planning contracts, not execution plans.
 
@@ -92,4 +94,4 @@ Outputs must be:
 
 Bad specs should fail loudly.
 
-If VBW would guess -> Revise
+If the planner would guess -> Revise

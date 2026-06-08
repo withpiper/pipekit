@@ -47,6 +47,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
+- **Linear Agent Guidance → backend-agnostic (v5.2).** `templates/linear_guidance.md` (injected ahead of the Spec Review Agent) no longer names VBW as the execution engine. "VBW is the execution engine" → "Claude Code (`/work`) is the planning + execution engine, native default / vbw optional"; pipeline `… → VBW Plan → Execution` → `… → Plan → Execution` with an inline-planning note; "If VBW would guess → Revise" → "If the planner would guess → Revise". Review philosophy and gates unchanged.
 - **Spec Review Agent → backend-agnostic (v5.2).** `templates/spec_review_skill.md` no longer names VBW as the planning engine. The reviewer sits **upstream of backend dispatch** — the spec is reviewed before `/work` runs, and `/work` plans inline regardless of executor (`native` default, `vbw` optional) — so the executor is irrelevant to the review. Replaced every "VBW will/would …" with "the planner …" and added an explicit upstream-of-dispatch note. Gate logic (Problem/Scope/AC, Authority Rule, Decomposition Readiness) unchanged; native's task-DAG + atomic-commit-per-task model only sharpens the existing decomposition/testable-AC bar.
 
 ---
