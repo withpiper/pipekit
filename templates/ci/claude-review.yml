@@ -1,15 +1,38 @@
 # Claude PR Review — semantic outside reviewer on release-class PRs.
 #
+# ⚠️  DO NOT EDIT THIS WORKFLOW FILE ON A FEATURE BRANCH.
+#     anthropics/claude-code-action does a privileged app-token exchange that
+#     requires this file to be byte-identical to the version on the default
+#     branch. ANY change on a PR branch — even deleting a comment — makes the
+#     exchange fail with:
+#         "App token exchange failed: 401 Unauthorized - Workflow validation
+#          failed. The workflow file must exist and have identical content to
+#          the version on the repository's default branch."
+#     and the review job fails. (Note: `ANTHROPIC_API_KEY: empty` in the log is
+#     NORMAL under OAuth auth and is NOT the cause — look for the 401 above it.)
+#     This is a deliberate security guard: a PR must not be able to alter the
+#     reviewer that runs with the OAuth secret. To change this workflow, land
+#     the edit on the default branch first (its own PR), then rebase.
+#     Fix for an already-broken branch:
+#         git checkout origin/<default-branch> -- .github/workflows/<this-file>
+#     (Anchor: SiteLine POC-87, 2026-06-07 — a stripped header comment 401'd the
+#     review; first misread as a 1Password/secret failure.)
+#
 # Part of Pipekit's Path 3 reviewer model (v2.6.0): Claude is the
 # semantic outside reviewer; semgrep.yml is the deterministic one.
 # Empirically caught 2 must-fix bugs on Piper PR #331 (2026-05-18)
 # that Semgrep and Gemini both missed.
 #
-# Triggers: `opened` and `ready_for_review` only. Match the Pipekit
-# Draft-PR lifecycle (open as Draft via `pk ship` default, iterate
-# freely without firing reviews, `pk ready <ID>` flips to Ready at
-# the actual merge moment). Drops `synchronize` to avoid per-push
-# credit burn on iteration.
+# Triggers: `opened`, `ready_for_review`, and `synchronize`. The first
+# two match the Pipekit Draft-PR lifecycle (open as Draft via `pk ship`
+# default, iterate freely as a Draft without firing reviews, `pk ready
+# <ID>` flips to Ready at the merge moment). `synchronize` (every push to
+# a Ready PR) is included so a failed review — transient, or the 401
+# workflow-validation guard above — self-heals on the next push instead
+# of needing a Draft→Ready re-flip. Per-push credit burn is capped by the
+# `triage` skip-on-trivial job below (doc-only and <5-LOC pushes skip the
+# paid review). Draft PRs never fire regardless of event (the `draft ==
+# false` guard on `triage`), so Draft iteration stays free.
 #
 # Path filtering: ALL paths reviewed by default (PR #331 evidence
 # showed claude-review caught bugs in non-high-leverage paths that
@@ -20,7 +43,7 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, ready_for_review, synchronize]
     # Release-class branches only — match method.config.md `Ship environments`.
     branches:
       - main

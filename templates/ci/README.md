@@ -39,19 +39,46 @@ The list should mirror `method.config.md`'s `Ship environments` minus the first 
 
 `claude-review.yml` also requires the `CLAUDE_CODE_OAUTH_TOKEN` repo secret (Settings → Secrets and variables → Actions → New repository secret). Get the token via the Claude Code Action setup flow.
 
-## Trigger model — why `opened` + `ready_for_review` only
+## ⚠️ Never edit `claude-review.yml` on a feature branch
 
-Both templates trigger on:
+`anthropics/claude-code-action` performs a privileged app-token exchange that **requires the workflow file to be byte-identical to the version on the default branch.** Any change to it on a PR branch — including deleting a comment line — fails the exchange and the review job dies with:
+
+```
+App token exchange failed: 401 Unauthorized - Workflow validation failed.
+The workflow file must exist and have identical content to the version on
+the repository's default branch.
+```
+
+This is a deliberate security guard: a PR must not be able to alter the reviewer that runs with the OAuth secret, then have that altered version execute.
+
+**The log is misleading.** It prints `ANTHROPIC_API_KEY: empty` (normal under OAuth auth) just above the real 401. Don't chase it as a secrets/1Password failure — scan for `App token exchange failed`.
+
+**To change the workflow:** land the edit on the default branch first (its own PR), then rebase feature branches on top.
+
+**To fix an already-broken branch** (restore the file to match the default branch):
+
+```bash
+git checkout origin/<default-branch> -- .github/workflows/claude-code-review.yml
+git commit -m "ci: restore claude-review workflow to match default branch (fixes 401 app-token validation)"
+```
+
+Anchor: SiteLine POC-87, 2026-06-07 — a feature branch stripped the file's header comment; the review 401'd and was first misdiagnosed as a 1Password secret-load failure. The OAuth token had loaded fine.
+
+## Trigger model — `opened` + `ready_for_review` + `synchronize`
+
+`claude-review.yml` triggers on:
 
 ```yaml
 on:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, ready_for_review, synchronize]
 ```
 
-**No `synchronize`.** Every push to a Ready PR would otherwise fire the reviewer — wasteful on heavy-iteration PRs (Piper's WIT-463 was a 23-commit feature branch; 23 reviews × per-call cost = the problem). `synchronize` is exactly the wrong event to gate "outside review" on.
+**`opened` + `ready_for_review` are the merge-moment signals.** Combined with Pipekit's Draft-PR lifecycle below, the reviewer fires once at PR-open (if not Draft) and once when the user flips Draft → Ready (the "I'm done iterating, review it now" gesture). Draft PRs never fire — the `triage` job's `draft == false` guard keeps Draft iteration free.
 
-**`ready_for_review` is the merge-moment signal.** Combined with Pipekit's Draft-PR lifecycle below, the reviewer fires once at PR-open (if not Draft) and once when the user flips Draft → Ready (the "I'm done iterating, review it now" gesture).
+**`synchronize` (every push to a Ready PR) is included so failed reviews self-heal.** When a review fails — a transient error, or the 401 workflow-validation guard (see the warning above) — the next push re-runs it automatically, instead of forcing a Draft → Ready re-flip to re-trigger. The cost of every-push reviews is capped two ways: Draft PRs are exempt (iterate as a Draft, push freely, no reviews), and the **skip-on-trivial `triage` job** filters doc-only and <5-LOC pushes before the paid review runs.
+
+> **History:** `synchronize` was originally *omitted* (≤ v2.8.0) to avoid per-push credit burn — Piper's WIT-463 was a 23-commit branch where 23 reviews would have fired. It was added back once two facts converged: (1) the `triage` skip-on-trivial guard already absorbs the cheap-push noise, and (2) without `synchronize`, a failed review has no automatic re-trigger, which turned a one-line workflow-file mistake (SiteLine POC-87) into a Draft-dance to recover. The cost is genuinely modest for small teams; raise the `triage` LOC floor (5 → 50) if your push volume makes it add up.
 
 ## Draft-PR lifecycle (v2.6.0 #6)
 
