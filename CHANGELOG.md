@@ -51,6 +51,18 @@ _Nothing yet._
 
 ---
 
+## v3.0.0-rc1 — 2026-06-08
+
+**Pipekit 3.0 — native-on-Workflow becomes the default executor; VBW is now an optional backend.**
+
+- **`/work` defaults `Backend:` to `native`** when the config row is unset (was `vbw`). Native executes the inline plan on the Workflow primitive (task DAG in `.pk-work/<ID>-PLAN.md`, atomic commit per task, verify-before-integrate). Set `Backend: vbw` to opt into the VBW executor; `auto` still routes per plan complexity.
+- **Doc-drift fix:** corrected the long-standing claim that `Backend: vbw` runs the "full vbw-lead/dev/qa pipeline." It does **not** — `/work` plans inline in *every* backend and the `vbw` backend dispatches only the `vbw-dev` subagent (no `vbw-lead`/`vbw-qa`). The sole difference between backends is the executor. Fixed in `CLAUDE.md`, `method.md`, `method.config.template.md`, `skills/work/skill.md`.
+- **VBW reframed as optional, not removed.** Retained as a selectable backend; no deletion. `/work`, `/review-plan`, and the dispatch logic still support it.
+- **Justification:** the round-2 head-to-head on POC-48 (tier:heavy financial-parity, JS↔SQL to the cent) — the improved native executor (`feat/native-workflow-executor`: test-first + sequential-default) matched-or-beat VBW-the-full-system on first-pass correctness (native held parity both sides + tested non-zero in-cost; VBW's dev tried to loosen the parity AC and missed the IN-side fold) at **~1/5 wall-clock and a fraction of the tokens** — VBW exhausted ~a weekly token budget on one issue. The deep-analysis safety net is the gate layer (`/financial-review`, `/pr-security-review`), which **both backends run**. Framework + verdict: `experiments/poc-48-roundtwo/`.
+- **Known follow-up:** a few lower-traffic `method.md` references (ownership-model lines ~362/377/381, the §208 output note) still phrase `/work` as spawning `vbw-lead` — a deeper doc-accuracy pass tracked for a later rc.
+
+---
+
 ## v2.8.0-rc1 — 2026-06-06
 
 > **New capability: portable `/financial-review`.** A finance/calculation-accuracy review skill, generalized from SiteLine's project-specific version so any finance project (Piper, SiteLine, other users) gets it via the framework + checks-file split. Plus a sync-noise self-heal. Minor bump for the new skill; cut as a release candidate.

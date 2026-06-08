@@ -146,7 +146,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 
 | Key | Value | Default | Used by |
 |-----|-------|---------|---------|
-| **Backend** | `vbw` \| `native` \| `auto` | `vbw` | `/work` — chooses agent dispatch path. `auto` routes per plan complexity: ≤3 files + no migration → native, otherwise → vbw |
+| **Backend** | `vbw` \| `native` \| `auto` | `native` | `/work` — chooses the **executor** for the inline plan (`/work` plans inline in all backends). **`native` (default, v3.0)** executes on the Workflow primitive; `vbw` (optional) dispatches `vbw-dev`; `auto` routes per plan complexity: ≤3 files + no migration → native, otherwise → vbw. Omit the row to take the `native` default. |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
 | **Deploy command** | shell command | (none) | `pk done` — for **script-deploy** projects (deploy is a script, not branch promotion). Surfaced as a reminder after merge so "Done" can't be reached without a deploy ("merged ≠ deployed"). Advisory; never auto-run. Leave blank for branch-per-env projects that use `pk promote`. |

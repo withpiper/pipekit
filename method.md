@@ -1,6 +1,6 @@
 # Pipekit
 
-**v2.8.0-rc1** — Last updated: 2026-06-06 10:00  *(adds portable `/financial-review` to the tooling table — finance/calculation-accuracy review, framework + checks-file. Carries v2.7.1 `templates/ci/linear-transition.yml` and the v2.7.0 content pass: `/pk-express`, `/pr-fix` pluggable engine + historical finders, `/verify` migration self-review verdict, `pk done` rc5 finish, `/pipekit-update` Phase P, `pk doctor` false-ship check, `/light-spec` configured `Spec ready state`; rc2's stage-isolation reframe of Fresh-Chat Discipline)*
+**v3.0.0-rc1** — Last updated: 2026-06-08 04:30  *(Pipekit 3.0 — native-on-Workflow is the default executor; VBW is an optional backend. `/work` defaults `Backend:` to `native`; corrects the backend dispatch description — `/work` plans inline regardless of backend, the `vbw` backend dispatches only `vbw-dev` (no `vbw-lead`). Justified by the round-2 POC-48 head-to-head, see `experiments/poc-48-roundtwo/`. Carries v2.8.0-rc1 `/financial-review`, v2.7.x `/pk-express` + `/pr-fix` pluggable engine + merge-driven Linear transition)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -201,9 +201,10 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 
 - **`pk branch <ID>`** sets up the worktree + branch and transitions Linear to In Progress. Idempotent — rerun is safe.
 - **`/work <ID>`** does plan + execute in one skill, gated by a **verdict** (`proceed` / `revise: <feedback>` / `abort`) before any code is written. Tier (Quick / Standard / Heavy) is human-confirmed before the verdict step. Backend dispatch is per `method.config.md`:
-  - `Backend: vbw` → `/work` spawns `vbw-lead` (plan) and `vbw-dev` (execute) with `PLAN.md` as the contract.
-  - `Backend: native` → `/work` plans in your current Claude session (parallel `Agent` calls for grounding), writes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the **Workflow primitive** — one atomic commit per task with verify-before-integrate, run trail in `.pk-work/<ID>-SUMMARY.md`. Trivial plans run inline. Scope is the executor contract only (no UAT/known-issue/sprint state — that stays VBW's).
-- **`/review-plan`** *(vbw backend, optional)* spawns the `plan-reviewer` agent against `PLAN.md` between `vbw-lead`'s output and `vbw-dev`'s execution — independent stress-test of scope, atomicity, dependencies, success criteria, and risks.
+  `/work` **plans inline** (in your current Claude session, with parallel `Agent` grounding) regardless of backend; the backend selects only the **executor** for that plan:
+  - `Backend: native` (**default, v3.0**) → `/work` writes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the **Workflow primitive** — one atomic commit per task with verify-before-integrate, run trail in `.pk-work/<ID>-SUMMARY.md`. Trivial plans run inline. Scope is the executor contract only (no UAT/known-issue/sprint state — that stays VBW's).
+  - `Backend: vbw` (**optional**) → `/work` dispatches the `vbw-dev` subagent to execute the inline plan. Note: it does **not** spawn `vbw-lead` or `vbw-qa` — planning is `/work`'s inline step in both backends, so the only difference is the executor.
+- **`/review-plan`** *(optional)* spawns the `plan-reviewer` agent against the inline `PLAN.md` before execution — independent stress-test of scope, atomicity, dependencies, success criteria, and risks. (Most relevant on the `vbw` backend, where `/work` hands the plan to `vbw-dev` wholesale.)
 
 **Output:** Code committed against verify/done criteria (or `PLAN.md` + execution for the `vbw` backend)
 
