@@ -1,28 +1,30 @@
 # Pipekit
 
-**v2.7.0** — Last updated: 2026-06-05  *(v2.7.0 sync: adds the `/pk-express` express lane, names the `/pr-fix` and `/pr-security-review` enforcement gates, refreshes the versioning example)*
+**v3.0.0-rc2** — Last updated: 2026-06-09  *(Pipekit 3.0: native-on-Workflow is the default executor, VBW reframed as an optional backend. Rewrites the "wraps VBW" thesis + ownership split, fixes the VBW repo link, reframes the install step. Carries the v2.8.x substrate)*
 
-A structured AI-assisted software delivery system. Wraps [VBW](https://github.com/dnakov/claude-code-vbw) in a visibility and project management layer — from idea to production with quality gates at every stage.
+A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The default executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) remains an optional backend.
 
 ## What This Is (and Isn't)
 
-Pipekit **does not replace VBW**. VBW handles planning, execution, and QA. Pipekit adds structure around it:
+Pipekit is the **structure around an executor** — spec creation, independent review, human sign-off, quality gates, Linear visibility, and promotion. It is **not** itself a planner or code executor: it dispatches the build step to a configured backend and owns everything around it.
 
-| Layer | What Pipekit does | What VBW does |
-|-------|-------------------|---------------|
-| **Before** (steps 1-4) | Spec creation, agent review, human sign-off, gate checks | — |
-| **During** (steps 5-8) | — | **Plan, execute, QA — all VBW** |
-| **After** (steps 9-11) | UAT tracking, shipping, doc sync | — |
-| **Around** | Linear integration for cross-issue visibility | Tracks one phase at a time |
-| **Stage 0** | Project bootstrap (idea → roadmap) | Starts at "I have a task" |
+As of **3.0**, the default backend is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is now an **optional** backend, not a dependency — set `Backend: vbw` to dispatch the `vbw-dev` executor instead. Either way `/work` does the planning; the backend only changes who executes.
 
-VBW doesn't need the full project plan — it's designed for bounded scope. Pipekit makes sure the input going into VBW is clean and unambiguous, and tracks what comes out.
+| Stage | What Pipekit handles |
+|-------|----------------------|
+| **Stage 0** | Project bootstrap — idea → roadmap |
+| **Before** (steps 1–4) | Spec creation, agent review, human sign-off, gate checks |
+| **During** (steps 5–8) | `/work` (plan inline + execute) and `/verify` (pre-deploy gate) |
+| **After** (steps 9–13) | UAT tracking, shipping, promotion, doc sync |
+| **Around** | Linear for cross-issue visibility (VBW tracks one phase at a time) |
+
+The deep-analysis safety net is the **gate layer** — `/financial-review`, `/pr-security-review`, antagonistic PR review — which runs regardless of backend. The executor is not where correctness is enforced; the gates are. (Validated head-to-head on hard financial work: native matched VBW-the-full-system on first-pass correctness at a fraction of the wall-clock and tokens — see `CHANGELOG.md` v3.0.0-rc1.)
 
 ### Ownership split
 
 To avoid drift between the two systems, the boundaries are explicit:
 
-- **VBW owns the planning layer** — `.vbw-planning/ROADMAP.md`, `PLAN.md` files, and execution state. Pipekit reads these but does not overwrite them.
+- **VBW owns the `.vbw-planning/` directory** — `ROADMAP.md` (the roadmap, written at Stage 0) plus the `PLAN.md`/execution-state files the `vbw` backend produces. The native backend writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead. Pipekit reads these but does not overwrite them.
 - **Pipekit owns the visibility layer** — Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and `method.config.md`. VBW does not touch these. "What's next?" is read live from Linear via `pk next` (phase-aware as of v2.1.0); v2 retired the old `NEXT.md` mirror file.
 - **The merge happens once**, at `/roadmap-create`. Strategy-derived requirements are added **into** VBW's phase structure; VBW's phases, goals, and success criteria are preserved.
 - **Don't invoke VBW agents directly.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` dispatches to the configured backend (`vbw` or `native` per `method.config.md`) and keeps Linear and the `pk *` state machine in sync. Direct VBW invocation bypasses the visibility layer.
@@ -66,7 +68,7 @@ A bigger context window changes how much an agent can hold. It does not change w
 | 3 | Human Review | (Linear UI) | You sign off in Linear |
 | 4 | Find next | `pk next` | Phase-aware: groups by status from Linear + `PHASES.md` |
 | 5 | Branch | `pk branch <ID>` | Worktree + branch + Linear → In Progress |
-| 6 | **Work** | **`/work <ID>`** | **Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`.** |
+| 6 | **Work** | **`/work <ID>`** | **Plan inline + execute. Default backend is `native` (Workflow primitive); `vbw` optional per `method.config.md`.** |
 | 7 | **Verify** | **`/verify`** | **Pre-deploy gate (types + lint + test).** |
 | 8 | Ship | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` triggers antagonistic review. |
 | 8a | Flip to Ready | `pk ready [<ID>]` | (v2.6.0+) Flip Draft → Ready; fires outside reviewers (Semgrep + claude-review per `templates/ci/`). |
@@ -142,7 +144,7 @@ The sync script creates a `method.config.md` file in your project — this is wh
 
 Open Claude Code **in your project directory** and install the dependencies:
 
-**VBW** — the planning/execution engine that Pipekit wraps. Run these as two separate commands (don't paste them together):
+**VBW** — an optional execution backend. Pipekit's default executor is native-on-Workflow (built into Claude Code, nothing to install), but Stage 0's `/vbw:init` still uses VBW to scaffold the `.vbw-planning/` roadmap directory, and `Backend: vbw` stays available as a per-issue executor — so install it once during setup. Run these as two separate commands (don't paste them together):
 
 ```
 /plugin marketplace add yidakee/vibe-better-with-claude-code-vbw
@@ -285,7 +287,7 @@ pipekit/
 Tag releases when stable. Projects can pin to a specific version:
 
 ```bash
-./scripts/sync-method.sh v2.7.0   # or any tag listed in CHANGELOG.md
+./scripts/sync-method.sh v3.0.0-rc2   # or any tag listed in CHANGELOG.md
 ```
 
 Versioning is semver-ish — minor bumps for new capability, patch for fixes/docs only. Tags are created automatically on merge to `main` via `.github/workflows/auto-tag-release.yml` when the PR title contains a `vX.Y.Z` token.
