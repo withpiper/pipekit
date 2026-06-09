@@ -1,0 +1,5 @@
+feat(approvals): Approved stamp in internal version list
+feat(approvals): Approve action + approved stamp in client view
+feat(approvals): version label reads approval stamp from approved_at
+feat(approvals): approveSnapshot() data-layer call + approval select columns
+feat(approvals): DB contract for client sign-off on published versions

@@ -1,0 +1,645 @@
+diff --git a/src/app/js/database/snapshots.js b/src/app/js/database/snapshots.js
+index 4fab42ec..11411ca1 100644
+--- a/src/app/js/database/snapshots.js
++++ b/src/app/js/database/snapshots.js
+@@ -45,7 +45,7 @@ async function getProjectSnapshots(projectId) {
+     const { data, error } = await supabaseClient
+         .from('budget_snapshots')
+         .select(
+-            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency',
++            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency, approved_at, approved_by_contact_id, approval_note',
+         )
+         .eq('project_id', projectId)
+         .order('created_at', { ascending: false });
+@@ -169,7 +169,7 @@ async function createVersionedSnapshot(projectId, description = null, majorBump
+  */
+ async function getProjectVersions(projectId, includeArchived = false) {
+     const snapshotColumns =
+-        'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency';
++        'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency, approved_at, approved_by_contact_id, approval_note';
+     let query = supabaseClient
+         .from('budget_snapshots')
+         .select(snapshotColumns)
+@@ -447,7 +447,7 @@ async function getClientSnapshots(projectId) {
+     const { data, error } = await supabaseClient
+         .from('budget_snapshots')
+         .select(
+-            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency',
++            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency, approved_at, approved_by_contact_id, approval_note',
+         )
+         .eq('project_id', projectId)
+         .eq('is_snapshot', true)
+@@ -461,6 +461,27 @@ async function getClientSnapshots(projectId) {
+     return data || [];
+ }
+ 
++/**
++ * Record a client sign-off on a published budget version.
++ * Calls the gated approve_snapshot RPC (auth + project-access + one-time invariant
++ * are enforced server-side). UI gating is advisory only.
++ * @param {string} snapshotId - The published version (is_snapshot=true) to approve
++ * @param {string|null} note - Optional approval note
++ * @returns {Promise<object>} The updated budget_snapshots row
++ */
++async function approveSnapshot(snapshotId, note = null) {
++    const { data, error } = await supabaseClient.rpc('approve_snapshot', {
++        p_snapshot_id: snapshotId,
++        p_note: note,
++    });
++
++    if (error) {
++        console.error('Error approving snapshot:', error);
++        throw error;
++    }
++    return data;
++}
++
+ /**
+  * Update a version's settings (fee percentages, etc.)
+  * Only allows updating unlocked versions (working draft)
+@@ -549,4 +570,5 @@ window.unsnapshotVersion = unsnapshotVersion;
+ window.getVersionLineItems = getVersionLineItems;
+ window.getVersionData = getVersionData;
+ window.getClientSnapshots = getClientSnapshots;
++window.approveSnapshot = approveSnapshot;
+ window.updateVersion = updateVersion;
+diff --git a/src/app/js/pages/budget-edit-main.js b/src/app/js/pages/budget-edit-main.js
+index 753d00bb..c8d836ce 100644
+--- a/src/app/js/pages/budget-edit-main.js
++++ b/src/app/js/pages/budget-edit-main.js
+@@ -7942,6 +7942,14 @@ function renderVersionRow(version, liveVersionId) {
+     let statusTags = '';
+     if (isLive) statusTags += '<span class="status-tag live">LIVE</span>';
+     if (version.is_snapshot) statusTags += '<span class="status-tag snapshot">📸 Published</span>';
++    if (version.approved_at) {
++        const approvedDate = new Date(version.approved_at).toLocaleDateString('en-US', {
++            year: 'numeric',
++            month: 'short',
++            day: 'numeric',
++        });
++        statusTags += `<span class="status-tag approved">✓ Approved (${approvedDate})</span>`;
++    }
+     if (version.is_archived) statusTags += '<span class="status-tag archived">Archived</span>';
+ 
+     // Build action buttons
+diff --git a/src/app/js/utils/versions.js b/src/app/js/utils/versions.js
+index 61e9d7c2..af01b376 100644
+--- a/src/app/js/utils/versions.js
++++ b/src/app/js/utils/versions.js
+@@ -111,11 +111,11 @@ function isLiveVersion(version, allVersions) {
+  * @param {boolean} [options.isLive=false] - Whether this is the live version
+  * @param {boolean} [options.showDate=true] - Include date in label
+  * @param {boolean} [options.showNote=true] - Include snapshot note in label
+- * @returns {string} Formatted label (e.g., "v1.03 [LIVE] 📷 Client approved (Jan 15, 2026)")
++ * @returns {string} Formatted label (e.g., "v1.03 [LIVE] 📷 Approved (Jan 15, 2026)")
+  *
+  * @example
+- * formatVersionLabel({ version_major: 1, version_minor: 3, is_snapshot: true, description: 'Client approved', created_at: '2026-01-15' }, { isLive: true })
+- * // Returns: "v1.03 [LIVE] 📷 Client approved (Jan 15, 2026)"
++ * formatVersionLabel({ version_major: 1, version_minor: 3, is_snapshot: true, approved_at: '2026-01-15', created_at: '2026-01-10' }, { isLive: true })
++ * // Returns: "v1.03 [LIVE] 📷 Approved (Jan 15, 2026) (Jan 10, 2026)"
+  */
+ function formatVersionLabel(version, options = {}) {
+     const { isLive = false, showDate = true, showNote = true } = options;
+@@ -127,10 +127,23 @@ function formatVersionLabel(version, options = {}) {
+     const minor = version.version_minor || 0;
+     const versionStr = `v${major}.${String(minor).padStart(2, '0')}`;
+ 
++    const formatDate = (value) =>
++        new Date(value).toLocaleDateString('en-US', {
++            month: 'short',
++            day: 'numeric',
++            year: 'numeric',
++        });
++
+     // Build tags
+     const liveTag = isLive ? ' [LIVE]' : '';
+     const snapshotTag = version.is_snapshot ? ' 📷' : '';
+ 
++    // Approval stamp — sourced ONLY from the persisted approved_at field,
++    // never from description (which carries author notes).
++    const approvedTag = version.approved_at
++        ? ` Approved (${formatDate(version.approved_at)})`
++        : '';
++
+     // Include note/description if present (truncate at 30 chars for dropdown readability)
+     let noteStr = '';
+     if (showNote && version.description) {
+@@ -144,15 +157,10 @@ function formatVersionLabel(version, options = {}) {
+     // Format date
+     let dateStr = '';
+     if (showDate && version.created_at) {
+-        const date = new Date(version.created_at);
+-        dateStr = ` (${date.toLocaleDateString('en-US', {
+-            month: 'short',
+-            day: 'numeric',
+-            year: 'numeric',
+-        })})`;
++        dateStr = ` (${formatDate(version.created_at)})`;
+     }
+ 
+-    return `${versionStr}${liveTag}${snapshotTag}${noteStr}${dateStr}`;
++    return `${versionStr}${liveTag}${snapshotTag}${approvedTag}${noteStr}${dateStr}`;
+ }
+ 
+ /**
+diff --git a/src/app/project_detail.html b/src/app/project_detail.html
+index 498277e4..82a5cef0 100644
+--- a/src/app/project_detail.html
++++ b/src/app/project_detail.html
+@@ -311,6 +311,15 @@
+                 margin-left: 6px;
+                 font-weight: 600;
+             }
++            .approval-stamp {
++                display: inline-block;
++                background: var(--color-success, #2e7d32);
++                color: #fff;
++                padding: 2px 10px;
++                border-radius: 10px;
++                font-size: 11px;
++                font-weight: 600;
++            }
+ 
+             /* v0 style export buttons - outline with subtle icon colors */
+             .export-buttons {
+@@ -2202,6 +2211,70 @@
+     `;
+                 }
+ 
++                // Resolve the snapshot object currently selected in the client view.
++                function getSelectedSnapshot() {
++                    if (!Array.isArray(clientSnapshots) || clientSnapshots.length === 0) {
++                        return null;
++                    }
++                    if (currentSnapshotId) {
++                        return clientSnapshots.find((s) => s.id === currentSnapshotId) || null;
++                    }
++                    return clientSnapshots[0] || null;
++                }
++
++                // Render the Approve control for the selected published version.
++                // UX gating only — the DB is authoritative (approve_snapshot RPC).
++                // Show Approve only when: the selected version is a published snapshot,
++                // not yet approved, and the viewer is an authenticated contact (access
++                // already verified at page load ~L1532). Already-approved versions show
++                // a stamp; working drafts / no selection show nothing.
++                function renderApprovalControl() {
++                    const snap = getSelectedSnapshot();
++                    if (!snap || snap.is_snapshot !== true) return '';
++
++                    if (snap.approved_at) {
++                        const dateStr = formatSnapshotDate(snap.approved_at);
++                        return `<span class="approval-stamp">✓ Approved${dateStr ? ` (${dateStr})` : ''}</span>`;
++                    }
++
++                    if (!window.currentContact) return '';
++
++                    return `<button class="export-btn" onclick="approveCurrentSnapshot()">Approve</button>`;
++                }
++
++                // Record a client sign-off on the currently-selected published version.
++                window.approveCurrentSnapshot = async function () {
++                    const snap = getSelectedSnapshot();
++                    if (!snap || snap.is_snapshot !== true || snap.approved_at) return;
++
++                    const note = window.prompt('Optional note to include with your approval:', '');
++                    // prompt() returns null on Cancel — treat as "no note", still approve.
++                    const approvalNote = note && note.trim() ? note.trim() : null;
++
++                    const control = document.getElementById('approvalControl');
++
++                    try {
++                        const updated = await approveSnapshot(snap.id, approvalNote);
++
++                        // Update in-memory snapshot so re-render reflects approved state
++                        // without a full page reload.
++                        snap.approved_at =
++                            (updated && updated.approved_at) || new Date().toISOString();
++                        snap.approved_by_contact_id =
++                            (updated && updated.approved_by_contact_id) ||
++                            (window.currentContact && window.currentContact.id) ||
++                            null;
++                        snap.approval_note = updated ? updated.approval_note : approvalNote;
++
++                        if (control) control.innerHTML = renderApprovalControl();
++                    } catch (err) {
++                        console.error('Error approving version:', err);
++                        window.alert(
++                            'Could not record approval: ' + (err.message || 'unknown error'),
++                        );
++                    }
++                };
++
+                 // Switch to a different snapshot version
+                 window.switchSnapshot = async function (snapshotId, options = {}) {
+                     if (!snapshotId || snapshotId === currentSnapshotId) return;
+@@ -2271,6 +2344,8 @@
+           <div class="header-value">${escapeHtml(project.director) || '-'}</div>
+           <div class="header-label">Version:</div>
+           <div class="header-value">${renderVersionSelector()}</div>
++          <div class="header-label">Approval:</div>
++          <div class="header-value" id="approvalControl">${renderApprovalControl()}</div>
+         </div>
+         <div class="header-right">
+           <div class="company-name">${escapeHtml(entity.name)}</div>
+diff --git a/supabase/migrations/20260607180000_snapshot_client_approval.sql b/supabase/migrations/20260607180000_snapshot_client_approval.sql
+new file mode 100644
+index 00000000..8b4ee498
+--- /dev/null
++++ b/supabase/migrations/20260607180000_snapshot_client_approval.sql
+@@ -0,0 +1,150 @@
++-- POC-57: Client Approve action on a published budget version (single sign-off).
++-- Adds durable, attributable approval fields to budget_snapshots, a gated
++-- SECURITY DEFINER RPC for clients to record sign-off, and a notification
++-- trigger to alert the internal publisher.
++
++-- ============================================================================
++-- 1. Approval columns on budget_snapshots
++-- ============================================================================
++ALTER TABLE public.budget_snapshots
++    ADD COLUMN IF NOT EXISTS approved_at timestamptz,
++    ADD COLUMN IF NOT EXISTS approved_by_contact_id uuid,
++    ADD COLUMN IF NOT EXISTS approval_note text;
++
++DO $$
++BEGIN
++    IF NOT EXISTS (
++        SELECT 1 FROM pg_constraint
++        WHERE conname = 'budget_snapshots_approved_by_contact_id_fkey'
++    ) THEN
++        ALTER TABLE public.budget_snapshots
++            ADD CONSTRAINT budget_snapshots_approved_by_contact_id_fkey
++            FOREIGN KEY (approved_by_contact_id)
++            REFERENCES public.contacts(id);
++    END IF;
++END $$;
++
++-- ============================================================================
++-- 2. approve_snapshot RPC — gated client sign-off
++-- ============================================================================
++-- Why a SECURITY DEFINER RPC and not a permissive RLS UPDATE: the snapshots_update
++-- RLS policy gates on producer-only edit access, and RLS cannot column-scope an
++-- UPDATE. A permissive client UPDATE policy would let clients rewrite ANY snapshot
++-- column. This RPC enforces an explicit access gate and writes only the approval
++-- fields (cf. POC-87, which ADDED auth checks to SECURITY DEFINER version RPCs).
++CREATE OR REPLACE FUNCTION public.approve_snapshot(
++    p_snapshot_id uuid,
++    p_note text DEFAULT NULL
++)
++RETURNS public.budget_snapshots
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = 'public'
++AS $$
++DECLARE
++    v_contact  uuid;
++    v_snapshot public.budget_snapshots;
++    v_result   public.budget_snapshots;
++BEGIN
++    v_contact := get_current_contact_id();
++    IF v_contact IS NULL THEN
++        RAISE EXCEPTION 'not authenticated';
++    END IF;
++
++    SELECT * INTO v_snapshot
++    FROM public.budget_snapshots
++    WHERE id = p_snapshot_id;
++
++    IF NOT FOUND THEN
++        RAISE EXCEPTION 'snapshot not found';
++    END IF;
++
++    IF v_snapshot.is_snapshot IS NOT TRUE THEN
++        RAISE EXCEPTION 'not a published version';
++    END IF;
++
++    IF v_snapshot.approved_at IS NOT NULL THEN
++        RAISE EXCEPTION 'already approved';
++    END IF;
++
++    IF NOT user_has_project_access(v_snapshot.project_id) THEN
++        RAISE EXCEPTION 'no project access';
++    END IF;
++
++    UPDATE public.budget_snapshots
++    SET approved_at = now(),
++        approved_by_contact_id = v_contact,
++        approval_note = p_note
++    WHERE id = p_snapshot_id
++      AND approved_at IS NULL
++    RETURNING * INTO v_result;
++
++    RETURN v_result;
++END;
++$$;
++
++ALTER FUNCTION public.approve_snapshot(uuid, text) OWNER TO postgres;
++REVOKE ALL ON FUNCTION public.approve_snapshot(uuid, text) FROM public;
++GRANT EXECUTE ON FUNCTION public.approve_snapshot(uuid, text) TO authenticated;
++
++-- ============================================================================
++-- 3. Notify the internal publisher when a version is approved
++-- ============================================================================
++CREATE OR REPLACE FUNCTION public.notify_on_snapshot_approval()
++RETURNS TRIGGER
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = 'public'
++AS $$
++DECLARE
++    v_recipient    uuid;
++    v_approver_name text;
++BEGIN
++    -- Recipient: the internal publisher (snapshot_by), fallback created_by.
++    v_recipient := COALESCE(NEW.snapshot_by, NEW.created_by);
++
++    -- No publisher recorded -> nothing to notify.
++    IF v_recipient IS NULL THEN
++        RETURN NEW;
++    END IF;
++
++    -- Don't notify if the approver is also the publisher.
++    IF v_recipient = NEW.approved_by_contact_id THEN
++        RETURN NEW;
++    END IF;
++
++    SELECT name INTO v_approver_name
++    FROM public.contacts
++    WHERE id = NEW.approved_by_contact_id;
++
++    PERFORM enqueue_notification(
++        p_recipient_contact_id := v_recipient,
++        p_notification_type := 'mention',
++        p_entity_type := 'budget_snapshot',
++        p_entity_id := NEW.id,
++        p_project_id := NEW.project_id,
++        p_context := jsonb_build_object(
++            'sender_name', COALESCE(v_approver_name, 'A client'),
++            'comment_preview', 'approved version v' || COALESCE(NEW.version_major::text, '0') || '.' || COALESCE(NEW.version_minor::text, '0'),
++            'notification_subtype', 'snapshot_approval',
++            'snapshot_id', NEW.id
++        )
++    );
++
++    RETURN NEW;
++END;
++$$;
++
++ALTER FUNCTION public.notify_on_snapshot_approval() OWNER TO postgres;
++
++DROP TRIGGER IF EXISTS trg_notify_snapshot_approval ON public.budget_snapshots;
++CREATE TRIGGER trg_notify_snapshot_approval
++    AFTER UPDATE ON public.budget_snapshots
++    FOR EACH ROW
++    WHEN (OLD.approved_at IS NULL AND NEW.approved_at IS NOT NULL)
++    EXECUTE FUNCTION public.notify_on_snapshot_approval();
++
++-- ============================================================================
++-- 4. Reload PostgREST schema cache so the new columns/RPC are visible
++-- ============================================================================
++NOTIFY pgrst, 'reload schema';
+diff --git a/tests/rls/snapshot-approval-rpc.test.js b/tests/rls/snapshot-approval-rpc.test.js
+new file mode 100644
+index 00000000..124eedc3
+--- /dev/null
++++ b/tests/rls/snapshot-approval-rpc.test.js
+@@ -0,0 +1,188 @@
++// POC-57 — client snapshot approval RPC authorization + notification suite.
++//
++// approve_snapshot(p_snapshot_id, p_note) is a gated SECURITY DEFINER RPC that
++// records a single client sign-off (approved_at + approved_by_contact_id +
++// approval_note) on a PUBLISHED version (is_snapshot = true). Gates, in order:
++//   - not authenticated            -> RAISE 'not authenticated'
++//   - snapshot not found           -> RAISE 'snapshot not found'
++//   - is_snapshot != true          -> RAISE 'not a published version'
++//   - approved_at already set      -> RAISE 'already approved' (one-time invariant)
++//   - no project access            -> RAISE 'no project access'
++//
++// An AFTER UPDATE trigger (trg_notify_snapshot_approval) enqueues a notification
++// to the internal publisher (snapshot_by, fallback created_by) on approval.
++//
++// Fixtures: P_B (entity E2). Approver WITH access = `projectGranted` (project_contacts
++// read grant on P_B → user_has_project_access true). Attacker WITHOUT access =
++// `ungranted`. Publisher = `entityAdmin` contact (set as snapshot_by on the target
++// rows). Targets are dedicated snapshot rows under P_B created via the service-role
++// admin client so the shared fixture working draft stays pristine.
++//
++// Run: supabase start; export SUPABASE_URL/ANON/SERVICE from `supabase status -o
++// json`; npm run test:rls. If the local stack 502s after a reset, run
++// `supabase stop && supabase start` first.
++
++import { setupFixtures, teardownFixtures, clientFor, admin, fixtures } from './fixtures.mjs';
++
++let approver; // authed client for projectGranted (read grant on P_B → has access)
++let attacker; // authed client for ungranted (no access anywhere)
++
++const RANDOM_UUID = '00000000-0000-4000-8000-0000000000bb';
++
++// Create a throwaway snapshot row under a project. Defaults make a published
++// (is_snapshot=true) locked version not yet approved, with snapshot_by set to the
++// entityAdmin contact so it is a valid notification recipient.
++async function makeSnapshot(projectId, overrides = {}) {
++    const { data, error } = await admin
++        .from('budget_snapshots')
++        .insert({
++            project_id: projectId,
++            name: `poc57-${fixtures.runId}-${Math.random().toString(36).slice(2, 8)}`,
++            version_major: 7,
++            version_minor: 0,
++            is_locked: true,
++            is_snapshot: true,
++            is_archived: false,
++            snapshot_by: fixtures.users.entityAdmin.contactId,
++            ...overrides,
++        })
++        .select('id')
++        .single();
++    if (error) throw new Error(`makeSnapshot failed: ${error.message}`);
++    return data.id;
++}
++
++async function readSnapshot(id) {
++    const { data, error } = await admin
++        .from('budget_snapshots')
++        .select('id, is_snapshot, approved_at, approved_by_contact_id, approval_note')
++        .eq('id', id)
++        .maybeSingle();
++    if (error) throw new Error(`readSnapshot failed: ${error.message}`);
++    return data;
++}
++
++const createdSnapshots = [];
++async function trackSnapshot(id) {
++    createdSnapshots.push(id);
++    return id;
++}
++
++beforeAll(async () => {
++    await setupFixtures();
++    approver = await clientFor(fixtures.users.projectGranted);
++    attacker = await clientFor(fixtures.users.ungranted);
++}, 60000);
++
++afterAll(async () => {
++    for (const id of createdSnapshots) {
++        // Remove any notifications referencing this snapshot first, then the row.
++        await admin.from('notifications_queue').delete().eq('entity_id', id);
++        await admin.from('budget_snapshots').delete().eq('id', id);
++    }
++    await teardownFixtures();
++}, 60000);
++
++describe('approve_snapshot — authorization gates', () => {
++    test('contact WITH project access → succeeds, approval fields persist', async () => {
++        const snapId = await trackSnapshot(await makeSnapshot(fixtures.projects.P_B));
++        const { data, error } = await approver.rpc('approve_snapshot', {
++            p_snapshot_id: snapId,
++            p_note: 'Looks good, approved',
++        });
++        expect(error).toBeNull();
++        expect(data).toBeTruthy();
++
++        const row = await readSnapshot(snapId);
++        expect(row.approved_at).not.toBeNull();
++        expect(row.approved_by_contact_id).toBe(fixtures.users.projectGranted.contactId);
++        expect(row.approval_note).toBe('Looks good, approved');
++    });
++
++    test('contact WITHOUT project access → rejected, no approval field set', async () => {
++        const snapId = await trackSnapshot(await makeSnapshot(fixtures.projects.P_B));
++        const { error } = await attacker.rpc('approve_snapshot', { p_snapshot_id: snapId });
++        expect(error).not.toBeNull();
++        expect((error.message || '') + (error.details || '')).toMatch(/no project access/i);
++
++        const row = await readSnapshot(snapId);
++        expect(row.approved_at).toBeNull(); // mutation did not happen
++        expect(row.approved_by_contact_id).toBeNull();
++    });
++
++    test('working-draft (is_snapshot=false) → rejected', async () => {
++        const snapId = await trackSnapshot(
++            await makeSnapshot(fixtures.projects.P_B, { is_snapshot: false, is_locked: false }),
++        );
++        const { error } = await approver.rpc('approve_snapshot', { p_snapshot_id: snapId });
++        expect(error).not.toBeNull();
++        expect((error.message || '') + (error.details || '')).toMatch(/not a published version/i);
++
++        const row = await readSnapshot(snapId);
++        expect(row.approved_at).toBeNull();
++    });
++
++    test('already-approved version → rejected (one-time invariant)', async () => {
++        const snapId = await trackSnapshot(await makeSnapshot(fixtures.projects.P_B));
++        // First approval succeeds.
++        const first = await approver.rpc('approve_snapshot', { p_snapshot_id: snapId });
++        expect(first.error).toBeNull();
++        const firstRow = await readSnapshot(snapId);
++        const firstApprovedAt = firstRow.approved_at;
++        expect(firstApprovedAt).not.toBeNull();
++
++        // Second approval is rejected; the original approval is unchanged.
++        const second = await approver.rpc('approve_snapshot', { p_snapshot_id: snapId });
++        expect(second.error).not.toBeNull();
++        expect((second.error.message || '') + (second.error.details || '')).toMatch(
++            /already approved/i,
++        );
++        const secondRow = await readSnapshot(snapId);
++        expect(secondRow.approved_at).toBe(firstApprovedAt); // not overwritten
++    });
++
++    test('non-existent snapshot id → rejected (no silent success)', async () => {
++        const { error } = await approver.rpc('approve_snapshot', { p_snapshot_id: RANDOM_UUID });
++        expect(error).not.toBeNull();
++        expect((error.message || '') + (error.details || '')).toMatch(/snapshot not found/i);
++    });
++});
++
++describe('approve_snapshot — publisher notification', () => {
++    test('approving enqueues a notification targeting the publisher (snapshot_by)', async () => {
++        // Publisher = entityAdmin contact: it has access to P_B (E2 membership), which
++        // enqueue_notification requires of the RECIPIENT (POC-31 stripped god-mode, so
++        // siteproAdmin would be rejected here). The notification batching trigger
++        // merges unsent rows by recipient+type+project; the gate tests above already
++        // enqueued mention rows for entityAdmin, so clear any unsent ones first to
++        // guarantee a brand-new queue row keyed to this snapshot's entity_id.
++        const publisherContactId = fixtures.users.entityAdmin.contactId;
++        await admin
++            .from('notifications_queue')
++            .delete()
++            .eq('recipient_contact_id', publisherContactId)
++            .is('sent_at', null);
++
++        const snapId = await trackSnapshot(
++            await makeSnapshot(fixtures.projects.P_B, { snapshot_by: publisherContactId }),
++        );
++
++        const { error } = await approver.rpc('approve_snapshot', { p_snapshot_id: snapId });
++        expect(error).toBeNull();
++
++        // The trigger enqueues to the publisher (snapshot_by), referencing this
++        // project + snapshot.
++        const { data: notes, error: nErr } = await admin
++            .from('notifications_queue')
++            .select('recipient_contact_id, entity_type, entity_id, project_id, context')
++            .eq('entity_id', snapId)
++            .eq('entity_type', 'budget_snapshot');
++        expect(nErr).toBeNull();
++        expect(notes.length).toBeGreaterThan(0);
++
++        const note = notes[0];
++        expect(note.recipient_contact_id).toBe(publisherContactId);
++        expect(note.project_id).toBe(fixtures.projects.P_B);
++        expect(note.context.notification_subtype).toBe('snapshot_approval');
++    });
++});
+diff --git a/tests/versions.test.js b/tests/versions.test.js
+index 5515f814..25ed1527 100644
+--- a/tests/versions.test.js
++++ b/tests/versions.test.js
+@@ -35,6 +35,7 @@ const createVersion = (id, major, minor, opts = {}) => ({
+     is_snapshot: opts.is_snapshot || false,
+     description: opts.description || null,
+     created_at: opts.created_at || '2026-01-15T10:00:00Z',
++    approved_at: opts.approved_at || null,
+ });
+ 
+ describe('Version Sorting - sortVersionsDescending()', () => {
+@@ -303,6 +304,37 @@ describe('Version Label Formatting', () => {
+             const label = formatVersionLabel(version, { showDate: false });
+             expect(label).toBe('v1.00');
+         });
++
++        // POC-57: client approval stamp sourced from approved_at
++        test('renders Approved (date) stamp from approved_at', () => {
++            const version = createVersion('1', 1, 0, {
++                is_snapshot: true,
++                approved_at: '2026-02-20T09:00:00Z',
++            });
++            const label = formatVersionLabel(version, { showDate: false });
++            expect(label).toBe('v1.00 📷 Approved (Feb 20, 2026)');
++        });
++
++        test('omits Approved stamp when approved_at is null', () => {
++            const version = createVersion('1', 1, 0, { is_snapshot: true });
++            const label = formatVersionLabel(version, { showDate: false });
++            expect(label).not.toMatch(/Approved/);
++            expect(label).toBe('v1.00 📷');
++        });
++
++        test('approval stamp does NOT read description for the date', () => {
++            // description carries an author note that mentions approval, but the
++            // stamp must only appear when approved_at is set.
++            const version = createVersion('1', 1, 0, {
++                is_snapshot: true,
++                description: 'Approved by client verbally',
++                approved_at: null,
++            });
++            const label = formatVersionLabel(version, { showDate: false });
++            // The description still renders as a note, but no "Approved (date)" stamp.
++            expect(label).not.toMatch(/Approved \(/);
++            expect(label).toBe('v1.00 📷 Approved by client verbally');
++        });
+     });
+ 
+     describe('formatVersionLabels()', () => {
