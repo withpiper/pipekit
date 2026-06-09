@@ -360,13 +360,13 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 | File / System | Owned by | Writers | Readers |
 |---|---|---|---|
 | `.vbw-planning/ROADMAP.md` | VBW | `/vbw:init` creates it; `/roadmap-create` merges strategy-derived requirements **into** it (never overwrites) | All Pipekit skills, VBW agents |
-| `.vbw-planning/phases/*/PLAN.md` | VBW | `vbw-lead` agent (spawned by `/work` when `Backend: vbw`) | `/work`, `/review-plan`, `/phase-plan --status`, vbw-dev/vbw-qa agents |
+| `.vbw-planning/phases/*/PLAN.md` | VBW | `vbw-lead` (direct VBW use / `/vbw:vibe --plan`). **Pipekit's `/work` does not spawn `vbw-lead`** — it plans inline (native → `.pk-work/<ID>-PLAN.md`; vbw backend → hands the inline plan to `vbw-dev`) | `/work`, `/review-plan`, `/phase-plan --status`, `vbw-dev`/`vbw-qa` agents |
 | `.vbw-planning/.execution-state.json` | VBW | vbw-dev / vbw-qa agents | `/phase-plan --status` |
 | `.vbw-planning/linear-map.json` | Pipekit | `/roadmap-create`, `/sync-linear` | `pk next`, `pk *`, all Pipekit skills |
 | `.vbw-planning/PHASES.md` | Pipekit | `/phase-plan` | `pk next` (phase-aware), all Pipekit skills |
 | `notepad.md` (project root, gitignored) | Human | Whoever's typing | Whoever's reading. v2 retired the auto-written `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear instead. |
 | Linear issues | Pipekit | `/light-spec`, `pk branch`, `pk ship`, `pk done`, `/roadmap-create`, `/phase-plan` | Everyone |
-| `concept-brief.md`, `project-definition.md`, `Strategy/` | Pipekit | `/concept`, `/define`, `/strategy-create`, `/strategy-sync` | `/light-spec`, vbw-lead |
+| `concept-brief.md`, `project-definition.md`, `Strategy/` | Pipekit | `/concept`, `/define`, `/strategy-create`, `/strategy-sync` | `/light-spec`, `/work` (inline planning) |
 | `method.config.md` | Pipekit | `/startup` (populates); human (edits) | All Pipekit skills, `bin/pk` |
 
 ### Rules of Engagement
@@ -375,11 +375,11 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 2. **Pipekit owns the visibility layer.** Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and project config are Pipekit's. VBW does not write to these. (v2 retired the `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear.)
 3. **Initial merge happens once** — at `/roadmap-create`. Strategy-derived requirements are added **into** VBW's existing phase structure. VBW's phases, goals, and success criteria are preserved verbatim.
 4. **After the merge, the split is one-way.** Pipekit reads VBW state (plan progress, execution state) to update Linear. VBW does not read Linear — its source of truth is its own files.
-5. **Pipekit owns gates; VBW owns build.** `pk branch` opens Linear → In Progress; `/work` (with `Backend: vbw`) dispatches `vbw-lead` and `vbw-dev`; `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT (PR open on preview); `pk done` verifies merge, transitions Linear UAT → `In <FirstEnv>` (e.g. `In Dev`), cleans up the worktree; `pk promote <env>` walks `Ship environments` one hop at a time and transitions issues → `In <Env>` (intermediate) or → Done (final). The plan-review gate (Pipekit's value-add over raw VBW) lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent at `model: opus` between `vbw-lead`'s plan and `vbw-dev`'s execution.
+5. **Pipekit owns gates; VBW owns build.** `pk branch` opens Linear → In Progress; `/work` (with `Backend: vbw`) dispatches the `vbw-dev` executor (planning is `/work`'s inline step — no `vbw-lead`); `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT (PR open on preview); `pk done` verifies merge, transitions Linear UAT → `In <FirstEnv>` (e.g. `In Dev`), cleans up the worktree; `pk promote <env>` walks `Ship environments` one hop at a time and transitions issues → `In <Env>` (intermediate) or → Done (final). The plan-review gate (Pipekit's value-add over raw VBW) lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent at `model: opus` between `/work`'s inline plan and `vbw-dev`'s execution.
 
    **Pipekit's VBW-steering surface:**
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Not a VBW agent; Pipekit-shipped.
-   2. **`/work` dispatches VBW agents (vbw backend) or runs in-context (native backend).** Backend choice is per-project in `method.config.md`; per-invocation override via `--backend=`.
+   2. **`/work` dispatches the `vbw-dev` agent (vbw backend) or runs in-context (native backend).** Backend choice is per-project in `method.config.md`; per-invocation override via `--backend=`.
    3. **Read-only state observation** — `.vbw-planning/{ROADMAP,STATE,PHASES,linear-map}.md` reads from `/sync-linear`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/10-strategy-sync`, `pk next`, `pk status`.
    4. **One lifecycle hook** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive`, writes a `pending-strategy-sync` marker into Pipekit's machine-local state directory.
    5. **Pipekit-side ephemeral state** lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds the `pending-strategy-sync` marker and per-issue pipeline-state records consumed by `pk *` commands. Out-of-repo by design — v1.6.0 placed these at `.pipekit/`, but VBW's file-guard hook silently blocked writes during active-plan scope (#13). The relocation made writes succeed unconditionally.
@@ -463,7 +463,7 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts. v2.7.0+: **false-ship cross-check** — flags UAT/Done WITs with no real commits on the integration branch (git evidence). |
 | `/pipekit-help` | Read project state, recommend the next pipeline step. |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into the project (`--push` round-trips improvements back). v2.7.0 **Phase P** also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |
-| `/review-plan {phase-slug}` | Run plan-reviewer agent against PLAN.md (vbw backend). Run between vbw-lead's plan and vbw-dev's execution. |
+| `/review-plan {phase-slug}` | Run plan-reviewer agent against the inline `PLAN.md` before execution. Most relevant on the `vbw` backend, where `/work` hands the plan to `vbw-dev` wholesale. |
 | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
 | `/strategy-sync` | Post-pipeline: update Strategy docs to reflect shipped features |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human edit. |
