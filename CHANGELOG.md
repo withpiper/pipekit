@@ -52,6 +52,14 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v3.0.0-rc2 — (in progress, unreleased)
+
+Accumulating bug-workflow fixes surfaced by rc1 production runs (SiteLine POC family). Version stamps bump at release.
+
+- **`/pk-bug` branches early — Phases 3+ run in the worktree, off the shared integration checkout.** Previously Phases 1–4 were *main-anchored*: intake → reproduce → diagnose → the failing test were authored uncommitted on the integration checkout, then a Phase-4 "worktree handoff" did `pk branch` + `git stash`-apply to move the test into the worktree. That occupied the shared `main` working tree through test-authoring and collided with other agents working there. Now: **Phase 2 cuts the worktree the moment the bug reproduces** (`pk branch` off `origin/<integration>`), and diagnosis + the failing test + the fix all run inside it — the test is committed test-first in the worktree (Phase 4), so the fragile stash-handoff and orphaned-on-`main` risk are gone. Reproduce stays on the integration checkout (read-mostly) so an unreproducible bug never spends a worktree. Restructured: Preflight guard (now "don't nest worktrees" instead of "must stay on main"), resume-routing table + heuristics (worktree/test-commit detected earlier), Phases 2–4, and the Invariants table. (Surfaced 2026-06-08: `/pk-bug` on `main` blocked concurrent SiteLine agents.)
+
+---
+
 ## v3.0.0-rc1 — 2026-06-08
 
 **Pipekit 3.0 — native-on-Workflow becomes the default executor; VBW is now an optional backend.**
