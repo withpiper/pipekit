@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v2.8.0-rc3** — Last updated: 2026-06-07 16:00  *(no instruction-manual change — `/security-review` finding-stage coverage + adversarial verification pass (generalized from a downstream override). Carries v2.8.0-rc2 CI reviewer-trigger hardening + `/pk-bug` guard, rc1 `/financial-review`, and the v2.7.0 final content pass: `/pk-express`; `/pr-fix` pluggable engine + historical finders; `/verify` migration self-review verdict; `pk branch` nested env symlinks; `pk doctor` false-ship cross-check; `pk done` rc5 finish; `/pipekit-update` Phase P; `/light-spec` configured `Spec ready state`)*
+**v3.0.0-rc2** — Last updated: 2026-06-09  *(Pipekit 3.0: reframes the VBW Integration section + the `/vbw:init`, Building-state, and enforcement-layer descriptions around native-on-Workflow as the default executor with VBW as an optional backend; drops the misleading "VBW QA" row (the `vbw` backend only spawns `vbw-dev`). Carries the v2.8.x substrate + the v2.7.0 content pass)*
 
 ---
 
@@ -342,7 +342,7 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
 **Input:** —
 **Output:** `.vbw-planning/` directory scaffold
 
-VBW (Vibe-Based Workflow) is the planning and execution engine. `/vbw:init` creates the directory structure that VBW uses to track roadmap, state, plans, and execution.
+VBW is an optional execution backend — as of 3.0 the default executor is native-on-Workflow — but `/vbw:init` still scaffolds the `.vbw-planning/` directory Pipekit uses to track the roadmap and state (and, when the `vbw` backend runs, its plans and execution). The directory is created here regardless of which backend you execute with, because the roadmap lives in it.
 
 This step is simple — run `/vbw:init` and it scaffolds:
 ```
@@ -887,7 +887,7 @@ Both `/strategy-create` and `/strategy-sync` read this table. Add or remove rows
 
 ## The Linear Model
 
-Linear is the view layer. VBW is the planning engine. They share data but serve different purposes.
+Linear is the view layer. The executor (`/work`, native by default) plans and builds. They share data but serve different purposes.
 
 ### Hierarchy
 
@@ -914,7 +914,7 @@ Terminal:
 `[In <Env> →]*` is one state per non-final env in `Ship environments`. For 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. For 2-tier (`dev,main`): `In Dev → Done`. State maps 1:1 to environment: `UAT` = PR open on preview branch; `In Dev` = merged to dev; `In Beta` = promoted to beta; `Done` = on the final env.
 
 **Key distinction:**
-- **Building** = VBW owns it. Phase-batched, planned work.
+- **Building** = automated execution owns it (`/work`, native or vbw backend). Phase-batched, planned work.
 - **In Progress** = You're doing it manually. Ad-hoc, outside the phase.
 
 ### Phase Management via Status
@@ -953,19 +953,18 @@ Terminal:
 
 ---
 
-## VBW Integration
+## VBW Integration (optional backend)
 
-VBW (Vibe-Based Workflow) is the planning and execution engine. Here's where its tools appear in the pipeline:
+As of 3.0 the default executor is **native-on-Workflow** — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. VBW is an **optional backend** you opt into with `Backend: vbw`. The `.vbw-planning/` scaffold and the roadmap are used regardless of backend; the rest only appears when you actually run the `vbw` backend.
 
-| Pipeline Stage | VBW Tool | Purpose |
-|---------------|----------|---------|
-| Stage 0.5 | `/vbw:init` | Scaffold `.vbw-planning/` |
-| Stage 0.6 | `/roadmap-create` writes to `.vbw-planning/ROADMAP.md` | Populate roadmap |
-| Stage 0.7 (optional) | `/vbw:discuss` | Discuss first phase before speccing |
-| Stage 2 | VBW Lead Agent | Generate PLAN.md from spec |
-| Stage 3 | VBW Dev Agent | Execute tasks with atomic commits |
-| Stage 3 | VBW QA Agent | Verify against acceptance criteria |
-| Anytime | `/vbw:status` | Project progress dashboard |
+| Pipeline Stage | Tool | Used when | Purpose |
+|---------------|------|-----------|---------|
+| Stage 0.5 | `/vbw:init` | Always | Scaffold `.vbw-planning/` |
+| Stage 0.6 | `/roadmap-create` writes to `.vbw-planning/ROADMAP.md` | Always | Populate roadmap |
+| Stage 0.7 (optional) | `/vbw:discuss` | Optional | Discuss first phase before speccing |
+| Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — **native and vbw both plan here; `/work` has no separate "VBW Lead" step** |
+| Stage 3 (execute) | `vbw-dev` agent | `Backend: vbw` only | Execute tasks with atomic commits (native executes on the Workflow primitive instead) |
+| Anytime | `/vbw:status` | If VBW installed | Project progress dashboard |
 
 ### VBW Agent Roster
 
@@ -979,6 +978,8 @@ VBW (Vibe-Based Workflow) is the planning and execution engine. Here's where its
 | Docs | Documentation generation |
 | Scout | Research and codebase scanning |
 
+> **In Pipekit, `/work` with `Backend: vbw` only dispatches the Dev agent.** Lead, QA, Architect, and the rest run only under direct `/vbw:*` invocation — which Pipekit advises against (it bypasses the visibility layer). In every backend, planning is `/work`'s inline step and verification is the `/verify` gate plus the antagonistic review gates, not a VBW QA pass.
+
 ### Keeping VBW Updated
 
 When `/work` runs with `Backend: native` (plan + execute in-context; task DAG and run trail land in gitignored `.pk-work/`, not `.vbw-planning/`), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
@@ -991,11 +992,11 @@ The method uses three layers to enforce conventions. Each layer serves a differe
 
 | Layer | Purpose | Who Reads It | When |
 |-------|---------|-------------|------|
-| **CLAUDE.md** | Documents conventions | VBW agents during execution | Every agent session |
+| **CLAUDE.md** | Documents conventions | The executor (native or VBW) during execution | Every agent session |
 | **CI / Hooks** | Hard enforcement — blocks merges | Everyone (agents and humans) | Every PR |
 | **Skills** | Interactive shortcuts | You, in hands-on sessions | When you invoke them |
 
-**Skills are convenience wrappers.** They automate the same conventions documented in CLAUDE.md. VBW agents don't call skills — they read CLAUDE.md and write code directly.
+**Skills are convenience wrappers.** They automate the same conventions documented in CLAUDE.md. Executor agents (native or VBW) don't call skills — they read CLAUDE.md and write code directly.
 
 **CLAUDE.md is the single document** that agents read to understand the project. Build it up as the project grows:
 
