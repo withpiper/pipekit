@@ -36,22 +36,22 @@ Read `method.config.md` for:
 - Pre-deploy gate commands
 - Backend (`vbw` or `native`) — passed through to `/work`
 
-## Preflight — checkout guard  *(applies to Phases 1–4 only)*
+## Preflight — checkout guard  *(applies to Phases 1–2 only)*
 
-Phases 1–4 are **main-anchored**: intake, reproduce, diagnose, and the failing regression test are authored on the integration-branch checkout (`main` or the configured integration branch), with the test left *uncommitted* until `pk branch` cuts the worktree in Phase 4. Phase 4's `pk branch <ID>` always cuts the worktree off `origin/<integration>` (see `bin/pk`) — so a test written on **any other branch is orphaned**, not carried into the new worktree. Running these phases from a feature branch or an existing `pk branch` worktree silently breaks the handoff.
+Phases 1–2 (intake + reproduce) run from the **repo-root integration-branch checkout** (`main` or the configured integration branch). The moment Phase 2 reproduces the bug, `pk branch <ID>` cuts an isolated worktree off `origin/<integration>` (see `bin/pk`) and **every phase from 3 on runs inside that worktree** — so diagnosis, the failing test, and the fix never touch the shared integration checkout and never collide with other agents working there. (Reproduce is read-mostly; the working-tree writes that used to sit on `main` — the test file especially — now land in the worktree, committed test-first.)
 
-Before entering Phase 1 (new bug), or any resume that routes to Phases 2–4, check the current checkout:
+Before entering Phase 1 (new bug), or any resume that routes to Phase 2, check the current checkout:
 
 ```bash
 current=$(git rev-parse --abbrev-ref HEAD)
 # integration = `Integration branch` from method.config.md (pk falls back to origin/dev, else origin/HEAD)
 ```
 
-- `current` is the integration branch (and you're in the repo-root checkout, not a worktree) → **proceed.**
-- `current` is any other branch, or you are inside a `pk branch` worktree → **STOP.** Do not write the test here; it will not survive the Phase 4 handoff. Tell the user:
-  > `/pk-bug` Phases 1–4 must run from the `<integration>` checkout. You're on `<current>`. Return to the repo-root checkout (`cd <repo-root>` && `git switch <integration>`) and re-invoke, or finish/park the current branch first. (To resume a bug already past Phase 4, pass its `<ISSUE-ID>` — that routes straight into the worktree phases and skips this guard.)
+- You're in the repo-root checkout (not inside another `pk branch` worktree) → **proceed.** Phase 2 cuts this bug's worktree for you once it reproduces; `pk branch` bases off `origin/<integration>` regardless of which local branch you're on, so the baseline is always current integration HEAD.
+- You're inside an existing `pk branch` worktree → **STOP** (running a new bug's intake/reproduce here would nest worktrees). Tell the user:
+  > `/pk-bug` intake + reproduce should run from the repo-root checkout, not inside the `<other>` worktree — Phase 2 cuts this bug's own worktree once it reproduces. `cd <repo-root>` and re-invoke, or finish/park the current worktree first. (To resume a bug already past Phase 2, pass its `<ISSUE-ID>` — that routes straight into its worktree.)
 
-This guard does **not** apply to resume routing into Phases 5–8 — by then the worktree exists and running from inside it (`statusType=started`) is the correct location.
+This guard does **not** apply to resume routing into Phases 3–8 — by then the worktree exists and running from inside it (`statusType=started`) is the correct location.
 
 ## Resume routing
 
@@ -62,20 +62,21 @@ Routing keys off Linear's `statusType` (not display name) so projects with custo
 | Linear state                                                            | Enter phase |
 |------------------------------------------------------------------------|-------------|
 | Issue not yet created                                                   | 1 — Intake |
-| `statusType=backlog`, no "Reproduced:" comment                          | 2 — Reproduce |
-| `statusType=backlog` + "Reproduced:" comment, no test file              | 3 — Diagnose + Test |
-| Test file exists, no branch                                             | 4 — Worktree handoff |
-| `statusType=started` (e.g. In Progress)                                 | 5 — Fix + Ship |
+| `statusType=backlog`, no "Reproduced:" comment                          | 2 — Reproduce (cuts the worktree on success) |
+| `statusType=started`, worktree exists, **no** `test(<ID>)` commit in branch | 3 — Diagnose + Test |
+| `statusType=started`, `test(<ID>)` commit exists, no fix commit          | 4 — Commit/confirm test-first, then 5 — Fix |
 | `statusType=started` + PR open (or status named UAT/Review)             | 6 — PR review + merge to dev |
 | Merged to dev, not on main                                              | 7 — Promote dev → main |
 | `statusType=completed`, no postmortem comment (priority ≤ Medium = 3)   | 8 — Postmortem |
 | `statusType=completed`, postmortem present                              | report complete, exit |
 
 Heuristics for state detection:
-- "Reproduced" = Linear comment starting with `Reproduced:` (you write this in Phase 2)
-- "Test file exists" = grep the issue body for `## Regression Test` section filled in
-- "Branch exists" = `git branch --list <ISSUE-ID>` returns a result
+- "Reproduced" = Linear comment starting with `Reproduced:` (you write this in Phase 2, just before cutting the worktree)
+- "Worktree exists" = `git worktree list` shows a `<ISSUE-ID>` worktree (cut in Phase 2)
+- "Test commit exists" = from inside that worktree, `git log --oneline` shows a `test(<ISSUE-ID>):` commit
 - "Postmortem present" = Linear comment containing `# Postmortem` heading
+
+For resume into Phases 3–8, `cd` into the existing `<ISSUE-ID>` worktree first (that's where the branch's work lives).
 
 ---
 
@@ -116,14 +117,19 @@ Heuristics for state detection:
      - Method: <Playwright | curl | manual>
      - Artifact: <screenshot path | log snippet | n/a>
      ```
-     Advance to Phase 3.
-   - **Cannot reproduce** → Linear status to `Triage` or label `needs-info`, comment with everything tried. **STOP. Do not guess-fix.** Inform user, exit.
+     Then **cut the worktree and move into it immediately** — every phase from here runs in isolation, off the shared integration checkout:
+     ```bash
+     pk branch <ISSUE-ID>     # creates worktree + branch off origin/<integration>, Linear → In Progress
+     cd <worktree-path>       # pk prints the path; all of Phase 3+ runs here
+     ```
+     Advance to Phase 3 (inside the worktree).
+   - **Cannot reproduce** → Linear status to `Triage` or label `needs-info`, comment with everything tried. **STOP. Do not guess-fix.** Inform user, exit. (No worktree was cut — you're still on the integration checkout, nothing to clean up.)
 
 ---
 
 ## Phase 3 — Diagnose + Failing Regression Test  *(GATE)*
 
-**Goal:** find root cause AND write a test that fails because the bug exists. **Done on `main` branch — test file is uncommitted.**
+**Goal:** find root cause AND write a test that fails because the bug exists. **Done inside the worktree** (cut in Phase 2) — the test file is written here and committed test-first in Phase 4.
 
 ### 3a — Diagnose
 
@@ -172,22 +178,18 @@ Append test path to Linear issue body under `## Regression Test`.
 
 ---
 
-## Phase 4 — Worktree handoff
+## Phase 4 — Commit the failing test  *(test-first audit trail)*
 
-**Goal:** move from main into an isolated worktree, with the test as the first commit.
+**Goal:** land the failing test as the first commit, before any fix. The worktree already exists (cut in Phase 2), so this is just the commit — no branch handoff, no stash.
 
-1. Run `pk branch <ISSUE-ID>`
-   - Creates worktree, branch, sets Linear → `In Progress`
-2. `cd` into the worktree
-3. Move the test file from main into the worktree (or recreate — usually a git stash + apply)
-4. Commit ONLY the test:
+1. Commit ONLY the test (from inside the worktree):
    ```
    git add <test-path>
    git commit -m "test(<ISSUE-ID>): add failing regression test for <one-liner>"
    ```
-5. Verify: `git log --oneline` shows the test commit. Run the test from the worktree — must still fail.
+2. Verify: `git log --oneline` shows the `test(<ISSUE-ID>)` commit as the latest, and re-running the test still **fails** (the fix hasn't been written yet).
 
-This commit is the audit trail. Anyone reading `git log` later sees the test landed before the fix.
+This commit is the audit trail. Anyone reading `git log` later sees the test landed before the fix — and because the test was authored in the worktree from the start, there's no orphaned-on-main / stash-handoff risk.
 
 ---
 
@@ -242,13 +244,13 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 
 | Rule | Enforcement |
 |------|-------------|
-| Phases 1–4 run only from the integration checkout | Preflight guard; STOP + redirect on any other branch/worktree |
-| No fix code before failing test exists | Phase 3 gate; Phase 4 commits test first |
-| Cannot repro → STOP | Phase 2 gate; mark `needs-info`, exit |
+| Phases 1–2 run from the integration checkout; Phases 3–8 run in the worktree | Preflight guard (STOP if invoked inside another worktree); Phase 2 cuts the worktree on repro |
+| No fix code before failing test exists | Phase 3 writes the test; Phase 4 commits it test-first, before any fix |
+| Cannot repro → STOP | Phase 2 gate; mark `needs-info`, exit (no worktree cut) |
 | Linear is the source of truth | Resume always re-reads Linear, never local state |
 | Postmortem mandatory for priority 1–3 | Phase 8; reviewer sign-off if Urgent |
 | Urgent → solo promote | Phase 7 |
-| Test commit lands before fix commit | Phase 4 step 4 |
+| Test commit lands before fix commit | Phase 4 commits the test; Phase 5 writes the fix |
 
 ## Failure modes to avoid
 

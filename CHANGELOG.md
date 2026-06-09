@@ -47,6 +47,15 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
+_Nothing yet._
+
+---
+
+## v3.0.0-rc2 — 2026-06-09
+
+Bug-workflow and review-layer fixes surfaced by rc1 production runs (SiteLine POC family). Carries v3.0.0-rc1 (native-on-Workflow as the default executor; VBW optional).
+
+- **`/pk-bug` branches early — Phases 3+ run in the worktree, off the shared integration checkout.** Previously Phases 1–4 were *main-anchored*: intake → reproduce → diagnose → the failing test were authored uncommitted on the integration checkout, then a Phase-4 "worktree handoff" did `pk branch` + `git stash`-apply to move the test into the worktree. That occupied the shared `main` working tree through test-authoring and collided with other agents working there. Now: **Phase 2 cuts the worktree the moment the bug reproduces** (`pk branch` off `origin/<integration>`), and diagnosis + the failing test + the fix all run inside it — the test is committed test-first in the worktree (Phase 4), so the fragile stash-handoff and orphaned-on-`main` risk are gone. Reproduce stays on the integration checkout (read-mostly) so an unreproducible bug never spends a worktree. Restructured: Preflight guard (now "don't nest worktrees" instead of "must stay on main"), resume-routing table + heuristics (worktree/test-commit detected earlier), Phases 2–4, and the Invariants table. (Surfaced 2026-06-08: `/pk-bug` on `main` blocked concurrent SiteLine agents.)
 - **Linear Agent Guidance → backend-agnostic (v5.2).** `templates/linear_guidance.md` (injected ahead of the Spec Review Agent) no longer names VBW as the execution engine. "VBW is the execution engine" → "Claude Code (`/work`) is the planning + execution engine, native default / vbw optional"; pipeline `… → VBW Plan → Execution` → `… → Plan → Execution` with an inline-planning note; "If VBW would guess → Revise" → "If the planner would guess → Revise". Review philosophy and gates unchanged.
 - **Spec Review Agent → backend-agnostic (v5.2).** `templates/spec_review_skill.md` no longer names VBW as the planning engine. The reviewer sits **upstream of backend dispatch** — the spec is reviewed before `/work` runs, and `/work` plans inline regardless of executor (`native` default, `vbw` optional) — so the executor is irrelevant to the review. Replaced every "VBW will/would …" with "the planner …" and added an explicit upstream-of-dispatch note. Gate logic (Problem/Scope/AC, Authority Rule, Decomposition Readiness) unchanged; native's task-DAG + atomic-commit-per-task model only sharpens the existing decomposition/testable-AC bar.
 
