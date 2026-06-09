@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="3.0.0-rc2"
+PK_VERSION="3.0.0-rc3"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
