@@ -51,6 +51,16 @@ _Nothing yet._
 
 ---
 
+## v3.0.0-rc3 — 2026-06-09
+
+Doc-accuracy follow-up + experiment evidence. **No behavior change** — closes the doc-drift rc1 explicitly deferred, folds the same fix into `/review-plan`, and lands the POC-57 verdict. Carries v3.0.0-rc1/rc2.
+
+- **`method.md` ownership model — scrubbed the last stale `/work`-spawns-`vbw-lead` references** rc1 named as a known follow-up. The Ownership table (PLAN.md-writer + Strategy-docs-reader rows), Rule 5, the VBW-steering-surface list, and the `/review-plan` tooling row still phrased `/work` as dispatching `vbw-lead`. Corrected to match 3.0's dispatch model (already-correct in the Stage 2 text): `/work` plans **inline** in every backend; the `vbw` backend dispatches **only** `vbw-dev`; `vbw-lead` appears only in direct VBW use.
+- **`/review-plan` skill — same scrub.** The skill claimed `/work` (vbw backend) "spawns `vbw-lead` to produce `PLAN.md`." Corrected the provenance framing (the plan is `/work`'s inline output on the vbw backend, or VBW's planner in direct VBW use) and clarified *why* the skill is most relevant on the `vbw` backend (the whole plan is handed to `vbw-dev` wholesale, no per-task gate) while `native` needs it less (per-task verify-before-integrate is its own plan-safety gate). Mechanics (file paths, `/vbw:vibe` next-steps) unchanged — the skill is legitimately VBW-oriented.
+- **POC-57 native-vs-vbw blind verdict committed** (`experiments/poc-57-backend-ab/`). A blind-judged, reality-grounded A/B on a tier:standard SiteLine feature (client Approve action). Result is a **split** (single pilot rep): native got the architecture right (plain RLS, no SECDEF — matched what shipped) but under-tested it and shipped a forgeable timestamp; vbw was tested + server-bound but violated a DEFINED no-SECDEF decision. **Reinforces the gate-layer-as-safety-net thesis rather than crowning a backend** — and flags native's recurring test-authoring gap, which the gates (run by both backends) exist to backstop. Directional, not co-equal with the POC-48 round-two justification.
+
+---
+
 ## v3.0.0-rc2 — 2026-06-09
 
 Bug-workflow and review-layer fixes surfaced by rc1 production runs (SiteLine POC family). Carries v3.0.0-rc1 (native-on-Workflow as the default executor; VBW optional).
