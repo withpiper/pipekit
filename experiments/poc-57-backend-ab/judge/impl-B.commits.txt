@@ -1,0 +1,6 @@
+test(approval): unit + RLS coverage for client snapshot approval (POC-57)
+feat(client-view): Approve button + approval stamp on published versions (POC-57)
+feat(budget-edit): surface approval columns in internal version lists (POC-57)
+feat(versions): render Approved (date) stamp from approved_at in formatVersionLabel (POC-57)
+feat(snapshots): approveSnapshot client and approval columns in getClientSnapshots (POC-57)
+feat(db): client snapshot approval RPC + notification trigger (POC-57)

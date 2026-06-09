@@ -1,0 +1,433 @@
+diff --git a/src/app/js/database/snapshots.js b/src/app/js/database/snapshots.js
+index 4fab42ec..9ea37c1e 100644
+--- a/src/app/js/database/snapshots.js
++++ b/src/app/js/database/snapshots.js
+@@ -45,7 +45,7 @@ async function getProjectSnapshots(projectId) {
+     const { data, error } = await supabaseClient
+         .from('budget_snapshots')
+         .select(
+-            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency',
++            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency, approved_at, approved_by_contact_id, approval_note',
+         )
+         .eq('project_id', projectId)
+         .order('created_at', { ascending: false });
+@@ -169,7 +169,7 @@ async function createVersionedSnapshot(projectId, description = null, majorBump
+  */
+ async function getProjectVersions(projectId, includeArchived = false) {
+     const snapshotColumns =
+-        'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency';
++        'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency, approved_at, approved_by_contact_id, approval_note';
+     let query = supabaseClient
+         .from('budget_snapshots')
+         .select(snapshotColumns)
+@@ -447,7 +447,7 @@ async function getClientSnapshots(projectId) {
+     const { data, error } = await supabaseClient
+         .from('budget_snapshots')
+         .select(
+-            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency',
++            'id, project_id, name, description, created_by, created_at, production_fee_pct, production_fee_on_subtotal, contingency_pct, version_major, version_minor, is_locked, is_snapshot, is_archived, currency, approved_at, approved_by_contact_id, approval_note',
+         )
+         .eq('project_id', projectId)
+         .eq('is_snapshot', true)
+@@ -526,6 +526,49 @@ async function updateVersion(snapshotId, updates) {
+     return data;
+ }
+ 
++/**
++ * Record a client sign-off on a published version (POC-57).
++ *
++ * Plain RLS-guarded write: the snapshots_approve_update policy plus the
++ * column-scope guard trigger enforce project access, published-only, write-once,
++ * and approver-is-caller at the DB layer. The client-side filters here are UX
++ * only (a stale/duplicate click resolves to a thrown "no row" rather than a
++ * silent no-op). Approval notification to the publisher fires server-side via
++ * the AFTER-UPDATE trigger.
++ *
++ * @param {string} snapshotId - The published version to approve
++ * @param {string|null} [note] - Optional approval note
++ * @returns {Promise<object>} The updated snapshot row (approval fields populated)
++ * @throws if the write is rejected (no access / already approved / not published)
++ */
++async function approveSnapshot(snapshotId, note = null) {
++    const contact = await getCurrentContact();
++    if (!contact) {
++        throw new Error('You must be signed in to approve a version.');
++    }
++
++    const { data, error } = await supabaseClient
++        .from('budget_snapshots')
++        .update({
++            approved_at: new Date().toISOString(),
++            approved_by_contact_id: contact.id,
++            approval_note: note,
++        })
++        .eq('id', snapshotId)
++        .eq('is_snapshot', true)
++        .is('approved_at', null)
++        .select(
++            'id, project_id, name, created_by, snapshot_by, version_major, version_minor, is_snapshot, approved_at, approved_by_contact_id, approval_note',
++        )
++        .single();
++
++    if (error) {
++        console.error('Error approving version:', error);
++        throw error;
++    }
++    return data;
++}
++
+ // ============================================
+ // EXPORT TO WINDOW (backward compatibility)
+ // ============================================
+@@ -550,3 +593,4 @@ window.getVersionLineItems = getVersionLineItems;
+ window.getVersionData = getVersionData;
+ window.getClientSnapshots = getClientSnapshots;
+ window.updateVersion = updateVersion;
++window.approveSnapshot = approveSnapshot;
+diff --git a/src/app/js/pages/budget-edit-main.js b/src/app/js/pages/budget-edit-main.js
+index 753d00bb..af22c212 100644
+--- a/src/app/js/pages/budget-edit-main.js
++++ b/src/app/js/pages/budget-edit-main.js
+@@ -7943,6 +7943,15 @@ function renderVersionRow(version, liveVersionId) {
+     if (isLive) statusTags += '<span class="status-tag live">LIVE</span>';
+     if (version.is_snapshot) statusTags += '<span class="status-tag snapshot">📸 Published</span>';
+     if (version.is_archived) statusTags += '<span class="status-tag archived">Archived</span>';
++    // POC-57: approval stamp sourced from the persisted field, not description.
++    if (version.approved_at) {
++        const approvedStr = new Date(version.approved_at).toLocaleDateString('en-US', {
++            year: 'numeric',
++            month: 'short',
++            day: 'numeric',
++        });
++        statusTags += `<span class="status-tag" style="background:#2e7d32;color:#fff;">✅ Approved (${approvedStr})</span>`;
++    }
+ 
+     // Build action buttons
+     let actions = '';
+diff --git a/src/app/js/utils/versions.js b/src/app/js/utils/versions.js
+index 61e9d7c2..3d777673 100644
+--- a/src/app/js/utils/versions.js
++++ b/src/app/js/utils/versions.js
+@@ -111,11 +111,11 @@ function isLiveVersion(version, allVersions) {
+  * @param {boolean} [options.isLive=false] - Whether this is the live version
+  * @param {boolean} [options.showDate=true] - Include date in label
+  * @param {boolean} [options.showNote=true] - Include snapshot note in label
+- * @returns {string} Formatted label (e.g., "v1.03 [LIVE] 📷 Client approved (Jan 15, 2026)")
++ * @returns {string} Formatted label (e.g., "v1.03 [LIVE] 📷 ✅ Approved (Jan 15, 2026)")
+  *
+  * @example
+- * formatVersionLabel({ version_major: 1, version_minor: 3, is_snapshot: true, description: 'Client approved', created_at: '2026-01-15' }, { isLive: true })
+- * // Returns: "v1.03 [LIVE] 📷 Client approved (Jan 15, 2026)"
++ * formatVersionLabel({ version_major: 1, version_minor: 3, is_snapshot: true, approved_at: '2026-01-15', created_at: '2026-01-10' }, { isLive: true })
++ * // Returns: "v1.03 [LIVE] 📷 ✅ Approved (Jan 15, 2026) (Jan 10, 2026)"
+  */
+ function formatVersionLabel(version, options = {}) {
+     const { isLive = false, showDate = true, showNote = true } = options;
+@@ -141,6 +141,18 @@ function formatVersionLabel(version, options = {}) {
+         noteStr = ` ${desc}`;
+     }
+ 
++    // Approval stamp — sourced from the persisted approval field (POC-57),
++    // never from `description` free text.
++    let approvalStr = '';
++    if (version.approved_at) {
++        const approvedDate = new Date(version.approved_at);
++        approvalStr = ` ✅ Approved (${approvedDate.toLocaleDateString('en-US', {
++            month: 'short',
++            day: 'numeric',
++            year: 'numeric',
++        })})`;
++    }
++
+     // Format date
+     let dateStr = '';
+     if (showDate && version.created_at) {
+@@ -152,7 +164,7 @@ function formatVersionLabel(version, options = {}) {
+         })})`;
+     }
+ 
+-    return `${versionStr}${liveTag}${snapshotTag}${noteStr}${dateStr}`;
++    return `${versionStr}${liveTag}${snapshotTag}${noteStr}${approvalStr}${dateStr}`;
+ }
+ 
+ /**
+diff --git a/src/app/project_detail.html b/src/app/project_detail.html
+index 498277e4..01756a6f 100644
+--- a/src/app/project_detail.html
++++ b/src/app/project_detail.html
+@@ -312,6 +312,33 @@
+                 font-weight: 600;
+             }
+ 
++            /* POC-57: client approval control */
++            .approve-btn {
++                margin-left: 10px;
++                padding: 4px 14px;
++                border: 1px solid var(--color-success, #2e7d32);
++                background: var(--color-success, #2e7d32);
++                color: #fff;
++                border-radius: 6px;
++                font-size: 12px;
++                font-weight: 600;
++                cursor: pointer;
++            }
++            .approve-btn:hover {
++                opacity: 0.9;
++            }
++            .approve-btn:disabled {
++                opacity: 0.6;
++                cursor: default;
++            }
++            .approval-stamp {
++                display: inline-block;
++                margin-left: 10px;
++                color: var(--color-success, #2e7d32);
++                font-size: 12px;
++                font-weight: 600;
++            }
++
+             /* v0 style export buttons - outline with subtle icon colors */
+             .export-buttons {
+                 display: flex;
+@@ -2202,6 +2229,56 @@
+     `;
+                 }
+ 
++                // POC-57: the currently selected published version object.
++                function getCurrentSnapshot() {
++                    if (!clientSnapshots || clientSnapshots.length === 0) return null;
++                    return (
++                        clientSnapshots.find((s) => s.id === currentSnapshotId) ||
++                        clientSnapshots[0]
++                    );
++                }
++
++                // POC-57: Approve action / "Approved (date)" stamp for the client view.
++                // Visibility is UX only — the DB (RLS + guard trigger) is authoritative.
++                function renderApprovalControl() {
++                    const snap = getCurrentSnapshot();
++                    if (!snap || !snap.is_snapshot) return '';
++
++                    if (snap.approved_at) {
++                        const approvedDate = new Date(
++                            snap.approved_at,
++                        ).toLocaleDateString('en-US', {
++                            month: 'short',
++                            day: 'numeric',
++                            year: 'numeric',
++                        });
++                        return `<span class="approval-stamp">✅ Approved (${approvedDate})</span>`;
++                    }
++
++                    return `<button class="approve-btn" onclick="window.approveVersion('${snap.id}')">Approve</button>`;
++                }
++
++                // POC-57: record the sign-off, then re-render the approved state
++                // (loadBudget re-fetches clientSnapshots with approved_at) — no full reload.
++                window.approveVersion = async function (snapshotId) {
++                    const btn = document.querySelector('.approve-btn');
++                    if (btn) {
++                        btn.disabled = true;
++                        btn.textContent = 'Approving…';
++                    }
++                    try {
++                        await approveSnapshot(snapshotId);
++                        await loadBudget();
++                    } catch (err) {
++                        console.error('Approval failed:', err);
++                        alert('Could not record approval. Please try again.');
++                        if (btn) {
++                            btn.disabled = false;
++                            btn.textContent = 'Approve';
++                        }
++                    }
++                };
++
+                 // Switch to a different snapshot version
+                 window.switchSnapshot = async function (snapshotId, options = {}) {
+                     if (!snapshotId || snapshotId === currentSnapshotId) return;
+@@ -2270,7 +2347,7 @@
+           <div class="header-label">Account Director:</div>
+           <div class="header-value">${escapeHtml(project.director) || '-'}</div>
+           <div class="header-label">Version:</div>
+-          <div class="header-value">${renderVersionSelector()}</div>
++          <div class="header-value">${renderVersionSelector()}${renderApprovalControl()}</div>
+         </div>
+         <div class="header-right">
+           <div class="company-name">${escapeHtml(entity.name)}</div>
+diff --git a/supabase/migrations/20260607180000_client_approval_on_published_version.sql b/supabase/migrations/20260607180000_client_approval_on_published_version.sql
+new file mode 100644
+index 00000000..38ca8e44
+--- /dev/null
++++ b/supabase/migrations/20260607180000_client_approval_on_published_version.sql
+@@ -0,0 +1,170 @@
++-- POC-57: MVP client Approve action on a published version (single sign-off).
++--
++-- Records a durable, attributable client sign-off directly on the published
++-- budget_snapshots row (who + when + optional note), one per published version.
++--
++-- Write authorization is a PLAIN RLS-guarded UPDATE (no SECURITY DEFINER bypass,
++-- deliberately avoiding the POC-87 footgun). Because `authenticated` holds a
++-- table-wide UPDATE grant on budget_snapshots, an RLS policy alone cannot
++-- restrict WHICH columns a client may change -- so a BEFORE-UPDATE guard trigger
++-- confines non-editor (client) writers to the three approval columns, binds the
++-- approver to the caller, and enforces the one-time/published-only invariant.
++--
++-- The scaffolded notify_on_approval_* functions (migration 20260213142825)
++-- reference never-created approvals/approval_steps tables -- this migration does
++-- NOT depend on them; it adds its own AFTER-UPDATE notification trigger.
++--
++-- Idempotent per the frozen-file invariant.
++
++-- 1. Approval columns (nullable; absence = not yet approved) ------------------
++
++ALTER TABLE public.budget_snapshots
++    ADD COLUMN IF NOT EXISTS approved_at timestamptz,
++    ADD COLUMN IF NOT EXISTS approved_by_contact_id uuid,
++    ADD COLUMN IF NOT EXISTS approval_note text;
++
++DO $$
++BEGIN
++    IF NOT EXISTS (
++        SELECT 1 FROM pg_constraint
++        WHERE conname = 'budget_snapshots_approved_by_contact_id_fkey'
++    ) THEN
++        ALTER TABLE public.budget_snapshots
++            ADD CONSTRAINT budget_snapshots_approved_by_contact_id_fkey
++            FOREIGN KEY (approved_by_contact_id) REFERENCES public.contacts(id);
++    END IF;
++END $$;
++
++COMMENT ON COLUMN public.budget_snapshots.approved_at IS
++    'POC-57: client sign-off timestamp on a published version. NULL = not yet approved. One-time (write-once via guard trigger).';
++COMMENT ON COLUMN public.budget_snapshots.approved_by_contact_id IS
++    'POC-57: contact who recorded the approval. Bound to the authenticated caller by the column-scope guard trigger.';
++COMMENT ON COLUMN public.budget_snapshots.approval_note IS
++    'POC-57: optional free-text note captured with the client approval.';
++
++-- 2. RLS: allow a project-access contact to approve an unapproved published ---
++--    version. Permissive, OR'd with snapshots_update (which covers editors).
++
++DROP POLICY IF EXISTS "snapshots_approve_update" ON public.budget_snapshots;
++CREATE POLICY "snapshots_approve_update" ON public.budget_snapshots
++    FOR UPDATE
++    USING (
++        public.user_has_project_access(project_id)
++        AND is_snapshot = true
++        AND approved_at IS NULL
++    )
++    WITH CHECK (
++        public.user_has_project_access(project_id)
++        AND is_snapshot = true
++    );
++
++-- 3. Column-scope guard: confine non-editor writers to the approval columns ---
++--    and enforce the published-only / one-time / approver-is-caller invariants.
++
++CREATE OR REPLACE FUNCTION public.enforce_snapshot_approval_column_scope()
++RETURNS trigger
++LANGUAGE plpgsql
++SECURITY INVOKER
++SET search_path = 'public'
++AS $$
++DECLARE
++    v_caller_contact_id uuid;
++BEGIN
++    -- Service-role / internal (no auth context) and project editors/admins are
++    -- unrestricted -- this guard only tightens the client approval path.
++    IF auth.uid() IS NULL THEN
++        RETURN NEW;
++    END IF;
++    IF public.is_current_user_sitepro_admin()
++       OR public.user_can_edit_project(NEW.project_id) THEN
++        RETURN NEW;
++    END IF;
++
++    -- Client path: only the three approval columns may differ.
++    IF (to_jsonb(OLD) - 'approved_at' - 'approved_by_contact_id' - 'approval_note')
++       IS DISTINCT FROM
++       (to_jsonb(NEW) - 'approved_at' - 'approved_by_contact_id' - 'approval_note') THEN
++        RAISE EXCEPTION 'Only approval fields may be modified on a published version by a client';
++    END IF;
++
++    -- Published-only, write-once sign-off.
++    IF NOT OLD.is_snapshot THEN
++        RAISE EXCEPTION 'Approval is only allowed on a published version';
++    END IF;
++    IF OLD.approved_at IS NOT NULL THEN
++        RAISE EXCEPTION 'This version has already been approved';
++    END IF;
++    IF NEW.approved_at IS NULL THEN
++        RAISE EXCEPTION 'Approval requires approved_at to be set';
++    END IF;
++
++    -- Attributable: the approver must be the authenticated caller's own contact.
++    SELECT id INTO v_caller_contact_id
++    FROM public.contacts
++    WHERE auth_user_id = auth.uid();
++    IF NEW.approved_by_contact_id IS DISTINCT FROM v_caller_contact_id THEN
++        RAISE EXCEPTION 'Approver must be the authenticated contact';
++    END IF;
++
++    RETURN NEW;
++END;
++$$;
++
++DROP TRIGGER IF EXISTS trg_enforce_snapshot_approval_column_scope ON public.budget_snapshots;
++CREATE TRIGGER trg_enforce_snapshot_approval_column_scope
++    BEFORE UPDATE ON public.budget_snapshots
++    FOR EACH ROW
++    EXECUTE FUNCTION public.enforce_snapshot_approval_column_scope();
++
++-- 4. Notify the version publisher on approval (best-effort; never aborts the --
++--    sign-off). Recipient = snapshot_by, falling back to created_by.
++
++CREATE OR REPLACE FUNCTION public.notify_on_version_approval()
++RETURNS trigger
++LANGUAGE plpgsql
++SECURITY INVOKER
++SET search_path = 'public'
++AS $$
++DECLARE
++    v_recipient uuid;
++BEGIN
++    -- Fire only on the transition into the approved state.
++    IF NEW.approved_at IS NOT NULL AND OLD.approved_at IS NULL THEN
++        v_recipient := COALESCE(NEW.snapshot_by, NEW.created_by);
++
++        -- Skip if there is no notifiable publisher, or the approver is the publisher.
++        IF v_recipient IS NOT NULL
++           AND v_recipient IS DISTINCT FROM NEW.approved_by_contact_id THEN
++            BEGIN
++                PERFORM public.enqueue_notification(
++                    v_recipient,
++                    'approval_complete',
++                    'approval',
++                    NEW.id,
++                    NEW.project_id,
++                    jsonb_build_object(
++                        'snapshot_id', NEW.id,
++                        'version_major', NEW.version_major,
++                        'version_minor', NEW.version_minor,
++                        'approved_by_contact_id', NEW.approved_by_contact_id
++                    )
++                );
++            EXCEPTION WHEN OTHERS THEN
++                -- Notification is secondary to the durable sign-off; log loudly
++                -- but do not roll back the approval.
++                RAISE WARNING 'notify_on_version_approval: enqueue failed for snapshot %: %', NEW.id, SQLERRM;
++            END;
++        END IF;
++    END IF;
++    RETURN NEW;
++END;
++$$;
++
++DROP TRIGGER IF EXISTS trg_notify_on_version_approval ON public.budget_snapshots;
++CREATE TRIGGER trg_notify_on_version_approval
++    AFTER UPDATE ON public.budget_snapshots
++    FOR EACH ROW
++    EXECUTE FUNCTION public.notify_on_version_approval();
++
++-- 5. Refresh PostgREST schema cache so the new columns are queryable. ---------
++NOTIFY pgrst, 'reload schema';
