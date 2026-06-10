@@ -225,6 +225,18 @@ Portable skills are maintained in the method repo and synced into projects via `
 
 To update: `./scripts/sync-method.sh [tag]`
 
+### Declaring project-specific skills (`pipekit/.local-skills`)
+
+The sync flags any `.claude/skills/` entry that doesn't exist upstream — it can't otherwise tell a project's own skill from a portable skill that upstream removed or renamed. Declare your project-specific skills in a committed manifest, one name per line (`#` comments allowed):
+
+```
+# pipekit/.local-skills — skills that are ours by design
+g-deploy
+reset-user
+```
+
+Declared skills are listed under "Project-local" in the sync changelog; undeclared ones are flagged "Not in upstream (undeclared)" with the exact command to declare them. If a flagged skill *isn't* yours, upstream removed or renamed it — check the method repo's CHANGELOG and `archive/` before deleting.
+
 ---
 
 ## Next-Step Nudges (Opt-In Stop Hook)
