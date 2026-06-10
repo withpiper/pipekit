@@ -2123,10 +2123,13 @@ NOTEPAD
   elif [ -f "$gi" ]; then
     echo "  ✓ .gitignore already excludes notepad.md"
   fi
-  # If a stale NEXT.md is hanging around, flag it (don't auto-delete — user's call)
+  # NEXT.md may be the retired v1 machine-mirror OR a legitimate hand-curated
+  # roadmap (first-class optional artifact as of v3.1.0). Can't tell from
+  # here — print the distinction, never auto-delete.
   if [ -f "$root/NEXT.md" ]; then
-    echo "  ⚠ NEXT.md present — v1 artifact, retired in v2. Consider removing:"
-    echo "      git rm NEXT.md  &&  git commit -m 'chore: retire NEXT.md (use pk next)'"
+    echo "  • NEXT.md present — fine if it's your hand-curated roadmap (human-owned,"
+    echo "    narrative only; see method.md § ownership). The v1 auto-written mirror"
+    echo "    is retired — 'what's next?' is always: pk next"
   fi
 
   echo ""
