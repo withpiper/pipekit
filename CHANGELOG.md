@@ -51,6 +51,19 @@ _Nothing yet._
 
 ---
 
+## v3.1.0 — 2026-06-10
+
+> **Distribution-layer hardening.** A top-to-bottom system review (pipekit ↔ Piper ↔ SiteLine, 2026-06-10) found the method itself healthy but the distribution layer under-protected: `bin/pk` had zero test coverage and its bugs were being found by consumers in production; the sync flagged every project-local skill as "possibly removed" on every run; a consumer could fall releases behind with no signal anywhere; and doctrine still ordered the deletion of a curated roadmap file consumers demonstrably want. This release closes all four.
+
+- **`bin/pk` smoke suite + CI gate** (`tests/pk-smoke.sh`, `.github/workflows/pk-smoke.yml`) — 23 zero-dependency tests (bash 3.2+, git, jq; no bats). CLI tests run pk in a throwaway git repo with a `gh` shim on PATH that logs every invocation, so tests can assert pk *never reached for GitHub*. Covers: config parsing (code-block + legacy table + precedence), dispatch, the per-subcommand `--help` regression, promote guard rails (target resolution/rejection, single-tier no-op), ship preflight, doctor staleness. Out of smoke scope (deliberate): migration-drift heuristic, Linear API paths, worktree lifecycle.
+- **fix(pk): `-h`/`--help` after any subcommand prints usage instead of executing.** Subcommand arg loops swallowed unknown flags, so `pk ship --help` actually shipped and `pk next --help` queried Linear (SiteLine, 2026-06-04). A global dispatcher guard intercepts exact `-h`/`--help` args before dispatch; quoted free-text args containing "--help" (e.g. `pk delegate`) don't trip it. Test-first: the 7 regression tests failed before the fix.
+- **`pipekit/.local-skills` manifest** — the sync flagged every project-local skill "Possibly Removed/Renamed" on every run (the old check's `grep -qv` against the multi-line skill list was always true, and its `.sync-changelog.md` history fallback became transient when v2.8.0-rc1 gitignored that file). Projects now declare local-by-design skills in a committed manifest (one name per line, `#` comments); declared skills report under "Project-local", undeclared ones flag "Not in upstream (undeclared)" with the exact declare command. Documented in `Skills_SOP.md`. Both consumers seeded (SiteLine #284 — 8 skills; Piper #449 — 9 skills, with the retired-v1 `/end-session` deliberately left undeclared so it keeps flagging).
+- **`pk doctor` upstream-staleness check** — compares the synced `PK_VERSION` against the method repo's latest `vX.Y.Z` tag (`git ls-remote`; `Method repo` config key / `METHOD_REPO` env overridable). Behind → warning with the exact update command; unreachable repo → info line only (doctor works offline); rc tags don't count as "latest". Motivation: a consumer checkout sat a full release behind through the 2.8/3.0 cycle with no signal.
+- **Curated visual roadmap re-legitimized** (`method.md` header note + ownership table, `pk init` message, `Skills_SOP.md`). v2's NEXT.md retirement over-rotated: it correctly killed the v1 machine-readable mirror but also ordered deletion of the hand-curated visual roadmap consumers actually keep (SiteLine maintains one against doctrine). The two are different artifacts. Doctrine now: a committed human-owned `NEXT.md`/`ROADMAP.md` (phases, themes, standing backlogs) is a first-class *optional* artifact under two rules — skills/agents never write it and never read it as operational state; "what's next?" is always `pk next`. `pk init`'s warning prints the distinction instead of recommending `git rm`.
+- **Release-checklist note:** the v3.0.0 unconditional constitutional-stamp rule applied here — `method.md`/`RUNBOOK.md`/`GUIDE.md` all re-checked and stamped v3.1.0.
+
+---
+
 ## v3.0.0 — 2026-06-10
 
 **Pipekit 3.0 — native-on-Workflow is the default executor; VBW is an optional backend.** Final cut of the rc1–rc3 cycle. The rc tree ships as-is; final adds only the last documentation carry-overs. The 3.0 arc, by rc (detailed sections below):

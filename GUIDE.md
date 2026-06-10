@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v3.0.0** — Last updated: 2026-06-10  *(Pipekit 3.0 final. Completes the `vbw-lead` dispatch scrub the rc cycle applied elsewhere: the Stage 2 backend table and the Plan Review section no longer claim `/work` spawns `vbw-lead` — `/work` plans inline in every backend; the `vbw` backend dispatches only `vbw-dev`. Carries the rc2 reframe (VBW Integration, `/vbw:init`, Building-state, enforcement-layer around native-on-Workflow as default) + the v2.8.x substrate + the v2.7.0 content pass)*
+**v3.1.0** — Last updated: 2026-06-10 12:16  *(Adds the v3.1.0 distribution-layer rows: `pk doctor` upstream-staleness check and the `pipekit/.local-skills` manifest in the sync section. Carries 3.0 final's `vbw-lead` dispatch scrub (Stage 2 backend table + Plan Review section), the rc2 reframe around native-on-Workflow as default, the v2.8.x substrate, and the v2.7.0 content pass)*
 
 ---
 
@@ -1056,6 +1056,7 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 | File | Why |
 |------|-----|
 | `method.config.md` | Project-specific |
+| `pipekit/.local-skills` | Committed manifest declaring project-specific skills (v3.1.0) — the sync reads it to separate "local by design" from "removed upstream" in its changelog |
 | `.claude/rules/` | Project coding conventions |
 | `.claude/skills/{project-specific}/` | Stack-specific skills |
 | `.claude/overrides/` | Sync-safe customization (applied on top of sync; see `method.md` § Sync-Safe Overrides) |
@@ -1220,7 +1221,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
 | Status | `pk status` | Full unscoped Linear board view |
-| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence) |
+| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence), **upstream-staleness check** (v3.1.0 — warns when the synced Pipekit lags the method repo's latest release; offline-soft) |
 | Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
 | Sync Linear | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
 | Linear | `/linear` | Linear issue workflow helper |
