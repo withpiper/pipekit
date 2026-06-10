@@ -13,7 +13,7 @@ Every `chore(release): vX.Y.Z` PR must complete the following before merging to 
 - [ ] Bump `PK_VERSION` in `bin/pk`.
 - [ ] Add a new `## vX.Y.Z — YYYY-MM-DD` section to `CHANGELOG.md` (this file).
 - [ ] **Stamp every doc you actually edited in this release.** Don't bump stamps on untouched docs — the version gap between an older stamp and the current release is the drift signal we keep them for. The stamped doc set lives in the table below. If you add a new top-level doc or SOP, stamp it and add it to that table.
-- [ ] If `method.md` / `RUNBOOK.md` / `GUIDE.md` were edited, also bump their stamps to `vX.Y.Z` with today's date (these three are the "constitutional" docs — they describe current behavior and should always carry the latest version).
+- [ ] Bump `method.md` / `RUNBOOK.md` / `GUIDE.md` stamps to `vX.Y.Z` with today's date **unconditionally** — these three are the "constitutional" docs: they describe current behavior and must always carry the latest version, edited or not. If one wasn't edited, bumping its stamp is your assertion that you re-checked it against this release and it's still accurate. (The drift-signal convention applies only to the non-constitutional docs below; v3.0.0-rc3 shipping with a `GUIDE.md` that still claimed `/work` spawns `vbw-lead` is what this rule prevents.)
 - [ ] Update `RUNBOOK.md` line 14 (`./scripts/sync-method.sh vX.Y.Z` example) to the new tag.
 - [ ] PR title contains `vX.Y.Z` so the `auto-tag-release` workflow can tag the merge commit (see `.github/workflows/auto-tag-release.yml`).
 - [ ] Skip-check: leave historical `vX.Y.Z` references in prose alone (e.g., "as of v2.3.0" describes when a behavior shipped — that's intentional, not drift).
@@ -48,6 +48,23 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 ## Unreleased
 
 _Nothing yet._
+
+---
+
+## v3.0.0 — 2026-06-10
+
+**Pipekit 3.0 — native-on-Workflow is the default executor; VBW is an optional backend.** Final cut of the rc1–rc3 cycle. The rc tree ships as-is; final adds only the last documentation carry-overs. The 3.0 arc, by rc (detailed sections below):
+
+- **rc1** — `/work` defaults `Backend:` to `native`; backend dispatch corrected (`/work` plans inline in every backend; `vbw` dispatches only `vbw-dev` — no `vbw-lead`/`vbw-qa`); justified by the POC-48 round-two head-to-head (native matched-or-beat VBW-the-full-system on tier:heavy financial parity at ~1/5 wall-clock and a fraction of the tokens).
+- **rc2** — `/pk-bug` branches early (Phases 3+ in the worktree, off the shared integration checkout); Linear review layer backend-agnostic (`templates/linear_guidance.md` + `templates/spec_review_skill.md` v5.2 review for "the planner," upstream of backend dispatch).
+- **rc3** — ownership-model `vbw-lead` scrub in `method.md` + `/review-plan`; POC-57 blind A/B verdict committed (split result; reinforces gate-layer-as-safety-net rather than crowning a backend).
+
+### What changed since rc3
+
+- **`GUIDE.md` — completed the `vbw-lead` dispatch scrub** rc3 applied to `method.md` and `/review-plan`. The Stage 2 backend table claimed `Backend: vbw` "spawns `vbw-lead` to generate PLAN.md"; the Plan Review section framed `/review-plan` as running "between `vbw-lead`'s plan generation and `vbw-dev`'s execution" and routing failed plans "back to vbw-lead" — contradicting GUIDE's own (rc2-corrected) VBW Integration section. Corrected to the 3.0 dispatch model, including *why* `/review-plan` matters most on the `vbw` backend (whole plan handed to `vbw-dev` wholesale, no per-task gate) vs `native` (per-task verify-before-integrate is its own plan-safety net).
+- **`agents/plan-reviewer.md` — same scrub.** The agent's frontmatter description and Context section framed the pipeline as `VBW Lead → reviewer → VBW Dev` unconditionally. Corrected to the `/review-plan` skill's rc3 provenance framing: the plan comes from `/work`'s inline planning on the `vbw` backend, or VBW's own planner in direct VBW use. Review rubric unchanged.
+- **Release-checklist hardening** — the constitutional-doc stamp rule is now unconditional: `method.md` / `RUNBOOK.md` / `GUIDE.md` get stamped every release, edited or not (an unedited bump asserts the doc was re-checked against the release). rc3 shipping while `GUIDE.md` still carried the `vbw-lead` dispatch claim is the failure this closes — the "intended drift signal" reading of a stale constitutional stamp made real drift indistinguishable from convention.
+- `PK_VERSION` → `3.0.0`; stamps: `method.md`, `RUNBOOK.md`, `GUIDE.md`, `CLAUDE.md`, `README.md` → v3.0.0; `RUNBOOK.md` sync example → `v3.0.0`.
 
 ---
 
