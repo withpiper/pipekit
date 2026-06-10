@@ -137,6 +137,8 @@ v2 retired the v1 `NEXT.md` mirror. The single source of truth for "what should 
 
 Skills should **not** write a `NEXT.md` file. Skills MAY still print `➜ Next:` inline at the end of their output as a courtesy hint to the current user, but the persistence layer is Linear, not a sidecar markdown file.
 
+A project may keep a **hand-curated** roadmap file (`NEXT.md` / `ROADMAP.md` at the project root — first-class optional artifact as of v3.1.0). The skill-facing rule is unchanged in both directions: never write it, and never read it as operational state. It's human narrative; Linear is the truth.
+
 `pk init` (v2.1.1+) seeds a gitignored `notepad.md` at the project root for personal free-form notes (replaces NEXT.md as a human scratch space). It is never committed and never auto-written by skills.
 
 #### Pipekit machine-local state directory

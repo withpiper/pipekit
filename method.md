@@ -4,12 +4,13 @@
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
-> **NEXT.md is retired.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer. v2 replaces it with `pk next` (reads Linear directly + scopes to the current phase via `PHASES.md` as of v2.1.0). Consuming projects should:
-> - Delete any committed `NEXT.md` (`git rm NEXT.md`)
-> - Add `notepad.md` to `.gitignore` for personal free-form notes (never committed; replaces NEXT.md as human scratch space)
-> - Use `pk next` for the canonical "what's next?" answer
+> **The machine-readable NEXT.md is retired; a curated roadmap file is legitimate.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer that skills auto-wrote. That artifact is retired — `pk next` (reads Linear directly + scopes to the current phase via `PHASES.md` as of v2.1.0) is the canonical "what's next?" answer, and **skills never write a roadmap file**.
 >
-> `pk init` (v2.1.1+) seeds a starter `notepad.md` and adds the gitignore line on first run. If a stale `NEXT.md` is present, `pk init` flags it but does not auto-delete.
+> What v2's retirement over-rotated on (corrected in v3.1.0): a **hand-curated visual roadmap** at the project root — phases, themes, standing backlogs, the orientation picture Linear's board view doesn't give — is a first-class *optional* artifact. Keep one if you like seeing the whole arc in a file (`NEXT.md` or `ROADMAP.md` by convention). Two rules keep it safe:
+> - **Human-owned.** Skills and agents never write it, and never read it as operational state. It can go stale without breaking anything — it's narrative, not state.
+> - **Linear stays the truth.** "What should I do now?" is always `pk next`, never the roadmap file.
+>
+> `notepad.md` (gitignored, seeded by `pk init` v2.1.1+) remains the personal free-form scratch space — distinct from the curated roadmap, which is committed and shareable.
 
 ## Overview
 
@@ -365,6 +366,7 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 | `.vbw-planning/linear-map.json` | Pipekit | `/roadmap-create`, `/sync-linear` | `pk next`, `pk *`, all Pipekit skills |
 | `.vbw-planning/PHASES.md` | Pipekit | `/phase-plan` | `pk next` (phase-aware), all Pipekit skills |
 | `notepad.md` (project root, gitignored) | Human | Whoever's typing | Whoever's reading. v2 retired the auto-written `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear instead. |
+| Curated roadmap (optional — `NEXT.md` / `ROADMAP.md` at project root, committed) | Human | Human only — skills and agents never write it | Humans and stakeholders. Narrative orientation (phases, themes, standing backlogs), never read by skills as operational state. |
 | Linear issues | Pipekit | `/light-spec`, `pk branch`, `pk ship`, `pk done`, `/roadmap-create`, `/phase-plan` | Everyone |
 | `concept-brief.md`, `project-definition.md`, `Strategy/` | Pipekit | `/concept`, `/define`, `/strategy-create`, `/strategy-sync` | `/light-spec`, `/work` (inline planning) |
 | `method.config.md` | Pipekit | `/startup` (populates); human (edits) | All Pipekit skills, `bin/pk` |
