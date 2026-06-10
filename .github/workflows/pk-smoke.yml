@@ -1,0 +1,27 @@
+# Smoke tests for bin/pk. Zero-dependency (bash + git + jq, all preinstalled
+# on ubuntu runners). bin/pk previously had no test coverage of any kind —
+# its bugs were found by consuming projects in production (the `pk ship
+# --help` ship, the migration-drift false positives). This gate catches the
+# cheap half of that class before release.
+
+name: pk smoke tests
+
+on:
+  pull_request:
+    paths:
+      - bin/pk
+      - tests/**
+      - .github/workflows/pk-smoke.yml
+  push:
+    branches: [main]
+    paths:
+      - bin/pk
+      - tests/**
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run pk smoke suite
+        run: ./tests/pk-smoke.sh
