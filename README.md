@@ -1,6 +1,6 @@
 # Pipekit
 
-**v3.0.0-rc2** — Last updated: 2026-06-09  *(Pipekit 3.0: native-on-Workflow is the default executor, VBW reframed as an optional backend. Rewrites the "wraps VBW" thesis + ownership split, fixes the VBW repo link, reframes the install step. Carries the v2.8.x substrate)*
+**v3.0.0** — Last updated: 2026-06-10  *(Pipekit 3.0 final: native-on-Workflow is the default executor, VBW reframed as an optional backend. Carries the rc2 rewrite of the "wraps VBW" thesis + ownership split and the v2.8.x substrate)*
 
 A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The default executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) remains an optional backend.
 

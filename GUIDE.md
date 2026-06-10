@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v3.0.0-rc2** — Last updated: 2026-06-09  *(Pipekit 3.0: reframes the VBW Integration section + the `/vbw:init`, Building-state, and enforcement-layer descriptions around native-on-Workflow as the default executor with VBW as an optional backend; drops the misleading "VBW QA" row (the `vbw` backend only spawns `vbw-dev`). Carries the v2.8.x substrate + the v2.7.0 content pass)*
+**v3.0.0** — Last updated: 2026-06-10  *(Pipekit 3.0 final. Completes the `vbw-lead` dispatch scrub the rc cycle applied elsewhere: the Stage 2 backend table and the Plan Review section no longer claim `/work` spawns `vbw-lead` — `/work` plans inline in every backend; the `vbw` backend dispatches only `vbw-dev`. Carries the rc2 reframe (VBW Integration, `/vbw:init`, Building-state, enforcement-layer around native-on-Workflow as default) + the v2.8.x substrate + the v2.7.0 content pass)*
 
 ---
 
@@ -561,7 +561,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 
 | Backend | What `/work` does |
 |---------|-------------------|
-| `vbw` | Spawns `vbw-lead` to generate `PLAN.md`, then `vbw-dev` to execute. PLAN.md captures task decomposition with verify/done criteria per task. Each task gets one atomic commit. |
+| `vbw` | Hands `/work`'s inline plan to the `vbw-dev` subagent for execution — one atomic commit per task. No `vbw-lead`/`vbw-qa`: planning already happened inline, and verification is the `/verify` gate. |
 | `native` | Plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). |
 
 `--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
@@ -574,7 +574,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 **Input:** `PLAN.md` (vbw backend). Native now also emits a task DAG at `.pk-work/<ID>-PLAN.md`, but `/review-plan` currently targets VBW's `.vbw-planning/.../PLAN.md` path; wiring it to the native artifact is a follow-up.
 **Output:** Validated plan or revision requests
 
-Run between `vbw-lead`'s plan generation and `vbw-dev`'s execution. The plan reviewer stress-tests:
+Run between `/work`'s inline planning and `vbw-dev`'s execution. (In direct VBW use — outside Pipekit — the plan comes from VBW's own planner instead.) The review matters most on the `vbw` backend because the whole plan is handed to `vbw-dev` wholesale, with no per-task gate; `native` needs it less, since per-task verify-before-integrate is its own plan-safety net. The plan reviewer stress-tests:
 
 - Scope alignment with the spec
 - Task atomicity (each task produces one logical commit)
@@ -582,7 +582,7 @@ Run between `vbw-lead`'s plan generation and `vbw-dev`'s execution. The plan rev
 - Success criteria completeness
 - Risk identification
 
-If the plan fails review, it goes back to vbw-lead for rework. Once the plan passes, vbw-dev's execution begins.
+If the plan fails review, it goes back to `/work`'s planning step for rework. Once the plan passes, `vbw-dev`'s execution begins.
 
 ---
 
