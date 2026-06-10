@@ -184,6 +184,30 @@ run_pk promote
 [ $RUN_CODE -eq 0 ] && case "$RUN_OUT" in *disabled*) ok "promote: single-tier no-op" ;; *) fail "promote: single-tier no-op" "output: $RUN_OUT" ;; esac \
   || fail "promote: single-tier no-op" "exit $RUN_CODE, want 0"
 
+# ── CLI tests: doctor upstream-staleness check ───────────────────────────────
+
+echo "== doctor staleness check =="
+
+# Unreachable method repo → info line, never an error (offline-safe).
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$FIXTURE/no-such-repo.git" "$PK" doctor 2>&1)
+case "$RUN_OUT" in
+  *"skipped upstream-staleness check"*) ok "doctor: unreachable method repo is soft" ;;
+  *) fail "doctor: unreachable method repo is soft" "no skip line in output" ;;
+esac
+
+# Local method repo whose latest tag is ahead of PK_VERSION → staleness warning.
+METHOD_FIXTURE=$(mktemp -d)
+git -C "$METHOD_FIXTURE" init -q -b main
+git -C "$METHOD_FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+git -C "$METHOD_FIXTURE" tag v99.0.0
+git -C "$METHOD_FIXTURE" tag v99.1.0-rc1   # rc tags must not count as "latest"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$METHOD_FIXTURE" "$PK" doctor 2>&1)
+case "$RUN_OUT" in
+  *"latest release is v99.0.0"*) ok "doctor: warns when behind latest release (rc tags ignored)" ;;
+  *) fail "doctor: warns when behind latest release (rc tags ignored)" "$(echo "$RUN_OUT" | grep -i 'pipekit v\|latest' | head -2)" ;;
+esac
+rm -rf "$METHOD_FIXTURE"
+
 # ── CLI tests: ship guard rails ──────────────────────────────────────────────
 
 echo "== ship guard rails =="

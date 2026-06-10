@@ -2512,6 +2512,39 @@ cmd_doctor() {
     warn=$((warn+1))
   fi
 
+  # --- Upstream staleness (method repo) -----------------------------------
+  # The synced pk's PK_VERSION is the project's sync marker. Compare it
+  # against the method repo's latest release tag so a project can't silently
+  # fall releases behind (Piper sat a full release back through the 2.8/3.0
+  # cycle with no signal). Network-soft: unreachable repo is an info line,
+  # never an error — doctor must work offline. rc tags don't count as
+  # "latest"; running an rc of the latest release still warns.
+  local method_repo latest_tag
+  method_repo=$(pk_config "Method repo" "${METHOD_REPO:-https://github.com/withpiper/pipekit.git}")
+  # `|| true`: ls-remote fails on an unreachable repo and pipefail would
+  # kill doctor mid-run; empty latest_tag is the offline signal instead.
+  latest_tag=$(git ls-remote --tags --refs "$method_repo" 2>/dev/null \
+    | sed 's#.*refs/tags/##' \
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+    | awk -F'[v.]' '{ n = $2*1000000 + $3*1000 + $4; if (n > m) { m = n; t = $0 } } END { print t }' || true)
+  if [ -z "$latest_tag" ]; then
+    echo "  • method repo unreachable — skipped upstream-staleness check"
+  else
+    local cur_base cur_n latest_n
+    cur_base=${PK_VERSION%%-*}
+    cur_n=$(echo "$cur_base" | awk -F. '{print $1*1000000 + $2*1000 + $3}')
+    latest_n=$(echo "${latest_tag#v}" | awk -F. '{print $1*1000000 + $2*1000 + $3}')
+    if [ "$cur_n" -gt "$latest_n" ]; then
+      echo "  ✓ synced Pipekit v$PK_VERSION (ahead of latest release $latest_tag)"
+    elif [ "$cur_n" -eq "$latest_n" ] && [ "$PK_VERSION" = "$cur_base" ]; then
+      echo "  ✓ synced Pipekit v$PK_VERSION (latest release)"
+    else
+      echo "  ⚠ synced Pipekit is v$PK_VERSION; latest release is $latest_tag"
+      echo "    update: /pipekit-update  (or ./scripts/sync-method.sh $latest_tag)"
+      warn=$((warn+1))
+    fi
+  fi
+
   # --- Linear↔git integrity (false-ship detection) -----------------------
   # For WITs the board calls built/shipped (UAT, Done), confirm git history
   # actually contains implementation referencing the id. A Done/UAT issue with
