@@ -130,6 +130,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • creates feature/<ID>-<3-word-slug>                 │
   │     • worktree at .worktrees/<ID>-<slug>                 │
   │     • symlinks .env / .env.local / .mcp.json             │
+  │       (announced; never .env.prod)                       │
   │     • copies parent's bin/pk into worktree               │
   │     • Linear: Approved → In Progress                     │
   └──────────────────────────────────────────────────────────┘

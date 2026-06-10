@@ -47,7 +47,7 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ## Unreleased
 
-_Nothing yet._
+- **`pk branch` secrets hygiene — 1Password pattern round-trip.** Closes the "promote into Pipekit" item from the SiteLine (POC-85/86) and Piper (WIT-559) 1Password rollouts. `pk_link_env_files` no longer links `.env.prod` into worktrees (root or nested) — prod credentials have no business in a feature worktree; deploys render prod values from the vault. Env linking is no longer silent: `pk branch` now announces every plaintext symlink it creates and names `.env.prod` files it skipped. New `pipekit-security.md` § Secrets Managers and Worktrees codifies the portable contract: committed `op://` reference files travel via git checkout (no linking needed), a reference is not a credential, the op-recipe `.envrc` is config (still linked + direnv-allowed), plaintext symlinking is the legacy fallback, and loaded ≠ valid for write-only secret migrations. Regression coverage added to `scripts/test-pk-env-links.sh`.
 
 ---
 

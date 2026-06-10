@@ -15,6 +15,16 @@ Never commit secrets to git. Ever. No exceptions for "just for testing" or "I'll
 
 If you accidentally commit a secret: rotate it immediately, then rewrite history. A committed secret is a leaked secret even if you delete the commit — assume it was scraped.
 
+## Secrets Managers and Worktrees
+
+When the project uses a secrets manager (reference pattern: 1Password for Developers, proven on SiteLine POC-85/86 and Piper WIT-559), the contract is:
+
+- **Committed reference files carry pointers, never values.** `op://` reference files (`secrets.op`, `op-references.conf`, `*.tpl`) are tracked in git, so they reach every worktree via checkout — no copying or symlinking needed. Injection happens at the edge: `op run --env-file=<refs> -- <cmd>` locally, `op inject` on templates at deploy, `1password/load-secrets-action` in CI.
+- **A reference is not a credential.** `op://` lines are safe to commit; exempt them from secret scanners.
+- **An `.envrc` wrapping the secrets-manager recipe** (direnv + `op run`) is config, not a secret — `pk branch` symlinks it into worktrees and auto-allows direnv so worktree shells load the vault-backed env.
+- **Plaintext `.env*` symlinking into worktrees is the legacy fallback** for projects not yet migrated. `pk branch` announces what it links, and **never links `.env.prod`** — prod credentials have no business in a feature worktree. When a deploy needs prod values, render them from the vault at deploy time.
+- **Loaded ≠ valid.** When migrating a write-only secret (GitHub Actions secrets cannot be read back), exercise the real auth path once before declaring the cutover done — a token that resolves from the vault can still be expired.
+
 ## Input Validation at Boundaries Only
 
 - Validate user input at the entry point (API handlers, form submissions, CLI args)

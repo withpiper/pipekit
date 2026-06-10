@@ -537,7 +537,7 @@ After agent review passes, you review the spec in Linear. This is where product 
 
 - Creates `feature/<ID>-<3-word-slug>` (slug derived from issue title)
 - Worktree at `.worktrees/<ID>-<slug>`
-- Symlinks `.env` / `.env.local` / `.mcp.json` into the worktree — plus **nested per-app env files** (v2.7.0+): auto-discovers and links real nested env files (e.g. `apps/web/.env.local`, `packages/*/.env`) at the same relative path, so monorepo worktrees don't come up reading the `*.example` placeholder. Exact-name match (never `*.example`), idempotent, never clobbers a real file already in the worktree.
+- Symlinks `.env` / `.env.local` / `.mcp.json` into the worktree — plus **nested per-app env files** (v2.7.0+): auto-discovers and links real nested env files (e.g. `apps/web/.env.local`, `packages/*/.env`) at the same relative path, so monorepo worktrees don't come up reading the `*.example` placeholder. Exact-name match (never `*.example`), idempotent, never clobbers a real file already in the worktree. **Never links `.env.prod`** — prod credentials stay out of feature worktrees — and announces every link it makes on stdout. Projects on the secrets-manager pattern (committed `op://` reference files) don't need the symlinks at all: tracked reference files travel via git checkout. See `pipekit-security.md` § Secrets Managers and Worktrees.
 - Copies parent's `bin/pk` so v2 commands work from inside the worktree
 - Linear: Approved → In Progress
 
