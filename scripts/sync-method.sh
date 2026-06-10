@@ -94,6 +94,10 @@ if [ -d "$PROJECT_ROOT/.git" ] || [ -f "$PROJECT_ROOT/.git" ]; then
 fi
 
 CHANGELOG="$PROJECT_ROOT/pipekit/.sync-changelog.md"
+# Committed manifest of project-specific skills (one name per line, # comments
+# allowed). Skills listed here are local-by-design — the sync reports them
+# separately instead of flagging them as possibly-removed upstream skills.
+LOCAL_MANIFEST="$PROJECT_ROOT/pipekit/.local-skills"
 
 echo "=== Method Sync ==="
 echo "Source: $METHOD_REPO @ $REF"
@@ -157,6 +161,7 @@ CHANGES=0
 NEW_SKILLS=""
 UPDATED_SKILLS=""
 REMOVED_SKILLS=""
+LOCAL_SKILLS=""
 UPDATED_FILES=""
 NEW_FILES=""
 
@@ -351,19 +356,21 @@ for skill in $PORTABLE_SKILLS; do
   fi
 done
 
-# Check for skills that exist locally but not in the method repo (removed/renamed)
+# Check for skills that exist locally but not in the method repo. The committed
+# manifest (pipekit/.local-skills) declares which are project-specific by
+# design; anything undeclared is flagged — upstream removed/renamed it, or it's
+# a local skill that should be declared. Replaces the pre-v3.0.1 check, which
+# flagged every local skill (`grep -qv` against the multi-line skill list is
+# true whenever any other skill exists) and leaned on .sync-changelog.md
+# history that v2.8.0-rc1 made transient by gitignoring the file.
 if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
   for existing_skill_dir in "$PROJECT_ROOT/.claude/skills"/*/; do
     existing_skill=$(basename "$existing_skill_dir")
-    if [ ! -d "$TEMP/skills/$existing_skill" ]; then
-      # Could be project-specific or a removed portable skill
-      # Only flag it if it has no project-specific marker
-      if [ -f "$existing_skill_dir/skill.md" ]; then
-        # Check if this was a portable skill (existed in a previous sync)
-        if grep -q "^  SYNCED skill: $existing_skill" "$PROJECT_ROOT/pipekit/.sync-changelog.md" 2>/dev/null || \
-           echo "$PORTABLE_SKILLS" | grep -qv "$existing_skill"; then
-          REMOVED_SKILLS="$REMOVED_SKILLS $existing_skill"
-        fi
+    if [ ! -d "$TEMP/skills/$existing_skill" ] && [ -f "$existing_skill_dir/skill.md" ]; then
+      if [ -f "$LOCAL_MANIFEST" ] && grep -qx "$existing_skill" "$LOCAL_MANIFEST" 2>/dev/null; then
+        LOCAL_SKILLS="$LOCAL_SKILLS $existing_skill"
+      else
+        REMOVED_SKILLS="$REMOVED_SKILLS $existing_skill"
       fi
     fi
   done
@@ -562,11 +569,26 @@ CHLOG
     echo "" >> "$CHANGELOG"
   fi
 
-  if [ -n "$REMOVED_SKILLS" ]; then
-    echo "### Possibly Removed/Renamed" >> "$CHANGELOG"
-    for s in $REMOVED_SKILLS; do
-      echo "- \`/$s\` — exists locally but not in method repo (may be renamed or project-specific)" >> "$CHANGELOG"
+  if [ -n "$LOCAL_SKILLS" ]; then
+    echo "### Project-local (declared in pipekit/.local-skills)" >> "$CHANGELOG"
+    for s in $LOCAL_SKILLS; do
+      echo "- \`/$s\`" >> "$CHANGELOG"
     done
+    echo "" >> "$CHANGELOG"
+  fi
+
+  if [ -n "$REMOVED_SKILLS" ]; then
+    echo "### Not in upstream (undeclared)" >> "$CHANGELOG"
+    for s in $REMOVED_SKILLS; do
+      echo "- \`/$s\` — exists locally but not in the method repo and is not declared in \`pipekit/.local-skills\`. If project-specific by design, declare it; if it was a portable skill, upstream removed or renamed it (check the method repo's CHANGELOG and \`archive/\`)." >> "$CHANGELOG"
+    done
+    echo "" >> "$CHANGELOG"
+    echo "Declare project-specific skills with:" >> "$CHANGELOG"
+    echo '```' >> "$CHANGELOG"
+    printf 'printf '\''%%s\\n'\''' >> "$CHANGELOG"
+    for s in $REMOVED_SKILLS; do printf ' %s' "$s" >> "$CHANGELOG"; done
+    echo " >> pipekit/.local-skills" >> "$CHANGELOG"
+    echo '```' >> "$CHANGELOG"
     echo "" >> "$CHANGELOG"
   fi
 
