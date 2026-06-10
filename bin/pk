@@ -2623,6 +2623,18 @@ main() {
 
   local sub="${1:-help}"
   shift || true
+
+  # -h/--help anywhere in the args prints usage instead of executing.
+  # Subcommand arg loops swallowed unknown flags, so `pk ship --help`
+  # actually shipped (SiteLine, 2026-06-04). Exact-arg match only — a
+  # quoted text arg containing "--help" (e.g. pk delegate) doesn't trip it.
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help) cmd_help; return 0 ;;
+    esac
+  done
+
   case "$sub" in
     next)     cmd_next "$@" ;;
     status)   cmd_status "$@" ;;
