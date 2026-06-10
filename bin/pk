@@ -566,23 +566,39 @@ pk_worktree_path() {
 # nested env file at the same relative path. Exact-name match (never *.example),
 # pruning node_modules/.git/.worktrees so we never recurse into a dependency
 # tree or a sibling worktree.
+#
+# .env.prod is deliberately NOT linked — prod credentials have no business in
+# a feature worktree; prod values are rendered from the secrets manager at
+# deploy time. Committed secrets-manager reference files (op:// pointers,
+# *.tpl) are tracked, so they reach worktrees via git checkout — no linking
+# needed. See pipekit-security.md § Secrets Managers and Worktrees.
 pk_link_env_files() {
-  local root="$1" wt_path="$2" envf abs rel
-  for envf in .env .env.local .env.dev .env.prod .envrc .mcp.json .sentryclirc; do
+  local root="$1" wt_path="$2" envf abs rel linked="" skipped=""
+  for envf in .env .env.local .env.dev .envrc .mcp.json .sentryclirc; do
     if [ -f "$root/$envf" ] && [ ! -e "$wt_path/$envf" ]; then
       ln -sf "$root/$envf" "$wt_path/$envf"
+      linked="$linked $envf"
     fi
   done
+  [ -f "$root/.env.prod" ] && skipped=" .env.prod"
   while IFS= read -r abs; do
     [ -n "$abs" ] || continue
     rel="${abs#"$root"/}"
     case "$rel" in */*) ;; *) continue ;; esac   # root-level handled above
+    case "$rel" in *.env.prod) skipped="$skipped $rel"; continue ;; esac
     if [ ! -e "$wt_path/$rel" ]; then
       mkdir -p "$wt_path/$(dirname "$rel")"
       ln -sf "$abs" "$wt_path/$rel"
+      linked="$linked $rel"
     fi
   done < <(find "$root" \( -name node_modules -o -name .git -o -name .worktrees \) -prune \
              -o -type f \( -name .env -o -name .env.local -o -name .env.dev -o -name .env.prod \) -print 2>/dev/null)
+  if [ -n "$linked" ]; then
+    echo "  Linked from parent (plaintext symlinks):$linked"
+  fi
+  if [ -n "$skipped" ]; then
+    echo "  Skipped:$skipped — prod secrets stay out of worktrees (pipekit-security.md)"
+  fi
 }
 
 # Classify whether a WIT identifier has real implementation evidence in git

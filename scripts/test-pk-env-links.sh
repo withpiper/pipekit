@@ -8,6 +8,8 @@
 #     *.example placeholder (NEXT_PUBLIC_SUPABASE_URL=your-project.supabase.co)
 #     so the browser client had no backend to talk to
 #   - *.example placeholders are NEVER linked (exact-name match)
+#   - .env.prod is NEVER linked, root or nested (prod secrets stay out of
+#     worktrees — pipekit-security.md § Secrets Managers and Worktrees)
 #   - node_modules / .git / .worktrees are pruned (no dep-tree or sibling-worktree recursion)
 #   - the operation is idempotent (re-run is a no-op, never errors)
 #
@@ -53,11 +55,13 @@ printf 'NEXT_PUBLIC_SUPABASE_URL=your-project.supabase.co\n'  > "$root/apps/web/
 printf 'DB=postgres://real\n'                                 > "$root/packages/db/.env"
 printf 'SHOULD_NOT_LINK=1\n'                                  > "$root/node_modules/pkg/.env"
 printf 'ROOT=1\n'                                             > "$root/.env.local"
+printf 'PROD_SECRET=1\n'                                      > "$root/.env.prod"
+printf 'NESTED_PROD_SECRET=1\n'                               > "$root/apps/web/.env.prod"
 
 # Fresh worktree: tracked dirs only, no gitignored env files present.
 mkdir -p "$wt/apps/web" "$wt/packages/db"
 
-pk_link_env_files "$root" "$wt"
+link_output=$(pk_link_env_files "$root" "$wt")
 
 # Nested real env file linked to the REAL value (the core regression).
 if [ -L "$wt/apps/web/.env.local" ] && \
@@ -79,9 +83,23 @@ fi
 # Root-level file handled by pass (1).
 [ -L "$wt/.env.local" ] && ok "root .env.local linked" || nope "root .env.local linked"
 
+# .env.prod must never be linked — root or nested.
+[ ! -e "$wt/.env.prod" ] && ok "root .env.prod NOT linked" || nope "root .env.prod NOT linked"
+[ ! -e "$wt/apps/web/.env.prod" ] && ok "nested apps/web/.env.prod NOT linked" || nope "nested apps/web/.env.prod NOT linked"
+
+# Linking is announced (visibility — plaintext propagation must not be silent).
+case "$link_output" in
+  *"Linked from parent"*) ok "linked files announced on stdout" ;;
+  *) nope "linked files announced on stdout" "got: $link_output" ;;
+esac
+case "$link_output" in
+  *"Skipped"*".env.prod"*) ok ".env.prod skip announced on stdout" ;;
+  *) nope ".env.prod skip announced on stdout" "got: $link_output" ;;
+esac
+
 # Idempotency: a second run must not error and must not change anything.
 before=$(cd "$wt" && find . -name '.env*' | sort)
-if pk_link_env_files "$root" "$wt" 2>/dev/null; then
+if pk_link_env_files "$root" "$wt" >/dev/null 2>&1; then
   after=$(cd "$wt" && find . -name '.env*' | sort)
   [ "$before" = "$after" ] && ok "idempotent re-run (no change, no error)" || nope "idempotent re-run" "set changed"
 else
@@ -93,7 +111,7 @@ fi
 mkdir -p "$wt/apps/api" "$root/apps/api"
 printf 'PREEXISTING=1\n' > "$wt/apps/api/.env.local"
 printf 'PARENT=1\n'      > "$root/apps/api/.env.local"
-pk_link_env_files "$root" "$wt"
+pk_link_env_files "$root" "$wt" >/dev/null
 if [ ! -L "$wt/apps/api/.env.local" ] && [ "$(cat "$wt/apps/api/.env.local")" = "PREEXISTING=1" ]; then
   ok "pre-existing worktree env file not clobbered"
 else
