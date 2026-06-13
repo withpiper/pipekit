@@ -14,7 +14,7 @@ Use this orchestrator when:
 Don't use this for:
 
 - A single WIT (just run `/work WIT-XXX --backend=native` directly)
-- Heavyweight WITs (>1h each — VBW dispatch via `Backend: auto` is better)
+- Heavyweight WITs (>1h each — run `/work WIT-XXX` solo with forced `--deep` grounding rather than batching)
 - WITs with cross-dependencies (run them serially)
 - Manual-only WITs (e.g. LaunchDarkly UI archival — do those separately)
 

@@ -1,14 +1,14 @@
 # Pipekit
 
-**v3.0.0** — Last updated: 2026-06-10  *(Pipekit 3.0 final: native-on-Workflow is the default executor, VBW reframed as an optional backend. Carries the rc2 rewrite of the "wraps VBW" thesis + ownership split and the v2.8.x substrate)*
+**v3.2.0** — Last updated: 2026-06-13  *(Pipekit 3.2: native-on-Workflow is the default executor; VBW is now a **legacy** backend (deprecated v3.2.0, removal targeted v4.0.0) and the `auto` router is removed. Carries 3.0's "wraps VBW" → "native default" reframe + ownership split, 3.1's distribution-layer hardening, and the v2.8.x substrate)*
 
-A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The default executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) remains an optional backend.
+A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The default executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is a legacy backend, deprecated as of v3.2.0.
 
 ## What This Is (and Isn't)
 
 Pipekit is the **structure around an executor** — spec creation, independent review, human sign-off, quality gates, Linear visibility, and promotion. It is **not** itself a planner or code executor: it dispatches the build step to a configured backend and owns everything around it.
 
-As of **3.0**, the default backend is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is now an **optional** backend, not a dependency — set `Backend: vbw` to dispatch the `vbw-dev` executor instead. Either way `/work` does the planning; the backend only changes who executes.
+As of **3.0**, the default backend is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is a **legacy** backend, not a dependency — **deprecated as of v3.2.0 (removal targeted v4.0.0)**; set `Backend: vbw` to opt into the `vbw-dev` executor while it lasts. Either way `/work` does the planning; the backend only changes who executes.
 
 | Stage | What Pipekit handles |
 |-------|----------------------|
@@ -68,7 +68,7 @@ A bigger context window changes how much an agent can hold. It does not change w
 | 3 | Human Review | (Linear UI) | You sign off in Linear |
 | 4 | Find next | `pk next` | Phase-aware: groups by status from Linear + `PHASES.md` |
 | 5 | Branch | `pk branch <ID>` | Worktree + branch + Linear → In Progress |
-| 6 | **Work** | **`/work <ID>`** | **Plan inline + execute. Default backend is `native` (Workflow primitive); `vbw` optional per `method.config.md`.** |
+| 6 | **Work** | **`/work <ID>`** | **Plan inline + execute. Default backend is `native` (Workflow primitive); `vbw` is a legacy opt-in per `method.config.md` (deprecated v3.2.0).** |
 | 7 | **Verify** | **`/verify`** | **Pre-deploy gate (types + lint + test).** |
 | 8 | Ship | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` triggers antagonistic review. |
 | 8a | Flip to Ready | `pk ready [<ID>]` | (v2.6.0+) Flip Draft → Ready; fires outside reviewers (Semgrep + claude-review per `templates/ci/`). |
@@ -144,7 +144,7 @@ The sync script creates a `method.config.md` file in your project — this is wh
 
 Open Claude Code **in your project directory** and install the dependencies:
 
-**VBW** — an optional execution backend. Pipekit's default executor is native-on-Workflow (built into Claude Code, nothing to install), but Stage 0's `/vbw:init` still uses VBW to scaffold the `.vbw-planning/` roadmap directory, and `Backend: vbw` stays available as a per-issue executor — so install it once during setup. Run these as two separate commands (don't paste them together):
+**VBW** — a legacy execution backend (deprecated v3.2.0, removal targeted v4.0.0). Pipekit's default executor is native-on-Workflow (built into Claude Code, nothing to install), but Stage 0's `/vbw:init` still uses VBW to scaffold the `.vbw-planning/` roadmap directory, and `Backend: vbw` remains available as a legacy per-issue executor — so install it once during setup (the roadmap scaffold needs it regardless of backend). Run these as two separate commands (don't paste them together):
 
 ```
 /plugin marketplace add yidakee/vibe-better-with-claude-code-vbw

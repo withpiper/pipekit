@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v3.1.0** — Last updated: 2026-06-10 12:16  *(Adds the v3.1.0 distribution-layer rows: `pk doctor` upstream-staleness check and the `pipekit/.local-skills` manifest in the sync section. Carries 3.0 final's `vbw-lead` dispatch scrub (Stage 2 backend table + Plan Review section), the rc2 reframe around native-on-Workflow as default, the v2.8.x substrate, and the v2.7.0 content pass)*
+**v3.2.0** — Last updated: 2026-06-13  *(VBW backend deprecated: the VBW Integration section + `/vbw:init` note now read "legacy, deprecated v3.2.0, removal targeted v4.0.0"; the `auto` router is gone. Carries the v3.1.0 distribution-layer rows (`pk doctor` staleness check, `.local-skills` manifest), 3.0 final's `vbw-lead` dispatch scrub, the rc2 native-on-Workflow reframe, and the v2.8.x substrate)*
 
 ---
 
@@ -342,7 +342,7 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
 **Input:** —
 **Output:** `.vbw-planning/` directory scaffold
 
-VBW is an optional execution backend — as of 3.0 the default executor is native-on-Workflow — but `/vbw:init` still scaffolds the `.vbw-planning/` directory Pipekit uses to track the roadmap and state (and, when the `vbw` backend runs, its plans and execution). The directory is created here regardless of which backend you execute with, because the roadmap lives in it.
+VBW is a legacy execution backend (deprecated v3.2.0) — as of 3.0 the default executor is native-on-Workflow — but `/vbw:init` still scaffolds the `.vbw-planning/` directory Pipekit uses to track the roadmap and state (and, when the legacy `vbw` backend runs, its plans and execution). The directory is created here regardless of which backend you execute with, because the roadmap lives in it.
 
 This step is simple — run `/vbw:init` and it scaffolds:
 ```
@@ -953,9 +953,9 @@ Terminal:
 
 ---
 
-## VBW Integration (optional backend)
+## VBW Integration (legacy backend — deprecated v3.2.0)
 
-As of 3.0 the default executor is **native-on-Workflow** — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. VBW is an **optional backend** you opt into with `Backend: vbw`. The `.vbw-planning/` scaffold and the roadmap are used regardless of backend; the rest only appears when you actually run the `vbw` backend.
+As of 3.0 the default executor is **native-on-Workflow** — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. VBW is a **legacy backend** you opt into with `Backend: vbw` (or `--backend=vbw`); **as of v3.2.0 it is deprecated and slated for removal in v4.0.0**, and the complexity-based `auto` router is gone. The deprecation is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. The `.vbw-planning/` scaffold and the roadmap are still used regardless of backend (Pipekit owns the roadmap there); the rest only appears when you explicitly run the `vbw` backend.
 
 | Pipeline Stage | Tool | Used when | Purpose |
 |---------------|------|-----------|---------|

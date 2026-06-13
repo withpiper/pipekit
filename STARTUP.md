@@ -192,7 +192,7 @@ Configure in `.mcp.json` with `${VAR}` interpolation for secrets.
 
 | Key | What it controls |
 |-----|------------------|
-| `Backend` | `/work` dispatch: `vbw`, `native`, or `auto` (routes per plan complexity). |
+| `Backend` | `/work` executor: `native` (default) or `vbw` (legacy opt-in, deprecated v3.2.0). |
 | `Integration branch` | The base `pk ship` opens PRs against (`dev` or `main`). |
 | `Promote to main` | Whether `pk promote` is enabled (`false` for single-tier projects). |
 | `Ship environments` | The chain `pk promote` walks (`prod`, `dev,main`, `dev,beta,main`, …). |
