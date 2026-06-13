@@ -2,6 +2,8 @@
 
 **v2.1.2** — Last updated: 2026-05-03  *(v1 vocabulary retired in SOPs + this file)*  •  External: VBW v1.35.1 snapshot
 
+> **Deprecation note (Pipekit v3.2.0):** the `vbw` execution backend is **deprecated, removal targeted for v4.0.0** — native-on-Workflow is the default and only non-legacy executor. `/vbw:init` is still used to scaffold the `.vbw-planning/` roadmap directory (Pipekit owns the roadmap there regardless of backend), so VBW stays installed; this command reference is retained for that scaffold use and for the rare explicit `--backend=vbw` run.
+
 Output of `/vbw:help` (VBW v1.35.1) — included here for context on how Pipekit wraps VBW.
 
 Regenerate this file from the current installed VBW version with:

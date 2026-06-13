@@ -1,6 +1,6 @@
 ---
 name: work
-description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Backend-pluggable (vbw | native | auto) per method.config.md.
+description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Native-on-Workflow is the default executor; `vbw` is a legacy opt-in backend per method.config.md.
 ---
 
 # /work
@@ -13,7 +13,7 @@ You are a focused work driver. Given a Linear issue ID, you read its spec, infer
 
 - `/work <ISSUE-ID>` — primary (tier inferred from Linear `tier:*` label, defaults to Standard)
 - `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec-validator + plan-review subagent + security-review; no-op on Quick (light by design); redundant on Heavy (already forced)
-- `/work <ISSUE-ID> --backend=vbw|native|auto` — override the project's default backend for this invocation only
+- `/work <ISSUE-ID> --backend=vbw|native` — override the project's default backend for this invocation only (`vbw` is the legacy backend, slated for removal in v4.0.0)
 - "work on RS-30" / "let's do PIP-123"
 
 ## Required preconditions
@@ -75,22 +75,18 @@ Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
 
 Resolve the effective backend in this order (first match wins):
 
-1. `--backend=vbw`, `--backend=native`, or `--backend=auto` passed on the invocation
+1. `--backend=vbw` or `--backend=native` passed on the invocation
 2. `Backend` row in `method.config.md` (read via `pk config` above)
-3. Default: `native` (v3.0 — native-on-Workflow is the default executor; set `Backend: vbw` to opt into the VBW executor)
+3. Default: `native` (v3.0 — native-on-Workflow is the default executor; set `Backend: vbw` to opt into the legacy VBW executor)
 
-If `--backend=` is passed with any value other than `vbw`, `native`, or `auto`, refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.`
+If `--backend=` is passed with any value other than `vbw` or `native`, refuse: `Unknown backend '<value>'. Valid: vbw, native.`
 
-When the resolved backend is `vbw` or `native`, print one line:
+> **`vbw` is deprecated (v3.2.0).** Native carried 100% of recent production work (0/30 PRs used vbw) and matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. `vbw` stays available as an explicit opt-in escape hatch but is **slated for removal in v4.0.0**. Complexity-based `auto`-routing was removed in v3.2.0 — there is no `auto` backend.
+
+Print one line:
 
 ```
 Work: <ISSUE-ID>  ·  Backend: <vbw|native>  ·  Deep: <yes|no>
-```
-
-When the resolved backend is `auto`, print:
-
-```
-Work: <ISSUE-ID>  ·  Backend: auto (routing after plan)  ·  Deep: <yes|no>
 ```
 
 ## Step 2 — Fetch the spec from Linear
@@ -265,36 +261,6 @@ Format (single screen — keep tight):
 - <empty list — if non-empty, the spec is not ready, go back to step 2>
 ```
 
-## Step 3c — Auto-backend routing (only when `Backend: auto`)
-
-Skip this step entirely if the effective backend is `vbw` or `native`.
-
-After the plan is written, evaluate these three signals from the **Files to touch** section:
-
-| Signal | Check |
-|---|---|
-| File count | Count entries in "Files to touch" |
-| Migration present | Any path matches `*/migrations/*` or ends in `.sql` |
-| Unfamiliar package | Any package referenced in the plan is absent from `package.json` (run `node -e "require('./package.json')"` to confirm) |
-
-**Routing decision:**
-
-- If file count ≤ 3 AND no migration AND no unfamiliar package → resolve to `native`
-- Any other combination → resolve to `vbw`
-
-Store the resolved backend as the effective backend for Step 5.
-
-Print one line immediately after the plan (before the verdict prompt):
-
-```
-Routing: <signal summary> → <native|vbw>
-```
-
-Examples:
-- `Routing: 2 files, no migration → native`
-- `Routing: 7 files → vbw`
-- `Routing: migration present → vbw`
-
 ## Step 4 — Verdict gate
 
 **Tier-aware verdict** (resolved against `$TIER` from Step 2.6):
@@ -351,7 +317,9 @@ If the spec's Acceptance Criteria names a specific test command verbatim — e.g
 
 If the AC doesn't name a test command, fall back to the project's § Pre-Deploy Gate in `method.config.md`.
 
-### vbw backend
+### vbw backend (legacy — slated for removal in v4.0.0)
+
+> Reachable only via explicit `Backend: vbw` or `--backend=vbw`. Native is the default and carried 100% of recent production work; keep this path for the rare case you specifically want `vbw-dev` execution.
 
 Use Task tool with:
 - `subagent_type: "vbw:vbw-dev"`
@@ -622,7 +590,8 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Spec missing required sections, no `--deep` | Warn, ask y/N. |
 | Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
 | Plan revised >3 times | Refuse. Recommend `pk delegate`. |
-| `--backend=` with unknown value | Refuse: `Unknown backend '<value>'. Valid: vbw, native, auto.` |
+| `--backend=` with unknown value | Refuse: `Unknown backend '<value>'. Valid: vbw, native.` |
+| `--backend=auto` (removed in v3.2.0) | Refuse: `'auto' routing was removed in v3.2.0. Use native (default) or --backend=vbw.` |
 | `pk` (or `bin/pk`) binary absent | Warn: `pk not found — cannot read Backend from config. Defaulting to native. Run /pipekit-update to fix.` |
 | Subagent returns permission denial | Stop. Print the denial. Do not retry. |
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |

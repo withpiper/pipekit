@@ -53,7 +53,7 @@ Immediately after creating the issue, force a disposition decision:
 - Route by complexity tier (see Complexity Guidelines for tier mapping):
   - **Quick (Low)** → move to "Approved". Inform: _"Ready for `pk branch {issue}` then `/work {issue}` — no spec needed."_
   - **Standard (Medium)** → move to "Needs Spec". Inform: _"Ready for `/light-spec {issue}`, then `pk branch {issue}` + `/work {issue}`."_
-  - **Heavy (High)** → move to "Needs Spec". Inform: _"Heavy tier — run `/light-spec {issue}` first; `/work` will route through full VBW planning (Backend: vbw)."_
+  - **Heavy (High)** → move to "Needs Spec". Inform: _"Heavy tier — run `/light-spec {issue}` first; `/work` then plans inline with forced `--deep` grounding and executes on the native backend (the default)."_
 
 **If Later:**
 - Ask for a **trigger type** from the grammar below (parsable triggers are what let `/roadmap-review` auto-surface this later — prose triggers get flagged as manual-review)

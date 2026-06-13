@@ -1,6 +1,10 @@
+> **SUPERSEDED (Pipekit v3.2.0, 2026-06-13).** This spec proposed the complexity-based `auto` backend router for `/work`. The `auto` router was **removed** in v3.2.0 when the `vbw` backend was deprecated (native is the default and only non-legacy executor; `vbw` is an explicit legacy opt-in, removal targeted v4.0.0). The config-parser-reliability problem this doc also raised (#1 below) was fixed independently via the `pk config` helper. Archived for rationale trail only — do not implement.
+
+---
+
 ## Light Spec
 
-**Status:** Draft
+**Status:** Draft (SUPERSEDED — see banner above)
 **Complexity:** Low (~2-4h)
 **Linear Project:** Pipekit
 
