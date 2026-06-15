@@ -178,7 +178,7 @@ claude --dangerously-skip-permissions
 ### Step 2: Plan + Execute
 
 ```
-/work <ID>             # plan-verdict gate, then execute (vbw or native backend per method.config.md)
+/work <ID>             # plan-verdict gate, then execute on native-on-Workflow
 ```
 
 ### Step 3: Verify

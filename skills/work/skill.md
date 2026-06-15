@@ -1,6 +1,6 @@
 ---
 name: work
-description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Native-on-Workflow is the default executor; `vbw` is a legacy opt-in backend per method.config.md.
+description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Native-on-Workflow is the sole executor (v4.0.0 removed the pluggable vbw backend).
 ---
 
 # /work
@@ -13,7 +13,6 @@ You are a focused work driver. Given a Linear issue ID, you read its spec, infer
 
 - `/work <ISSUE-ID>` — primary (tier inferred from Linear `tier:*` label, defaults to Standard)
 - `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec-validator + plan-review subagent + security-review; no-op on Quick (light by design); redundant on Heavy (already forced)
-- `/work <ISSUE-ID> --backend=vbw|native` — override the project's default backend for this invocation only (`vbw` is the legacy backend, slated for removal in v4.0.0)
 - "work on RS-30" / "let's do PIP-123"
 
 ## Required preconditions
@@ -65,28 +64,23 @@ ISSUE=${ISSUE:-$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)}
 Read these values from `method.config.md` using `pk config <key> [default]` — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline. (`pk_config` is the internal shell function inside `bin/pk`; the subcommand exposed to skill bodies is `pk config`. Using `bin/pk pk_config` would exit 1 with "Unknown subcommand: pk_config" — surfaced 2026-05-14 canary, fixed v2.4.3.3.)
 
 ```bash
-BACKEND=$(pk config "Backend" "native")   # v3.0: native is the default executor; vbw is opt-in
 DEEP_FLAG=$(pk config "Default deep flag" "false")
 QA_REVIEW=$(pk config "Require QA review" "false")
 STRATEGY_PATH=$(pk config "Strategy docs path" "Strategy/")
+BACKEND=$(pk config "Backend" "native")   # v4.0.0: native is the sole executor; read only to guard stale configs
 ```
 
 Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
 
-Resolve the effective backend in this order (first match wins):
+**Native-on-Workflow is the sole executor (v4.0.0).** The pluggable `vbw` and `auto` backends were removed, so there is nothing to resolve — but reject any explicit request for a removed backend loudly, so a stale config or muscle-memory flag fails fast instead of silently running something else:
 
-1. `--backend=vbw` or `--backend=native` passed on the invocation
-2. `Backend` row in `method.config.md` (read via `pk config` above)
-3. Default: `native` (v3.0 — native-on-Workflow is the default executor; set `Backend: vbw` to opt into the legacy VBW executor)
-
-If `--backend=` is passed with any value other than `vbw` or `native`, refuse: `Unknown backend '<value>'. Valid: vbw, native.`
-
-> **`vbw` is deprecated (v3.2.0).** Native carried 100% of recent production work (0/30 PRs used vbw) and matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. `vbw` stays available as an explicit opt-in escape hatch but is **slated for removal in v4.0.0**. Complexity-based `auto`-routing was removed in v3.2.0 — there is no `auto` backend.
+- If `--backend=` is passed with any value other than `native` (i.e. `vbw`, `auto`, or anything else), refuse: `Backend selection was removed in v4.0.0 — native-on-Workflow is the sole executor. Drop the --backend flag.`
+- If `BACKEND` (from `method.config.md`) is anything other than `native`, refuse: `method.config.md sets 'Backend: <value>', removed in v4.0.0. Set 'Backend: native' or delete the row, then re-run.`
 
 Print one line:
 
 ```
-Work: <ISSUE-ID>  ·  Backend: <vbw|native>  ·  Deep: <yes|no>
+Work: <ISSUE-ID>  ·  Deep: <yes|no>
 ```
 
 ## Step 2 — Fetch the spec from Linear
@@ -174,16 +168,16 @@ Plan accordingly.
 | Tier | Path | Subagents |
 |------|------|-----------|
 | Quick | Default (inline) — **forced**; `--deep` is ignored | None |
-| Standard | `--deep` if flag set, else Default | spec-validator + Explore (+ vbw-scout for vbw backend) if `--deep` |
-| Heavy | `--deep` parallel grounding — **forced** | spec-validator + Explore (+ vbw-scout for vbw backend) |
+| Standard | `--deep` if flag set, else Default | spec-validator + Explore if `--deep` |
+| Heavy | `--deep` parallel grounding — **forced** | spec-validator + Explore |
 
-If `TIER == quick`, skip directly to "Default path: plan inline." Do not spawn the spec-validator / Explore / vbw-scout subagents even if `--deep` was passed.
+If `TIER == quick`, skip directly to "Default path: plan inline." Do not spawn the spec-validator / Explore subagents even if `--deep` was passed.
 
 If `TIER == heavy`, take the `--deep` parallel-grounding path below regardless of whether `--deep` was passed on the invocation.
 
 ### `--deep` path: parallel grounding
 
-Send these three Agent invocations **in a single message** (parallel execution):
+Send these two Agent invocations **in a single message** (parallel execution):
 
 1. **Spec validator subagent.** Use Task tool with:
    - `subagent_type: "general-purpose"` (or `"spec-validator"` if a project-local subagent of that name exists)
@@ -226,12 +220,7 @@ Send these three Agent invocations **in a single message** (parallel execution):
      Be terse. ≤300 words.
      ```
 
-3. **(VBW backend only) `vbw:vbw-scout` for deep research.** Use Task tool with:
-   - `subagent_type: "vbw:vbw-scout"`
-   - `description: "Research <ISSUE-ID>"`
-   - Prompt template: (delegate research per VBW conventions; pass the spec)
-
-When all three return, synthesize their outputs into a written plan in step 3b.
+When both return, synthesize their outputs into a written plan in step 3b.
 
 ### Default path: plan inline
 
@@ -317,35 +306,7 @@ If the spec's Acceptance Criteria names a specific test command verbatim — e.g
 
 If the AC doesn't name a test command, fall back to the project's § Pre-Deploy Gate in `method.config.md`.
 
-### vbw backend (legacy — slated for removal in v4.0.0)
-
-> Reachable only via explicit `Backend: vbw` or `--backend=vbw`. Native is the default and carried 100% of recent production work; keep this path for the rare case you specifically want `vbw-dev` execution.
-
-Use Task tool with:
-- `subagent_type: "vbw:vbw-dev"`
-- `description: "Execute plan for <ISSUE-ID>"`
-- Prompt template:
-  ```
-  Execute this plan. Make atomic commits per task (one logical change = one commit).
-  After each commit, run the project's test command if relevant.
-  Stop and surface immediately if you hit:
-    - Permission denial (EditPermissionDenied)
-    - Pre-commit hook failure you can't fix
-    - Type errors that contradict the plan's assumptions
-    - A blocker that wasn't visible at planning time
-
-  Do NOT loop on failures. Do NOT modify the plan unilaterally — surface and ask.
-
-  Plan:
-  <full plan from step 3b>
-
-  Spec:
-  <full spec from step 2>
-  ```
-
-Wait for the subagent to return.
-
-### native backend
+### Execute (native-on-Workflow)
 
 Native execution is **Workflow-primitive-driven** for multi-task plans and **inline** for trivial ones. Both paths produce the same executor contract: a PLAN artifact, atomic commits with verify-before-integrate, and a SUMMARY trail. The scope is *only* that contract — PLAN → atomic tasks → verify-before-integrate → SUMMARY. Do **not** add UAT, known-issue registries, or sprint/retro state; that is VBW's surface, not the executor's. The full Pre-Deploy Gate still runs once at the end via the Step 7 `/verify` rollover.
 
@@ -414,7 +375,7 @@ Each task agent's prompt carries: the single task entry (title, files, change, v
 | Standard | Run if `--deep` was passed |
 | Heavy | Run (forced — regardless of `--deep`) |
 
-After dev completes (whether subagent or inline), invoke the review when the gate fires:
+After execution completes, invoke the review when the gate fires:
 
 Use Task tool with:
 - `subagent_type: "security-review"` (project may have this; otherwise `"general-purpose"`)
@@ -590,8 +551,8 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Spec missing required sections, no `--deep` | Warn, ask y/N. |
 | Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
 | Plan revised >3 times | Refuse. Recommend `pk delegate`. |
-| `--backend=` with unknown value | Refuse: `Unknown backend '<value>'. Valid: vbw, native.` |
-| `--backend=auto` (removed in v3.2.0) | Refuse: `'auto' routing was removed in v3.2.0. Use native (default) or --backend=vbw.` |
+| `--backend=` with any value | Refuse: `Backend selection was removed in v4.0.0 — native is the sole executor. Drop the --backend flag.` |
+| `Backend: vbw` / `Backend: auto` in `method.config.md` | Refuse: `'Backend: <value>' was removed in v4.0.0. Set 'Backend: native' or delete the row.` |
 | `pk` (or `bin/pk`) binary absent | Warn: `pk not found — cannot read Backend from config. Defaulting to native. Run /pipekit-update to fix.` |
 | Subagent returns permission denial | Stop. Print the denial. Do not retry. |
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
@@ -615,6 +576,6 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Lines of skill prose | 765 | ~330 |
 | Tier system | Quick/Standard/Heavy (label-driven) | Quick/Standard/Heavy (Linear `tier:*` labels, opt-in; restored in v2.6.0) |
 | Verdict loop | 3 rounds + stalemate detection | 1 screen, 3 options, 3-revision hard limit |
-| Backend | VBW only | `vbw \| native` per config |
+| Backend | VBW only | native — sole executor (vbw removed v4.0.0) |
 | Auto-chain | Yes (4 hidden agent invocations) | No (user paces) |
 | State writes | Linear (twice), VBW STATE.md, pipeline-state JSON | None (read-only) |

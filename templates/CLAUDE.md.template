@@ -83,7 +83,7 @@ Code written without context produces rework.
 Feedback-derived rules this project has learned to follow. Add new rules when patterns emerge; never remove without explicit decision.
 
 1. **Never make decisions for the user.** Present analysis and wait for explicit approval before committing a direction.
-2. **Always review plans before execution.** When `Backend: vbw` and `vbw-lead` produces a `PLAN.md`, invoke `/review-plan` (which spawns the `plan-reviewer` agent) before starting `vbw-dev` execution.
+2. **Review plans before execution when warranted.** Invoke `/review-plan` (which spawns the `plan-reviewer` agent) to stress-test a large or high-risk plan before execution begins.
 3. {Add project-specific rules here as they emerge.}
 
 ## Routing Pointers
@@ -118,6 +118,6 @@ If CLAUDE.md and a rules file conflict on implementation detail, the rules file 
 - Skills are for interactive sessions, not agent execution paths.
 - All VBW artifacts live in `.vbw-planning/`. Agents do not modify product code without a plan.
 - Agents must validate against the pre-deploy gate before marking work complete.
-- Do not invoke VBW agents directly in Pipekit projects. Use `/work`, not `/vbw:lead` / `/vbw:dev`. `/work` dispatches to the configured backend (`vbw` or `native` per `method.config.md`) and keeps Linear and the `pk *` state machine in sync.
+- Do not invoke VBW agents directly in Pipekit projects. Use `/work`, not `/vbw:lead` / `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state machine in sync.
 
 See `method/method.md` § "VBW / Pipekit Ownership Model" for details.

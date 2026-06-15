@@ -146,7 +146,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 
 | Key | Value | Default | Used by |
 |-----|-------|---------|---------|
-| **Backend** | `native` \| `vbw` | `native` | `/work` — chooses the **executor** for the inline plan (`/work` plans inline in both backends). **`native` (default, v3.0)** executes on the Workflow primitive; `vbw` is a **legacy** opt-in that dispatches `vbw-dev` (deprecated v3.2.0, slated for removal in v4.0.0). The `auto` router was removed in v3.2.0. Omit the row to take the `native` default. |
+| **Backend** | `native` | `native` | **Vestigial as of v4.0.0 — omit the row.** Native-on-Workflow is the sole executor: `/work` plans inline and executes on the Workflow primitive. The pluggable `vbw` executor was removed in v4.0.0 (`auto` router in v3.2.0). If the row is present it must be `native`; any other value (`vbw`/`auto`) makes `/work` refuse with a migration message. |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
 | **Deploy command** | shell command | (none) | `pk done` — for **script-deploy** projects (deploy is a script, not branch promotion). Surfaced as a reminder after merge so "Done" can't be reached without a deploy ("merged ≠ deployed"). Advisory; never auto-run. Leave blank for branch-per-env projects that use `pk promote`. |
@@ -166,7 +166,6 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 ### Example (rs-vault)
 
 ```
-Backend: native
 Integration branch: main
 Promote to main: false
 Require QA review: false
@@ -177,7 +176,6 @@ Ship environments: main
 ### Example (Piper)
 
 ```
-Backend: native
 Integration branch: dev
 Promote to main: true
 Require QA review: true
