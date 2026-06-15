@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v3.2.0** — Last updated: 2026-06-13  *(**v3.2.0 — VBW backend deprecated.** The complexity-based `auto` router is **removed**; `/work` is native-default with `vbw` reachable only as an explicit legacy opt-in (`Backend: vbw` / `--backend=vbw`), **slated for removal in v4.0.0**. Evidence-driven: across the last 30 merged SiteLine PRs, **0 used vbw** (last vbw dispatch was 2026-06-06, before 3.0 made native default), and the Opus-authored native set shipped **12/13 clean first-pass** with the gate layer catching the one real defect — corroborating POC-48 round-two (`experiments/poc-48-roundtwo/`) + the POC-57 split verdict (`experiments/poc-57-backend-ab/`). The vbw executor path, `vbw-dev`/`vbw-scout` agents, and `.vbw-planning/` roadmap scaffold all stay; only the router and default-eligibility are gone. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. **Carries Pipekit 3.0–3.1:** native-on-Workflow default executor; distribution-layer hardening (`bin/pk` smoke suite + CI gate, global `--help` guard, `pipekit/.local-skills` manifest, `pk doctor` upstream-staleness warning, curated-roadmap doctrine — `pk next` stays the operational truth); the rc-cycle ownership-model `vbw-lead` scrub; v2.8.0's `/financial-review` + `/security-review` substrate; and v2.7.x: `/pk-express`, `/pr-fix` pluggable engine, merge-driven Linear transition)*
+**v4.0.0-rc1** — Last updated: 2026-06-15  *(**v4.0.0 — VBW executor removed.** Native-on-Workflow is now the **sole** executor; the pluggable `vbw` backend, `--backend=` selection, and the `vbw-dev`/`vbw-scout` dispatch in `/work` are gone (the `auto` router went in v3.2.0). A stale `Backend: vbw`/`auto` in `method.config.md` or a `--backend=vbw` flag now **refuses** with a migration message rather than silently routing. This makes good on the v3.2.0 deprecation promise, backed by SiteLine production evidence (0/30 recent PRs used vbw; native shipped 12/13 clean first-pass with the gate layer — not the executor — catching the one defect). **The VBW planning layer is untouched:** `.vbw-planning/`, `/vbw:init`'s roadmap scaffold, `/roadmap-create`'s phase merge, `/phase-plan`, `/review-plan`, and the `pk_vbw_*` roadmap helpers all stay — retiring the planning layer is a separate, later effort. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. **Carries Pipekit 3.0–3.2:** native-on-Workflow executor; distribution-layer hardening (`bin/pk` smoke suite + CI gate, global `--help` guard, `pipekit/.local-skills` manifest, `pk doctor` upstream-staleness warning, curated-roadmap doctrine — `pk next` stays the operational truth); v2.8.0's `/financial-review` + `/security-review` substrate; and v2.7.x: `/pk-express`, `/pr-fix` pluggable engine, merge-driven Linear transition)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -51,7 +51,7 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The boundary is 
 - **VBW owns** `.vbw-planning/ROADMAP.md`, `PLAN.md` files, and execution state.
 - **Pipekit owns** Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (phase-aware as of v2.1.0); v2 retired the `NEXT.md` mirror file.
 - **The two merge once**, at `/roadmap-create` — Pipekit adds strategy-derived requirements into VBW's phase structure without overwriting VBW's phases, goals, or success criteria.
-- **Don't invoke VBW agents directly in Pipekit projects.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` dispatches to the configured backend (`vbw` or `native` per `method.config.md`) and keeps Linear, `PHASES.md`, and the `pk *` state in sync. Direct VBW invocation bypasses Pipekit's visibility layer and causes drift.
+- **Don't invoke VBW agents directly in Pipekit projects.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear, `PHASES.md`, and the `pk *` state in sync. Direct VBW invocation bypasses Pipekit's visibility layer and causes drift.
 
 Full ownership model in `method.md` (§ VBW / Pipekit Ownership Model).
 
@@ -63,11 +63,11 @@ Skills live in `skills/{name}/skill.md` with YAML frontmatter (`name`, `descript
 
 | Layer | Purpose |
 |-------|---------|
-| `CLAUDE.md` (in consuming project) | Conventions for VBW agents |
+| `CLAUDE.md` (in consuming project) | Conventions for the executor (native-on-Workflow) |
 | CI / Hooks | Hard enforcement — blocks merges |
 | Skills (this repo) | Interactive shortcuts for hands-on sessions |
 
-VBW agents don't call skills — they read the consuming project's CLAUDE.md directly.
+The executor doesn't call skills — it reads the consuming project's CLAUDE.md directly during execution.
 
 ## Key Skills
 
@@ -88,7 +88,7 @@ VBW agents don't call skills — they read the consuming project's CLAUDE.md dir
 |---------|---------|
 | `pk next` | Phase-aware: reads `## Current Phase:` from `PHASES.md`, queries Linear, groups by status (In Progress / Approved / Needs Spec) with per-group hints. Replaces v1's `cat NEXT.md`. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
-| `/work <ID>` | Plan + execute in-session. `/work` plans inline (parallel `Agent` grounding) regardless of backend, then dispatches the **executor** per `method.config.md`: `Backend: native` (**default** — materializes a task DAG to `.pk-work/<ID>-PLAN.md`, executes on the **Workflow primitive**, atomic commit per task with verify-before-integrate) or `Backend: vbw` (**legacy** — dispatches the `vbw-dev` subagent to execute the inline plan; note: it does *not* spawn `vbw-lead`/`vbw-qa`; **deprecated v3.2.0, removal targeted v4.0.0**). Per-invocation override via `--backend=`. The `auto` router was removed in v3.2.0. |
+| `/work <ID>` | Plan + execute in-session. `/work` plans inline (parallel `Agent` grounding), then materializes a task DAG to `.pk-work/<ID>-PLAN.md` and executes on the **Workflow primitive** — atomic commit per task with verify-before-integrate. Native-on-Workflow is the **sole executor** as of v4.0.0; the pluggable `vbw` backend and `--backend=` flag were removed (a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message). |
 | `/verify` | Pre-deploy gate. |
 | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` invokes the antagonistic reviewer. |
 | `pk ready [<ID>]` | Flip Draft PR to Ready (v2.6.0+). Fires `ready_for_review` → outside reviewers (Semgrep + claude-review per `templates/ci/`) run. No Linear state change. |

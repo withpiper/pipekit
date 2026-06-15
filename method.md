@@ -1,6 +1,6 @@
 # Pipekit
 
-**v3.2.0** — Last updated: 2026-06-13  *(**VBW backend deprecated.** The complexity-based `auto` router is removed; `/work` is native-default with `vbw` reachable only as an explicit legacy opt-in (`Backend: vbw` / `--backend=vbw`), slated for removal in v4.0.0. Grounded in production evidence: 0/30 recent SiteLine PRs used vbw, and the Opus-authored native set shipped 12/13 clean first-pass with the gate layer catching the one real defect — corroborating POC-48 round-two + the POC-57 verdict. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. Carries Pipekit 3.0–3.1: native-on-Workflow default executor, distribution-layer hardening, see `experiments/`)*
+**v4.0.0-rc1** — Last updated: 2026-06-15  *(**VBW executor removed.** Native-on-Workflow is the sole executor; the pluggable `vbw` backend, the `--backend=` flag, and the `vbw-dev`/`vbw-scout` dispatch in `/work` are gone (the `auto` router went in v3.2.0). A stale `Backend: vbw`/`auto` or `--backend=vbw` now refuses with a migration message. Makes good on the v3.2.0 deprecation, grounded in production evidence: 0/30 recent SiteLine PRs used vbw, and native shipped 12/13 clean first-pass with the gate layer — not the executor — catching the one defect. The **VBW planning layer** (`.vbw-planning/`, `/vbw:init` roadmap scaffold, `/roadmap-create` phase merge, `/phase-plan`, `/review-plan`) is untouched. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. Carries Pipekit 3.0–3.2: native-on-Workflow executor, distribution-layer hardening, see `experiments/`)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -41,7 +41,7 @@ Stage 0: Foundation (a contract, not a script)
 Development Pipeline (repeats per issue, contract-strict):
 
   Stage 1: Spec          /light-spec → agent review → human review
-  Stage 2: Plan + Build  pk branch → /work    (→ /review-plan if vbw backend)
+  Stage 2: Plan + Build  pk branch → /work    (→ /review-plan to gate the plan)
   Stage 3: Verify + Ship /verify → pk ship    (→ /pr-fix | /pr-security-review) → UAT
   Stage 4: Release       pk promote <env> → pk done   (promote walks one hop per call; pk done is cleanup)
   Stage 5: Doc Loop      /strategy-sync       (after UAT)
@@ -79,8 +79,8 @@ Stage 0 is the foundation contract — a set of artifacts, not a script. The gre
 | 2 | 1 | **Agent Review** | Spec Review Agent (in Linear) | Pass/Revise verdict with readiness score | Spec is unambiguous + decomposable without guessing |
 | 3 | 1 | **Human Review** | You, in Linear | Approved spec with product decisions locked | Human signs off on scope/decisions/priority |
 | 4 | 2 | **Branch** | `pk next` then `pk branch <ID>` | Worktree + branch created, Linear → In Progress | Spec approved, deps met |
-| 5 | 2 | **Work** | `/work <ID>` (vbw or native backend per `method.config.md`) | Code committed against verify/done criteria | Verdict gate passes before code is written |
-| 5b | 2 | **Plan Review** *(vbw backend, optional)* | `/review-plan` (spawns `plan-reviewer` agent) | Validated `PLAN.md` or revision requests | Plan executable step-by-step without ambiguity |
+| 5 | 2 | **Work** | `/work <ID>` (native-on-Workflow) | Code committed against verify/done criteria | Verdict gate passes before code is written |
+| 5b | 2 | **Plan Review** *(optional)* | `/review-plan` (spawns `plan-reviewer` agent) | Validated plan or revision requests | Plan executable step-by-step without ambiguity |
 | 6 | 3 | **Verify** | `/verify` (or `pk verify`) | Pre-deploy gate report — Pass / Partial / Fail with per-AC table; QA subagent if `Require QA review: true` | Gate green; AC satisfied |
 | 7 | 3 | **Ship** | `pk ship [--review] [--ready]` | Branch pushed, PR opened as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT | Verify passed |
 | 7a | 3 | **Flip to Ready** | `pk ready [<ID>]` | PR flipped Draft → Ready; outside reviewers (Semgrep + claude-review per `templates/ci/`) fire on `ready_for_review` event | Ready to merge |
@@ -113,7 +113,7 @@ The development pipeline (Stages 1-5) is **contract-strict**: every skill in it 
 | Project definition | `project-definition.md` | `/strategy-create`, `/roadmap-create` |
 | Strategy docs | `Strategy/*.md` | `/light-spec`, `/strategy-sync` |
 | Project config | `method.config.md` | All Pipekit skills, `bin/pk` |
-| VBW scaffold | `.vbw-planning/` | `/work` (vbw backend), VBW agents |
+| VBW scaffold | `.vbw-planning/` | Pipekit roadmap state; VBW agents (direct use) |
 | Linear-VBW map | `.vbw-planning/linear-map.json` | `pk next`, `/work`, `/sync-linear` |
 | Phase plan | `.vbw-planning/PHASES.md` | `pk next` (phase-aware as of v2.1.0), `/phase-plan` |
 
@@ -196,18 +196,17 @@ Run before entering the spec pipeline to validate that Stage 0 is complete and t
 
 ## Stage 2: Plan + Build (Execution Quality Gate)
 
-**Steps:** 4–5b (`pk branch` → `/work` → optional `/review-plan` for vbw backend)
+**Steps:** 4–5b (`pk branch` → `/work` → optional `/review-plan`)
 
 **Tools:** `pk branch`, `/work`, `plan-reviewer` agent (via `/review-plan`)
 
 - **`pk branch <ID>`** sets up the worktree + branch and transitions Linear to In Progress. Idempotent — rerun is safe.
-- **`/work <ID>`** does plan + execute in one skill, gated by a **verdict** (`proceed` / `revise: <feedback>` / `abort`) before any code is written. Tier (Quick / Standard / Heavy) is human-confirmed before the verdict step. Backend dispatch is per `method.config.md`:
-  `/work` **plans inline** (in your current Claude session, with parallel `Agent` grounding) regardless of backend; the backend selects only the **executor** for that plan:
-  - `Backend: native` (**default, v3.0**) → `/work` writes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the **Workflow primitive** — one atomic commit per task with verify-before-integrate, run trail in `.pk-work/<ID>-SUMMARY.md`. Trivial plans run inline. Scope is the executor contract only (no UAT/known-issue/sprint state — that stays VBW's).
-  - `Backend: vbw` (**legacy — deprecated v3.2.0, removal targeted for v4.0.0**) → `/work` dispatches the `vbw-dev` subagent to execute the inline plan. Note: it does **not** spawn `vbw-lead` or `vbw-qa` — planning is `/work`'s inline step in both backends, so the only difference is the executor. Reachable only via an explicit `Backend: vbw` / `--backend=vbw`; native carried 100% of recent production work and matched-or-beat VBW-the-full-system on first-pass correctness (POC-48). The complexity-based `auto` router was removed in v3.2.0.
-- **`/review-plan`** *(optional)* spawns the `plan-reviewer` agent against the inline `PLAN.md` before execution — independent stress-test of scope, atomicity, dependencies, success criteria, and risks. (Most relevant on the `vbw` backend, where `/work` hands the plan to `vbw-dev` wholesale.)
+- **`/work <ID>`** does plan + execute in one skill, gated by a **verdict** (`proceed` / `revise: <feedback>` / `abort`) before any code is written. Tier (Quick / Standard / Heavy) is human-confirmed before the verdict step. `/work` **plans inline** (in your current Claude session, with parallel `Agent` grounding), then executes on the **native-on-Workflow** backend — the sole executor as of v4.0.0:
+  - `/work` writes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the **Workflow primitive** — one atomic commit per task with verify-before-integrate, run trail in `.pk-work/<ID>-SUMMARY.md`. Trivial plans run inline. Scope is the executor contract only (no UAT/known-issue/sprint state — that stays VBW's planning surface).
+  - The pluggable `vbw` backend and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0). A stale `Backend: vbw`/`auto` or `--backend=vbw` makes `/work` refuse with a migration message rather than silently routing. Evidence-driven: native carried 100% of recent production work and matched-or-beat VBW-the-full-system on first-pass correctness (POC-48).
+- **`/review-plan`** *(optional)* spawns the `plan-reviewer` agent against the inline `PLAN.md` (`.pk-work/<ID>-PLAN.md`) before execution — independent stress-test of scope, atomicity, dependencies, success criteria, and risks.
 
-**Output:** Code committed against verify/done criteria (or `PLAN.md` + execution for the `vbw` backend)
+**Output:** Code committed against verify/done criteria
 
 **Gate:** Plan must be executable step-by-step without ambiguity or rework. No task should require the dev agent to make product decisions.
 
@@ -323,7 +322,7 @@ The corollary: isolation is mandatory only where independence or a clean contrac
 |---|---|
 | `/light-spec` → `/light-spec-revise` (after agent review) | Reviser must read the published spec + agent comment as documents, not recall the draft session |
 | `/light-spec` → `pk branch` + `/work` | The work agent must validate the spec on its merits, not from memory of how it was built |
-| `/work` plan-verdict → `/review-plan` (vbw backend) | Plan reviewer must be independent of the planner |
+| `/work` plan-verdict → `/review-plan` | Plan reviewer must be independent of the planner |
 | `/work` execution → `/verify` | QA must verify against goals, not against the executor's narration |
 | `pk ship` → `pk ship --review` (or `/pr-security-review`) | Antagonistic reviewer must approach the PR fresh, without the executor's context |
 | Any stage → `/strategy-sync` | Strategy sync compares shipped reality to docs; recall of build decisions contaminates the diff |
@@ -361,8 +360,8 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 | File / System | Owned by | Writers | Readers |
 |---|---|---|---|
 | `.vbw-planning/ROADMAP.md` | VBW | `/vbw:init` creates it; `/roadmap-create` merges strategy-derived requirements **into** it (never overwrites) | All Pipekit skills, VBW agents |
-| `.vbw-planning/phases/*/PLAN.md` | VBW | `vbw-lead` (direct VBW use / `/vbw:vibe --plan`). **Pipekit's `/work` does not spawn `vbw-lead`** — it plans inline (native → `.pk-work/<ID>-PLAN.md`; vbw backend → hands the inline plan to `vbw-dev`) | `/work`, `/review-plan`, `/phase-plan --status`, `vbw-dev`/`vbw-qa` agents |
-| `.vbw-planning/.execution-state.json` | VBW | vbw-dev / vbw-qa agents | `/phase-plan --status` |
+| `.vbw-planning/phases/*/PLAN.md` | VBW | `vbw-lead` (direct VBW use / `/vbw:vibe --plan`). **Pipekit's `/work` does not spawn `vbw-lead`** — it plans inline to `.pk-work/<ID>-PLAN.md` | `/work`, `/review-plan`, `/phase-plan --status`; `vbw-dev`/`vbw-qa` in direct VBW use |
+| `.vbw-planning/.execution-state.json` | VBW | vbw-dev / vbw-qa agents (direct VBW use) | `/phase-plan --status` |
 | `.vbw-planning/linear-map.json` | Pipekit | `/roadmap-create`, `/sync-linear` | `pk next`, `pk *`, all Pipekit skills |
 | `.vbw-planning/PHASES.md` | Pipekit | `/phase-plan` | `pk next` (phase-aware), all Pipekit skills |
 | `notepad.md` (project root, gitignored) | Human | Whoever's typing | Whoever's reading. v2 retired the auto-written `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear instead. |
@@ -377,11 +376,11 @@ Pipekit wraps VBW — it does not replace VBW's planning layer. The two systems 
 2. **Pipekit owns the visibility layer.** Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and project config are Pipekit's. VBW does not write to these. (v2 retired the `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear.)
 3. **Initial merge happens once** — at `/roadmap-create`. Strategy-derived requirements are added **into** VBW's existing phase structure. VBW's phases, goals, and success criteria are preserved verbatim.
 4. **After the merge, the split is one-way.** Pipekit reads VBW state (plan progress, execution state) to update Linear. VBW does not read Linear — its source of truth is its own files.
-5. **Pipekit owns gates; VBW owns build.** `pk branch` opens Linear → In Progress; `/work` (with `Backend: vbw`) dispatches the `vbw-dev` executor (planning is `/work`'s inline step — no `vbw-lead`); `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT (PR open on preview); `pk done` verifies merge, transitions Linear UAT → `In <FirstEnv>` (e.g. `In Dev`), cleans up the worktree; `pk promote <env>` walks `Ship environments` one hop at a time and transitions issues → `In <Env>` (intermediate) or → Done (final). The plan-review gate (Pipekit's value-add over raw VBW) lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent at `model: opus` between `/work`'s inline plan and `vbw-dev`'s execution.
+5. **Pipekit owns gates; native-on-Workflow owns build.** `pk branch` opens Linear → In Progress; `/work` plans inline and executes on the native-on-Workflow backend; `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT (PR open on preview); `pk done` verifies merge, transitions Linear UAT → `In <FirstEnv>` (e.g. `In Dev`), cleans up the worktree; `pk promote <env>` walks `Ship environments` one hop at a time and transitions issues → `In <Env>` (intermediate) or → Done (final). The plan-review gate lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent at `model: opus` between `/work`'s inline plan and execution.
 
    **Pipekit's VBW-steering surface:**
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Not a VBW agent; Pipekit-shipped.
-   2. **`/work` dispatches the `vbw-dev` agent (vbw backend) or runs in-context (native backend).** Backend choice is per-project in `method.config.md`; per-invocation override via `--backend=`.
+   2. **`/work` executes inline on the native-on-Workflow backend** — the sole executor as of v4.0.0. No VBW executor dispatch.
    3. **Read-only state observation** — `.vbw-planning/{ROADMAP,STATE,PHASES,linear-map}.md` reads from `/sync-linear`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/10-strategy-sync`, `pk next`, `pk status`.
    4. **One lifecycle hook** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive`, writes a `pending-strategy-sync` marker into Pipekit's machine-local state directory.
    5. **Pipekit-side ephemeral state** lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds the `pending-strategy-sync` marker and per-issue pipeline-state records consumed by `pk *` commands. Out-of-repo by design — v1.6.0 placed these at `.pipekit/`, but VBW's file-guard hook silently blocked writes during active-plan scope (#13). The relocation made writes succeed unconditionally.
@@ -449,7 +448,7 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `/spec-preflight {ISSUE}` | Empirical pre-flight on a specced issue — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. Run between Spec Review Agent and `pk branch`. |
 | `pk next` | Phase-aware: groups Linear results by status with per-group hints |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) |
-| `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. Per-invocation override via `--backend=`. |
+| `/work <ID>` | Plan + execute on native-on-Workflow (the sole executor as of v4.0.0). |
 | `/pk-express <ISSUE-ID>` | Express lane — idea→Draft-PR autopilot for **simple** WITs (Quick/Standard only). Chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship); stops at 5 gates (not-Now, tier:heavy, spec stalemate, verify flag, Draft PR). Resumes from Linear state. Skill, not a Workflow. |
 | `/verify` | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true`. v2.7.0+: when the diff touches `Migration dir`, spawns a migration-review subagent (`/pr-security-review` rubric M1–M8 + RLS/SECURITY DEFINER/GRANT) and the flag carries a **Hold/Approve verdict** instead of a raw `git show`. Runs every tier; a Hold pauses auto-ship without auto-downgrading status. |
 | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. |
@@ -465,7 +464,7 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts. v2.7.0+: **false-ship cross-check** — flags UAT/Done WITs with no real commits on the integration branch (git evidence). |
 | `/pipekit-help` | Read project state, recommend the next pipeline step. |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into the project (`--push` round-trips improvements back). v2.7.0 **Phase P** also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |
-| `/review-plan {phase-slug}` | Run plan-reviewer agent against the inline `PLAN.md` before execution. Most relevant on the `vbw` backend, where `/work` hands the plan to `vbw-dev` wholesale. |
+| `/review-plan {phase-slug}` | Run plan-reviewer agent against the inline `PLAN.md` (`.pk-work/<ID>-PLAN.md`) before execution — an optional plan-quality gate. |
 | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
 | `/strategy-sync` | Post-pipeline: update Strategy docs to reflect shipped features |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human edit. |

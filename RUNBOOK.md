@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v3.2.0** — Last updated: 2026-06-13  *(VBW backend deprecated: the `auto` router is removed and the Backend config row is now `native` (default) \| `vbw` (legacy opt-in, removal targeted v4.0.0). No other daily-flow change. Carries Pipekit 3.0–3.1 (native default executor, distribution-layer hardening) and the v2.8.x substrate; sync-method.sh example bumped to v3.2.0)*
+**v4.0.0-rc1** — Last updated: 2026-06-15  *(VBW executor removed: native-on-Workflow is the sole executor — the pluggable `vbw` backend, the `--backend=` flag, and the `Backend` config row are gone (a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message). No other daily-flow change; the VBW planning layer (`.vbw-planning/`, `/vbw:init` roadmap scaffold) is untouched. Carries Pipekit 3.0–3.2 (native executor, distribution-layer hardening) and the v2.8.x substrate; sync-method.sh example bumped to v4.0.0-rc1)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,8 +11,8 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v3.2.0                 (or latest tag)
-2. Fill in method.config.md from method.config.template.md (V2 keys: backend, integration_branch, ship_environments, …)
+1. ./scripts/sync-method.sh v4.0.0-rc1             (or latest tag)
+2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
 5. ./bin/pk doctor                                 (deeper diagnostic)
@@ -150,7 +150,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • reads spec from Linear                             │
   │     • plans (one-screen)                                 │
   │     • verdict: proceed | revise: <feedback> | abort      │
-  │     • dispatches dev (vbw or native per config)          │
+  │     • executes plan on native-on-Workflow                │
   │     • atomic commits, gate-aware                         │
   │     • --deep adds spec-validator + plan-review +         │
   │       security-review subagents                          │
@@ -379,8 +379,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 | 1 | Quick status | `pk status` | `./bin/pk status` | parent | reads Linear (full board, unscoped) |
 | 2 | Branch | `pk branch <ID>` | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
 | 3 | Plan + execute | `/work <ID>` | — (skill) | worktree | reads Linear |
-| 3 | (Variant) | `/work <ID> --deep` | — (skill) | worktree | reads Linear; spawns 3 grounding agents |
-| 3 | (Variant) | `/work <ID> --backend=vbw\|native` | — (skill) | worktree | per-invocation backend override (v2.0) |
+| 3 | (Variant) | `/work <ID> --deep` | — (skill) | worktree | reads Linear; spawns 2 grounding agents |
 | 4 | Verify | `/verify` | `./bin/pk verify` | worktree | local-only |
 | 5 | Ship | `pk ship` | `./bin/pk ship` | worktree | push + gh pr create as **Draft** (v2.6.0+) + writes Linear (UAT) |
 | 5 | (Variant) | `pk ship --env=<env>` | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
@@ -405,7 +404,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 
 | Key | Values | Default | Used by |
 |---|---|---|---|
-| **Backend** | `native` \| `vbw` | `native` | `/work` executor for the inline plan. `native` (default) runs on the Workflow primitive; `vbw` is the legacy opt-in (dispatches `vbw-dev`, deprecated v3.2.0 → removal v4.0.0). The `auto` router was removed in v3.2.0. |
+| **Backend** | `native` | `native` | **Vestigial as of v4.0.0 — omit the row.** Native-on-Workflow is the sole `/work` executor; the pluggable `vbw` backend and `--backend=` flag were removed. If present the row must be `native`; `vbw`/`auto` makes `/work` refuse. |
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` PR base |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` enabled |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` runs QA subagent |
