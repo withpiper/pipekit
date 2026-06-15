@@ -29,7 +29,7 @@ bash "$(find ~/.claude/plugins/cache/vbw-marketplace/vbw -maxdepth 1 -mindepth 1
 |---------|-------------|
 | `/vbw:status [--verbose] [--metrics]` | Display project progress dashboard with phase status, velocity metrics, and next action. |
 
-> **Deprecated (VBW v1.35.0):** `/vbw:qa` and `/vbw:verify` were removed from the public help surface and absorbed into `/vbw:vibe --verify`. They still exist as hidden internal commands; in Pipekit v2, the `/verify` skill (or `pk verify`) is the canonical entry point and dispatches to VBW's verification path when `Backend: vbw`.
+> **Deprecated (VBW v1.35.0):** `/vbw:qa` and `/vbw:verify` were removed from the public help surface and absorbed into `/vbw:vibe --verify`. They still exist as hidden internal commands; in Pipekit the `/verify` skill (or `pk verify`) is the canonical verification entry point, and as of v4.0.0 it always runs natively (the `vbw` execution backend was removed — see the note at the top of this file).
 
 ## Supporting — The Safety Net
 
