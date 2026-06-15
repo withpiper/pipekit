@@ -587,7 +587,7 @@ To tell skeleton vs. populated: check for Linear issue IDs or strategy doc refer
 **Critical reminder:** Do NOT run `/vbw:vibe` as an alternative to `/roadmap-create`. VBW's own output after `/vbw:init` suggests it as a path — but in Pipekit it's a dead end. The Pipekit flow is:
 
 ```
-/vbw:init (skeleton) → /roadmap-create (merges + populates Linear) → /phase-plan → /light-spec → pk branch → /work (vbw or native backend)
+/vbw:init (skeleton) → /roadmap-create (merges + populates Linear) → /phase-plan → /light-spec → pk branch → /work (native-on-Workflow)
 ```
 
 **Output:** ROADMAP.md populated (merged with VBW's phase structure), Linear board seeded with initiatives, projects, milestones, and issues

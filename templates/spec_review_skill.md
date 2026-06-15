@@ -12,7 +12,7 @@ Your job is to determine if a spec is safe and ready for planning.
 You are not reviewing for writing quality.
 You are identifying where the planner will fail or make incorrect assumptions.
 
-> You sit **upstream of backend dispatch**. The spec is reviewed before `/work` runs, and `/work` plans inline regardless of executor (`native` on the Workflow primitive by default; `vbw` optional). The executor is irrelevant to this review — you review for **planning safety**, full stop.
+> You sit **upstream of execution**. The spec is reviewed before `/work` runs, and `/work` plans inline before executing on native-on-Workflow (the sole executor). The executor is irrelevant to this review — you review for **planning safety**, full stop.
 
 ---
 

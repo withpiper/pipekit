@@ -2,7 +2,7 @@
 
 **v2.1.2** — Last updated: 2026-05-03  *(v1 vocabulary retired in SOPs + this file)*  •  External: VBW v1.35.1 snapshot
 
-> **Deprecation note (Pipekit v3.2.0):** the `vbw` execution backend is **deprecated, removal targeted for v4.0.0** — native-on-Workflow is the default and only non-legacy executor. `/vbw:init` is still used to scaffold the `.vbw-planning/` roadmap directory (Pipekit owns the roadmap there regardless of backend), so VBW stays installed; this command reference is retained for that scaffold use and for the rare explicit `--backend=vbw` run.
+> **Note (Pipekit v4.0.0):** the `vbw` execution backend was **removed** — native-on-Workflow is the sole executor, and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. `/vbw:init` is still used to scaffold the `.vbw-planning/` roadmap directory (Pipekit owns the roadmap there), so VBW stays installed; this command reference is retained for that scaffold use.
 
 Output of `/vbw:help` (VBW v1.35.1) — included here for context on how Pipekit wraps VBW.
 
@@ -29,7 +29,7 @@ bash "$(find ~/.claude/plugins/cache/vbw-marketplace/vbw -maxdepth 1 -mindepth 1
 |---------|-------------|
 | `/vbw:status [--verbose] [--metrics]` | Display project progress dashboard with phase status, velocity metrics, and next action. |
 
-> **Deprecated (VBW v1.35.0):** `/vbw:qa` and `/vbw:verify` were removed from the public help surface and absorbed into `/vbw:vibe --verify`. They still exist as hidden internal commands; in Pipekit v2, the `/verify` skill (or `pk verify`) is the canonical entry point and dispatches to VBW's verification path when `Backend: vbw`.
+> **Deprecated (VBW v1.35.0):** `/vbw:qa` and `/vbw:verify` were removed from the public help surface and absorbed into `/vbw:vibe --verify`. They still exist as hidden internal commands; in Pipekit the `/verify` skill (or `pk verify`) is the canonical verification entry point, and as of v4.0.0 it always runs natively (the `vbw` execution backend was removed — see the note at the top of this file).
 
 ## Supporting — The Safety Net
 

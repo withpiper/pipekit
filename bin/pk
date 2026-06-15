@@ -29,7 +29,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="3.2.0"
+PK_VERSION="4.0.0-rc1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -48,7 +48,7 @@ pk_config_path() {
 #      method.config.template.md):
 #
 #        ```
-#        Backend: auto
+#        Backend: native
 #        Ship environments: dev,beta,main
 #        ```
 #
@@ -2060,7 +2060,8 @@ cmd_init() {
   echo ""
   echo "Checking your method.config.md for v2 keys..."
   echo ""
-  local needed=("Backend" "Integration branch" "Promote to main" "Require QA review")
+  # v4.0.0: `Backend` is no longer required — native-on-Workflow is the sole executor.
+  local needed=("Integration branch" "Promote to main" "Require QA review")
   local missing=()
   for k in "${needed[@]}"; do
     local v
@@ -2512,8 +2513,8 @@ cmd_doctor() {
   fi
   # Integration branch
   echo "  • Integration branch: $(pk_integration_branch)"
-  # Backend
-  echo "  • Backend: $(pk_config "Backend" "vbw")"
+  # Backend (v4.0.0: native is the sole executor; value shown only to surface a stale vbw config)
+  echo "  • Backend: $(pk_config "Backend" "native")"
   # Session logs (v2.1.2+ — replaces the retired bash Stop hook).
   if [ -n "$root" ] && [ -d "$root/Logs/Sessions" ]; then
     echo "  ✓ Logs/Sessions/ present"

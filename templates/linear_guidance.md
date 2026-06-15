@@ -9,7 +9,7 @@ It is used to:
 - enforce quality before planning
 - provide audit trail for decisions
 
-Claude Code (`/work`) is the planning + execution engine — `native` on the Workflow primitive by default, `vbw` optional. This review is **upstream of backend dispatch** and executor-agnostic: review for planning safety, not for any one executor.
+Claude Code (`/work`) is the planning + execution engine — native-on-Workflow. This review is **upstream of execution** and executor-agnostic: review for planning safety, not for any one executor.
 
 ---
 
@@ -54,7 +54,7 @@ Pipeline:
 
 Feature → Spec → Review → Plan → Execution
 
-(`/work` plans inline before executing, regardless of backend.)
+(`/work` plans inline before executing.)
 
 Specs are planning contracts, not execution plans.
 

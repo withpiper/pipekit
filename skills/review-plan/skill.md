@@ -1,15 +1,15 @@
 ---
 name: review-plan
-description: Run plan-reviewer agent against a VBW PLAN.md before execution. Use after /work plan phase and before approving execution. Use when you need an independent gate catching scope drift, atomicity failures, test gaps. Requires a fresh chat.
+description: Run plan-reviewer agent against a PLAN.md before execution. Use after /work plan phase and before approving execution. Use when you need an independent gate catching scope drift, atomicity failures, test gaps. Requires a fresh chat.
 ---
 
 # Review Plan Skill
 
 > **Fresh-chat check.** If this conversation ran `/vbw:vibe --plan` or watched the plan get drafted, start a new conversation. The reviewer must be independent of the planner. See `method.md` § Fresh-Chat Discipline.
 
-You are a plan-review coordinator. Your job is to invoke the `plan-reviewer` agent against a `PLAN.md` before execution, present the structured review back to the user, and recommend a path forward (proceed to execute, route back for plan revision, or escalate). The plan comes from VBW's planner in direct VBW use (`/vbw:vibe --plan` / `vbw:vbw-lead`), or from `/work`'s inline planning on the `vbw` backend.
+You are a plan-review coordinator. Your job is to invoke the `plan-reviewer` agent against a `PLAN.md` before execution, present the structured review back to the user, and recommend a path forward (proceed to execute, route back for plan revision, or escalate). The plan comes from VBW's planner in direct VBW use (`/vbw:vibe --plan` / `vbw:vbw-lead`), or from `/work`'s inline planning (native, filed at `.pk-work/<ID>-PLAN.md`).
 
-This skill is Pipekit's plan-review gate — an independent stress-test between planning and execution. It is **most relevant on the `vbw` backend** (and in direct VBW use), where the whole plan is handed to `vbw-dev` **wholesale** with no per-task gate; the `native` backend's per-task verify-before-integrate is its own plan-safety mechanism, so upfront review matters less there. In direct VBW use, run this **between** `/vbw:vibe --plan` and `/vbw:vibe --execute`.
+This skill is Pipekit's plan-review gate — an independent stress-test between planning and execution. It is **most relevant in direct VBW use**, where the whole plan is handed to `vbw-dev` **wholesale** with no per-task gate. For native `/work`, per-task verify-before-integrate is its own plan-safety mechanism, so upfront review matters less — reach for it when a plan is large or high-risk. In direct VBW use, run this **between** `/vbw:vibe --plan` and `/vbw:vibe --execute`.
 
 ## Triggers
 
@@ -34,7 +34,7 @@ The `plan-reviewer` agent fills that gap. This skill orchestrates the call.
 
 ## Prerequisites
 
-- A `PLAN.md` to review. In direct VBW use it lives in `.vbw-planning/phases/{phase-slug}/` (produced by `/vbw:vibe --plan` / `vbw:vbw-lead`). On the `vbw` `/work` backend the plan is `/work`'s inline output — `/work` hands it to `vbw-dev` without filing it, so provide that plan to this skill directly
+- A `PLAN.md` to review. In direct VBW use it lives in `.vbw-planning/phases/{phase-slug}/` (produced by `/vbw:vibe --plan` / `vbw:vbw-lead`). With native `/work` the plan is filed at `.pk-work/<ID>-PLAN.md` — point this skill at that path
 - The approved Light Spec is available — either as the description of a Linear issue tied to the current branch, or readable from a known location
 - `.claude/agents/plan-reviewer.md` is installed (Pipekit ships this; if missing, run `bash scripts/sync-method.sh`)
 
@@ -187,7 +187,7 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 
 | Skill | Relationship |
 |-------|-------------|
-| `/work` (vbw backend) | Plans **inline** (no `vbw-lead`); run `/review-plan` against that plan before `/work` hands it to `vbw-dev` wholesale. `/work` does not spawn plan-reviewer directly. |
+| `/work` (native) | Plans **inline** and files the plan at `.pk-work/<ID>-PLAN.md`; run `/review-plan` against it before execution. `/work` does not spawn plan-reviewer directly. |
 | `/vbw:vibe --plan` | Produces the `PLAN.md` this skill reviews. |
 | `/vbw:vibe --execute` | Next step after Pass / Revise. |
 | `/02-light-spec-revise` | Route here when plan-reviewer's Block verdict points at spec-level issues (framing, missing AC, scope ambiguity). |

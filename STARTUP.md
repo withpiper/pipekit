@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v2.7.0** — Last updated: 2026-06-05  *(adds the V2 `method.config.md` key reference to Step 3, flagging `Spec ready state` / `Spec approved state` as the load-bearing `/light-spec` ↔ `pk spec-cycle` interlock — see CHANGELOG.md)*
+**v4.0.0-rc1** — Last updated: 2026-06-15  *(Backend row → native-only; the `vbw` executor was removed in v4.0.0. Otherwise carries the v2.7.0 Step 3 `method.config.md` key reference — `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -192,7 +192,7 @@ Configure in `.mcp.json` with `${VAR}` interpolation for secrets.
 
 | Key | What it controls |
 |-----|------------------|
-| `Backend` | `/work` executor: `native` (default) or `vbw` (legacy opt-in, deprecated v3.2.0). |
+| `Backend` | `/work` executor — native-on-Workflow only (the `vbw` option was removed in v4.0.0; omit this row). |
 | `Integration branch` | The base `pk ship` opens PRs against (`dev` or `main`). |
 | `Promote to main` | Whether `pk promote` is enabled (`false` for single-tier projects). |
 | `Ship environments` | The chain `pk promote` walks (`prod`, `dev,main`, `dev,beta,main`, …). |

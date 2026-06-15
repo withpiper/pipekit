@@ -43,8 +43,8 @@ These skills work across any project that follows the method. They read `method.
 | `/spec-preflight` | Empirical pre-flight checks on a specced Linear issue (file paths, line refs, phase-detect baseline, Linear status). Read-only. | Stage 1 → Stage 2 gate |
 | `pk next` | Phase-aware: groups Linear results by status (In Progress / Approved / Needs Spec) | Stage 2: Plan + Build |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) | Stage 2: Plan + Build |
-| `/work <ID>` | Plan + execute. Dispatches to `vbw` or `native` backend per `method.config.md`. | Stage 2: Plan + Build |
-| `/review-plan` | Spawns `plan-reviewer` agent against `PLAN.md` (vbw backend). | Stage 2: Plan + Build |
+| `/work <ID>` | Plan + execute on native-on-Workflow (the sole executor as of v4.0.0). | Stage 2: Plan + Build |
+| `/review-plan` | Spawns `plan-reviewer` agent against the inline `PLAN.md` (optional gate). | Stage 2: Plan + Build |
 | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true`. v2.7.0+: migration-touching diffs get a self-review subagent (M1–M8 rubric) carrying a Hold/Approve verdict, not a raw `git show`. | Stage 3: Verify + Ship |
 | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` flags review-in-flight + prints reviewer invocation. | Stage 3: Verify + Ship |
 | `pk ready [<ID>]` | Flip Draft PR to Ready (v2.6.0+). Fires `ready_for_review` → outside reviewers (Semgrep + claude-review per `templates/ci/`) run. No Linear state change. | Stage 3: Verify + Ship |
@@ -125,7 +125,7 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 1. **Read `method.config.md`** for project-specific values (Linear team, issue prefix, state IDs)
 2. **Read `CLAUDE.md`** for project coding conventions
 3. **Use Linear MCP tools** for issue management (`mcp__linear-server__*`)
-4. **Dispatch heavy planning + execution through `/work`** (which routes to the `vbw` or `native` backend per `method.config.md`). Don't invoke `vbw:vbw-lead`, `vbw:vbw-dev`, or `vbw:vbw-qa` directly from skills — that bypasses Pipekit's backend dispatch and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
+4. **Dispatch heavy planning + execution through `/work`** (which executes on the native-on-Workflow backend, the sole executor as of v4.0.0). Don't invoke `vbw:vbw-lead`, `vbw:vbw-dev`, or `vbw:vbw-qa` directly from skills — that bypasses Pipekit's execution and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
 
 ### "What's next?" in v2 — `pk next` reads Linear
 
@@ -212,7 +212,7 @@ Defaults we've found to work well:
 | Agent role | Default model |
 |------------|---------------|
 | Planning (`vbw:vbw-lead`, `plan-reviewer`, spec reviewers) | `opus` |
-| Execution (`vbw:vbw-dev`, batch runners) | `sonnet` |
+| Execution (native Workflow task agents, batch runners) | `sonnet` |
 | Verification (`vbw:vbw-qa`) | `sonnet` |
 
 Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents).

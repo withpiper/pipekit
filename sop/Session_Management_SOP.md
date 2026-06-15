@@ -36,7 +36,7 @@ Pipekit's pipeline maps naturally onto session boundaries. Treat each pipeline s
 | `/roadmap-create` | Fresh session | Different context from infrastructure; reads strategy docs anew |
 | `/phase-plan` | Fresh session | Distinct from roadmap creation |
 | `/light-spec` per issue | Fresh session per issue | Each spec is a bounded AI-to-AI contract |
-| `/work` (vbw backend) → vbw-dev execution | VBW manages its own context | Don't try to orchestrate from the main session — let `/work` dispatch and read state on completion |
+| `/work` → native-on-Workflow execution | The Workflow primitive manages per-task context | Let `/work` plan + execute; read its `.pk-work/<ID>-SUMMARY.md` trail on completion |
 | `/strategy-sync` post-ship | Fresh session | Compares codebase to strategy docs, needs clean context |
 | **End of any session** | **`/pk-exit`** | **Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Run manually as the final command of every Claude Code session regardless of where the current issue stands. Per-session, not per-issue — never auto-chained from `/work` or `/verify`.** |
 

@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v3.2.0** — Last updated: 2026-06-13  *(VBW backend deprecated: the VBW Integration section + `/vbw:init` note now read "legacy, deprecated v3.2.0, removal targeted v4.0.0"; the `auto` router is gone. Carries the v3.1.0 distribution-layer rows (`pk doctor` staleness check, `.local-skills` manifest), 3.0 final's `vbw-lead` dispatch scrub, the rc2 native-on-Workflow reframe, and the v2.8.x substrate)*
+**v4.0.0-rc1** — Last updated: 2026-06-15  *(VBW executor removed: native-on-Workflow is the sole executor — the pluggable `vbw` backend, the `--backend=` flag, and the `vbw-dev`/`vbw-scout` dispatch are gone (the `auto` router in v3.2.0); a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The VBW Integration section is reframed as the **roadmap scaffold** (`/vbw:init`), which stays. Carries the v3.1.0 distribution-layer rows (`pk doctor` staleness check, `.local-skills` manifest), 3.0 final's `vbw-lead` dispatch scrub, the native-on-Workflow reframe, and the v2.8.x substrate)*
 
 ---
 
@@ -27,7 +27,7 @@ A complete guide to using Pipekit from project inception through production deli
 7. [Stage 2: Plan + Build](#stage-2-plan--build)
    - [Branch](#branch)
    - [Work](#work)
-   - [Plan Review (vbw backend)](#plan-review-vbw-backend)
+   - [Plan Review](#plan-review)
 8. [Stage 3: Verify + Ship](#stage-3-verify--ship)
    - [Verify](#verify)
    - [Ship](#ship)
@@ -101,7 +101,7 @@ STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
      Linear                           Linear
 
   Stage 2: Plan + Build
-    pk next ──→ pk branch <ID> ──→ /work <ID>   (→ /review-plan if vbw backend)
+    pk next ──→ pk branch <ID> ──→ /work <ID>   (→ /review-plan to gate the plan)
         │             │                  │
     Phase-aware   Worktree +         Plan-verdict
     Linear        Linear → In        gate, then
@@ -342,7 +342,7 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
 **Input:** —
 **Output:** `.vbw-planning/` directory scaffold
 
-VBW is a legacy execution backend (deprecated v3.2.0) — as of 3.0 the default executor is native-on-Workflow — but `/vbw:init` still scaffolds the `.vbw-planning/` directory Pipekit uses to track the roadmap and state (and, when the legacy `vbw` backend runs, its plans and execution). The directory is created here regardless of which backend you execute with, because the roadmap lives in it.
+VBW is no longer an execution backend — native-on-Workflow is the sole executor as of v4.0.0 — but `/vbw:init` still scaffolds the `.vbw-planning/` directory Pipekit uses to track the roadmap and state. The directory is created here because the roadmap lives in it; `/work` writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead.
 
 This step is simple — run `/vbw:init` and it scaffolds:
 ```
@@ -557,24 +557,21 @@ After branching, `cd .worktrees/<ID>-<slug>` and start a fresh Claude Code sessi
 
 Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
 
-**Backend dispatch** is per `method.config.md`:
+**Execution** is native-on-Workflow — the sole executor as of v4.0.0:
 
-| Backend | What `/work` does |
-|---------|-------------------|
-| `vbw` | Hands `/work`'s inline plan to the `vbw-dev` subagent for execution — one atomic commit per task. No `vbw-lead`/`vbw-qa`: planning already happened inline, and verification is the `/verify` gate. |
-| `native` | Plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). |
+`/work` plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). The pluggable `vbw` backend and `--backend=` flag were removed in v4.0.0; a stale `Backend: vbw`/`--backend=vbw` makes `/work` refuse with a migration message.
 
 `--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
 
-**All commits include the issue ID** in the message format: `feat(scope): description (PROJ-1)`. CLAUDE.md conventions are followed (vbw-dev reads it; native backend reads it via your session).
+**All commits include the issue ID** in the message format: `feat(scope): description (PROJ-1)`. CLAUDE.md conventions are followed (the native backend reads it via your session).
 
-### Plan Review (vbw backend)
+### Plan Review
 
 **Skill:** `/review-plan` (spawns `plan-reviewer` agent at `model: opus`)
-**Input:** `PLAN.md` (vbw backend). Native now also emits a task DAG at `.pk-work/<ID>-PLAN.md`, but `/review-plan` currently targets VBW's `.vbw-planning/.../PLAN.md` path; wiring it to the native artifact is a follow-up.
+**Input:** the inline plan — `/work` (native) emits a task DAG at `.pk-work/<ID>-PLAN.md`. (In direct VBW use the plan lives at `.vbw-planning/.../PLAN.md`; `/review-plan` currently targets that path, so wiring it to the native artifact is a follow-up.)
 **Output:** Validated plan or revision requests
 
-Run between `/work`'s inline planning and `vbw-dev`'s execution. (In direct VBW use — outside Pipekit — the plan comes from VBW's own planner instead.) The review matters most on the `vbw` backend because the whole plan is handed to `vbw-dev` wholesale, with no per-task gate; `native` needs it less, since per-task verify-before-integrate is its own plan-safety net. The plan reviewer stress-tests:
+Run between `/work`'s inline planning and execution as an optional plan-quality gate. (In direct VBW use — outside Pipekit — the plan comes from VBW's own planner instead.) Native execution has per-task verify-before-integrate as its own plan-safety net, so `/review-plan` is most useful when a plan is large or high-risk and you want a whole-plan stress-test before any task runs. The plan reviewer stress-tests:
 
 - Scope alignment with the spec
 - Task atomicity (each task produces one logical commit)
@@ -582,7 +579,7 @@ Run between `/work`'s inline planning and `vbw-dev`'s execution. (In direct VBW 
 - Success criteria completeness
 - Risk identification
 
-If the plan fails review, it goes back to `/work`'s planning step for rework. Once the plan passes, `vbw-dev`'s execution begins.
+If the plan fails review, it goes back to `/work`'s planning step for rework. Once the plan passes, execution begins.
 
 ---
 
@@ -914,7 +911,7 @@ Terminal:
 `[In <Env> →]*` is one state per non-final env in `Ship environments`. For 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. For 2-tier (`dev,main`): `In Dev → Done`. State maps 1:1 to environment: `UAT` = PR open on preview branch; `In Dev` = merged to dev; `In Beta` = promoted to beta; `Done` = on the final env.
 
 **Key distinction:**
-- **Building** = automated execution owns it (`/work`, native or vbw backend). Phase-batched, planned work.
+- **Building** = automated execution owns it (`/work`, native-on-Workflow). Phase-batched, planned work.
 - **In Progress** = You're doing it manually. Ad-hoc, outside the phase.
 
 ### Phase Management via Status
@@ -953,9 +950,9 @@ Terminal:
 
 ---
 
-## VBW Integration (legacy backend — deprecated v3.2.0)
+## VBW Integration (roadmap scaffold — executor removed v4.0.0)
 
-As of 3.0 the default executor is **native-on-Workflow** — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. VBW is a **legacy backend** you opt into with `Backend: vbw` (or `--backend=vbw`); **as of v3.2.0 it is deprecated and slated for removal in v4.0.0**, and the complexity-based `auto` router is gone. The deprecation is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. The `.vbw-planning/` scaffold and the roadmap are still used regardless of backend (Pipekit owns the roadmap there); the rest only appears when you explicitly run the `vbw` backend.
+Native-on-Workflow is the sole executor — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. **VBW is no longer an execution backend**: the pluggable `vbw` executor and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0), and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The removal is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. What VBW still provides is the **roadmap scaffold**: `/vbw:init` creates `.vbw-planning/`, and Pipekit owns the roadmap there. Everything below is about that scaffold, not an executor.
 
 | Pipeline Stage | Tool | Used when | Purpose |
 |---------------|------|-----------|---------|
@@ -963,7 +960,7 @@ As of 3.0 the default executor is **native-on-Workflow** — `/work` plans the i
 | Stage 0.6 | `/roadmap-create` writes to `.vbw-planning/ROADMAP.md` | Always | Populate roadmap |
 | Stage 0.7 (optional) | `/vbw:discuss` | Optional | Discuss first phase before speccing |
 | Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — **native and vbw both plan here; `/work` has no separate "VBW Lead" step** |
-| Stage 3 (execute) | `vbw-dev` agent | `Backend: vbw` only | Execute tasks with atomic commits (native executes on the Workflow primitive instead) |
+| Stage 3 (execute) | native-on-Workflow | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify-before-integrate (the `vbw-dev` executor was removed in v4.0.0) |
 | Anytime | `/vbw:status` | If VBW installed | Project progress dashboard |
 
 ### VBW Agent Roster
@@ -978,7 +975,7 @@ As of 3.0 the default executor is **native-on-Workflow** — `/work` plans the i
 | Docs | Documentation generation |
 | Scout | Research and codebase scanning |
 
-> **In Pipekit, `/work` with `Backend: vbw` only dispatches the Dev agent.** Lead, QA, Architect, and the rest run only under direct `/vbw:*` invocation — which Pipekit advises against (it bypasses the visibility layer). In every backend, planning is `/work`'s inline step and verification is the `/verify` gate plus the antagonistic review gates, not a VBW QA pass.
+> **In Pipekit, `/work` no longer dispatches any VBW agent** (the `vbw-dev` executor was removed in v4.0.0). The agents above — Lead, Dev, QA, Architect, and the rest — run only under direct `/vbw:*` invocation, which Pipekit advises against (it bypasses the visibility layer). Planning is `/work`'s inline step, execution is native-on-Workflow, and verification is the `/verify` gate plus the antagonistic review gates — not a VBW QA pass.
 
 ### Keeping VBW Updated
 
@@ -992,11 +989,11 @@ The method uses three layers to enforce conventions. Each layer serves a differe
 
 | Layer | Purpose | Who Reads It | When |
 |-------|---------|-------------|------|
-| **CLAUDE.md** | Documents conventions | The executor (native or VBW) during execution | Every agent session |
+| **CLAUDE.md** | Documents conventions | The executor (native-on-Workflow) during execution | Every agent session |
 | **CI / Hooks** | Hard enforcement — blocks merges | Everyone (agents and humans) | Every PR |
 | **Skills** | Interactive shortcuts | You, in hands-on sessions | When you invoke them |
 
-**Skills are convenience wrappers.** They automate the same conventions documented in CLAUDE.md. Executor agents (native or VBW) don't call skills — they read CLAUDE.md and write code directly.
+**Skills are convenience wrappers.** They automate the same conventions documented in CLAUDE.md. Executor agents don't call skills — they read CLAUDE.md and write code directly.
 
 **CLAUDE.md is the single document** that agents read to understand the project. Build it up as the project grows:
 
@@ -1173,9 +1170,9 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 |-----------------|------------|-------------|
 | Find next | `pk next` | Phase-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
 | Branch | `pk branch <ID>` | Worktree + feature branch + Linear → In Progress (idempotent) |
-| Work | `/work <ID>` | Plan + execute. Verdict gate before code. Dispatches to `vbw` or `native` backend per `method.config.md`. |
+| Work | `/work <ID>` | Plan + execute on native-on-Workflow. Verdict gate before code. |
 | Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
-| Plan Review | `/review-plan` | Spawn `plan-reviewer` against `PLAN.md` (vbw backend only) |
+| Plan Review | `/review-plan` | Spawn `plan-reviewer` against the inline `PLAN.md` (optional gate) |
 
 ### Fast lanes (autopilots over the loop)
 
