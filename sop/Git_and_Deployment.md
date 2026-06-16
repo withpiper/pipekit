@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` + `pk ship` Draft default + `pk ready` flip command; `pk done` auto-pulls integration and writes VBW SUMMARY)*
+**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` + `pk ship` Draft default + `pk ready` flip command; `pk done` auto-pulls integration and writes planning SUMMARY)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---
@@ -29,7 +29,7 @@ dev  (active development)
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; Linear → `UAT`). `pk ready` flips it to Ready (fires outside reviewers). `pk done` after merge → `In Dev`. `pk promote main` (or `pk promote` with no arg, since only one hop exists) opens the `dev` → `main` PR; `pk promote main --finish` runs after merge.
-**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed; also auto-pulls integration + writes VBW SUMMARY); `pk promote main --finish` → `Done` (after promote PR merges — two-phase, not optimistic).
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed; also auto-pulls integration + writes planning SUMMARY); `pk promote main --finish` → `Done` (after promote PR merges — two-phase, not optimistic).
 
 ### Three-Tier (dev → beta → main)
 
@@ -210,7 +210,7 @@ PR is reviewed, approved, and merged (rebase or merge-commit per § Merge Strate
 ```
 pk done <ID> [--merge] # verify merge, cleanup worktree+branch, post commits to Linear,
                        # transition UAT → In <FirstEnv>, auto-pull integration (v2.6.0+),
-                       # write VBW SUMMARY + flip PLAN status (v2.6.0+; skipped if no VBW)
+                       # write planning SUMMARY + flip PLAN status (v2.6.0+; skipped if no planning layer)
 ```
 
 ### Step 6: Promote to Production (two-phase as of v2.6.0)

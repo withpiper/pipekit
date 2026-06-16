@@ -48,7 +48,7 @@ Promotion mechanism: `pk ship` (feature → integration branch from `method.conf
 
 ## Pipeline
 
-This project uses **Pipekit** (a portable AI-delivery methodology) wrapping **VBW** (planning and execution engine) with **Linear** (review and tracking layer).
+This project uses **Pipekit** (a portable AI-delivery methodology) with **VBW** for the planning-layer scaffold and **Linear** for review and tracking. Execution is native-on-Workflow (the sole executor as of v4.0.0).
 
 The full pipeline is documented in `method/method.md`; the one-page operational view is in `method/RUNBOOK.md`. Core loop:
 

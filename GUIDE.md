@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.0.0-rc1** — Last updated: 2026-06-15  *(VBW executor removed: native-on-Workflow is the sole executor — the pluggable `vbw` backend, the `--backend=` flag, and the `vbw-dev`/`vbw-scout` dispatch are gone (the `auto` router in v3.2.0); a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The VBW Integration section is reframed as the **roadmap scaffold** (`/vbw:init`), which stays. Carries the v3.1.0 distribution-layer rows (`pk doctor` staleness check, `.local-skills` manifest), 3.0 final's `vbw-lead` dispatch scrub, the native-on-Workflow reframe, and the v2.8.x substrate)*
+**v4.0.0-rc2** — Last updated: 2026-06-16  *(De-stale + debrand follow-up to rc1: purged executor-stale VBW references that still routed to the removed backend (`/verify` + `/pk-bug` QA-subagent now `general-purpose`, `/review-plan`'s `/vbw:vibe` routing now native `/work`, tier-template execution rows, `Linear_SOP` execution-ownership) and debranded cosmetic prose ("VBW SUMMARY" → "planning SUMMARY"). The VBW Integration section stays as the **roadmap scaffold** (`/vbw:init`); the planning layer and vbw plugin are untouched. rc1: VBW executor removed — native-on-Workflow is the sole executor; a stale `Backend: vbw`/`--backend=vbw` refuses with a migration message. Carries the v3.1.0 distribution-layer rows and the v2.8.x substrate)*
 
 ---
 
@@ -702,7 +702,7 @@ feature/* → pk ship (Draft) → pk ready → pk done (UAT → In Dev)
 ```
 - `pk ship` opens the feature → dev PR as Draft (Linear → `UAT`)
 - `pk ready` flips Draft → Ready (fires outside reviewers)
-- `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + VBW SUMMARY/PLAN-flip
+- `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + planning SUMMARY/PLAN-flip
 - `pk promote main` (or `pk promote` with no arg) opens the dev → main PR. WITs stay in `In Dev`.
 - `pk promote main --finish` (v2.6.0+ Phase 2) after the promote PR merges: transitions the issue → `Done`
 
@@ -714,7 +714,7 @@ feature/* → pk ship (Draft) → pk ready → pk done (UAT→In Dev)
 ```
 - `pk ship` opens the feature → dev PR as Draft (Linear → `UAT`)
 - `pk ready` flips Draft → Ready (fires outside reviewers)
-- `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + VBW SUMMARY/PLAN-flip
+- `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + planning SUMMARY/PLAN-flip
 - `pk promote beta` opens dev → beta. WITs stay in `In Dev`. `--finish` after merge transitions → `In Beta`.
 - `pk promote main` opens beta → main. WITs stay in `In Beta`. `--finish` after merge transitions → `Done`.
 
@@ -1197,7 +1197,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 
 | Command | Invocation | What It Does |
 |---------|------------|-------------|
-| Cleanup | `pk done <ID> [--merge]` | Post-merge: verify merge, cleanup worktree+branch, post commits/diffstat to Linear, transition UAT → In `<FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. v2.7.0+: resets the parent branch, prints a stack advisory, and reminds you to deploy when a `Deploy command` is configured (script-deploy projects). |
+| Cleanup | `pk done <ID> [--merge]` | Post-merge: verify merge, cleanup worktree+branch, post commits/diffstat to Linear, transition UAT → In `<FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes planning SUMMARY + flips PLAN status. v2.7.0+: resets the parent branch, prints a stack advisory, and reminds you to deploy when a `Deploy command` is configured (script-deploy projects). |
 | Promote — open | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR. WITs stay in source state. PR body embeds bundled-WIT tracker. 2-tier: `pk promote` with no arg picks the only hop. |
 | Promote — finish | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions matching issues → `In <Env>` (intermediate) or → Done (final). |
 

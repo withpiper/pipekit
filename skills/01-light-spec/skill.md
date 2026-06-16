@@ -5,7 +5,7 @@ description: Structured spec generation with auto-cycled agent review + tier aut
 
 # Light Spec Skill
 
-Draft a structured, VBW-ingestible specification for a Linear issue. Bridges the gap between raw brainstorms and full VBW PLAN.md files.
+Draft a structured, plan-ready specification for a Linear issue. Bridges the gap between raw brainstorms and full PLAN.md files.
 
 ## Triggers
 

@@ -45,6 +45,23 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.0.0-rc2 — 2026-06-16
+
+> **De-stale + debrand follow-up to rc1.** rc1 removed the VBW *executor* but left stale references that still routed users to it, plus cosmetic "VBW" branding that no longer matches reality. This pass fixes the wrong-routing bugs and debrands prose where the name isn't load-bearing. **No behavior change to the planning layer** — `.vbw-planning/`, `/vbw:init`, `/roadmap-create`, `/phase-plan`, `/review-plan`, `pk_vbw_*`, and the vbw plugin are all untouched. The brand necessarily persists in the plugin-owned `.vbw-planning/` directory and the `/vbw:*` commands until a separate planning-layer retirement.
+
+- **Executor-stale bug fixes (were misrouting users to removed infra):**
+  - `skills/verify/skill.md`: QA + adversarial subagents now use `subagent_type: "general-purpose"` directly (dropped the `Backend`-keyed `vbw:vbw-qa` selection and the `Backend` config read); fallback row no longer names `vbw:vbw-qa`.
+  - `skills/pk-bug/skill.md`: dropped the `Backend (vbw or native)` config read and the `vbw-debugger` agent suggestion (now a `general-purpose` debugging subagent).
+  - `skills/review-plan/skill.md`: reframed native-first — all 14 `/vbw:vibe --plan/--execute` references now point at `/work`'s inline planning (`.pk-work/<ID>-PLAN.md`) and native execution; legacy `.vbw-planning/phases/` layout still reviewed.
+  - `templates/tier-standard.md`, `templates/tier-heavy.md`: execution rows say native `/work` (planning still required; `PLAN.md` at `.pk-work/<ID>-PLAN.md`).
+  - `sop/Linear_SOP.md`: `Building` state now correctly attributes execution + QA to native `/work` + `/verify`, not "VBW execution / VBW QA agent". Planning-layer ownership model preserved.
+  - `method.md`: "VBW agents read CLAUDE.md / VBW agents execute plans" → "the executor".
+- **Debrand (cosmetic):** "VBW SUMMARY" → "planning SUMMARY" (`GUIDE.md`, `sop/Git_and_Deployment.md`); `01-light-spec` "VBW-ingestible" → "plan-ready"; `templates/CLAUDE.md.template` dropped the stale "planning and execution engine" claim (execution is native).
+- **Deliberately not touched:** the `## VBW Integration` / `Step 0.5: VBW Init` section headings (named after the real `/vbw:init` command, TOC-anchored, kept in rc1) and `VBW_COMMANDS.md` / `sop/VBW_Help.md` (real planning-command references). Fully removing "VBW" from these requires the deferred planning-layer retirement.
+- **Migration:** none. Consumers re-sync (`./scripts/sync-method.sh v4.0.0-rc2`) to pick up the corrected guidance.
+
+---
+
 ## v4.0.0-rc1 — 2026-06-15
 
 > **VBW executor removed.** v3.2.0 deprecated the optional `vbw` `/work` executor on production evidence (0/30 recent SiteLine PRs used it); v4.0.0 makes good on the removal. Native-on-Workflow is now the **sole** executor — there is no pluggable backend, no `--backend=` flag, and no `vbw-dev`/`vbw-scout` dispatch in `/work`. This is the breaking change that justifies the major bump: a stale `Backend: vbw`/`auto` in `method.config.md` or a `--backend=vbw` flag now **refuses with a migration message** rather than silently routing. **The VBW *planning* layer is untouched** — `.vbw-planning/`, `/vbw:init`'s roadmap scaffold, `/roadmap-create`'s phase merge, `/phase-plan`, `/review-plan`, and the `pk_vbw_*` roadmap helpers all stay. Retiring the planning layer (and rewriting Stage 0 onto Linear + a native phase surface) is a separate, later effort, deliberately not bundled here.

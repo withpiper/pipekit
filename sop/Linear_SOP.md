@@ -92,7 +92,7 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **Specced** | unstarted | You | Steps 2-3 | Light spec applied, agent reviewed. Awaiting your sign-off. **Config-driven (v2.7.0+):** this is the default `Spec ready state`, but the state `/light-spec` publishes to and `pk spec-cycle` requires is whatever `method.config.md` § `Spec ready state` names. Two-state boards with no `Specced` state set it to `Needs Spec`. |
 | **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
 | **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
-| **Building** | started | VBW | Steps 4-7 | VBW planning + execution + QA. Current-phase execution queue only. |
+| **Building** | started | VBW + `/work` | Steps 4-7 | VBW planning; native `/work` execution + `/verify` QA. Current-phase execution queue only. |
 | **UAT** | started | You | Step 8a | PR open on preview branch (pre-merge — v2.6.0+ opens as Draft; `pk ready` flips to Ready to fire outside reviewers). Code review + preview-URL acceptance testing happens here. **v2.4.3+**: `pk promote` (Phase 1) refuses if any bundled issue is still in UAT (PR not merged) — pass `--confirmed` to bypass after env-UAT signoff. |
 | **In `<FirstEnv>`** (e.g. `In Dev`) | started | You | Step 8b | Code merged to first deploy env. Interactive UAT in progress, or signed-off-awaiting-promote. Set by `pk done` after merge confirmation. |
 | **In `<Env>`** (e.g. `In Beta`) | started | You | Step 8c+ | Code promoted to a non-final env. One state per non-final env in `Ship environments`. **v2.6.0+**: set by `pk promote <env> --finish` (Phase 2, after the promote PR merges) — replaces the pre-v2.6.0 optimistic-at-PR-open transition. |
@@ -112,7 +112,7 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | Specced | Needs Spec | Agent or human sends back for revision | You |
 | Specced | Approved | You approve scope, decisions, priority | You |
 | Approved | Building | Phase batch is ready for execution | You (or VBW pickup) |
-| Building | UAT | VBW QA passes + `pk ship` | VBW QA agent + you |
+| Building | UAT | `/verify` QA passes + `pk ship` | `/verify` QA + you |
 | UAT | In `<FirstEnv>` | `pk done` after PR merge (or `pk done --merge`) | You + `pk done` |
 | UAT | Done | `pk done` on 1-tier project (first env IS final env) | You + `pk done` |
 | In `<Env>` | In `<NextEnv>` | `pk promote <NextEnv>` opens PR (no state change); `pk promote <NextEnv> --finish` after merge transitions (v2.6.0+) | You + `pk promote` |
@@ -133,7 +133,7 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 
 `[In <Env> →]*` is one state per non-final env in `Ship environments`. 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. 2-tier (`dev,main`): `In Dev → Done`. 1-tier (`main`): `UAT → Done` (no intermediate `In <Env>`).
 
-**Building** = VBW owns it. Phase-batched, trigger rules apply. Never put ad-hoc work here.
+**Building** = phase-managed (VBW plans the batch; `/work` executes). Phase-batched, trigger rules apply. Never put ad-hoc work here.
 **In Progress** = You're doing it by hand, outside the phase. VBW ignores these.
 
 ### Phase Management
