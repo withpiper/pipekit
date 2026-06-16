@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.0.0-rc1** — Last updated: 2026-06-15  *(**VBW executor removed.** Native-on-Workflow is the sole executor; the pluggable `vbw` backend, the `--backend=` flag, and the `vbw-dev`/`vbw-scout` dispatch in `/work` are gone (the `auto` router went in v3.2.0). A stale `Backend: vbw`/`auto` or `--backend=vbw` now refuses with a migration message. Makes good on the v3.2.0 deprecation, grounded in production evidence: 0/30 recent SiteLine PRs used vbw, and native shipped 12/13 clean first-pass with the gate layer — not the executor — catching the one defect. The **VBW planning layer** (`.vbw-planning/`, `/vbw:init` roadmap scaffold, `/roadmap-create` phase merge, `/phase-plan`, `/review-plan`) is untouched. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. Carries Pipekit 3.0–3.2: native-on-Workflow executor, distribution-layer hardening, see `experiments/`)*
+**v4.0.0-rc2** — Last updated: 2026-06-16  *(**De-stale + debrand follow-up to rc1.** Purged executor-stale VBW references that still routed users to the removed backend: `/verify` + `/pk-bug` QA-subagent defaults are now `general-purpose`, `/review-plan`'s `/vbw:vibe --plan/--execute` routing is now native `/work`, the tier templates' execution rows and `Linear_SOP`'s execution-ownership now name native, and method.md's "VBW agents read/execute" claims now say "the executor". Debranded cosmetic prose ("VBW SUMMARY" → "planning SUMMARY"). The **VBW planning layer** (`.vbw-planning/`, `/vbw:init` roadmap scaffold, `/roadmap-create` phase merge, `/phase-plan`, `/review-plan`) and the vbw plugin are untouched — the brand persists in the plugin-owned dir + `/vbw:*` commands until a separate planning-layer retirement. rc1: **VBW executor removed** — native-on-Workflow is the sole executor; a stale `Backend: vbw`/`auto`/`--backend=vbw` refuses with a migration message; grounded in production evidence (0/30 recent SiteLine PRs used vbw). Carries Pipekit 3.0–3.2: native-on-Workflow executor, distribution-layer hardening, see `experiments/`)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -53,7 +53,7 @@ Per session (not per issue): /pk-exit          (last command of every Claude Cod
 
 **Bookends:** `/roadmap-review` validates Stage 0 outputs and plan health before entering the pipeline. `/strategy-sync` updates Strategy docs after features ship — closing the documentation loop.
 
-**Three-layer enforcement.** Conventions live in `CLAUDE.md` (VBW agents read this), hard gates live in CI + hooks (block merges that violate them), and skills are interactive shortcuts for hands-on sessions. The same rule is enforced at multiple layers so neither a missed skill invocation nor a permissive prompt can bypass it.
+**Three-layer enforcement.** Conventions live in `CLAUDE.md` (the executor reads this), hard gates live in CI + hooks (block merges that violate them), and skills are interactive shortcuts for hands-on sessions. The same rule is enforced at multiple layers so neither a missed skill invocation nor a permissive prompt can bypass it.
 
 ### Step-by-Step
 
@@ -343,11 +343,11 @@ The spec-as-contract principle ("no stage may introduce guesswork into the next 
 
 | Layer | Purpose | Who it serves |
 |---|---|---|
-| **CLAUDE.md** | Documents conventions so VBW agents follow them automatically | VBW dev agents during plan execution |
+| **CLAUDE.md** | Documents conventions so the executor follows them automatically | The native executor during plan execution |
 | **CI / Hooks** | Hard enforcement — blocks merges that violate conventions | Everyone (agents and humans) |
 | **Skills** | Interactive shortcuts for hands-on sessions | You, when working with Claude directly |
 
-Skills are convenience wrappers. They automate the same conventions documented in CLAUDE.md. VBW agents don't call skills — they read CLAUDE.md and write code directly.
+Skills are convenience wrappers. They automate the same conventions documented in CLAUDE.md. The executor doesn't call skills — it reads CLAUDE.md and writes code directly.
 
 ---
 

@@ -70,7 +70,6 @@ For tier:quick, the rest of this skill executes against stdout only — no file 
 Read from `method.config.md`:
 
 - `Require QA review` (default `false`) — controls whether QA subagent runs by default
-- `Backend` (default `vbw`) — used for QA subagent type selection
 - `## Pre-Deploy Gate` — bash code block of test/lint/type commands
 
 Resolve `--qa`:
@@ -183,10 +182,7 @@ git diff "origin/$INTEGRATION...HEAD"
 
 ### Step 4c — Spawn the QA subagent
 
-Backend-pluggable:
-
-- **vbw** backend: use `subagent_type: "vbw:vbw-qa"` (project must have VBW installed)
-- **native** backend: use `subagent_type: "general-purpose"`
+Use `subagent_type: "general-purpose"`.
 
 The subagent is configured with `allowed-tools: Read, Bash, Write` (the `Write` permission is what lets it land the verdict file). Recommend `model: sonnet` — deterministic file-shaping work.
 
@@ -316,10 +312,7 @@ The reasoning: these are the exact surfaces where shipping without adversarial r
 
 ### Step 5a — Spawn the adversarial subagent
 
-Backend-pluggable (same as QA):
-
-- **vbw** backend: use `subagent_type: "vbw:vbw-qa"` (re-uses QA agent — only the prompt differs)
-- **native** backend: use `subagent_type: "general-purpose"`
+Use `subagent_type: "general-purpose"` (same agent as QA — only the prompt differs).
 
 Configure with `allowed-tools: Read, Bash, Write`. Recommend `model: opus` — adversarial review benefits from deeper reasoning.
 
@@ -683,7 +676,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | No commits ahead of integration | Refuse with clear message. |
 | Pre-Deploy Gate not configured | Print: "Configure § Pre-Deploy Gate in method.config.md, then re-run." |
 | Gate command fails | Stop. Print failing command + last 30 lines. Write reality-check.md with status NEEDS WORK. Don't run QA. Don't write verify-complete.md. |
-| QA subagent type missing (e.g., `vbw:vbw-qa` not installed) | Fall back to `general-purpose`. Warn. |
+| QA subagent type unavailable | Warn and skip QA rather than blocking the gate. |
 | Spec has no AC | QA subagent should report "AC missing" as Fail; user gets clear next-action. |
 | `$VERIFY_DIR` unwritable (perms, disk full) | Print error, fall through to stdout-only mode for this run (tier downgraded to virtual). Day 3 gate will block ship in this case since `verify-complete.md` cannot be written. |
 | Linear unreachable for tier lookup | `pk_linear_tier` returns "standard" — evidence layer still written. |

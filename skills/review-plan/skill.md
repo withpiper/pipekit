@@ -5,11 +5,11 @@ description: Run plan-reviewer agent against a PLAN.md before execution. Use aft
 
 # Review Plan Skill
 
-> **Fresh-chat check.** If this conversation ran `/vbw:vibe --plan` or watched the plan get drafted, start a new conversation. The reviewer must be independent of the planner. See `method.md` § Fresh-Chat Discipline.
+> **Fresh-chat check.** If this conversation drafted the plan (e.g. ran `/work`'s planning phase) or watched it get drafted, start a new conversation. The reviewer must be independent of the planner. See `method.md` § Fresh-Chat Discipline.
 
-You are a plan-review coordinator. Your job is to invoke the `plan-reviewer` agent against a `PLAN.md` before execution, present the structured review back to the user, and recommend a path forward (proceed to execute, route back for plan revision, or escalate). The plan comes from VBW's planner in direct VBW use (`/vbw:vibe --plan` / `vbw:vbw-lead`), or from `/work`'s inline planning (native, filed at `.pk-work/<ID>-PLAN.md`).
+You are a plan-review coordinator. Your job is to invoke the `plan-reviewer` agent against a `PLAN.md` before execution, present the structured review back to the user, and recommend a path forward (proceed to execute, route back for plan revision, or escalate). The plan comes from `/work`'s inline planning, filed at `.pk-work/<ID>-PLAN.md` (native-on-Workflow is the sole executor as of v4.0.0).
 
-This skill is Pipekit's plan-review gate — an independent stress-test between planning and execution. It is **most relevant in direct VBW use**, where the whole plan is handed to `vbw-dev` **wholesale** with no per-task gate. For native `/work`, per-task verify-before-integrate is its own plan-safety mechanism, so upfront review matters less — reach for it when a plan is large or high-risk. In direct VBW use, run this **between** `/vbw:vibe --plan` and `/vbw:vibe --execute`.
+This skill is Pipekit's plan-review gate — an independent stress-test between planning and execution. Native `/work` runs per-task verify-before-integrate, which is its own plan-safety mechanism, so upfront review matters most when a plan is **large or high-risk** — reach for `/review-plan` against `.pk-work/<ID>-PLAN.md` before kicking off execution in those cases.
 
 ## Triggers
 
@@ -20,7 +20,7 @@ This skill is Pipekit's plan-review gate — an independent stress-test between 
 
 ## Purpose
 
-VBW Lead's Stage 3 self-review covers structural correctness (requirements coverage, circular deps, same-wave file conflicts, task counts, skill refs). It cannot see:
+The planner's own self-review covers structural correctness (requirements coverage, circular deps, same-wave file conflicts, task counts, skill refs). It cannot see:
 
 - **Scope drift** vs the approved spec
 - **Framing errors** (solving the wrong problem)
@@ -34,7 +34,7 @@ The `plan-reviewer` agent fills that gap. This skill orchestrates the call.
 
 ## Prerequisites
 
-- A `PLAN.md` to review. In direct VBW use it lives in `.vbw-planning/phases/{phase-slug}/` (produced by `/vbw:vibe --plan` / `vbw:vbw-lead`). With native `/work` the plan is filed at `.pk-work/<ID>-PLAN.md` — point this skill at that path
+- A `PLAN.md` to review. With native `/work` the plan is filed at `.pk-work/<ID>-PLAN.md` — point this skill at that path. (Legacy VBW-planned phases keep `PLAN.md` under `.vbw-planning/phases/{phase-slug}/`; this skill still reviews those.)
 - The approved Light Spec is available — either as the description of a Linear issue tied to the current branch, or readable from a known location
 - `.claude/agents/plan-reviewer.md` is installed (Pipekit ships this; if missing, run `bash scripts/sync-method.sh`)
 
@@ -138,9 +138,9 @@ Based on the verdict:
 
 | Verdict | Recommendation |
 |---------|----------------|
-| **Pass** | "Plan is execution-safe. Run `/vbw:vibe --execute {phase}` when ready." |
-| **Revise** (non-blocking only) | "Plan can proceed but here are improvements to apply during execution: {list}. Run `/vbw:vibe --execute {phase}` when you've decided which to address." |
-| **Block** | "Do not execute. Route the Fast Path items back to Lead via `/vbw:vibe --plan {phase}` or amend the spec via `/02-light-spec-revise PROJ-XXX` if scope/framing is wrong. Specifically: {list of blocking issues}." |
+| **Pass** | "Plan is execution-safe. Proceed to execution when ready." |
+| **Revise** (non-blocking only) | "Plan can proceed but here are improvements to apply during execution: {list}. Proceed to execution when you've decided which to address." |
+| **Block** | "Do not execute. Re-run `/work`'s planning to address the Fast Path items, or amend the spec via `/02-light-spec-revise PROJ-XXX` if scope/framing is wrong. Specifically: {list of blocking issues}." |
 
 Always quote the agent's own Fast Path to Pass section verbatim — those are the concrete moves the user has to make.
 
@@ -148,9 +148,9 @@ Always quote the agent's own Fast Path to Pass section verbatim — those are th
 
 Emit an inline `➜ Next:` line in your terminal output. Pointer logic:
 
-- **Pass** → `/vbw:vibe --execute {phase-slug}`
-- **Revise** → `/vbw:vibe --execute {phase-slug}` (with note about non-blocking improvements)
-- **Block** → either `/vbw:vibe --plan {phase-slug}` (if Lead-revise scope) or `/02-light-spec-revise PROJ-XXX` (if spec/framing scope)
+- **Pass** → proceed to execution (`/work`)
+- **Revise** → proceed to execution (`/work`) (with note about non-blocking improvements)
+- **Block** → re-plan via `/work` (if plan-revise scope) or `/02-light-spec-revise PROJ-XXX` (if spec/framing scope)
 
 Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear.
 
@@ -178,7 +178,7 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 
 - **Skipping the spec resolution** → reviewing a plan without the approved spec means the agent can't catch scope drift. Always pass the spec verbatim.
 - **Summarizing the spec for the agent** → the agent needs the AC section as written. Summary loses the testable conditions.
-- **Running review against partial PLAN.md** → wait for `/vbw:vibe --plan` to complete before reviewing. Partial plans return inflated Block verdicts.
+- **Running review against partial PLAN.md** → wait for planning to complete before reviewing. Partial plans return inflated Block verdicts.
 - **Treating Revise as Pass** → non-blocking improvements are not free; they accumulate technical debt if always deferred. Address each one or explicitly accept the trade-off.
 
 ---
@@ -187,9 +187,7 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 
 | Skill | Relationship |
 |-------|-------------|
-| `/work` (native) | Plans **inline** and files the plan at `.pk-work/<ID>-PLAN.md`; run `/review-plan` against it before execution. `/work` does not spawn plan-reviewer directly. |
-| `/vbw:vibe --plan` | Produces the `PLAN.md` this skill reviews. |
-| `/vbw:vibe --execute` | Next step after Pass / Revise. |
+| `/work` (native) | Plans **inline** and files the plan at `.pk-work/<ID>-PLAN.md`; run `/review-plan` against it before execution, then proceed to execution. `/work` does not spawn plan-reviewer directly. |
 | `/02-light-spec-revise` | Route here when plan-reviewer's Block verdict points at spec-level issues (framing, missing AC, scope ambiguity). |
 | `plan-reviewer` agent | The actual review work happens here; this skill orchestrates the invocation. |
 
@@ -245,11 +243,11 @@ Missed: OAuth-callback-server-bypass note.
 2. Add Task 0.5 or Task 4 note: "RLS bypass acknowledged on callback path" (5 min)
 
 ### Final Recommendation
-proceed to Dev with these two improvements applied during execution.
+proceed to execution with these two improvements applied.
 
 ---
 
-➜ Next: /vbw:vibe --execute rs-14-login-routes
+➜ Next: proceed to execution (rs-14-login-routes)
    (apply the two non-blocking improvements during execution; verify-step
    sharpening can land in the same task commit)
 ```

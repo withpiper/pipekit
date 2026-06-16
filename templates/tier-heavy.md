@@ -28,7 +28,7 @@ Heavy = Standard + the additions below. Every Standard gate is also required.
 
 ## Routing
 
-Heavy tier always routes through full VBW planning, regardless of complexity rating. Batch runner is disallowed — every Heavy issue gets a `PLAN.md` and explicit plan review.
+Heavy tier always requires a full plan and explicit plan review, regardless of complexity rating. Batch runner is disallowed — every Heavy issue gets a `PLAN.md` and a `/review-plan` pass before native execution.
 
 ## Required artifacts
 

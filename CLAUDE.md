@@ -21,7 +21,10 @@ Stage 0: Foundation (a contract — see Entry Modes)
   /concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create → /phase-plan
 
 Stages 1-5: Development — the v2 daily loop (repeats per issue)
-  pk next → pk branch → /work → /verify → pk ship (Draft) → pk ready → [PR review + preview UAT] → pk done [--merge] → [dev UAT] → pk promote <env> → (PR merges) → pk promote <env> --finish → /pk-exit
+  pk next → pk branch → /work → /verify → pk ship (Draft) → pk ready → [PR review + preview UAT] → pk done [--merge] → [dev UAT] → pk promote <env> → (PR merges) → pk promote <env> --finish
+
+Per session (NOT part of the issue chain): /pk-exit — the last command of whatever session you're in.
+  pk done runs from the parent repo and deletes the worktree, so in a worktree session: /pk-exit first, THEN leave the worktree and run pk done from the parent.
 ```
 
 Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a script. Three entry modes satisfy the contract: greenfield (full chain), brownfield (skip /concept and /define), inherited (verify and proceed). `/startup` auto-detects mode and confirms with the user. The v2 daily loop replaces v1's `/branch → /launch → /verify → /launch --close` chain — see `RUNBOOK.md` for the one-page flowchart. Full Entry Modes table in `method.md`.

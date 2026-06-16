@@ -34,7 +34,6 @@ Do NOT use for:
 Read `method.config.md` for:
 - Linear team ID, workflow state IDs
 - Pre-deploy gate commands
-- Backend (`vbw` or `native`) — passed through to `/work`
 
 ## Preflight — checkout guard  *(applies to Phases 1–2 only)*
 
@@ -139,7 +138,7 @@ Use the scientific method:
 3. Narrow until you have a one-paragraph root-cause statement
 4. Append the root cause to the Linear issue body under `## Root Cause`
 
-If diagnosis takes more than ~30 minutes of investigation, consider spawning the `vbw-debugger` agent. Don't burn the main context on a deep dive.
+If diagnosis takes more than ~30 minutes of investigation, consider spawning a dedicated debugging subagent (`general-purpose`) to investigate in a fresh context. Don't burn the main context on a deep dive.
 
 ### 3b — Write the failing test
 

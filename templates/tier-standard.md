@@ -16,9 +16,9 @@
 | Human approval | ✅ required |
 | Dependency check | ✅ required |
 | Milestone-readiness (siblings specced) | ✅ required |
-| VBW plan | ✅ required (Medium/High complexity) |
+| Plan | ✅ required (Medium/High complexity) |
 | Plan review (`/review-plan`) | ✅ required (Medium/High complexity) |
-| Execution | ✅ VBW Dev (Medium/High) or batch runner (Low) |
+| Execution | ✅ native `/work` (Medium/High) or batch runner (Low) |
 | QA agent | ✅ required |
 | Strategy sync | recommended (post-ship, batched) |
 
@@ -29,13 +29,13 @@ Inside Standard, complexity still routes execution:
 | Complexity | Route |
 |------------|-------|
 | Low (~2–4h) | `/linear-todo-runner`, AC-as-plan |
-| Medium (~6–10h) | VBW Lead → plan review → Dev → QA |
-| High (~12–20h+) | VBW Lead → plan review → Dev → QA, likely multi-task |
+| Medium (~6–10h) | `/work` plan → plan review → native execute → QA |
+| High (~12–20h+) | `/work` plan → plan review → native execute → QA, likely multi-task |
 
 ## Required artifacts
 
 - Light spec in Linear (`## Light Spec`, `## Acceptance Criteria`)
-- `PLAN.md` in `.vbw-planning/phases/<slug>/` (Medium/High)
+- `PLAN.md` — `/work` materializes it at `.pk-work/<ID>-PLAN.md` (Medium/High)
 - Plan-review report (Medium/High)
 - QA verification report
 
