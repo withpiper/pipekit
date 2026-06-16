@@ -136,7 +136,7 @@ Keep Linear comments concise and useful:
 ## Related
 
 - Branch + worktree: `pk branch <ID>` — creates worktree + branch + Linear → In Progress (idempotent)
-- v2 daily loop: `pk next` → `pk branch` → `/work` → `/verify` → `pk ship` → `pk done` → `/pk-exit` (recommended path; this skill is the manual hands-on alternative)
+- v2 daily loop: `pk next` → `pk branch` → `/work` → `/verify` → `pk ship` → `pk done` (recommended path; this skill is the manual hands-on alternative). `/pk-exit` is not part of this chain — it's the per-session log command (see below); `pk done` runs from the parent repo and deletes the worktree, so in a worktree session run `/pk-exit` first, then leave the worktree and run `pk done`.
 - Batch processing: `/linear-todo-runner` — rolling parallel queue for multiple issues
 - Promotion: `pk ship` (feature → integration branch) + `pk promote` (walks the chain per `Ship environments` in `method.config.md`)
 - Session log: `/pk-exit` — narrative session log to `Logs/Sessions/<date>_<HHMM>.md` (last command of every Claude Code session)
