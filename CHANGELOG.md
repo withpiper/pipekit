@@ -45,6 +45,14 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## Unreleased
+
+- **New skill `/linear-hygiene`** — a fast, frequent Linear *placement* janitor. Scans all open states for issues that drift in during the daily loop (🏚️ orphaned / no project, 🔶 stuck in Triage, ⚪ unprioritized) and batch-homes them: parent-project inference → keyword match → human pick for ambiguous; importance-aware priority floors (never lowers an existing priority); Triage → Backlog / Needs-Spec mirroring `/brainstorm-review`'s tier routing. Propose-then-apply (one manifest, single `go`). Modes: `default` and `--check` (read-only). Placement only — "where does it belong?", distinct from `/brainstorm-review` (disposition: Now/Later/Kill) and `/roadmap-review` (plan-vs-requirements audit). Built against the `mcp__linear-server__{list_issues,get_issue,save_issue,list_projects}` house convention; payload-safe (minimal fields board-wide, bodies only for the drift subset). VBW-free (does not read `.vbw-planning/`).
+- **`/pk-exit` hygiene check** — new non-mutating step runs `/linear-hygiene --check` at session close and surfaces drift under "Outstanding / next session" while context is warm. Degrades silently if the skill/Linear MCP is unavailable; preserves pk-exit's no-Linear-writes guarantee (no hook, manual model unchanged).
+- **Deferred to a `/linear-hygiene` v2:** 🔗 isolated→relation linking and 🧹 stale-label stripping (both need a `mcp__linear-server__` relation / label-remove tool that no current skill references — verify on the live server first), and a `--session` mode (only this session's follow-ups). Also flagged for live verification: a SiteLine note claimed the Linear MCP exposes camelCase tool names; if true that's a repo-wide migration, not a per-skill concern.
+
+---
+
 ## v4.0.0-rc2 — 2026-06-16
 
 > **De-stale + debrand follow-up to rc1.** rc1 removed the VBW *executor* but left stale references that still routed users to it, plus cosmetic "VBW" branding that no longer matches reality. This pass fixes the wrong-routing bugs and debrands prose where the name isn't load-bearing. **No behavior change to the planning layer** — `.vbw-planning/`, `/vbw:init`, `/roadmap-create`, `/phase-plan`, `/review-plan`, `pk_vbw_*`, and the vbw plugin are all untouched. The brand necessarily persists in the plugin-owned `.vbw-planning/` directory and the `/vbw:*` commands until a separate planning-layer retirement.
