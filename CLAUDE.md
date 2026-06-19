@@ -111,6 +111,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/pr-security-review` | Security-focused antagonistic PR review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, auth, and Server Actions on privileged tables. |
 | `/pk-bug` | Bug pipeline — intake, reproduce, regression-test-first, fix, ship, postmortem. Wraps `/work` and `pk ship` with discipline gates. |
 | `/pk-express` | Idea→Draft-PR autopilot for **simple** WITs — chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify+ship), stopping only at attention gates (not-Now, tier:heavy, spec stalemate, verify flags, Draft PR). Quick/Standard tier only. |
+| `/linear-hygiene` | Fast Linear placement janitor — batch-homes orphaned / untriaged / unprioritized issues across all open states (placement, not disposition). Propose-then-apply; `--check` is read-only and is what `/pk-exit` calls. |
 | `/pipekit-help` | Reads project state, recommends the next pipeline step. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what was actually built. |
 | `/release-changelog` | Generates draft CHANGELOG entry from git commits between tags. |
