@@ -170,7 +170,7 @@ Continue to step 4 only if QA is enabled.
 
 ### Step 4a — Fetch the spec for AC reference
 
-Use Linear MCP `mcp__linear-server__get_issue` with `<ISSUE-ID>`. Capture the full description.
+Use Linear MCP `mcp__linear-server__linear_getIssueById` with `<ISSUE-ID>`. Capture the full description.
 
 ### Step 4b — Compute the diff
 

@@ -135,7 +135,7 @@ _"Written merged roadmap to `.vbw-planning/ROADMAP.md`. Preserved VBW's N phases
 
 ### Phase 3 — Linear Setup
 
-**Preflight: check Linear MCP connection.** Try calling `mcp__linear-server__list_teams` or `list_issues`. If it fails:
+**Preflight: check Linear MCP connection.** Try calling `mcp__linear-server__linear_getTeams` or `linear_getIssues`. If it fails:
 
 _"Linear MCP isn't connected. I can't create issues without it. Options:"_
 1. _"Reconnect now — run `claude mcp add --transport http --scope user linear-server https://mcp.linear.app/mcp` in terminal, restart Claude Code, then resume with `/roadmap-create --verify` to pick up where we stopped."_
@@ -147,7 +147,7 @@ Once Linear MCP is confirmed working, determine what can be automated vs. what n
 
 **Automate via MCP (do these):**
 
-1. **Create Issues** — for each requirement, via `mcp__linear-server__save_issue`:
+1. **Create Issues** — for each requirement, via `mcp__linear-server__linear_createIssue`:
    - `team`: from `method.config.md`
    - `title`: requirement title
    - `description`: requirement detail + strategy doc reference
@@ -155,7 +155,7 @@ Once Linear MCP is confirmed working, determine what can be automated vs. what n
    - `priority`: 0 (None) — triage sets real priority
 
 2. **Set Dependency Relations** — for each dependency in the roadmap:
-   - Use `mcp__linear-server__save_issue` to set `blocked_by` relations
+   - Use `mcp__linear-server__linear_createIssueRelation` to set `blocked_by` relations
 
 3. **Apply Labels** — for each issue:
    - Type label (Feature, Improvement, Research, etc.)

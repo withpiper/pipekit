@@ -29,7 +29,7 @@ Take a rough idea from the user, explore the codebase to understand feasibility,
 2. **Explore** the codebase to assess feasibility
 3. **Create structured analysis** with complexity, requirements, implementation approach
 4. **Present** to user for approval
-5. **Create Linear issue** via `mcp__linear-server__save_issue`:
+5. **Create Linear issue** via `mcp__linear-server__linear_createIssue`:
    - `team`: `{team from method.config.md}`
    - `title`: concise feature title
    - `description`: full brainstorm analysis (feasibility, complexity, approach, requirements)
@@ -59,7 +59,7 @@ Immediately after creating the issue, force a disposition decision:
 - Ask for a **trigger type** from the grammar below (parsable triggers are what let `/roadmap-review` auto-surface this later — prose triggers get flagged as manual-review)
 - Ask for a **target phase/stage**
 - Move issue to "Ideas" or "Future Phases" based on target
-- Add the `Parked` label. If the label doesn't exist in the Linear workspace, create it first via `mcp__linear-server__create_issue_label` with name `Parked`, color `#EAB308` (amber).
+- Add the `Parked` label. If the label doesn't exist in the Linear workspace, create it first via `mcp__linear-server__linear_createTeamLabel` with name `Parked`, color `#EAB308` (amber).
 - Post a Linear comment using the **exact parseable format** below (do not paraphrase — `/roadmap-review` greps for it):
   ```
   **Parked:** Revisit when {trigger}. Target: {phase/stage}.

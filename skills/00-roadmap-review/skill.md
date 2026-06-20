@@ -63,9 +63,9 @@ If all Stage 0 checks pass, continue to the next check.
 2. Read `.vbw-planning/linear-map.json` for ID mappings
 3. Read `.vbw-planning/STATE.md` for current progress
 4. Read `.vbw-planning/PHASES.md` for current phase composition
-5. Fetch all initiatives via `mcp__linear-server__list_initiatives`
-6. For each active and next-up initiative, fetch projects via `mcp__linear-server__list_projects`
-7. For each project, fetch issues via `mcp__linear-server__list_issues`
+5. Fetch all initiatives via `mcp__linear-server__linear_getInitiatives`
+6. For each active and next-up initiative, fetch projects via `mcp__linear-server__linear_getProjects`
+7. For each project, fetch issues via `mcp__linear-server__linear_searchIssues`
 
 ### Phase 2 — Completeness Check
 
@@ -96,7 +96,7 @@ For each issue in the active and upcoming stages:
 1. Read light specs for issues that have them — extract dependency contracts (e.g., "PROJ-8 is a hard blocker for PROJ-7")
 2. Read the WP dependency graph from `pipekit/sop/Linear SOP.md` (Dependency Graph section)
 3. For each declared dependency:
-   - Fetch the issue via `mcp__linear-server__get_issue` with `includeRelations: true`
+   - Fetch the issue via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`
    - Check that `blockedBy`/`blocks` relations exist in Linear
 4. Flag missing dependency links with the exact relation to add
 5. Flag circular dependencies
@@ -188,7 +188,7 @@ Present a summary dashboard:
 Parked items are brainstorm dispositions marked "Later" with parseable triggers. Check if any triggers have fired.
 
 **Step 1 — Fetch parked items:**
-Use `mcp__linear-server__list_issues` filtered by the `Parked` label. For each, read the latest comment matching the parseable prefix `**Parked:** Revisit when ...`. If a parked issue has no such comment (older disposition, pre-grammar), flag it for manual review and continue.
+Use `mcp__linear-server__linear_searchIssues` filtered by the `Parked` label. For each, read the latest comment matching the parseable prefix `**Parked:** Revisit when ...`. If a parked issue has no such comment (older disposition, pre-grammar), flag it for manual review and continue.
 
 **Step 2 — Parse the trigger per the grammar** (authored by `/brainstorm` Phase 2):
 

@@ -60,7 +60,7 @@ If the phase dir uses non-VBW-native layout (e.g., nested `rs-N-slug/PLAN.md` ra
 
 The plan-reviewer agent compares the plan against the approved spec. Find the spec via this priority:
 
-1. **Linear issue tied to current branch** — extract `PROJ-XXX` from `git branch --show-current` (matches `feature/proj-xxx-*`, `fix/proj-xxx-*`, `hotfix/proj-xxx-*`); fetch via `mcp__linear-server__get_issue` with `includeRelations: true`; extract the `## Light Spec` and `## Acceptance Criteria` (or equivalent) sections from the description
+1. **Linear issue tied to current branch** — extract `PROJ-XXX` from `git branch --show-current` (matches `feature/proj-xxx-*`, `fix/proj-xxx-*`, `hotfix/proj-xxx-*`); fetch via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`; extract the `## Light Spec` and `## Acceptance Criteria` (or equivalent) sections from the description
 2. **User provides issue ID** — same fetch path with the explicit ID
 3. **No Linear context** — ask the user to paste the approved spec, or provide a path to a local spec file
 

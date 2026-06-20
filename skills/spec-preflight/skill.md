@@ -36,12 +36,12 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 
 | Source | Tool | Purpose |
 |--------|------|---------|
-| Linear issue body | `mcp__linear-server__get_issue` with `includeRelations: true` | Spec body + status + blocked_by |
+| Linear issue body | `mcp__linear-server__linear_getIssueById` with `includeRelations: true` | Spec body + status + blocked_by |
 | File paths from spec | `Read` or `Glob` | Confirm cited files exist |
 | Line ranges from spec | `Read` with `offset`/`limit` | Confirm line citations resolve to real content |
 | `phase-detect.sh` output | Bash via the v1.4.1 lookup chain (see Step 3) | Confirm stated VBW baseline is current |
-| Linear status (re-fetched) | `mcp__linear-server__get_issue` | Compare current status against spec body's claim |
-| Each `blocked_by` issue | `mcp__linear-server__get_issue` | Confirm dependency claims of "Done" |
+| Linear status (re-fetched) | `mcp__linear-server__linear_getIssueById` | Compare current status against spec body's claim |
+| Each `blocked_by` issue | `mcp__linear-server__linear_getIssueById` | Confirm dependency claims of "Done" |
 | `Strategy docs path` (from `method.config.md`) | `Glob` + `Read` | Probe 3.6a — canonical-doc cross-check (#21) |
 | `Platform` (from `method.config.md`) | none — heuristic match against spec body | Probe 3.6b — platform-capability check (#20) |
 | `package.json` + lockfile (root + workspace pkgs) | `Read` + `Grep` | Probe 3.6c — tooling availability (#22) |
@@ -51,7 +51,7 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 
 ### Step 1 — Fetch the issue
 
-Call `mcp__linear-server__get_issue` with `id: PROJ-XXX` and `includeRelations: true`. Capture:
+Call `mcp__linear-server__linear_getIssueById` with `id: PROJ-XXX` and `includeRelations: true`. Capture:
 
 - `title`, `identifier`
 - Full `description` (the spec body)
@@ -141,7 +141,7 @@ Re-fetch the issue (or reuse Step 1's payload if still in scope). Compare `state
 
 #### 3e — Dependencies
 
-For each `blocked_by` identifier (from `relations` and from any narrative claims in Step 2.5), call `mcp__linear-server__get_issue` and read `state.name`. Record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `pk branch` / `/work` would also catch — surfacing it pre-flight saves a round trip.
+For each `blocked_by` identifier (from `relations` and from any narrative claims in Step 2.5), call `mcp__linear-server__linear_getIssueById` and read `state.name`. Record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `pk branch` / `/work` would also catch — surfacing it pre-flight saves a round trip.
 
 If the Linear MCP server times out or is unavailable on any individual fetch: record that specific dependency as `unverified — Linear API timeout` and continue. Do not fail the whole verdict on infrastructure flake. (See Graceful Degradation below.)
 

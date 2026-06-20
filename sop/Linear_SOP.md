@@ -2,9 +2,35 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.7.0** — Last updated: 2026-06-05  *(documents the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — and notes the `Specced` state is the config-driven `Spec ready state`; carries v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.0.0-rc3** — Last updated: 2026-06-20  *(adds the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; carries the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
+
+---
+
+## Linear MCP Server
+
+Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create`, `/linear-hygiene`, `/light-spec`, `/brainstorm`, …) talk to Linear through an **MCP server registered as `linear-server`** in the project's version-controlled `.mcp.json`. The skills call tool names of the form `mcp__linear-server__<tool>`.
+
+**The skills assume `@tacticlaunch/mcp-linear`** — the server both reference consuming projects (SiteLine, Piper) run. Its tools are **camelCase** with a `linear_` prefix:
+
+| Purpose | Tool |
+|---|---|
+| List / filter issues | `linear_searchIssues` (filtered) · `linear_getIssues` (recent, connectivity test) |
+| Read one issue | `linear_getIssueById` |
+| Create / update issue | `linear_createIssue` · `linear_updateIssue` (one call carries `projectId` + `priority` + `stateId`) |
+| Comment | `linear_createComment` · `linear_getComments` |
+| Projects | `linear_getProjects` · `linear_getProjectById` · `linear_createProject` · `linear_updateProject` |
+| Initiatives | `linear_getInitiatives` · `linear_getInitiativeById` · `linear_createInitiative` · `linear_updateInitiative` |
+| Workflow states | `linear_getWorkflowStates` |
+| Labels | `linear_createTeamLabel` · `linear_addIssueLabel` · `linear_removeIssueLabel` |
+| Relations | `linear_createIssueRelation` |
+
+> **Not the official remote.** Linear's first-party `mcp.linear.app` server uses **snake_case** names (`list_issues`, `get_issue`, `update_issue`, `create_comment`) and a leaner ~21-tool surface that **lacks** the initiative-CRUD, label-create, and issue-relation tools these skills rely on. A project that points `linear-server` at the official remote (or any other Linear MCP) must remap the tool names in its synced skills — they are not drop-in compatible.
+
+> Per `.claude/rules/pipekit-tooling.md`, this server **must** be declared in the committed `.mcp.json` (not the per-path block of `~/.claude.json`) so it's visible inside the `pk branch` worktrees where `/work` and the interactive skills run.
+
+**Note on the daily loop:** `pk ship` / `pk done` / `pk promote` do **not** use MCP — they hit Linear's REST API directly via `LINEAR_API_KEY`. Only the interactive skills above use `mcp__linear-server__*`.
 
 ---
 

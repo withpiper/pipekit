@@ -39,8 +39,8 @@ Apply **only** the fixes the agent asked for, preserving everything else. Detect
 
 ### Phase 1 — Fetch issue and comments
 
-1. Fetch the issue via `mcp__linear-server__get_issue` (`id: "PROJ-123"`, `includeRelations: true`). Extract `description` and `title`.
-2. Fetch comments via `mcp__linear-server__list_comments` (`issueId: "PROJ-123"`). `get_issue` does **not** return comments — they must be fetched separately.
+1. Fetch the issue via `mcp__linear-server__linear_getIssueById` (`id: "PROJ-123"`, `includeRelations: true`). Extract `description` and `title`.
+2. Fetch comments via `mcp__linear-server__linear_getComments` (`issueId: "PROJ-123"`). `linear_getIssueById` does **not** return comments — they must be fetched separately.
 3. Filter to Spec Review Agent comments. Identify by **either**:
    - `author.name` contains `Linear` or `Agent` (case-insensitive), **or**
    - `body` starts with `### Verdict` (regex: `^###\s+Verdict`).
@@ -181,10 +181,10 @@ Do not proceed to Phase 6/7 until the user chooses.
 
 ### Phase 6 — Act on stalemate / override / manual choices
 
-- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `mcp__linear-server__save_comment` — the body MUST start with the literal text `@linear`. Format:
+- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `mcp__linear-server__linear_createComment` — the body MUST start with the literal text `@linear`. Format:
 
   ```
-  mcp__linear-server__save_comment({
+  mcp__linear-server__linear_createComment({
     issueId: "PROJ-XXX",
     body: "@linear this blocker has been addressed in the description — see the [section name] section where [specific line or text]. Please re-review."
   })
@@ -196,7 +196,7 @@ Do not proceed to Phase 6/7 until the user chooses.
   - Date of the stale review being overridden.
   - Link back to the specific description content that addresses each flagged blocker.
   - Who overrode it (the user).
-  - Update the issue description via `mcp__linear-server__save_issue`.
+  - Update the issue description via `mcp__linear-server__linear_updateIssue`.
 
 - **Manual review (option 4)**: for each blocker, show the user the flagged description section alongside the agent's demand. Let the user tell the skill what (if anything) to change. Treat each user-directed change as a patch to apply in Phase 7.
 
@@ -229,7 +229,7 @@ Do **not** apply Non-Blocking Improvements silently or in bulk.
 
 ### Phase 9 — Publish
 
-1. Update the issue description via `mcp__linear-server__save_issue`.
+1. Update the issue description via `mcp__linear-server__linear_updateIssue`.
 2. Append to the `## Agent Review` section of the description:
 
    ```markdown

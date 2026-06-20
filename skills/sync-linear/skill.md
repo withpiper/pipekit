@@ -57,16 +57,16 @@ All VBW ↔ Linear relationships are stored in `.vbw-planning/linear-map.json`. 
 1. **Read** `.vbw-planning/linear-map.json` for all ID mappings
 2. **Read** `.vbw-planning/ROADMAP.md` for phase content
 3. **For each initiative:**
-   - Read current Linear initiative description via `mcp__linear-server__get_initiative`
+   - Read current Linear initiative description via `mcp__linear-server__linear_getInitiativeById`
    - Compare with ROADMAP content for that phase
-   - If VBW content is newer or different, update via `mcp__linear-server__save_initiative`
+   - If VBW content is newer or different, update via `mcp__linear-server__linear_updateInitiative`
 4. **For each project:**
-   - Read current Linear project description via `mcp__linear-server__get_project`
+   - Read current Linear project description via `mcp__linear-server__linear_getProjectById`
    - Compare with plan content for that feature cluster
-   - If VBW content is newer, update via `mcp__linear-server__save_project`
+   - If VBW content is newer, update via `mcp__linear-server__linear_updateProject`
 5. **For VBW plan tasks** (when plans exist in `.vbw-planning/phases/*/PLAN.md`):
    - Check if a matching Linear issue exists (by title match or stored ID in linear-map.json)
-   - If no issue exists → create via `mcp__linear-server__save_issue` with correct project assignment
+   - If no issue exists → create via `mcp__linear-server__linear_createIssue` with correct project assignment
    - If issue exists but status differs → update status
    - Store new issue IDs back into `linear-map.json`
 6. **Report** what was pushed (created/updated/unchanged counts)
@@ -75,16 +75,16 @@ All VBW ↔ Linear relationships are stored in `.vbw-planning/linear-map.json`. 
 
 1. **Read** `.vbw-planning/linear-map.json` for all ID mappings
 2. **For each initiative:**
-   - Fetch current description from Linear via `mcp__linear-server__get_initiative`
+   - Fetch current description from Linear via `mcp__linear-server__linear_getInitiativeById`
    - Compare with ROADMAP.md content
    - If Linear description was edited (differs from last push), extract changes
    - Present diff to user for approval before updating ROADMAP.md
 3. **For each project:**
-   - Fetch current description from Linear via `mcp__linear-server__get_project`
+   - Fetch current description from Linear via `mcp__linear-server__linear_getProjectById`
    - Compare with stored content
    - If Linear description was edited, present diff to user
 4. **For issues:**
-   - Fetch issues in each project via `mcp__linear-server__list_issues`
+   - Fetch issues in each project via `mcp__linear-server__linear_searchIssues`
    - Check for new issues created directly in Linear (not via VBW push)
    - Check for status changes on existing issues
    - Report new Linear issues that need to be added to VBW plans
@@ -114,7 +114,7 @@ State IDs are stored in `linear-map.json` under `states.*`. Always read from the
 
 1. **Read** `linear-map.json` for state IDs and project mappings
 2. **For each Stage 2 project** (active stage), in order (P1 → P10):
-   - Fetch all issues via `mcp__linear-server__list_issues`
+   - Fetch all issues via `mcp__linear-server__linear_searchIssues`
    - Classify by status bucket:
      - **Done bucket:** Done, Canceled, Duplicate
      - **Active bucket:** In Progress, Building, UAT, Approved, Specced, Needs Spec
@@ -129,7 +129,7 @@ State IDs are stored in `linear-map.json` under `states.*`. Always read from the
    - Issues in `Future Phases` → recommend `On Deck`
    - Issues in `Triage` or `Ideas` → recommend `On Deck` (they're in a project, so they're real)
 5. **Present the recommendation** as a table showing issue ID, title, current status, and proposed status
-6. **Ask for confirmation** before executing. On approval, batch-update all issues via `mcp__linear-server__save_issue`
+6. **Ask for confirmation** before executing. On approval, batch-update all issues via `mcp__linear-server__linear_updateIssue`
 
 #### Parallel Track Awareness
 
@@ -204,14 +204,14 @@ After sync, display a summary table:
 
 ## Linear MCP Tools Used
 
-- `mcp__linear-server__get_initiative` — read initiative details
-- `mcp__linear-server__save_initiative` — create/update initiatives
-- `mcp__linear-server__get_project` — read project details
-- `mcp__linear-server__save_project` — create/update projects
-- `mcp__linear-server__list_issues` — list issues in a project
-- `mcp__linear-server__get_issue` — read issue details
-- `mcp__linear-server__save_issue` — create/update issues
-- `mcp__linear-server__list_issue_statuses` — get workflow states
+- `mcp__linear-server__linear_getInitiativeById` — read initiative details
+- `mcp__linear-server__linear_createInitiative` / `linear_updateInitiative` — create/update initiatives
+- `mcp__linear-server__linear_getProjectById` — read project details
+- `mcp__linear-server__linear_createProject` / `linear_updateProject` — create/update projects
+- `mcp__linear-server__linear_searchIssues` — list/filter issues in a project
+- `mcp__linear-server__linear_getIssueById` — read issue details
+- `mcp__linear-server__linear_createIssue` / `linear_updateIssue` — create/update issues
+- `mcp__linear-server__linear_getWorkflowStates` — get workflow states
 
 ## Important Notes
 

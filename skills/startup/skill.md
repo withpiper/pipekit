@@ -334,7 +334,7 @@ This is the most important infrastructure step — every downstream skill depend
 
 **4a. Verify MCP connection**
 
-Test that the Linear MCP server is connected by calling `mcp__linear-server__list_issues` (or any list tool). If it fails:
+Test that the Linear MCP server is connected by calling `mcp__linear-server__linear_getIssues` (or any list tool). If it fails:
 - _"Linear MCP isn't connected. Run this in your terminal and restart Claude Code:"_
   ```
   claude mcp add --transport http --scope user linear-server https://mcp.linear.app/mcp
@@ -478,7 +478,7 @@ Populate the Workflow State IDs table in `method.config.md`:
 
 **4e. Standard Labels**
 
-Create the standard label taxonomy via `mcp__linear-server__save_issue` or equivalent label tools. If MCP doesn't support label creation, instruct manually:
+Create the standard label taxonomy via `mcp__linear-server__linear_createTeamLabel`. If MCP doesn't support label creation, instruct manually:
 
 ```
 Create these labels in Linear (Settings → Labels):

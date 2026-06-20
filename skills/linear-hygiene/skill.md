@@ -22,17 +22,17 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 
 ## Tooling notes (read before building against this)
 
-- Uses the pipekit house convention `mcp__linear-server__{list_issues, get_issue, save_issue, list_projects}` — the same tools every other Linear-using skill calls. **One `save_issue` carries `projectId` + `priority` + `stateId` together** (verify this on first live run in a consuming project; mirror how `/linear` and `/brainstorm-review` call `save_issue`).
-- **UNVERIFIED — flag, do not act on blindly:** a 2026-06-19 SiteLine note claimed the live Linear MCP exposes camelCase methods (`linear_searchIssues`, `linear_updateIssue`, …). Those names appear in **no** pipekit skill. If a consuming project's `mcp__linear-server__` genuinely uses camelCase, that is a **repo-wide** problem (all ~18 Linear skills would be stale) and needs its own migration — not a per-skill workaround here. Default to the snake_case house names; only revisit if a live call actually fails.
+- Targets **`@tacticlaunch/mcp-linear`** — the Linear MCP server both consuming projects register as `linear-server`. Tool names are camelCase: `mcp__linear-server__{linear_searchIssues, linear_getIssueById, linear_updateIssue, linear_getProjects}` — the same tools every other Linear-using skill calls. **One `linear_updateIssue` carries `projectId` + `priority` + `stateId` together** (verified live on SiteLine, 2026-06-19).
+- **Not the official remote.** The first-party `mcp.linear.app` server uses snake_case (`list_issues`, `update_issue`) and lacks the initiative / label-create / issue-relation tools pipekit skills rely on. Pipekit's Linear skills assume the tacticlaunch surface; a project on a different Linear MCP server needs the tool names remapped.
 
 ## Execution Steps
 
 ### Phase 1 — Fetch (payload-safe)
 
 1. Read `method.config.md` → Team ID, Workflow State IDs, and the project's **open-state set** (everything except Done / Canceled / Duplicate — typically `Triage, Backlog, Needs Spec, Approved, In Progress, In Dev, UAT`).
-2. `mcp__linear-server__list_issues` across those open states, requesting a **minimal field set** (`identifier, title, state, priority, project, labels, createdAt`). Do **not** pull descriptions board-wide.
-   > **Payload watch-out (learned the hard way):** a board-wide `list_issues` with full descriptions can exceed a single context (~158K chars on a ~48-issue board). Page by state or have a subagent digest a saved tool-result if the board is large. Only fetch bodies for the drift subset (Phase 2).
-3. `mcp__linear-server__list_projects` once → cache `{name, description, id}` for inference.
+2. `mcp__linear-server__linear_searchIssues` across those open states, requesting a **minimal field set** (`identifier, title, state, priority, project, labels, createdAt`). Do **not** pull descriptions board-wide.
+   > **Payload watch-out (learned the hard way):** a board-wide `linear_searchIssues` with full descriptions can exceed a single context (~158K chars on a ~48-issue board). Page by state or have a subagent digest a saved tool-result if the board is large. Only fetch bodies for the drift subset (Phase 2).
+3. `mcp__linear-server__linear_getProjects` once → cache `{name, description, id}` for inference.
 4. **Exclude** any issue carrying the `Parked` *label* (already dispositioned "Later" by `/brainstorm-review`).
 
 ### Phase 2 — Classify (an issue can hit several)
@@ -41,7 +41,7 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 - 🔶 **Stuck in Triage** — `state == Triage`.
 - ⚪ **Unprioritized** — `priority == 0`.
 
-Pull `mcp__linear-server__get_issue` (with `includeRelations: true`) **only for the drift subset** — the issues that hit at least one class above — to read the body (for parent-project inference) and relations.
+Pull `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`) **only for the drift subset** — the issues that hit at least one class above — to read the body (for parent-project inference) and relations.
 
 ### Phase 3 — Infer the fix per issue
 
@@ -83,7 +83,7 @@ Say "go" to apply all, or redirect any line.
 
 ### Phase 5 — Apply (on `go`, default mode only)
 
-- One `mcp__linear-server__save_issue` per issue combining `projectId` + `priority` + `stateId`.
+- One `mcp__linear-server__linear_updateIssue` per issue combining `projectId` + `priority` + `stateId`.
 - Batch independent calls in parallel.
 - Skip any line the user redirected to a manual pick that they didn't resolve.
 
@@ -110,8 +110,8 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 
 ## Deferred to v2 (not in this version)
 
-- 🔗 **Isolated → relation linking** (body references a parent but no `blocked-by`/`relates` relation exists). Needs a `mcp__linear-server__` issue-relation tool, which **no current skill references** — verify it exists on the live server before building.
-- 🧹 **Strip stale labels.** Needs a label-remove tool — same verification gap.
+- 🔗 **Isolated → relation linking** (body references a parent but no `blocked-by`/`relates` relation exists). Uses `mcp__linear-server__linear_createIssueRelation` — **confirmed present** on `@tacticlaunch/mcp-linear` (already called by `/roadmap-create`); deferred only to keep this pass scoped to tool-name correctness.
+- 🧹 **Strip stale labels.** Uses `mcp__linear-server__linear_removeIssueLabel` — **confirmed present**; deferred for the same reason.
 - **`--session` mode** — limit to issues `createdAt >= session start`, to catch only the current session's follow-ups.
 
 ## Related

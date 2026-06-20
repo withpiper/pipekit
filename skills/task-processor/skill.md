@@ -22,7 +22,7 @@ Process tasks from Linear in a user-directed, interactive manner. Show available
 
 ### 1. Fetch Tasks from Linear
 
-Use `mcp__linear-server__list_issues` to get open issues:
+Use `mcp__linear-server__linear_searchIssues` to get open issues:
 
 ```
 team: "{team from method.config.md}"
@@ -44,7 +44,7 @@ Ask which task to work on.
 
 ### 3. Execute Selected Task
 
-- Move issue to "Building" using `mcp__linear-server__save_issue` with `stateId: {Building state ID from method.config.md}`
+- Move issue to "Building" using `mcp__linear-server__linear_updateIssue` with `stateId: {Building state ID from method.config.md}`
 - Read full issue description for requirements
 - **Check for spec links:** Look for `**Spec:**` or `**Linked spec:**` lines in the description
   - If spec link exists → read the spec files before executing

@@ -69,7 +69,7 @@ _"Phase {N} is still in progress ({M} issues not yet Done). Plan the next phase 
 1. Fetch issues in "On Deck" status (next phase candidates)
 2. If On Deck is empty, check "Future Phases" for promotable issues
 3. For each candidate:
-   - Check dependencies via `mcp__linear-server__get_issue` with `includeRelations: true`
+   - Check dependencies via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`
    - Classify as **ready** (no unresolved blockers) or **blocked** (list blockers)
    - Note milestone membership
    - Note complexity if available from existing description
@@ -116,7 +116,7 @@ Approve this phase? (y/n/edit)
 
 On approval:
 
-1. Move selected issues from "On Deck" to "Needs Spec" via `mcp__linear-server__save_issue`:
+1. Move selected issues from "On Deck" to "Needs Spec" via `mcp__linear-server__linear_updateIssue`:
    - `stateId`: Needs Spec state ID from `method.config.md`
 2. If On Deck is now depleted, promote issues from "Future Phases" to "On Deck" for the next phase pipeline
 3. Post a Linear comment on each promoted issue: `"Assigned to Phase {N}. Ready for /light-spec."`

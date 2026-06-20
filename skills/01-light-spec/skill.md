@@ -37,7 +37,7 @@ A light spec is an **AI→AI contract**: Generator → Reviewer → Planner. You
 
 ### Phase 1 — Capture
 
-1. **If issue ID provided**: Fetch via `mcp__linear-server__get_issue` (with `includeRelations: true`). Extract title, description, existing labels, project, and any sub-issues.
+1. **If issue ID provided**: Fetch via `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`). Extract title, description, existing labels, project, and any sub-issues.
 2. **If raw idea**: Ask the user for a 1-2 sentence description of what they want and why.
 
 ### Phase 2 — Technical Context
@@ -165,7 +165,7 @@ Derived tier: tier:heavy  (from "Complexity: High (~16-22h)")
 
 ### Phase 5 — Publish to Linear
 
-1. **Update or create** the Linear issue via `mcp__linear-server__save_issue`:
+1. **Update or create** the Linear issue via `mcp__linear-server__linear_updateIssue` (existing) or `mcp__linear-server__linear_createIssue` (new):
    - `team`: `{team from method.config.md}`
    - `title`: concise spec title (prefix with domain if useful, e.g., "Budget: Multi-currency support")
    - `description`: the full light spec (markdown)
@@ -173,12 +173,12 @@ Derived tier: tier:heavy  (from "Complexity: High (~16-22h)")
    - `priority`: ask user (default 0/None if unsure)
    - `project`: suggest based on Phase 2 findings, confirm with user
    - `labels`: **merged list**: `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
-     - Pull `existing_labels` from Phase 1's `get_issue` payload (new issues → empty list).
+     - Pull `existing_labels` from Phase 1's `linear_getIssueById` payload (new issues → empty list).
      - Strip any pre-existing `tier:quick | tier:standard | tier:heavy` label — the Phase 3.6 derivation replaces it. Other labels (`Feature`, `Finance`, domain tags, etc.) are preserved.
-     - Linear's `save_issue` replaces the labels list wholesale; passing the full merged set is required.
+     - Linear's `linear_updateIssue` replaces the labels list wholesale; passing the full merged set is required.
 2. Store the issue ID for reference.
 
-**Why the merge:** `save_issue` doesn't support add/remove deltas — pass it the desired final state. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
+**Why the merge:** `linear_updateIssue` doesn't support add/remove deltas — pass it the desired final state. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
 
 ### Phase 6 — Spec Review Cycle (automated)
 

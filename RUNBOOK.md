@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.0.0-rc2** — Last updated: 2026-06-16  *(De-stale + debrand follow-up to rc1: purged executor-stale VBW references that still routed to the removed backend (`/verify` + `/pk-bug` QA-subagent now `general-purpose`, `/review-plan`'s `/vbw:vibe` routing now native `/work`, tier-template execution rows, `Linear_SOP` execution-ownership, method.md "VBW agents" claims) and debranded cosmetic prose ("VBW SUMMARY" → "planning SUMMARY"). The VBW planning layer (`.vbw-planning/`, `/vbw:init` roadmap scaffold) and the vbw plugin are untouched. rc1: VBW executor removed — native-on-Workflow is the sole executor; a stale `Backend: vbw`/`--backend=vbw` refuses with a migration message. Carries Pipekit 3.0–3.2 and the v2.8.x substrate)*
+**v4.0.0-rc3** — Last updated: 2026-06-20 06:56  *(Linear MCP tool-name migration: all 19 interactive Linear skills now call `@tacticlaunch/mcp-linear` camelCase tools (`linear_searchIssues`/`linear_getIssueById`/`linear_createIssue`/`linear_updateIssue`/`linear_createComment`/…) — the server both consumers register as `linear-server`. The old snake_case house names (`list_issues`/`save_issue`) matched no installed server and silently broke interactive Linear calls; `bin/pk`'s REST path was unaffected. Promotes `/linear-hygiene` + `/pk-exit` hygiene check to a tagged release. Carries rc2 de-stale+debrand, rc1 executor removal.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.0.0-rc2             (or latest tag)
+1. ./scripts/sync-method.sh v4.0.0-rc3             (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
