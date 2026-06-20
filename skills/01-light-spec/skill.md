@@ -126,6 +126,17 @@ Print the derived tier in the Phase 4 spec re-presentation as a one-liner near t
 Derived tier: tier:heavy  (from "Complexity: High (~16-22h)")
 ```
 
+### Phase 3.7 — Migration Plan gate (schema-touching specs)
+
+If this spec changes the **database schema**, it is not planning-ready until it carries a **Migration Plan**. Phase 2's Explore already surfaced the involved tables — use that to decide.
+
+1. **Detect schema change.** The spec touches schema if it adds/alters tables, columns, types, constraints, indexes, RLS policies, functions, or triggers. Signals: the `Database:` line names a new/changed table; Requirements or AC imply persisted state that doesn't exist yet; Phase 2 found "new tables needed."
+2. **If no schema change:** delete the `### Migration Plan` section from the spec. Done — skip to Phase 4.
+3. **If schema changes:** the `### Migration Plan` section is **mandatory**. Fill all six fields (schema objects, migration tool + dir from `method.config.md § Migration dir`, forward intent, rollback intent, data backfill, authorization). The change MUST land as a **migration file** — never an ad-hoc `ALTER` or a hand-edited schema dump. The AI still writes all the DDL; only the artifact is constrained. See `sop/Database_SOP.md`.
+4. **Validate concreteness.** A Migration Plan with "TBD" on rollback or authorization that would force the planner to guess is a blocker — resolve it now or mark it in Risks & Open Questions for the Phase 4 walk-through. "Irreversible — data loss on revert" is a *valid* rollback answer; an empty one is not.
+
+This is the spec-time half of gap #1's artifact rule. The Spec Review Agent (`templates/spec_review_skill.md` § Migration Rule) independently blocks a schema-touching spec that reaches review without a concrete plan, and `/verify` runs a migration-review subagent on the diff — but catching it here, before publish, saves a review round-trip.
+
 ### Phase 4 — Present and Iterate
 
 1. Show the draft spec to the user.

@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.0.0-rc4** — Last updated: 2026-06-20 08:04  *(pk ship gate + pk promote hardening: (1) `pk ship` matches a `verify-complete.md` whose `sha:` == HEAD under any date dir instead of re-deriving tier + today's date (both caused false aborts); `/verify` writes the sentinel on PASS for every tier, quick included. (2) `pk promote` with no arg auto-picks the next ready hop on a 3+ env chain (never skips ahead). rc3: Linear MCP tool-name migration to `@tacticlaunch/mcp-linear` camelCase `linear_*` across all 19 interactive Linear skills. Carries rc2 de-stale+debrand, rc1 executor removal.)*
+**v4.0.0-rc5** — Last updated: 2026-06-20 09:25  *(gap #1 artifact rule: new `sop/Database_SOP.md` — every schema change lands as a tracked, reversible migration file (the AI still does all the DDL; only the artifact is constrained). `/light-spec` Phase 3.7 requires a six-field Migration Plan (schema objects, tool+dir, forward/rollback intent, backfill, authorization) on any schema-touching spec; the Spec Review Agent (§ Migration Rule) blocks one that lacks it. Companion to the immutability rule in `pipekit-migrations.md` (frozen-file). Carries rc1–rc4: executor removal, de-stale+debrand, Linear MCP migration, pk ship gate + pk promote hardening.)*
 
 ---
 

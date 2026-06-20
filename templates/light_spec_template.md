@@ -59,6 +59,16 @@
 - **Patterns to follow:** [existing patterns in the codebase to match]
 - **Authority:** [For data/calculations: where is the source of truth? DB | utils | POC | API. If multiple layers, explicitly define precedence — e.g., "DB is authoritative; utils must match DB behavior." Never leave authority ambiguous when two layers could disagree.]
 
+### Migration Plan
+[**Required only if this spec changes the database schema** (tables, columns, types, constraints, indexes, RLS policies, functions, triggers). If no schema change, delete this section. The schema change MUST land as a migration file — not an ad-hoc `ALTER` or a hand-edited schema dump. The AI still does all the DDL work; only the artifact is constrained. See `sop/Database_SOP.md`. Answer all six; a `[TBD]` that would force the planner to guess a task boundary blocks planning.]
+
+- **Schema objects:** [tables/columns/constraints/indexes/policies/functions touched]
+- **Migration tool + dir:** [from `method.config.md § Migration dir` — e.g. `supabase/migrations/`]
+- **Forward intent:** [what the migration asserts, in outcome terms — not literal SQL]
+- **Rollback intent:** [how it's undone, or "irreversible — data loss on revert" stated explicitly]
+- **Data backfill:** [existing-data transform/default/backfill needs; nullable-vs-NOT-NULL; sentinels — or "none"]
+- **Authorization:** [RLS policy / GRANT for new tables/columns; default deny — or "n/a, no new access path"]
+
 ### Risks & Open Questions
 - [risk or unknown 1 — e.g., "Unclear if RLS policy covers this case"]
 - [risk or unknown 2]
