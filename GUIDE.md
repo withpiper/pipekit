@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.0.0-rc3** — Last updated: 2026-06-20 06:56  *(Linear MCP tool-name migration: all 19 interactive Linear skills now call `@tacticlaunch/mcp-linear` camelCase tools (`linear_searchIssues`/`linear_getIssueById`/`linear_createIssue`/`linear_updateIssue`/…) instead of the stale snake_case house names (`list_issues`/`save_issue`) that matched no installed server; `bin/pk`'s REST path was unaffected, so the daily loop kept working. Promotes `/linear-hygiene` + `/pk-exit` hygiene check to a tagged release. Carries rc2 de-stale+debrand, rc1 executor removal.)*
+**v4.0.0-rc4** — Last updated: 2026-06-20 08:04  *(pk ship gate + pk promote hardening: (1) `pk ship` matches a `verify-complete.md` whose `sha:` == HEAD under any date dir instead of re-deriving tier + today's date (both caused false aborts); `/verify` writes the sentinel on PASS for every tier, quick included. (2) `pk promote` with no arg auto-picks the next ready hop on a 3+ env chain (never skips ahead). rc3: Linear MCP tool-name migration to `@tacticlaunch/mcp-linear` camelCase `linear_*` across all 19 interactive Linear skills. Carries rc2 de-stale+debrand, rc1 executor removal.)*
 
 ---
 
