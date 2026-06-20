@@ -33,6 +33,7 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `VBW_COMMANDS.md` | VBW `/vbw:help` snapshot |
 | `method.config.template.md` | Project-config template |
 | `sop/Code_Quality.md` | SOP — coding conventions |
+| `sop/Database_SOP.md` | SOP — schema-change artifact rule, Migration Plan contract |
 | `sop/Git_and_Deployment.md` | SOP — branches, merges, release flow |
 | `sop/Hooks_SOP.md` | SOP — Claude Code hooks |
 | `sop/Linear_SOP.md` | SOP — Linear model, states, labels |
@@ -42,6 +43,18 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
 
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
+
+---
+
+## v4.0.0-rc5 — 2026-06-20
+
+> **gap #1 artifact rule — schema changes land as migration files.** Closes the last open piece of the highest-priority production-readiness gap. The *immutability* rule (once a migration is applied anywhere, the file is frozen) shipped earlier as `.claude/rules/pipekit-migrations.md`. This release adds the *artifact* rule upstream of it: every schema change is born as a tracked, reversible migration — never an ad-hoc `ALTER` or a hand-edited schema dump — and schema-touching specs must plan that migration before they reach planning. **The AI still does all the database work; only the artifact is constrained.** No `bin/pk` change; docs/SOP/skill/template only.
+
+- **New `sop/Database_SOP.md`** — the schema-change methodology. The One Rule (every schema change = a migration file), an explicit "the AI still does all the work" clause (the rule changes the artifact, not the workload), the six-field **Migration Plan** spec contract, a per-tool interface table (Supabase / Prisma / Drizzle / Knex / Alembic / Rails), and the three enforcement points (spec / verify / review). References `pipekit-migrations.md` for immutability and `pipekit-security.md` for the default-deny authorization rule — no duplication of the frozen-file invariant.
+- **`/light-spec` Phase 3.7 — Migration Plan gate.** On a schema-touching spec, the new `### Migration Plan` template section is mandatory and must answer six questions (schema objects; migration tool + dir from `method.config.md § Migration dir`; forward intent; rollback intent; data backfill; authorization). Non-schema specs delete the section — it's conditional, so non-DB work is unaffected. Catching it here saves a Spec Review round-trip.
+- **Spec Review Agent § Migration Rule (Critical)** (`templates/spec_review_skill.md`, bumped to v5.3) — mirrors the existing Authority Rule. A schema-touching spec with no concrete Migration Plan is a **Blocking** issue; so is an empty rollback intent (no reasoned undo, not explicitly "irreversible") or a new table/column with no stated RLS policy / GRANT.
+- **`templates/light_spec_template.md`** gains the conditional `### Migration Plan` section under Technical Context.
+- **Migration:** none for the API. Consumers re-sync (`./scripts/sync-method.sh v4.0.0-rc5`) to pick up the new SOP, template section, light-spec phase, and reviewer rule. Deferred (explicitly out of scope, per the gap's tiering): the Tier 2 drift-detection script and Tier 3 CI template.
 
 ---
 

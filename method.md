@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.0.0-rc4** — Last updated: 2026-06-20 08:04  *(**pk ship gate + pk promote hardening.** (1) The `pk ship` verify gate now matches a `verify-complete.md` whose `sha:` == HEAD under **any** date dir, instead of re-deriving tier (Linear flake → `standard` default) and recomputing today's date — both caused false aborts; `/verify` now writes the sentinel on PASS for **every** tier, quick included. (2) `pk promote` with no arg on a 3+ env chain **auto-picks the next ready hop** (earliest pair where the source branch is ahead of the target) instead of refusing; never skips ahead. rc3: Linear MCP tool-name migration — all 19 interactive Linear skills call `@tacticlaunch/mcp-linear` camelCase tools (`linear_*`); the old snake_case house names matched no installed server. **Carries** rc2's de-stale+debrand and rc1's executor removal; the VBW planning layer is untouched.)*
+**v4.0.0-rc5** — Last updated: 2026-06-20 09:25  *(**gap #1 artifact rule — schema changes as migration files.** New `sop/Database_SOP.md` defines the *artifact* rule: every schema change lands as a tracked, reversible migration (never an ad-hoc `ALTER` or hand-edited dump); the AI still does all the DDL work, only the artifact is constrained. `/light-spec` (Phase 3.7) now requires a six-field **Migration Plan** (schema objects, tool+dir, forward/rollback intent, backfill, authorization) on any schema-touching spec, and the Spec Review Agent (§ Migration Rule) blocks one that lacks it. Companion to the *immutability* rule in `.claude/rules/pipekit-migrations.md` (frozen-file). Carries rc1–rc4: executor removal, de-stale+debrand, Linear MCP migration, pk ship gate + pk promote hardening.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -511,6 +511,7 @@ Detailed standard operating procedures for each discipline:
 |-----|--------|
 | [Git & Deployment](sop/Git_and_Deployment.md) | Branch strategy, worktrees, release flow |
 | [Code Quality](sop/Code_Quality.md) | Pre-deploy gates, quality standards |
+| [Database](sop/Database_SOP.md) | Schema-change artifact rule, Migration Plan contract, per-tool interface |
 | [Linear Configuration](sop/Linear_SOP.md) | Issue tracking, labels, workflow states |
 | [Skills](sop/Skills_SOP.md) | Skill authoring, triggers, conventions |
 | [VBW Help](sop/VBW_Help.md) | VBW plugin reference |

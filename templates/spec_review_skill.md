@@ -1,4 +1,4 @@
-# Linear Agent Skill: Spec Review Agent (v5.2)
+# Linear Agent Skill: Spec Review Agent (v5.3)
 
 ## Context
 
@@ -92,6 +92,22 @@ It MUST define the authoritative layer:
 - POC baseline
 
 If unclear -> Blocking issue
+
+---
+
+## Migration Rule (Critical)
+
+If the spec changes the database schema (new/altered tables, columns, types, constraints, indexes, RLS policies, functions, triggers):
+
+It MUST carry a concrete **Migration Plan** — the schema change lands as a migration file, never an ad-hoc `ALTER` or a hand-edited schema dump.
+
+The plan must answer: schema objects touched, migration tool + dir, forward intent, **rollback intent**, data backfill, and **authorization** (RLS/GRANT for new access paths; default deny).
+
+- Missing Migration Plan on a schema-touching spec -> Blocking
+- Empty rollback intent (no reasoned undo, and not explicitly "irreversible") -> Blocking
+- New table/column with no stated RLS policy or GRANT -> Blocking (a data-access path with no auth is a leak)
+
+A spec that touches no schema omits the Migration Plan section entirely — do NOT demand it. See `sop/Database_SOP.md` for the artifact rule.
 
 ---
 
