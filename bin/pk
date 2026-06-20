@@ -525,6 +525,23 @@ pk_linear_tier() {
   echo "${tier:-standard}"
 }
 
+# Echo the path of a verify-complete.md — under ANY Logs/Verify/<date>/<issue>/ —
+# whose `sha:` line matches the given commit, and return 0; otherwise return 1.
+# The date-independent + sha-matched lookup is what lets `pk ship` trust /verify's
+# persisted PASS without re-deriving tier or recomputing the date (both flaky).
+pk_verify_sentinel_for_head() {
+  local issue="$1" head="$2" f
+  [ -n "$head" ] || return 1
+  for f in Logs/Verify/*/"${issue}"/verify-complete.md; do
+    [ -f "$f" ] || continue
+    if grep -qE "^sha: ${head}([[:space:]]|\$)" "$f" 2>/dev/null; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Git / worktree helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1161,22 +1178,28 @@ cmd_ship() {
     mkdir -p Logs/Verify 2>/dev/null
     echo "$(date -u +%FT%TZ) ${issue}" >> Logs/Verify/bypass.log 2>/dev/null || true
   else
-    local _tier
-    _tier=$(pk_linear_tier "$issue" 2>/dev/null || echo "standard")
-    local _today _vc
-    _today=$(date -u +%Y%m%d)
-    _vc="Logs/Verify/${_today}/${issue}/verify-complete.md"
+    # v4: the gate trusts /verify's persisted decision instead of re-deriving
+    # tier or recomputing the date. /verify writes verify-complete.md on PASS
+    # for EVERY tier (quick included), recording the verified HEAD `sha:`. Ship
+    # accepts a sentinel — under ANY date dir — whose sha matches current HEAD.
+    # This kills two false-abort modes the old <today>-only + pk_linear_tier
+    # gate had: (1) a Linear flake at ship time defaulting tier to "standard"
+    # and demanding a sentinel that quick correctly never wrote; (2) a midnight
+    # UTC rollover between verify and ship pointing at the wrong date dir. The
+    # sha match also closes the converse hole — a PASS from an earlier commit
+    # can no longer vouch for the code actually being shipped.
+    local _head _vc_found
+    _head=$(git rev-parse HEAD 2>/dev/null || echo "")
+    _vc_found=$(pk_verify_sentinel_for_head "$issue" "$_head" || true)
 
-    if [ ! -f "$_vc" ]; then
-      if [ "$_tier" = "quick" ]; then
-        echo "⚠ verify-complete.md missing (${_vc}) — tier:quick is virtual, proceeding." >&2
-      elif $force; then
-        echo "⚠ verify-complete.md missing — bypassed via --force." >&2
-        pk_linear_comment "$issue" "Shipped without verify-complete.md (--force at $(date -u +%FT%TZ))" || true
+    if [ -z "$_vc_found" ]; then
+      if $force; then
+        echo "⚠ no verify-complete.md matching HEAD ${_head:0:8} — bypassed via --force." >&2
+        pk_linear_comment "$issue" "Shipped without a HEAD-matching verify-complete.md (--force at $(date -u +%FT%TZ))" || true
       else
-        echo "ERROR: verify-complete.md missing for ${issue}." >&2
-        echo "       Expected: ${_vc}" >&2
-        echo "       Run /verify first, or pass --force to bypass (logs a Linear comment)." >&2
+        echo "ERROR: no verify-complete.md matching current HEAD (${_head:0:8}) for ${issue}." >&2
+        echo "       /verify writes one on PASS for every tier (quick included)." >&2
+        echo "       Run /verify on this commit first, or pass --force to bypass (logs a Linear comment)." >&2
         return 1
       fi
     fi

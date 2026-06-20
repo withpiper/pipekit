@@ -232,6 +232,96 @@ fi
 cleanup
 FIXTURE=""
 
+# ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
+# pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
+# `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the
+# <today>-only + pk_linear_tier re-derivation (false-aborts on Linear flake /
+# midnight rollover). Pure FS+grep, so we pass a fake sha — no real git needed.
+
+echo "== verify-complete gate matcher (sourced) =="
+
+make_fixture
+HEAD_SHA="0123456789abcdef0123456789abcdef01234567"
+OTHER_SHA="ffffffffffffffffffffffffffffffffffffffff"
+unit_gate() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_for_head "$@" ); }
+write_sentinel() { # $1 date  $2 issue  $3 sha
+  mkdir -p "$FIXTURE/Logs/Verify/$1/$2"
+  printf '# verify-complete\n\nissue: %s\ntier: quick\nstatus: PASS\nsha: %s\n' "$2" "$3" \
+    > "$FIXTURE/Logs/Verify/$1/$2/verify-complete.md"
+}
+
+write_sentinel 20260101 ABC-123 "$HEAD_SHA"
+out=$(unit_gate ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -eq 0 ] && [ -n "$out" ] && ok "gate: HEAD-matching sentinel found" || fail "gate: HEAD-matching sentinel found" "rc=$rc out='$out'"
+
+out=$(unit_gate ABC-123 "$OTHER_SHA"); rc=$?
+[ $rc -ne 0 ] && [ -z "$out" ] && ok "gate: non-matching sha rejected" || fail "gate: non-matching sha rejected" "rc=$rc out='$out'"
+
+# Cross-date: a sentinel written yesterday still vouches for today's ship.
+rm -rf "$FIXTURE/Logs/Verify"; write_sentinel 20251231 ABC-123 "$HEAD_SHA"
+out=$(unit_gate ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -eq 0 ] && ok "gate: cross-date sentinel found (midnight-rollover fix)" || fail "gate: cross-date sentinel found (midnight-rollover fix)" "rc=$rc"
+
+# Wrong issue's sentinel must not satisfy this issue.
+out=$(unit_gate XYZ-999 "$HEAD_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "gate: other-issue sentinel ignored" || fail "gate: other-issue sentinel ignored" "rc=$rc"
+
+rm -rf "$FIXTURE/Logs/Verify"
+out=$(unit_gate ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "gate: no sentinel → not found" || fail "gate: no sentinel → not found" "rc=$rc"
+
+write_sentinel 20260101 ABC-123 "$HEAD_SHA"
+out=$(unit_gate ABC-123 ""); rc=$?
+[ $rc -ne 0 ] && ok "gate: empty HEAD never matches" || fail "gate: empty HEAD never matches" "rc=$rc out='$out'"
+cleanup
+FIXTURE=""
+
+# ── CLI tests: verify-complete ship gate (E2E) ───────────────────────────────
+
+echo "== verify-complete ship gate (E2E) =="
+
+make_fixture
+write_config '```
+Backend: native
+Integration branch: main
+Ship environments: dev,beta,main
+```'
+git -C "$FIXTURE" checkout -q -b feat/ABC-123-widget
+E2E_HEAD=$(git -C "$FIXTURE" rev-parse HEAD)
+
+# (a) No sentinel → abort at the gate, before push and before any gh call.
+: > "$GH_LOG"
+run_pk ship
+g=0; p=0
+case "$RUN_OUT" in *"no verify-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *Pushing*) p=1 ;; esac
+if [ $RUN_CODE -ne 0 ] && [ $g -eq 1 ] && [ $p -eq 0 ] && [ ! -s "$GH_LOG" ]; then
+  ok "ship gate: no sentinel aborts before push/gh"
+else
+  fail "ship gate: no sentinel aborts before push/gh" "rc=$RUN_CODE gate_msg=$g pushed=$p gh='$(cat "$GH_LOG")'"
+fi
+
+# (b) HEAD-matching sentinel → passes the gate (reaches push; push fails with no
+#     remote, which is fine — we only assert the gate let it through).
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-123"
+printf 'sha: %s\n' "$E2E_HEAD" > "$FIXTURE/Logs/Verify/20260101/ABC-123/verify-complete.md"
+run_pk ship
+case "$RUN_OUT" in
+  *Pushing*) ok "ship gate: HEAD-matching sentinel passes gate" ;;
+  *"no verify-complete.md matching"*) fail "ship gate: HEAD-matching sentinel passes gate" "gate still aborted" ;;
+  *) fail "ship gate: HEAD-matching sentinel passes gate" "output: $(echo "$RUN_OUT" | head -3)" ;;
+esac
+
+# (c) PK_VERIFY_BYPASS=1 → gate skipped entirely (even with no sentinel).
+rm -rf "$FIXTURE/Logs/Verify"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_VERIFY_BYPASS=1 "$PK" ship 2>&1)
+case "$RUN_OUT" in
+  *"gate bypassed via PK_VERIFY_BYPASS"*) ok "ship gate: PK_VERIFY_BYPASS=1 skips gate" ;;
+  *) fail "ship gate: PK_VERIFY_BYPASS=1 skips gate" "output: $(echo "$RUN_OUT" | head -3)" ;;
+esac
+cleanup
+FIXTURE=""
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
