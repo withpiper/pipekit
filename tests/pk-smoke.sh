@@ -163,9 +163,13 @@ done
 
 echo "== promote guard rails =="
 
+# No arg on a 3+ env chain now AUTO-PICKS the next ready hop instead of refusing.
+# This fixture has no origin remote, so no hop has unpromoted commits → no-op
+# (exit 0, "Nothing to promote"). The positive auto-pick path is exercised in the
+# bare-remote section below.
 run_pk promote
-[ $RUN_CODE -eq 2 ] && case "$RUN_OUT" in *"Specify target"*) ok "promote: multi-hop chain requires explicit target" ;; *) fail "promote: multi-hop chain requires explicit target" "output: $RUN_OUT" ;; esac \
-  || fail "promote: multi-hop chain requires explicit target" "exit $RUN_CODE, want 2"
+[ $RUN_CODE -eq 0 ] && case "$RUN_OUT" in *"Nothing to promote"*) ok "promote: no-arg multi-hop auto-picks (level chain → no-op)" ;; *) fail "promote: no-arg multi-hop auto-picks (level chain → no-op)" "output: $RUN_OUT" ;; esac \
+  || fail "promote: no-arg multi-hop auto-picks (level chain → no-op)" "exit $RUN_CODE, want 0"
 
 run_pk promote prod
 [ $RUN_CODE -eq 2 ] && case "$RUN_OUT" in *"not a valid promote target"*) ok "promote: invalid target rejected" ;; *) fail "promote: invalid target rejected" "output: $RUN_OUT" ;; esac \
@@ -184,9 +188,57 @@ run_pk promote
 [ $RUN_CODE -eq 0 ] && case "$RUN_OUT" in *disabled*) ok "promote: single-tier no-op" ;; *) fail "promote: single-tier no-op" "output: $RUN_OUT" ;; esac \
   || fail "promote: single-tier no-op" "exit $RUN_CODE, want 0"
 
+cleanup
+FIXTURE=""
+
+# ── Unit tests: promote frontier (sourced + bare remote) ─────────────────────
+# pk_promote_next_target walks the Ship-environments chain and returns the next
+# hop's target — the earliest pair where origin/<src> is ahead of origin/<tgt>.
+# This is the no-arg auto-pick that replaced the old "Specify target" refusal.
+
+echo "== promote auto-pick frontier (sourced + bare remote) =="
+
+make_fixture                                   # repo on main, one commit
+REMOTE=$(mktemp -d); git -C "$REMOTE" init -q --bare
+git -C "$FIXTURE" remote add origin "$REMOTE"
+git -C "$FIXTURE" branch beta
+git -C "$FIXTURE" branch dev
+git -C "$FIXTURE" push -q origin main beta dev 2>/dev/null
+# Advance dev one commit ahead of beta/main.
+git -C "$FIXTURE" checkout -q dev
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "dev work"
+git -C "$FIXTURE" push -q origin dev 2>/dev/null
+git -C "$FIXTURE" checkout -q main
+
+next_target() { ( cd "$FIXTURE" && source "$PK" && git fetch -q origin 2>/dev/null; pk_promote_next_target "$@" ); }
+
+out=$(next_target "dev beta main"); rc=$?
+[ $rc -eq 0 ] && [ "$out" = "beta" ] && ok "promote frontier: picks earliest ready hop (dev→beta)" || fail "promote frontier: picks earliest ready hop (dev→beta)" "rc=$rc out='$out'"
+
+# Catch beta up to dev → the frontier advances to the next hop (beta→main).
+git -C "$FIXTURE" push -q origin dev:beta 2>/dev/null
+out=$(next_target "dev beta main"); rc=$?
+[ $rc -eq 0 ] && [ "$out" = "main" ] && ok "promote frontier: advances after catch-up (beta→main)" || fail "promote frontier: advances after catch-up (beta→main)" "rc=$rc out='$out'"
+
+# Catch main up too → fully level → nothing to promote.
+git -C "$FIXTURE" push -q origin dev:main 2>/dev/null
+out=$(next_target "dev beta main"); rc=$?
+[ $rc -ne 0 ] && [ -z "$out" ] && ok "promote frontier: level chain → nothing" || fail "promote frontier: level chain → nothing" "rc=$rc out='$out'"
+
+rm -rf "$REMOTE"
+cleanup
+FIXTURE=""
+
 # ── CLI tests: doctor upstream-staleness check ───────────────────────────────
 
 echo "== doctor staleness check =="
+
+make_fixture
+write_config '```
+Backend: native
+Integration branch: main
+Ship environments: dev,beta,main
+```'
 
 # Unreachable method repo → info line, never an error (offline-safe).
 RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$FIXTURE/no-such-repo.git" "$PK" doctor 2>&1)
