@@ -163,9 +163,13 @@ done
 
 echo "== promote guard rails =="
 
+# No arg on a 3+ env chain now AUTO-PICKS the next ready hop instead of refusing.
+# This fixture has no origin remote, so no hop has unpromoted commits → no-op
+# (exit 0, "Nothing to promote"). The positive auto-pick path is exercised in the
+# bare-remote section below.
 run_pk promote
-[ $RUN_CODE -eq 2 ] && case "$RUN_OUT" in *"Specify target"*) ok "promote: multi-hop chain requires explicit target" ;; *) fail "promote: multi-hop chain requires explicit target" "output: $RUN_OUT" ;; esac \
-  || fail "promote: multi-hop chain requires explicit target" "exit $RUN_CODE, want 2"
+[ $RUN_CODE -eq 0 ] && case "$RUN_OUT" in *"Nothing to promote"*) ok "promote: no-arg multi-hop auto-picks (level chain → no-op)" ;; *) fail "promote: no-arg multi-hop auto-picks (level chain → no-op)" "output: $RUN_OUT" ;; esac \
+  || fail "promote: no-arg multi-hop auto-picks (level chain → no-op)" "exit $RUN_CODE, want 0"
 
 run_pk promote prod
 [ $RUN_CODE -eq 2 ] && case "$RUN_OUT" in *"not a valid promote target"*) ok "promote: invalid target rejected" ;; *) fail "promote: invalid target rejected" "output: $RUN_OUT" ;; esac \
@@ -184,9 +188,57 @@ run_pk promote
 [ $RUN_CODE -eq 0 ] && case "$RUN_OUT" in *disabled*) ok "promote: single-tier no-op" ;; *) fail "promote: single-tier no-op" "output: $RUN_OUT" ;; esac \
   || fail "promote: single-tier no-op" "exit $RUN_CODE, want 0"
 
+cleanup
+FIXTURE=""
+
+# ── Unit tests: promote frontier (sourced + bare remote) ─────────────────────
+# pk_promote_next_target walks the Ship-environments chain and returns the next
+# hop's target — the earliest pair where origin/<src> is ahead of origin/<tgt>.
+# This is the no-arg auto-pick that replaced the old "Specify target" refusal.
+
+echo "== promote auto-pick frontier (sourced + bare remote) =="
+
+make_fixture                                   # repo on main, one commit
+REMOTE=$(mktemp -d); git -C "$REMOTE" init -q --bare
+git -C "$FIXTURE" remote add origin "$REMOTE"
+git -C "$FIXTURE" branch beta
+git -C "$FIXTURE" branch dev
+git -C "$FIXTURE" push -q origin main beta dev 2>/dev/null
+# Advance dev one commit ahead of beta/main.
+git -C "$FIXTURE" checkout -q dev
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "dev work"
+git -C "$FIXTURE" push -q origin dev 2>/dev/null
+git -C "$FIXTURE" checkout -q main
+
+next_target() { ( cd "$FIXTURE" && source "$PK" && git fetch -q origin 2>/dev/null; pk_promote_next_target "$@" ); }
+
+out=$(next_target "dev beta main"); rc=$?
+[ $rc -eq 0 ] && [ "$out" = "beta" ] && ok "promote frontier: picks earliest ready hop (dev→beta)" || fail "promote frontier: picks earliest ready hop (dev→beta)" "rc=$rc out='$out'"
+
+# Catch beta up to dev → the frontier advances to the next hop (beta→main).
+git -C "$FIXTURE" push -q origin dev:beta 2>/dev/null
+out=$(next_target "dev beta main"); rc=$?
+[ $rc -eq 0 ] && [ "$out" = "main" ] && ok "promote frontier: advances after catch-up (beta→main)" || fail "promote frontier: advances after catch-up (beta→main)" "rc=$rc out='$out'"
+
+# Catch main up too → fully level → nothing to promote.
+git -C "$FIXTURE" push -q origin dev:main 2>/dev/null
+out=$(next_target "dev beta main"); rc=$?
+[ $rc -ne 0 ] && [ -z "$out" ] && ok "promote frontier: level chain → nothing" || fail "promote frontier: level chain → nothing" "rc=$rc out='$out'"
+
+rm -rf "$REMOTE"
+cleanup
+FIXTURE=""
+
 # ── CLI tests: doctor upstream-staleness check ───────────────────────────────
 
 echo "== doctor staleness check =="
+
+make_fixture
+write_config '```
+Backend: native
+Integration branch: main
+Ship environments: dev,beta,main
+```'
 
 # Unreachable method repo → info line, never an error (offline-safe).
 RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$FIXTURE/no-such-repo.git" "$PK" doctor 2>&1)
@@ -229,6 +281,96 @@ else
   fail "ship: refuses off feature branch, no gh" "exit $RUN_CODE, gh log: $(cat "$GH_LOG" 2>/dev/null)"
 fi
 
+cleanup
+FIXTURE=""
+
+# ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
+# pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
+# `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the
+# <today>-only + pk_linear_tier re-derivation (false-aborts on Linear flake /
+# midnight rollover). Pure FS+grep, so we pass a fake sha — no real git needed.
+
+echo "== verify-complete gate matcher (sourced) =="
+
+make_fixture
+HEAD_SHA="0123456789abcdef0123456789abcdef01234567"
+OTHER_SHA="ffffffffffffffffffffffffffffffffffffffff"
+unit_gate() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_for_head "$@" ); }
+write_sentinel() { # $1 date  $2 issue  $3 sha
+  mkdir -p "$FIXTURE/Logs/Verify/$1/$2"
+  printf '# verify-complete\n\nissue: %s\ntier: quick\nstatus: PASS\nsha: %s\n' "$2" "$3" \
+    > "$FIXTURE/Logs/Verify/$1/$2/verify-complete.md"
+}
+
+write_sentinel 20260101 ABC-123 "$HEAD_SHA"
+out=$(unit_gate ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -eq 0 ] && [ -n "$out" ] && ok "gate: HEAD-matching sentinel found" || fail "gate: HEAD-matching sentinel found" "rc=$rc out='$out'"
+
+out=$(unit_gate ABC-123 "$OTHER_SHA"); rc=$?
+[ $rc -ne 0 ] && [ -z "$out" ] && ok "gate: non-matching sha rejected" || fail "gate: non-matching sha rejected" "rc=$rc out='$out'"
+
+# Cross-date: a sentinel written yesterday still vouches for today's ship.
+rm -rf "$FIXTURE/Logs/Verify"; write_sentinel 20251231 ABC-123 "$HEAD_SHA"
+out=$(unit_gate ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -eq 0 ] && ok "gate: cross-date sentinel found (midnight-rollover fix)" || fail "gate: cross-date sentinel found (midnight-rollover fix)" "rc=$rc"
+
+# Wrong issue's sentinel must not satisfy this issue.
+out=$(unit_gate XYZ-999 "$HEAD_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "gate: other-issue sentinel ignored" || fail "gate: other-issue sentinel ignored" "rc=$rc"
+
+rm -rf "$FIXTURE/Logs/Verify"
+out=$(unit_gate ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "gate: no sentinel → not found" || fail "gate: no sentinel → not found" "rc=$rc"
+
+write_sentinel 20260101 ABC-123 "$HEAD_SHA"
+out=$(unit_gate ABC-123 ""); rc=$?
+[ $rc -ne 0 ] && ok "gate: empty HEAD never matches" || fail "gate: empty HEAD never matches" "rc=$rc out='$out'"
+cleanup
+FIXTURE=""
+
+# ── CLI tests: verify-complete ship gate (E2E) ───────────────────────────────
+
+echo "== verify-complete ship gate (E2E) =="
+
+make_fixture
+write_config '```
+Backend: native
+Integration branch: main
+Ship environments: dev,beta,main
+```'
+git -C "$FIXTURE" checkout -q -b feat/ABC-123-widget
+E2E_HEAD=$(git -C "$FIXTURE" rev-parse HEAD)
+
+# (a) No sentinel → abort at the gate, before push and before any gh call.
+: > "$GH_LOG"
+run_pk ship
+g=0; p=0
+case "$RUN_OUT" in *"no verify-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *Pushing*) p=1 ;; esac
+if [ $RUN_CODE -ne 0 ] && [ $g -eq 1 ] && [ $p -eq 0 ] && [ ! -s "$GH_LOG" ]; then
+  ok "ship gate: no sentinel aborts before push/gh"
+else
+  fail "ship gate: no sentinel aborts before push/gh" "rc=$RUN_CODE gate_msg=$g pushed=$p gh='$(cat "$GH_LOG")'"
+fi
+
+# (b) HEAD-matching sentinel → passes the gate (reaches push; push fails with no
+#     remote, which is fine — we only assert the gate let it through).
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-123"
+printf 'sha: %s\n' "$E2E_HEAD" > "$FIXTURE/Logs/Verify/20260101/ABC-123/verify-complete.md"
+run_pk ship
+case "$RUN_OUT" in
+  *Pushing*) ok "ship gate: HEAD-matching sentinel passes gate" ;;
+  *"no verify-complete.md matching"*) fail "ship gate: HEAD-matching sentinel passes gate" "gate still aborted" ;;
+  *) fail "ship gate: HEAD-matching sentinel passes gate" "output: $(echo "$RUN_OUT" | head -3)" ;;
+esac
+
+# (c) PK_VERIFY_BYPASS=1 → gate skipped entirely (even with no sentinel).
+rm -rf "$FIXTURE/Logs/Verify"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_VERIFY_BYPASS=1 "$PK" ship 2>&1)
+case "$RUN_OUT" in
+  *"gate bypassed via PK_VERIFY_BYPASS"*) ok "ship gate: PK_VERIFY_BYPASS=1 skips gate" ;;
+  *) fail "ship gate: PK_VERIFY_BYPASS=1 skips gate" "output: $(echo "$RUN_OUT" | head -3)" ;;
+esac
 cleanup
 FIXTURE=""
 

@@ -14,8 +14,9 @@
 #   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
 #   pk verify               — light verify (run test cmd from method.config.md)
 #   pk config [<key>]       — read a V2 key from method.config.md (or dump all)
-#   pk promote <env>        — promote one hop along Ship environments; transitions
-#                             matching issues → Released (intermediate) or Done (final)
+#   pk promote [<env>]      — promote one hop along Ship environments; transitions
+#                             matching issues → Released (intermediate) or Done (final).
+#                             No arg auto-picks the next ready hop (earliest with unpromoted commits).
 #   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
 #   pk spec-cycle <ID>      — trigger Spec Review Agent v5, poll, dispatch on verdict
 #
@@ -29,7 +30,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.0.0-rc3"
+PK_VERSION="4.0.0-rc4"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -407,6 +408,27 @@ pk_env_state_name() {
   echo ""
 }
 
+# Given the Ship-environments chain (space- or comma-separated), echo the next
+# env to promote TO: the target of the EARLIEST adjacent hop whose source
+# branch has commits the target branch doesn't yet have (origin/<tgt>..origin/<src>).
+# Echoes nothing + returns 1 when the chain is level (nothing to promote). Walks
+# the frontier so `pk promote` with no arg never skips ahead. Requires origin
+# refs to be current — the caller fetches first.
+pk_promote_next_target() {
+  local chain="$1" envs_arr=() j src tgt ahead
+  IFS=', ' read -ra envs_arr <<< "$chain"
+  for j in "${!envs_arr[@]}"; do
+    [ "$j" -lt "$(( ${#envs_arr[@]} - 1 ))" ] || continue
+    src="${envs_arr[$j]}"; tgt="${envs_arr[$((j + 1))]}"
+    ahead=$(git rev-list --count "origin/${tgt}..origin/${src}" 2>/dev/null || echo 0)
+    if [ "${ahead:-0}" -gt 0 ]; then
+      printf '%s\n' "$tgt"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Fetch the current workflow-state name for a Linear issue by identifier.
 # Empty string on lookup failure (network, missing issue, missing API key) so
 # callers can treat absence as "don't know" without aborting. Used by the
@@ -523,6 +545,23 @@ pk_linear_tier() {
     | jq -r '.data.issue.labels.nodes[]?.name // empty' 2>/dev/null \
     | grep -oE '^tier:(quick|standard|heavy)$' | head -1 | sed 's/^tier://')
   echo "${tier:-standard}"
+}
+
+# Echo the path of a verify-complete.md — under ANY Logs/Verify/<date>/<issue>/ —
+# whose `sha:` line matches the given commit, and return 0; otherwise return 1.
+# The date-independent + sha-matched lookup is what lets `pk ship` trust /verify's
+# persisted PASS without re-deriving tier or recomputing the date (both flaky).
+pk_verify_sentinel_for_head() {
+  local issue="$1" head="$2" f
+  [ -n "$head" ] || return 1
+  for f in Logs/Verify/*/"${issue}"/verify-complete.md; do
+    [ -f "$f" ] || continue
+    if grep -qE "^sha: ${head}([[:space:]]|\$)" "$f" 2>/dev/null; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1161,22 +1200,28 @@ cmd_ship() {
     mkdir -p Logs/Verify 2>/dev/null
     echo "$(date -u +%FT%TZ) ${issue}" >> Logs/Verify/bypass.log 2>/dev/null || true
   else
-    local _tier
-    _tier=$(pk_linear_tier "$issue" 2>/dev/null || echo "standard")
-    local _today _vc
-    _today=$(date -u +%Y%m%d)
-    _vc="Logs/Verify/${_today}/${issue}/verify-complete.md"
+    # v4: the gate trusts /verify's persisted decision instead of re-deriving
+    # tier or recomputing the date. /verify writes verify-complete.md on PASS
+    # for EVERY tier (quick included), recording the verified HEAD `sha:`. Ship
+    # accepts a sentinel — under ANY date dir — whose sha matches current HEAD.
+    # This kills two false-abort modes the old <today>-only + pk_linear_tier
+    # gate had: (1) a Linear flake at ship time defaulting tier to "standard"
+    # and demanding a sentinel that quick correctly never wrote; (2) a midnight
+    # UTC rollover between verify and ship pointing at the wrong date dir. The
+    # sha match also closes the converse hole — a PASS from an earlier commit
+    # can no longer vouch for the code actually being shipped.
+    local _head _vc_found
+    _head=$(git rev-parse HEAD 2>/dev/null || echo "")
+    _vc_found=$(pk_verify_sentinel_for_head "$issue" "$_head" || true)
 
-    if [ ! -f "$_vc" ]; then
-      if [ "$_tier" = "quick" ]; then
-        echo "⚠ verify-complete.md missing (${_vc}) — tier:quick is virtual, proceeding." >&2
-      elif $force; then
-        echo "⚠ verify-complete.md missing — bypassed via --force." >&2
-        pk_linear_comment "$issue" "Shipped without verify-complete.md (--force at $(date -u +%FT%TZ))" || true
+    if [ -z "$_vc_found" ]; then
+      if $force; then
+        echo "⚠ no verify-complete.md matching HEAD ${_head:0:8} — bypassed via --force." >&2
+        pk_linear_comment "$issue" "Shipped without a HEAD-matching verify-complete.md (--force at $(date -u +%FT%TZ))" || true
       else
-        echo "ERROR: verify-complete.md missing for ${issue}." >&2
-        echo "       Expected: ${_vc}" >&2
-        echo "       Run /verify first, or pass --force to bypass (logs a Linear comment)." >&2
+        echo "ERROR: no verify-complete.md matching current HEAD (${_head:0:8}) for ${issue}." >&2
+        echo "       /verify writes one on PASS for every tier (quick included)." >&2
+        echo "       Run /verify on this commit first, or pass --force to bypass (logs a Linear comment)." >&2
         return 1
       fi
     fi
@@ -1702,15 +1747,25 @@ cmd_promote() {
     return 2
   fi
 
-  # Resolve target. With no arg + 2-tier chain → auto-pick the only hop.
-  # Otherwise require an explicit target to avoid accidental skip-ahead.
+  # Resolve target. With no arg + 2-env chain → auto-pick the only hop.
+  # With no arg + 3+ env chain → auto-pick the NEXT hop: the earliest adjacent
+  # pair whose source branch has commits the target branch doesn't yet have.
+  # This walks the chain frontier so the user doesn't have to name the target,
+  # while still refusing skip-ahead — it never picks past the first ready hop.
+  # An explicit target arg always overrides the auto-pick.
+  local auto_picked=false
   if [ -z "$target" ]; then
     if [ ${#envs_arr[@]} -eq 2 ]; then
       target="${envs_arr[1]}"
     else
-      echo "ERROR: Ship environments has multiple hops. Specify target:" >&2
-      echo "  pk promote <env>   (valid: ${envs_arr[*]:1})" >&2
-      return 2
+      git fetch -q origin 2>/dev/null || true
+      target=$(pk_promote_next_target "${envs_arr[*]}" || true)
+      if [ -z "$target" ]; then
+        echo "Nothing to promote — no hop in '${envs_arr[*]}' has unpromoted commits." >&2
+        echo "  To force a specific hop: pk promote <env>  (valid: ${envs_arr[*]:1})" >&2
+        return 0
+      fi
+      auto_picked=true
     fi
   fi
 
@@ -1725,6 +1780,7 @@ cmd_promote() {
   fi
 
   local source="${envs_arr[$((target_idx - 1))]}"
+  $auto_picked && echo "Auto-picked next hop: $source → $target (earliest hop with unpromoted commits)"
 
   # Resolve target state name early — both phases need it.
   local target_state
@@ -2413,7 +2469,7 @@ Subcommands:
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote <env> [--stash|--take-remote] [--confirmed] [--finish]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
+  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)

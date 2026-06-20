@@ -1,6 +1,6 @@
 ---
 name: verify
-description: V2.7 verify — tier-aware evidence-gated pre-deploy gate. Writes Logs/Verify/<date>/<id>/{evidence.txt,reality-check.md,verify-complete.md} when tier != quick. Use when a Linear issue is ready for verify (Stage 3). Use when /work finished and you need a Pass/Partial/Fail verdict per AC before pk ship.
+description: verify — tier-aware evidence-gated pre-deploy gate. tier:standard|heavy write Logs/Verify/<date>/<id>/{evidence.txt,reality-check.md,verify-complete.md}; tier:quick writes only verify-complete.md on PASS. pk ship gates on a verify-complete.md whose sha matches HEAD. Use when a Linear issue is ready for verify (Stage 3). Use when /work finished and you need a Pass/Partial/Fail verdict per AC before pk ship.
 ---
 
 # /verify
@@ -13,9 +13,9 @@ You verify that a feature branch's work is shippable. You run the project's pre-
 
 - `evidence.txt` — raw gate output with per-command exit codes and durations, plus appended `FLAG: ...` lines
 - `reality-check.md` — structured verdict with gate results table, QA block, flags, status reasoning
-- `verify-complete.md` — minimal sentinel written only on PASS
+- `verify-complete.md` — minimal sentinel written on PASS; `tier:quick` writes **only** this file (a virtual sentinel), the other two stay stdout-only
 
-`pk ship` reads `verify-complete.md` as a hard gate (wired Day 3). Without that file, ship aborts — except `tier:quick` (warn + proceed), `--force` (bypass + Linear audit comment), or `PK_VERIFY_BYPASS=1` (emergency, logs to bypass.log).
+`pk ship` reads `verify-complete.md` as a hard, **sha-matched** gate: it accepts a sentinel under any date dir whose `sha:` line matches the commit being shipped (`git rev-parse HEAD`). Without a HEAD-matching sentinel, ship aborts — bypass via `--force` (Linear audit comment) or `PK_VERIFY_BYPASS=1` (emergency, logs to bypass.log). Every tier writes the sentinel on PASS, so quick is no longer a warn-but-proceed special case.
 
 ## Triggers
 
@@ -57,13 +57,13 @@ VERIFY_DIR="Logs/Verify/${TODAY}/${ISSUE}"
 
 | Tier | Evidence layer | reality-check.md | verify-complete.md | QA subagent | Antagonistic review | pk ship gate |
 |---|---|---|---|---|---|---|
-| quick | no | virtual (printed only) | virtual | only if `--qa` | never | warn-but-proceed |
-| standard | yes | written | written on PASS | per config + `--qa` | auto on sensitive-path diffs; opt-in via `--review` otherwise | hard, file required |
-| heavy | yes | written | written on PASS | per config + `--qa` | mandatory | hard, file required |
+| quick | no | virtual (printed only) | minimal, on PASS | only if `--qa` | never | hard, sha-matched |
+| standard | yes | written | written on PASS | per config + `--qa` | auto on sensitive-path diffs; opt-in via `--review` otherwise | hard, sha-matched |
+| heavy | yes | written | written on PASS | per config + `--qa` | mandatory | hard, sha-matched |
 
 Sensitive-path patterns are documented in Step 5.
 
-For tier:quick, the rest of this skill executes against stdout only — no file writes — and Steps 5 / 7 / 8 are skipped. For tier:standard and tier:heavy, every step below appends to or writes the files under `$VERIFY_DIR`. Step 5 (antagonistic) is also skipped for tier:standard unless `--review` is passed.
+For tier:quick, the rest of this skill executes against stdout only — Steps 5 and 7 are skipped and no `evidence.txt` / `reality-check.md` is written — **except Step 8**, which on PASS writes a single minimal `verify-complete.md` so `pk ship`'s sha-matched gate can confirm this commit was verified. For tier:standard and tier:heavy, every step below appends to or writes the files under `$VERIFY_DIR`. Step 5 (antagonistic) is also skipped for tier:standard unless `--review` is passed.
 
 ## Step 1 — Read configuration
 
@@ -569,21 +569,42 @@ For `TIER != quick`, render `$VERIFY_DIR/reality-check.md` with this structure:
 
 Use the Write tool with `file_path = "$VERIFY_DIR/reality-check.md"` to land the file. Re-runs overwrite. The QA and adversarial sections inline the fragment files written by their respective subagents — assembly happens here, not at subagent boundaries (parent-side parsing is for inclusion, not for verdict computation).
 
-## Step 8 — Write verify-complete.md on PASS (skip for tier:quick)
+## Step 8 — Write verify-complete.md on PASS (every tier, quick included)
 
-For `TIER != quick` AND status == PASS, write `$VERIFY_DIR/verify-complete.md`:
+On PASS, write `$VERIFY_DIR/verify-complete.md` — **for every tier**. `pk ship`'s gate accepts a sentinel under any date dir whose `sha:` matches the commit being shipped (`git rev-parse HEAD`), so the sha line is load-bearing: write the **full 40-char HEAD sha**, exactly `sha: <40-hex>` on its own line.
 
-```markdown
+```bash
+if [ "$STATUS" = "PASS" ]; then
+  mkdir -p "$VERIFY_DIR"            # tier:quick skipped dir creation in Step 2; create it now
+  SHA=$(git rev-parse HEAD)
+  if [ "$TIER" = "quick" ]; then
+    cat > "$VERIFY_DIR/verify-complete.md" <<EOF
 # verify-complete
 
-issue: <ISSUE>
-stamp: <STAMP>
-tier: <TIER>
+issue: $ISSUE
+stamp: $STAMP
+tier: quick
+status: PASS
+mode: virtual
+sha: $SHA
+EOF
+  else
+    cat > "$VERIFY_DIR/verify-complete.md" <<EOF
+# verify-complete
+
+issue: $ISSUE
+stamp: $STAMP
+tier: $TIER
 status: PASS
 evidence: evidence.txt
 reality-check: reality-check.md
-sha: <git rev-parse HEAD>
+sha: $SHA
+EOF
+  fi
+fi
 ```
+
+For `tier:quick` this minimal sentinel is the **only** file written — `evidence.txt` and `reality-check.md` stay virtual (stdout). It exists solely so `pk ship`'s gate can confirm "verify passed at this exact commit" without re-deriving tier or guessing the date. (Before v4 the gate special-cased `tier:quick` as warn-but-proceed and re-derived tier from Linear at ship time; a Linear flake or a midnight UTC rollover then caused false aborts. The sentinel-per-tier + sha match removes both.)
 
 **Status logic:**
 

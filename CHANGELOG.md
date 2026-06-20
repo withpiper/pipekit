@@ -45,6 +45,17 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.0.0-rc4 — 2026-06-20
+
+> **`pk ship` gate + `pk promote` hardening.** Two self-contained correctness/usability fixes from the standing backlog, both about a command re-deriving state it shouldn't.
+
+- **`pk ship` verify gate is now sha-matched and date-independent.** The gate re-derived state `/verify` had already computed, giving two false-abort modes: (1) it re-derived tier via `pk_linear_tier`, which defaults to `standard` when Linear is unreachable — so a transient Linear flake at ship time demanded a sentinel that a `tier:quick` issue correctly never wrote; (2) `/verify` wrote `verify-complete.md` under `Logs/Verify/<verify-date>/` but ship looked under `<ship-date>/`, so a verify at 23:55 / ship at 00:05 missed it. Now `/verify` writes `verify-complete.md` on PASS for **every** tier (quick gets a minimal virtual sentinel recording the HEAD `sha`), and ship accepts a sentinel under **any** date dir whose `sha:` matches `git rev-parse HEAD` (new helper `pk_verify_sentinel_for_head`). The sha match also closes the converse hole — a PASS from an earlier commit can no longer vouch for the code being shipped. **Behavior changes:** `tier:quick` now requires a verify run (or `--force`) before ship (closing the old "ship an unverified quick issue" hole), and a new commit after `/verify` requires a re-verify. `--force` / `PK_VERIFY_BYPASS=1` unchanged. Touches `bin/pk`, `skills/verify/skill.md`, `skills/01-light-spec/skill.md`.
+- **`pk promote` auto-picks the next ready hop.** On a 3+ env `Ship environments` chain, `pk promote` with no arg used to refuse (`Specify target`). It now walks the chain frontier and promotes the earliest hop whose source branch is ahead of its target (new helper `pk_promote_next_target`) — still one hop, still two-phase, never skipping ahead. A level chain is a no-op (exit 0); an explicit target still overrides; 2-env auto-pick unchanged.
+- **Tests:** +13 smoke cases in `tests/pk-smoke.sh` — 6 unit + 3 E2E for the ship gate, 3 frontier-walk + 1 updated guard-rail for promote. Suite now 35 green.
+- **Migration:** none for the API; consumers re-sync (`./scripts/sync-method.sh v4.0.0-rc4`) to pick up the gate + promote behavior. Note the two `pk ship` tightenings above when re-syncing.
+
+---
+
 ## v4.0.0-rc3 — 2026-06-20
 
 > **Linear MCP tool-name migration.** Every interactive Linear skill called Linear via a snake_case house convention (`mcp__linear-server__{list_issues, get_issue, save_issue, save_comment, list_projects, …}`) that matched **no** installed MCP server. Both consuming projects (SiteLine, Piper) register their Linear MCP as `linear-server` running **`@tacticlaunch/mcp-linear`**, which exposes **camelCase** tools (`linear_searchIssues`, `linear_getIssueById`, `linear_createIssue`/`linear_updateIssue`, …). The mismatch silently broke every interactive Linear call. The high-frequency daily-loop transitions (`pk ship`, `pk done`) were unaffected because they go through `bin/pk`'s direct Linear REST API, not MCP — which is why the break stayed latent until `/linear-hygiene` exercised MCP live (SiteLine, 2026-06-19). This release also promotes the previously-Unreleased `/linear-hygiene` + `/pk-exit` hygiene check into a tagged version.

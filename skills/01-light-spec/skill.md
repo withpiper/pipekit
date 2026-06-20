@@ -292,9 +292,9 @@ Same as `/brainstorm`, but with planning implications. Phase 3.6 maps these to `
 
 The auto-derived tier feeds into:
 - `/work` Steps 3/4/6/7 (plan strictness, security review, hand-off behavior — per v2.6.0 tier reinstatement)
-- `/verify` Step 0.5 dispatch (evidence layer + reality-check + verify-complete sentinel for tier ≥ standard)
+- `/verify` Step 0.5 dispatch (evidence layer + reality-check for tier ≥ standard; verify-complete sentinel on PASS for every tier, quick a minimal virtual one)
 - `/verify` Step 5 (mandatory antagonistic review on heavy; auto-fires on sensitive-path diffs for standard)
-- `pk ship` verify-complete.md gate (hard-fail on standard/heavy missing, warn-but-proceed on quick)
+- `pk ship` verify-complete.md gate (hard-fail on any tier without a verify-complete.md whose sha matches HEAD)
 
 If you disagree with the auto-derivation, change the Complexity field in the spec body and re-run `/light-spec PROJ-XXX` — the tier label will refresh on the next publish.
 

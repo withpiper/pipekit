@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.0.0-rc3** — Last updated: 2026-06-20 06:56  *(Linear MCP tool-name migration: all 19 interactive Linear skills now call `@tacticlaunch/mcp-linear` camelCase tools (`linear_searchIssues`/`linear_getIssueById`/`linear_createIssue`/`linear_updateIssue`/`linear_createComment`/…) — the server both consumers register as `linear-server`. The old snake_case house names (`list_issues`/`save_issue`) matched no installed server and silently broke interactive Linear calls; `bin/pk`'s REST path was unaffected. Promotes `/linear-hygiene` + `/pk-exit` hygiene check to a tagged release. Carries rc2 de-stale+debrand, rc1 executor removal.)*
+**v4.0.0-rc4** — Last updated: 2026-06-20 08:04  *(pk ship gate + pk promote hardening: (1) `pk ship` now matches a `verify-complete.md` whose `sha:` == HEAD under any date dir instead of re-deriving tier + today's date (both caused false aborts); `/verify` writes the sentinel on PASS for every tier, quick included. (2) `pk promote` with no arg auto-picks the next ready hop on a 3+ env chain (never skips ahead). rc3: Linear MCP tool-name migration — all 19 interactive Linear skills call `@tacticlaunch/mcp-linear` camelCase `linear_*` tools. Carries rc2 de-stale+debrand, rc1 executor removal.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.0.0-rc3             (or latest tag)
+1. ./scripts/sync-method.sh v4.0.0-rc4             (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
