@@ -25,7 +25,7 @@ Issues created by `/brainstorm` land in Triage or Ideas with no disposition. The
 ### Phase 1 — Fetch Undisposed Issues
 
 1. Read `method.config.md` for team and state IDs
-2. Fetch issues needing disposition via `mcp__linear-server__list_issues`:
+2. Fetch issues needing disposition via `mcp__linear-server__linear_searchIssues`:
    - State: Triage or Ideas
    - Filter out issues that already have a `Parked` label (already dispositioned as "Later")
 3. Sort by creation date (oldest first)
@@ -49,7 +49,7 @@ Review each? Or filter by project/age?
 
 For each issue, present the analysis and force a decision:
 
-1. **Read the issue** via `mcp__linear-server__get_issue` with `includeRelations: true`
+1. **Read the issue** via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`
 2. **Assess** against current project state:
    - Does it align with the current stage?
    - Are its dependencies met or close to met?
@@ -92,7 +92,7 @@ Disposition:
 1. Ask for **trigger type** from the grammar (same table as `/brainstorm` Phase 2 HOLD — see that skill for the full list). In short: `{ISSUE-ID} ships` | `Stage {N} UAT passes` | `Phase {N} ships` | `date: YYYY-MM-DD` | `manual`
 2. Ask for target phase/stage
 3. Move to "Ideas" or "Future Phases"
-4. Add `Parked` label (create it if missing via `mcp__linear-server__create_issue_label`, color `#EAB308`)
+4. Add `Parked` label (create it if missing via `mcp__linear-server__linear_createTeamLabel`, color `#EAB308`)
 5. Post the Linear comment in the **exact parseable format** — `/roadmap-review` greps for this prefix:
    ```
    **Parked:** Revisit when {trigger}. Target: {phase/stage}.

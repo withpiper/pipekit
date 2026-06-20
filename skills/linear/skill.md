@@ -29,12 +29,12 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
 
 ### Phase 1: Understand
 
-1. **Fetch the issue** using `mcp__linear-server__get_issue` with the identifier.
+1. **Fetch the issue** using `mcp__linear-server__linear_getIssueById` with the identifier.
 2. **Present a summary** to the user:
    - Title, description, priority, labels, current state
    - Any existing comments
    - If the issue has a linked spec (`**Spec:**` or `**Linked spec:**` in description), read it
-3. **Move to Building** using `mcp__linear-server__save_issue` with `stateId: {Building state ID from method.config.md}`.
+3. **Move to Building** using `mcp__linear-server__linear_updateIssue` with `stateId: {Building state ID from method.config.md}`.
 4. **Post a comment**: "Started work on this issue."
 5. **Ask the user** to confirm the scope and approach before proceeding.
 
@@ -68,7 +68,7 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
      - Short title (under 70 chars)
      - Body with Summary bullets + Test plan checklist
      - `Closes PROJ-XXX` in the body
-   - **Move to UAT** using `mcp__linear-server__save_issue` with `stateId: {UAT state ID from method.config.md}`.
+   - **Move to UAT** using `mcp__linear-server__linear_updateIssue` with `stateId: {UAT state ID from method.config.md}`.
    - **Post a comment** with the PR link.
 
 ---

@@ -53,7 +53,7 @@ If a Changelog doc exists in the manifest, it is excluded from sync content — 
 2. Read the first strategy doc's version header to get the last update date
 3. Read `.vbw-planning/STATE.md` for recently completed phases
 4. Query Linear for issues in Done state since the last Strategy doc update date:
-   - Use `mcp__linear-server__list_issues` filtered by state = Done
+   - Use `mcp__linear-server__linear_searchIssues` filtered by state = Done
    - Filter to issues completed after the last doc update
 4b. **Merged-PR cross-check (mandatory — do not skip).** Linear `Done` routinely *lags* git reality: a WIT's PR merges to the integration branch but the issue stays in UAT / In <Env> because the post-merge transition (`pk done`) was skipped, run via the GitHub UI, or failed. Trusting Linear `Done` alone therefore **under-reports shipped work**, and this sync silently skips real features. Cross-check against merged PRs:
    - Get the integration branch (`method.config.md` → `integration_branch` / `## Ship environments`) and the project's issue-ID prefix (from the Linear team in `method.config.md` — e.g. `WIT-`, `RS-`, `PROJ-`).

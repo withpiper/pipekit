@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.0.0-rc2** — Last updated: 2026-06-16  *(De-stale + debrand follow-up to rc1: purged executor-stale VBW references that still routed to the removed backend (`/verify` + `/pk-bug` QA-subagent now `general-purpose`, `/review-plan`'s `/vbw:vibe` routing now native `/work`, tier-template execution rows, `Linear_SOP` execution-ownership) and debranded cosmetic prose ("VBW SUMMARY" → "planning SUMMARY"). The VBW Integration section stays as the **roadmap scaffold** (`/vbw:init`); the planning layer and vbw plugin are untouched. rc1: VBW executor removed — native-on-Workflow is the sole executor; a stale `Backend: vbw`/`--backend=vbw` refuses with a migration message. Carries the v3.1.0 distribution-layer rows and the v2.8.x substrate)*
+**v4.0.0-rc3** — Last updated: 2026-06-20 06:56  *(Linear MCP tool-name migration: all 19 interactive Linear skills now call `@tacticlaunch/mcp-linear` camelCase tools (`linear_searchIssues`/`linear_getIssueById`/`linear_createIssue`/`linear_updateIssue`/…) instead of the stale snake_case house names (`list_issues`/`save_issue`) that matched no installed server; `bin/pk`'s REST path was unaffected, so the daily loop kept working. Promotes `/linear-hygiene` + `/pk-exit` hygiene check to a tagged release. Carries rc2 de-stale+debrand, rc1 executor removal.)*
 
 ---
 

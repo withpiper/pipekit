@@ -488,7 +488,7 @@ Identify the Linear issue from:
 - The PR body's `Closes <TEAM>-<N>` line, OR
 - The current branch name's `feature/<TEAM>-<N>-…` token.
 
-Post via `pk_linear_comment <ISSUE-ID> "<body>"` (the helper `pk done` uses), or via the Linear MCP `mcp__linear-server__save_comment` tool. Body format:
+Post via `pk_linear_comment <ISSUE-ID> "<body>"` (the helper `pk done` uses), or via the Linear MCP `mcp__linear-server__linear_createComment` tool. Body format:
 
 ```markdown
 **`/pr-fix` triage complete** (PR #<N>)

@@ -85,7 +85,7 @@ Work: <ISSUE-ID>  ·  Deep: <yes|no>
 
 ## Step 2 — Fetch the spec from Linear
 
-Use the Linear MCP tool `mcp__linear-server__get_issue` with the issue ID. Capture:
+Use the Linear MCP tool `mcp__linear-server__linear_getIssueById` with the issue ID. Capture:
 
 - `title`
 - `description` (the spec body)
