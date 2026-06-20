@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v4.0.0-rc1** — Last updated: 2026-06-15  *(Backend row → native-only; the `vbw` executor was removed in v4.0.0. Otherwise carries the v2.7.0 Step 3 `method.config.md` key reference — `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
+**v4.0.0** — Last updated: 2026-06-20  *(Backend row → native-only; the `vbw` executor was removed in v4.0.0. Otherwise carries the v2.7.0 Step 3 `method.config.md` key reference — `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 

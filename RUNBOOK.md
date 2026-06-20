@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.0.0-rc5** — Last updated: 2026-06-20 09:25  *(gap #1 artifact rule: new `sop/Database_SOP.md` — schema changes land as tracked, reversible migration files (AI does the DDL; only the artifact is constrained). `/light-spec` Phase 3.7 requires a six-field Migration Plan on schema-touching specs; the Spec Review Agent blocks one without it. Companion to the immutability rule in `pipekit-migrations.md`. Carries rc1–rc4.)*
+**v4.0.0** — Last updated: 2026-06-20 09:50  *(Final cut — VBW executor removed; native-on-Workflow is the sole executor (planning layer untouched). Folds in the rc train: Linear MCP camelCase migration (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1 artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate (rc5).)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.0.0-rc5             (or latest tag)
+1. ./scripts/sync-method.sh v4.0.0                 (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

@@ -46,6 +46,24 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.0.0 — 2026-06-20
+
+> **Final cut of the v4.0.0 line.** Promotes `v4.0.0-rc5` to stable — no code change from rc5, only the release label, the consolidated changelog, and doc-stamp normalization (every `v4.0.0-rc*` stamp → `v4.0.0`). The five release candidates (rc1–rc5) below carry the full detail; this is the one-stop summary of what v3.2.0 → v4.0.0 delivers.
+
+**Headline: the VBW *executor* is gone — native-on-Workflow is the sole executor.** The pluggable `vbw` backend, the `--backend=` flag, and the `vbw-dev`/`vbw-scout` dispatch in `/work` were removed (the `auto` router went in v3.2.0). A stale `Backend: vbw`/`auto` or `--backend=vbw` now **refuses** with a migration message rather than silently routing. Evidence-driven: 0/30 recent production PRs used vbw; native matched-or-beat VBW-the-full-system on first-pass correctness (POC-48), with the gate layer — not the executor — catching the one defect. **The VBW *planning* layer is deliberately untouched** (`.vbw-planning/`, `/vbw:init` roadmap scaffold, `/roadmap-create` phase merge, `/phase-plan`, `/review-plan`, `pk_vbw_*` helpers) — retiring it is a separate, later effort.
+
+What the rc train added on top of the executor removal:
+
+- **rc1** — VBW executor removal (the headline above).
+- **rc2** — de-stale + debrand pass over the docs (executor-removal language; the brand stays load-bearing only in the plugin-owned planning layer).
+- **rc3** — **Linear MCP tool-name migration.** All 19 interactive Linear skills now call `@tacticlaunch/mcp-linear`'s camelCase `linear_*` tools; the old snake_case house names matched no installed server (the daily-loop `pk ship`/`pk done` REST path was always unaffected, which is why the break stayed latent). Plus the `/linear-hygiene` placement janitor.
+- **rc4** — **`pk ship` verify gate is sha-matched and date-independent** (matches a `verify-complete.md` whose `sha:` == HEAD under any date dir instead of re-deriving tier + today's date — killed two false-abort modes; `/verify` now writes the sentinel on PASS for every tier). **`pk promote` auto-picks the next ready hop** on a 3+ env chain instead of refusing (never skips ahead).
+- **rc5** — **gap #1 artifact rule.** New `sop/Database_SOP.md`: every schema change lands as a tracked, reversible migration file (the AI still does all the DDL; only the artifact is constrained). `/light-spec` Phase 3.7 requires a six-field **Migration Plan** on schema-touching specs; the Spec Review Agent (§ Migration Rule) blocks one that lacks it. Companion to the *immutability* rule in `.claude/rules/pipekit-migrations.md`.
+
+**Migration:** consumers re-sync (`./scripts/sync-method.sh v4.0.0`). After syncing, verify `method.config.md` has `Backend: native` (or no Backend row) — the sync never touches `method.config.md`, and a stale `auto`/`vbw` makes `/work` refuse. Smoke suite: 35 green.
+
+---
+
 ## v4.0.0-rc5 — 2026-06-20
 
 > **gap #1 artifact rule — schema changes land as migration files.** Closes the last open piece of the highest-priority production-readiness gap. The *immutability* rule (once a migration is applied anywhere, the file is frozen) shipped earlier as `.claude/rules/pipekit-migrations.md`. This release adds the *artifact* rule upstream of it: every schema change is born as a tracked, reversible migration — never an ad-hoc `ALTER` or a hand-edited schema dump — and schema-touching specs must plan that migration before they reach planning. **The AI still does all the database work; only the artifact is constrained.** No `bin/pk` change; docs/SOP/skill/template only.
