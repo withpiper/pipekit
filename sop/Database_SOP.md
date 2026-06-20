@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.0.0-rc5** — Last updated: 2026-06-20  *(new SOP — the schema-change *artifact* rule: every schema change lands as a tracked, reversible migration; schema-touching specs must carry a Migration Plan. Companion to the immutability rule in `.claude/rules/pipekit-migrations.md`.)*
+**v4.0.0** — Last updated: 2026-06-20  *(new SOP — the schema-change *artifact* rule: every schema change lands as a tracked, reversible migration; schema-touching specs must carry a Migration Plan. Companion to the immutability rule in `.claude/rules/pipekit-migrations.md`.)*
 
 **Source of truth:** Your project's CLAUDE.md and `method.config.md § Migration dir` define the migration tool and directory. This SOP provides the methodology that applies regardless of tool.
 

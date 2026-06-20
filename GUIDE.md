@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.0.0-rc5** — Last updated: 2026-06-20 09:25  *(gap #1 artifact rule: new `sop/Database_SOP.md` — every schema change lands as a tracked, reversible migration file (the AI still does all the DDL; only the artifact is constrained). `/light-spec` Phase 3.7 requires a six-field Migration Plan (schema objects, tool+dir, forward/rollback intent, backfill, authorization) on any schema-touching spec; the Spec Review Agent (§ Migration Rule) blocks one that lacks it. Companion to the immutability rule in `pipekit-migrations.md` (frozen-file). Carries rc1–rc4: executor removal, de-stale+debrand, Linear MCP migration, pk ship gate + pk promote hardening.)*
+**v4.0.0** — Last updated: 2026-06-20 09:50  *(Final cut — VBW executor removed; native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning layer is untouched. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
 
 ---
 

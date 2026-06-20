@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.0.0-rc1** — Last updated: 2026-06-15  *(Pipekit 4.0: native-on-Workflow is the **sole** executor — the pluggable `vbw` backend and `--backend=` flag are removed (the `auto` router went in v3.2.0); a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The VBW **planning layer** (`.vbw-planning/`, `/vbw:init` roadmap scaffold) is untouched. Carries 3.0's "wraps VBW" → "native default" reframe + ownership split, 3.1's distribution-layer hardening, 3.2's deprecation, and the v2.8.x substrate)*
+**v4.0.0** — Last updated: 2026-06-20  *(Pipekit 4.0: native-on-Workflow is the **sole** executor — the pluggable `vbw` backend and `--backend=` flag are removed (the `auto` router went in v3.2.0); a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The VBW **planning layer** (`.vbw-planning/`, `/vbw:init` roadmap scaffold) is untouched. Carries 3.0's "wraps VBW" → "native default" reframe + ownership split, 3.1's distribution-layer hardening, 3.2's deprecation, and the v2.8.x substrate)*
 
 A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); the pluggable VBW execution backend was removed in v4.0.0 ([VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) remains only as Stage 0's roadmap-scaffolding tool).
 
