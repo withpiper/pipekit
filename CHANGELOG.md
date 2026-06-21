@@ -30,7 +30,6 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `README.md` | Public-facing repo intro |
 | `CLAUDE.md` | Guidance for Claude Code sessions in this repo |
 | `STARTUP.md` | Project bootstrap reference |
-| `VBW_COMMANDS.md` | VBW `/vbw:help` snapshot |
 | `method.config.template.md` | Project-config template |
 | `sop/Code_Quality.md` | SOP — coding conventions |
 | `sop/Database_SOP.md` | SOP — schema-change artifact rule, Migration Plan contract |
@@ -43,6 +42,20 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
 
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
+
+---
+
+## v4.2.0 — 2026-06-21
+
+> **VBW plugin decoupled — no longer required.** Pipekit no longer depends on the VBW plugin runtime. The plugin's one functional dependency — the advisory commit-format hook — is re-homed as a Pipekit-owned hook, so the `{type}({scope}): {desc}` nudge survives without VBW installed. The dead executor references are retired and the docs are debranded. The VBW *executor* was already removed in v4.0.0; what remains is a **legacy `.vbw-planning/` planning layer** that no Pipekit skill depends on — left intact, slated for a separate, later retirement.
+
+**Re-homed commit-format hook (the one functional must-do).** Ported the plugin's `validate-commit.sh` to a Pipekit-owned source at `templates/hooks/validate-commit.sh` (dropping the VBW-internal version-sync block). `scripts/sync-method.sh` ships it to a consumer's `.claude/hooks/` and idempotently registers it in `.claude/settings.json` (jq merge — preserves existing settings, no-ops if already wired, falls back to a printed snippet when jq is unavailable). The hook stays advisory/non-blocking (always exits 0). 7 new smoke tests cover it; the suite is **46/46**.
+
+**Debrand (framing only).** Dropped the "Pipekit wraps VBW" positioning across `method.md`, `GUIDE.md`, `README.md`, `CLAUDE.md`, `RUNBOOK.md`, `STARTUP.md`, `templates/CLAUDE.md.template`, `sop/Linear_SOP.md`, and `sop/Skills_SOP.md`; removed `/vbw:init` from the Stage 0 / bootstrap chains; reframed the legacy planning layer as optional and slated for retirement (not gone). Also fixed a stale executor claim in `GUIDE.md` ("native and vbw both plan here" → native only) and a long-broken `#vbw-integration` TOC anchor.
+
+**Retirements.** `VBW_COMMANDS.md` and `sop/VBW_Help.md` (pure `/vbw:*` plugin command references) moved to `archive/`. Dropped the vestigial `Backend:` row from `method.config.template.md` — native has been the sole executor since v4.0.0.
+
+**Deliberately deferred (separate, later retirement):** the functional identifiers `.vbw-planning/`, `pk_vbw_*`, and `/vbw:*` are left intact — they belong to the kept legacy planning layer; renaming/removing them is the separate planning-layer retirement. The machine-side plugin uninstall is a local op, not a repo change.
 
 ---
 

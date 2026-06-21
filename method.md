@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.1.0** — Last updated: 2026-06-21 10:30  *(**Linear-native phase surface.** The roadmap's phase order now lives in Linear — Initiatives (`i{N}.` phases) → Projects (`P{N}.` sub-phases) → Issues, ordered by the name-prefix number (Linear `sortOrder` is an unreliable drag-rank). `.vbw-planning/PHASES.md` + `linear-map.json` are retired (read-only fallback only); `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors it, `/phase-plan` advances it; Stage 0.5 `/vbw:init` is dropped from the contract. The `i{N}.`/`P{N}.` convention is the contract — `method.config.md § Phase Surface`. Validated live against a production Linear workspace. Carries v4.0.0: VBW executor removed (native-on-Workflow is the sole executor); Linear MCP `@tacticlaunch/mcp-linear` camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 migration artifact rule (`sop/Database_SOP.md`).)*
+**v4.2.0** — Last updated: 2026-06-21  *(**VBW plugin decoupled — the plugin is no longer required.** Its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`, synced from `templates/hooks/`); the dead executor references `VBW_COMMANDS.md` + `sop/VBW_Help.md` retire to `archive/`. The executor itself went in v4.0.0; a **legacy `.vbw-planning/` planning layer** remains, depended on by no Pipekit skill, slated for a separate retirement. Carries v4.1.0 — **Linear-native phase surface.** The roadmap's phase order now lives in Linear — Initiatives (`i{N}.` phases) → Projects (`P{N}.` sub-phases) → Issues, ordered by the name-prefix number (Linear `sortOrder` is an unreliable drag-rank). `.vbw-planning/PHASES.md` + `linear-map.json` are retired (read-only fallback only); `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors it, `/phase-plan` advances it; Stage 0.5 `/vbw:init` is dropped from the contract. The `i{N}.`/`P{N}.` convention is the contract — `method.config.md § Phase Surface`. Validated live against a production Linear workspace. Carries v4.0.0: VBW executor removed (native-on-Workflow is the sole executor); Linear MCP `@tacticlaunch/mcp-linear` camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 migration artifact rule (`sop/Database_SOP.md`).)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -36,7 +36,7 @@ When ambiguity is detected, the pipeline sends work backward — not forward. A 
 
 ```
 Stage 0: Foundation (a contract, not a script)
-  /concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create → /phase-plan
+  /concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan
 
 Development Pipeline (repeats per issue, contract-strict):
 
@@ -49,7 +49,7 @@ Development Pipeline (repeats per issue, contract-strict):
 Per session (not per issue): /pk-exit          (last command of every Claude Code session)
 ```
 
-**Stage 0** is the *contract* the development pipeline depends on — a set of artifacts (concept, definition, strategy, config, VBW scaffold, Linear map, phase plan) that must exist before the daily loop is safe to run. It's not a script you run once; it's a pre-condition. *How* those artifacts come to exist depends on the project's entry mode (greenfield, brownfield, inherited — see [Entry Modes](#entry-modes) below). **Stages 1-5** consume the contract and repeat per issue.
+**Stage 0** is the *contract* the development pipeline depends on — a set of artifacts (concept, definition, strategy, config, the Linear-native phase surface, phase plan) that must exist before the daily loop is safe to run. It's not a script you run once; it's a pre-condition. *How* those artifacts come to exist depends on the project's entry mode (greenfield, brownfield, inherited — see [Entry Modes](#entry-modes) below). **Stages 1-5** consume the contract and repeat per issue.
 
 **Bookends:** `/roadmap-review` validates Stage 0 outputs and plan health before entering the pipeline. `/strategy-sync` updates Strategy docs after features ship — closing the documentation loop.
 
@@ -383,7 +383,7 @@ truth. The boundaries below make ownership explicit.
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Not a VBW agent; Pipekit-shipped.
    2. **`/work` executes inline on the native-on-Workflow backend** — the sole executor as of v4.0.0. No VBW executor dispatch.
    3. **Phase surface read live from Linear** — `pk next`, `pk status`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/sync-linear`, `/10-strategy-sync` derive phase context from the Linear Initiative/Project hierarchy. (Legacy `.vbw-planning/{ROADMAP,STATE}.md` reads remain only for projects still on direct VBW.)
-   4. **One lifecycle hook** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive`, writes a `pending-strategy-sync` marker into Pipekit's machine-local state directory.
+   4. **One lifecycle hook (legacy)** — `scripts/pipekit-post-archive.sh` fires on `/vbw:vibe --archive` *only if* the optional VBW plugin is installed, writing a `pending-strategy-sync` marker into Pipekit's machine-local state directory. With the plugin retired (v4.2.0) this auto-nudge no longer fires; `/strategy-sync` is prompted via `/pk-exit` + convention instead.
    5. **Pipekit-side ephemeral state** lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds the `pending-strategy-sync` marker and per-issue pipeline-state records consumed by `pk *` commands. Out-of-repo by design — v1.6.0 placed these at `.pipekit/`, but VBW's file-guard hook silently blocked writes during active-plan scope (#13). The relocation made writes succeed unconditionally.
 
    No direct VBW-agent spawns outside `/work`. No execution-flow wrapping. VBW upgrades touch zero Pipekit code.
@@ -400,7 +400,9 @@ truth. The boundaries below make ownership explicit.
 
 If drift becomes a recurring pattern in practice, add a `/drift-check` skill for on-demand detection. Don't build it speculatively — measure first. Full spec tracked in [pipekit#1](https://github.com/withpiper/pipekit/issues/1).
 
-### Event Hook: Post-Archive → Strategy Sync
+### Event Hook: Post-Archive → Strategy Sync (legacy — requires the optional VBW plugin)
+
+> **v4.2.0:** this integration depends on the VBW plugin's `/vbw:vibe --archive`. With the plugin retired it no longer fires — kept here for projects still running direct VBW. The `/strategy-sync` reminder now rides on `/pk-exit` + convention.
 
 VBW v1.35.0 added a post-archive lifecycle hook (PR #481) that fires after `/vbw:vibe --archive` completes. Pipekit ships `scripts/pipekit-post-archive.sh` to wire this into the strategy-sync loop — when a milestone is archived, the hook writes a `pending-strategy-sync` marker into Pipekit's machine-local state directory (out-of-repo, v1.7.0+) that `pk doctor` and `/pipekit-help` surface on the next session, nudging the user to run `/strategy-sync`.
 
@@ -472,7 +474,9 @@ VBW resolves the path relative to the project root. The hook is fail-open — if
 
 Migration deployment is handled by GitHub Actions per the rs-vault pattern (`db-migrate.yml` + `db-pr-check.yml`), not by Pipekit skills.
 
-### VBW Agent Roster (for automated execution)
+### VBW Agent Roster (legacy — direct VBW use only)
+
+> Reference for projects still running the VBW plugin directly. Pipekit's `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and spawns none of these.
 
 | Agent | Role |
 |-------|------|
@@ -497,7 +501,7 @@ Agents shipped by Pipekit (synced to consumer projects via `sync-method.sh` → 
 | System | Role in Pipeline |
 |--------|-----------------|
 | Linear | Issue tracking, spec storage, agent review |
-| VBW | Planning engine (PLAN.md, execution state) |
+| VBW (legacy) | Planning engine (PLAN.md, execution state) — optional; the plugin is no longer required (v4.2.0) |
 | Vercel | Deployment, CI/CD, preview URLs |
 
 Additional integrations (Supabase, Sentry, Langfuse, etc.) are project-specific.
@@ -515,7 +519,6 @@ Detailed standard operating procedures for each discipline:
 | [Database](sop/Database_SOP.md) | Schema-change artifact rule, Migration Plan contract, per-tool interface |
 | [Linear Configuration](sop/Linear_SOP.md) | Issue tracking, labels, workflow states |
 | [Skills](sop/Skills_SOP.md) | Skill authoring, triggers, conventions |
-| [VBW Help](sop/VBW_Help.md) | VBW plugin reference |
 
 ## Templates
 
@@ -529,7 +532,7 @@ Detailed standard operating procedures for each discipline:
 
 ## Tiers
 
-`/work` resolves a **tier** for every issue. Tiers shape *which gates apply*; complexity (Low/Medium/High) shapes *how execution is routed*. The two are orthogonal — a Quick-tier issue can be Low or Medium complexity; a Heavy-tier issue is always routed through full VBW planning regardless of complexity.
+`/work` resolves a **tier** for every issue. Tiers shape *which gates apply*; complexity (Low/Medium/High) shapes *how execution is routed*. The two are orthogonal — a Quick-tier issue can be Low or Medium complexity; a Heavy-tier issue always gets the full planning-and-gate treatment (deep `/work` planning + `/review-plan`) regardless of complexity.
 
 | Tier | Use for | Notable behavior |
 |------|---------|------------------|

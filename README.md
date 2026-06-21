@@ -1,14 +1,14 @@
 # Pipekit
 
-**v4.1.0** — Last updated: 2026-06-21  *(Pipekit 4.1: **Linear-native phase surface.** The roadmap's phase order lives in Linear — Initiatives named `i{N}.` (phases) → Projects named `P{N}.` (sub-phases) → Issues, ordered by the name-prefix number. `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors the hierarchy and `/phase-plan` advances it; `PHASES.md`/`linear-map.json` are retired (read-only fallback); `/vbw:init` is dropped from Stage 0. Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed; a stale `Backend: vbw` refuses with a migration message). Plus 3.x's ownership split + distribution-layer hardening and the v2.8.x substrate)*
+**v4.2.0** — Last updated: 2026-06-21  *(Pipekit 4.2: **VBW plugin decoupled.** The VBW plugin is no longer required — its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`, synced + registered by `sync-method.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement. Carries 4.1: **Linear-native phase surface** — Initiatives named `i{N}.` (phases) → Projects named `P{N}.` (sub-phases) → Issues, ordered by the name-prefix number; `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors the hierarchy and `/phase-plan` advances it; `PHASES.md`/`linear-map.json` are retired (read-only fallback). Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed; a stale `Backend: vbw` refuses with a migration message). Plus 3.x's ownership split + distribution-layer hardening and the v2.8.x substrate)*
 
-A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); the pluggable VBW execution backend was removed in v4.0.0 ([VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) remains only as Stage 0's roadmap-scaffolding tool).
+A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); the pluggable VBW execution backend was removed in v4.0.0, and as of v4.2.0 the [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) plugin is no longer required at all. A legacy VBW planning layer remains for projects that used direct VBW, slated for a separate retirement.
 
 ## What This Is (and Isn't)
 
 Pipekit is the **structure around an executor** — spec creation, independent review, human sign-off, quality gates, Linear visibility, and promotion. It is **not** itself a planner or code executor: it runs the build step on the native-on-Workflow executor and owns everything around it.
 
-As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). As of **4.1**, [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer part of Stage 0 either — `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `P{N}.` Projects → Issues). VBW survives only as an optional direct-use planning layer, slated for a separate retirement.
+As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). As of **4.1**, [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer part of Stage 0 either — `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `P{N}.` Projects → Issues). As of **4.2**, the VBW plugin is no longer required at all — its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement.
 
 | Stage | What Pipekit handles |
 |-------|----------------------|
@@ -24,9 +24,9 @@ The deep-analysis safety net is the **gate layer** — `/financial-review`, `/pr
 
 To avoid drift between the two systems, the boundaries are explicit:
 
-- **VBW owns the `.vbw-planning/` directory** — `ROADMAP.md` (the roadmap, written at Stage 0) plus the `PLAN.md` files produced in direct VBW planning use. `/work` (native) writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead. Pipekit reads these but does not overwrite them.
-- **Pipekit owns the visibility layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `P{N}.` → Issues), strategy docs, and `method.config.md`. VBW does not touch these. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
-- **The merge happens once**, at `/roadmap-create`. Strategy-derived requirements are added **into** VBW's phase structure; VBW's phases, goals, and success criteria are preserved.
+- **The legacy `.vbw-planning/` directory** holds `ROADMAP.md` plus the `PLAN.md` files produced in direct VBW planning use. No Pipekit skill depends on it; it survives only for projects that used direct VBW and is slated for separate retirement. `/work` (native) writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead.
+- **Pipekit owns the visibility layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `P{N}.` → Issues), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
+- **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`P{N}.` hierarchy *is* the roadmap. There is no merge into a VBW phase skeleton.
 - **Don't invoke VBW agents directly.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state machine in sync. Direct VBW invocation bypasses the visibility layer.
 
 Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pipekit-ownership-model).
@@ -94,7 +94,7 @@ Pipekit projects enter the dev pipeline through one of three modes — pick the 
 | Mode | Who | Skills run | Skills skipped |
 |---|---|---|---|
 | **Greenfield** | Founder, fresh idea, no code yet | Full Stage 0 chain | None |
-| **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
+| **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
 | **Inherited** | New contributor joining a Pipekit project | None — verify foundation, jump to dev pipeline | All of Stage 0 |
 
 `/startup` auto-detects the mode and confirms with you before proceeding. `/strategy-from-code` (auto-audit for brownfield) is deferred — brownfield currently routes through `/strategy-create` with a manual-edit note. The skill was originally promised for v1.4.0 but hasn't shipped; track in the brainstorm/Linear backlog if you need it.
@@ -139,11 +139,11 @@ No local clone of Pipekit needed — the sync script pulls directly from GitHub.
 
 The sync script creates a `method.config.md` file in your project — this is where your project-specific settings go (Linear workspace IDs, environments, etc.). You'll fill this in during setup.
 
-### Step 4: Install VBW and connect Linear
+### Step 4: Connect Linear (and, optionally, VBW)
 
 Open Claude Code **in your project directory** and install the dependencies:
 
-**VBW (optional)** — As of **v4.1.0**, VBW is **not required** for the standard Pipekit flow. Stage 0 authors the roadmap directly into Linear (`/roadmap-create` — no `/vbw:init` scaffold), and the executor is native-on-Workflow (built into Claude Code, nothing to install). Install VBW only if you want its optional direct-use planning layer (`/vbw:*` agents, `.vbw-planning/` PLAN/SUMMARY artifacts) — slated for a separate retirement. If you do, run these as two separate commands (don't paste them together):
+**VBW (optional)** — As of **v4.2.0**, the VBW plugin is **not required** at all. Stage 0 authors the roadmap directly into Linear (`/roadmap-create` — no `/vbw:init` scaffold), the executor is native-on-Workflow (built into Claude Code, nothing to install), and VBW's one functional dependency — the advisory commit-format hook — is now a Pipekit-owned hook installed by `sync-method.sh`. Install the VBW plugin only if you want its optional direct-use planning layer (`/vbw:*` agents, `.vbw-planning/` PLAN/SUMMARY artifacts) — a legacy layer slated for a separate retirement. If you do, run these as two separate commands (don't paste them together):
 
 ```
 /plugin marketplace add yidakee/vibe-better-with-claude-code-vbw
@@ -181,7 +181,6 @@ This walks you through everything interactively:
 - Generates strategy docs (`/strategy-create`)
 - Helps you choose a tech stack and set up infrastructure
 - Configures your Linear workspace (team, workflow states, labels, state IDs)
-- Initializes VBW (`/vbw:init`)
 - Creates a roadmap and populates Linear (`/roadmap-create`)
 - Selects your first batch of work (`/phase-plan`)
 
@@ -221,14 +220,12 @@ pipekit/
   method.config.template.md        # Project config template (copied per project)
   STARTUP.md                       # Reference guide for project bootstrap
   RUNBOOK.md                       # Per-issue step-by-step (the practical loop)
-  VBW_COMMANDS.md                  # VBW command reference
   sop/                             # Standard operating procedures
     Code_Quality.md                #   Quality standards and pre-deploy gates
     Git_and_Deployment.md          #   Branch strategy, release flow, worktrees
     Linear_SOP.md                  #   Linear workspace model and workflow states
     Skills_SOP.md                  #   Skill inventory and enforcement model
     Hooks_SOP.md                   #   Claude Code hooks — per-machine install, not synced
-    VBW_Help.md                    #   VBW planning engine reference
     Anthropic - Prompting best practices.md  #   Prompt engineering reference
     Session_Management_SOP.md     #   How to manage sessions, context, compaction
   templates/                       # Templates used by skills
@@ -272,7 +269,7 @@ pipekit/
 - `.claude/rules/` — project coding conventions
 - `.claude/skills/{project-specific}/` — skills tied to your stack
 - `.claude/overrides/` — sync-safe customization of synced skills, SOPs, and method.md (see [method.md § Sync-Safe Overrides](method.md#sync-safe-overrides))
-- `.vbw-planning/` — all project state (ROADMAP, PHASES, plans)
+- `.vbw-planning/` — legacy VBW planning state (ROADMAP, plans), for projects that used direct VBW; slated for separate retirement
 
 ## Documentation
 
@@ -280,7 +277,6 @@ pipekit/
 - **[method.md](method.md)** — The methodology: pipeline, principles, tooling
 - **[STARTUP.md](STARTUP.md)** — Reference guide for project bootstrap
 - **[RUNBOOK.md](RUNBOOK.md)** — Per-issue step-by-step (the practical loop you'll run most often)
-- **[VBW_COMMANDS.md](VBW_COMMANDS.md)** — VBW command reference
 - **[sop/](sop/)** — Standard operating procedures
 
 ## Versioning

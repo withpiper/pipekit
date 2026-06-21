@@ -413,6 +413,42 @@ esac
 cleanup
 FIXTURE=""
 
+# ── commit-format hook ───────────────────────────────────────────────────────
+echo "== commit-format hook (templates/hooks/validate-commit.sh) =="
+
+HOOK="$REPO_ROOT/templates/hooks/validate-commit.sh"
+hook_run() { printf '%s' "$1" | bash "$HOOK" 2>&1; }   # $1 = PostToolUse JSON on stdin
+
+if [ ! -f "$HOOK" ]; then
+  fail "hook: source present" "missing $HOOK"
+else
+  ok "hook: source present"
+
+  out=$(hook_run '{"tool_input":{"command":"git commit -m \"added a thing\""}}')
+  case "$out" in
+    *"does not match format"*) ok "hook: bad subject nudges" ;;
+    *) fail "hook: bad subject nudges" "output: $out" ;;
+  esac
+
+  out=$(hook_run '{"tool_input":{"command":"git commit -m \"feat(work): native phase surface\""}}')
+  [ -z "$out" ] && ok "hook: good subject silent" || fail "hook: good subject silent" "output: $out"
+
+  out=$(hook_run '{"tool_input":{"command":"git commit -m \"fix(pk): repoint\" -m \"a long body without a colon\""}}')
+  [ -z "$out" ] && ok "hook: body via 2nd -m not validated" || fail "hook: body via 2nd -m not validated" "output: $out"
+
+  out=$(hook_run '{"tool_input":{"command":"ls -la && echo hi"}}')
+  [ -z "$out" ] && ok "hook: non-commit silent" || fail "hook: non-commit silent" "output: $out"
+
+  out=$(hook_run '{"tool_input":{"command":"git commit -m \"chore(release): v4.2.0\" && git commit -m \"broken\""}}')
+  case "$out" in
+    *"broken"*) ok "hook: chained nudges only the bad subject" ;;
+    *) fail "hook: chained nudges only the bad subject" "output: $out" ;;
+  esac
+
+  printf '%s' '{"tool_input":{"command":"git commit -m \"nope\""}}' | bash "$HOOK" >/dev/null 2>&1
+  [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
