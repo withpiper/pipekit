@@ -45,6 +45,14 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.2.1 — 2026-06-21
+
+> **Sync now force-tracks the re-homed commit hook.** v4.2.0 shipped the Pipekit-owned commit-format hook to `.claude/hooks/validate-commit.sh` and registered it in the committed `.claude/settings.json`. But many projects gitignore `.claude/hooks/` (the older "hooks are per-machine" convention), which left the hook **uncommitted** while its registration was committed — "wired but not really" for anyone who pulled without running sync.
+
+`scripts/sync-method.sh` now detects when `.claude/hooks/<hook>` is gitignored and **force-tracks it** (`git add -f`) so the committed registration always points at a committed script. Non-fatal, dry-run-safe, and a no-op outside a git repo or when the path isn't ignored. Surfaced as a `FORCE-TRACKED …` line in sync output (falls back to a `git add -f` instruction if the add can't run). Found while rolling v4.2.0 into SiteLine, whose `.gitignore` ignores `.claude/hooks/`.
+
+---
+
 ## v4.2.0 — 2026-06-21
 
 > **VBW plugin decoupled — no longer required.** Pipekit no longer depends on the VBW plugin runtime. The plugin's one functional dependency — the advisory commit-format hook — is re-homed as a Pipekit-owned hook, so the `{type}({scope}): {desc}` nudge survives without VBW installed. The dead executor references are retired and the docs are debranded. The VBW *executor* was already removed in v4.0.0; what remains is a **legacy `.vbw-planning/` planning layer** that no Pipekit skill depends on — left intact, slated for a separate, later retirement.
