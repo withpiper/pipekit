@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v4.0.0** — Last updated: 2026-06-20  *(Backend row → native-only; the `vbw` executor was removed in v4.0.0. Otherwise carries the v2.7.0 Step 3 `method.config.md` key reference — `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
+**v4.1.0** — Last updated: 2026-06-21  *(Linear-native phase surface; `/vbw:init` dropped from Stage 0. The roadmap's phase order lives in Linear — `i{N}.` initiatives are PHASES, `P{N}.` projects are SUB-PHASES, issues live in projects, ordering is by the integer name prefix. Carries v4.0.0's native-only Backend row — the `vbw` executor was removed — and the v2.7.0 Step 3 `method.config.md` key reference: `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -47,8 +47,10 @@ Break the build into stages. Each stage should be independently deployable and t
 | **Team name** | e.g., `MyProject`, `Acme` | Determines issue prefix (PROJ-1, ACME-1) |
 | **Issue prefix** | e.g., `PROJ`, `ACME` | Short, unique, used in commit messages and branch names |
 | **Workflow states** | Use the method standard (13 states) or simplify | Recommendation: start with the full set. You can always skip states, but adding them later means migrating issues. |
-| **Initiatives** | One per stage | Maps 1:1 to VBW phases |
-| **Projects** | Feature clusters within each stage | e.g., "Data Foundation", "Search & CRUD", "Reports" |
+| **Initiatives** | `i{N}.`-prefixed PHASES | Each initiative is an ordered roadmap phase (e.g., `i1. Foundation`, `i2. Search`). Ordering is the integer in the name prefix, parsed numerically (`i2` before `i10`); Linear `sortOrder` is never used. |
+| **Projects** | `P{N}.`-prefixed SUB-PHASES within a phase | Issues live in projects (e.g., `P1. Data Foundation`, `P2. Search & CRUD`). Same prefix-integer ordering. |
+
+This `i{N}.` initiative → `P{N}.` project → issue hierarchy **is** the phase surface — `pk next` / `pk status` derive the current phase live from it, not from a committed file.
 | **Labels** | Domain, Type, Flag, Tier | Domain labels are project-specific. Type/Flag labels are standard. |
 
 **Action:** Create the workspace/team, set up states, create initial initiatives and projects.
@@ -341,8 +343,8 @@ If all steps work, the pipeline is ready. Start building.
 - [ ] Workspace/team created
 - [ ] Workflow states configured (13 standard states)
 - [ ] Issue prefix chosen
-- [ ] Initial initiatives (stages) created
-- [ ] Initial projects (feature clusters) created
+- [ ] Initial initiatives created (`i{N}.`-prefixed PHASES)
+- [ ] Initial projects created (`P{N}.`-prefixed SUB-PHASES; issues live in projects)
 - [ ] Labels configured (Domain, Type, Flag)
 - [ ] State IDs copied into method.config.md
 

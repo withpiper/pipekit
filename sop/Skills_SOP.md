@@ -132,7 +132,7 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 
 v2 retired the v1 `NEXT.md` mirror. The single source of truth for "what should I do next?" is **Linear**, accessed via:
 
-- **`pk next`** — phase-aware (reads `## Current Phase:` from `PHASES.md`, matches to `linear-map.json`, groups Linear issues by status with per-group hints). Falls back to global "next Approved" when no phase context. Best when you know you want to pick up the next issue.
+- **`pk next`** — phase-aware: derives the current phase live from the Linear-native surface (lowest non-`Completed` `i{N}.` initiative → its lowest open `P{N}.` project, by numeric name prefix; legacy `PHASES.md`/`linear-map.json` fall back), then groups that phase's Linear issues by status with per-group hints. Falls back to global "next Approved" when no phase context. Best when you know you want to pick up the next issue.
 - **`pk status`** — full unscoped board view across all phases. Best when you want the wider picture.
 - **`/pipekit-help`** — context-aware skill recommendation based on full project state (Linear, `PHASES.md`, recent transitions, pipeline-state files). Best when you're not sure *which step* in the pipeline to run next.
 

@@ -1,106 +1,104 @@
 ---
 name: sync-linear
-description: Bidirectional sync between VBW planning files and Linear. Use when .vbw-planning/ and Linear have drifted. Use after manual edits to either side. Keeps planning state coherent between the two surfaces.
+description: Reconcile strategy-doc / requirement drift against the Linear board's i{N}./P{N}. phase hierarchy. Use when issues are mis-placed across P{N}. projects, or initiatives/projects drift from the naming convention. Linear is the source of truth; there is no PHASES.md/linear-map.json to sync.
 ---
 
 # Sync Linear Skill
 
-You are a planning synchronization coordinator. Your job is to maintain bidirectional sync between VBW planning files (`.vbw-planning/`) and the Linear workspace. Read `method.config.md` for project context. VBW is the planning engine; Linear is the view layer where the user reviews and edits plans.
+**v4.1.0** — Last updated: 2026-06-21 *(Linear-native phase surface — no PHASES.md/linear-map.json to sync. The phase order and Initiative→Project→Issue hierarchy live entirely in Linear; this skill reconciles strategy-doc and requirement drift against that board, not against committed phase files.)*
+
+You are a Linear hierarchy reconciliation coordinator. Your job is to keep the Linear board's phase hierarchy coherent with the project's strategy docs and requirements. Read `method.config.md` for project context — specifically `## Phase Surface`, which defines the canonical model.
+
+**Linear is the source of truth for the phase surface.** There is no planning-file mirror to push to or pull from. Phase order is encoded directly in Linear object names, not in a file and not in Linear's `sortOrder`.
+
+## Canonical Model (Phase Surface)
+
+Per `method.config.md` § Phase Surface:
+
+| Linear object | Role | Order |
+|---------------|------|-------|
+| **Initiative** `i{N}. label` | ordered **PHASE** | integer `{N}` in the name prefix |
+| **Project** `P{N}. label` | ordered **SUB-PHASE** | integer `{N}` in the name prefix |
+| **Issue** | individual requirement/task | lives inside the right `P{N}.` project |
+
+Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / `P1.`, `P2.`, …). Linear's `sortOrder` is **never** used to determine phase order — always parse the name prefix.
+
+**Retired surfaces** — this skill never reads or writes them; they exist only as a `bin/pk` fallback for un-migrated projects:
+- `.vbw-planning/PHASES.md`
+- `.vbw-planning/linear-map.json`
+
+`.vbw-planning/ROADMAP.md` may still exist as **optional legacy narrative**. It is not synced state — treat it as a human-readable reference only, never as a source or target of reconciliation.
 
 ## Triggers
 
 This skill is invoked when the user says:
 - `/sync-linear`
 - "sync linear"
-- "update linear"
-- "pull from linear"
-- "push to linear"
+- "reconcile linear"
+- "check linear hierarchy"
+- "are issues in the right phase?"
+
+## What This Skill Reconciles
+
+It detects and proposes fixes for **drift between the project's strategy docs / requirements and the Linear board's phase hierarchy**:
+
+1. **Naming-convention drift** — initiatives not named `i{N}. label`, projects not named `P{N}. label`, duplicate or gapped prefixes (`i1, i3` with no `i2`), or out-of-order numbering.
+2. **Placement drift** — issues sitting in the wrong `P{N}.` project (or no project at all) given what the strategy docs say belongs in that sub-phase.
+3. **Coverage drift** — strategy-doc requirements with no corresponding Linear issue, or Linear issues that no longer map to any documented requirement.
+
+It does **not** reconcile a planning-file mirror — there is none. All reconciliation targets are live Linear objects.
 
 ## Modes
 
-The skill supports three modes, selected by argument or inferred from context:
-
 | Mode | Command | What it does |
 |------|---------|--------------|
-| **push** | `/sync-linear push` | VBW → Linear: push ROADMAP content, plan tasks, and status updates into Linear |
-| **pull** | `/sync-linear pull` | Linear → VBW: pull edits made in Linear back into VBW files |
-| **sync** | `/sync-linear` (default) | Both directions: push first, then pull, reporting any conflicts |
-| **promote** | `/sync-linear promote` | Analyze project completion and recommend status promotions for the next batch of issues |
+| **check** | `/sync-linear` (default) | Read-only audit: report naming, placement, and coverage drift against the board. Proposes no writes. |
+| **fix** | `/sync-linear fix` | Propose-then-apply: present the drift report, ask for confirmation, then apply approved renames/re-placements/issue creations to Linear. |
+| **promote** | `/sync-linear promote` | Analyze sub-phase completion and recommend status promotions for the next batch of issues. |
 
-## Data Sources
+## Reading the Board
 
-### VBW files (source of truth for structure)
-- `.vbw-planning/ROADMAP.md` — Phase definitions, goals, requirements, success criteria
-- `.vbw-planning/STATE.md` — Current phase status, progress, decisions
-- `.vbw-planning/phases/*/PLAN.md` — Detailed task plans per phase
-- `.vbw-planning/linear-map.json` — ID mapping between VBW entities and Linear objects
+To reconcile, build a live picture of the hierarchy from Linear (never from a map file):
 
-### Linear objects (view layer for review and editing)
-- **Initiatives** = VBW Phases (6 total)
-- **Projects** = Feature clusters within phases (25 total)
-- **Issues** = Individual tasks/requirements from VBW plans
+1. **List initiatives** via `mcp__linear-server__linear_getInitiatives` (or search) — these are the phases. Parse `i{N}.` from each name to get phase order.
+2. **List projects** under each initiative via `mcp__linear-server__linear_getProjects` — these are the sub-phases. Parse `P{N}.` from each name to get sub-phase order.
+3. **List issues** in each project via `mcp__linear-server__linear_searchIssues` — these are the requirements/tasks.
+4. **Read the strategy docs** named in `method.config.md` — these define what *should* exist and where. This is the requirement side of the reconciliation.
 
-## ID Mapping
-
-All VBW ↔ Linear relationships are stored in `.vbw-planning/linear-map.json`. This file contains:
-- Team ID and workflow state IDs
-- Initiative IDs mapped to VBW phase slugs
-- Project IDs mapped to feature cluster slugs
-- Issue ID mappings (populated as plans create tasks)
-
-**Never hardcode Linear IDs in skill logic.** Always read from `linear-map.json`.
+The Linear team ID and workflow state IDs come from `method.config.md` (or are resolved live via `mcp__linear-server__linear_getTeams` / `linear_getWorkflowStates`). **Never hardcode Linear IDs** and never read them from `linear-map.json` — that file is retired.
 
 ## Execution Steps
 
-### Push Mode (VBW → Linear)
+### Check Mode (default, read-only)
 
-1. **Read** `.vbw-planning/linear-map.json` for all ID mappings
-2. **Read** `.vbw-planning/ROADMAP.md` for phase content
-3. **For each initiative:**
-   - Read current Linear initiative description via `mcp__linear-server__linear_getInitiativeById`
-   - Compare with ROADMAP content for that phase
-   - If VBW content is newer or different, update via `mcp__linear-server__linear_updateInitiative`
-4. **For each project:**
-   - Read current Linear project description via `mcp__linear-server__linear_getProjectById`
-   - Compare with plan content for that feature cluster
-   - If VBW content is newer, update via `mcp__linear-server__linear_updateProject`
-5. **For VBW plan tasks** (when plans exist in `.vbw-planning/phases/*/PLAN.md`):
-   - Check if a matching Linear issue exists (by title match or stored ID in linear-map.json)
-   - If no issue exists → create via `mcp__linear-server__linear_createIssue` with correct project assignment
-   - If issue exists but status differs → update status
-   - Store new issue IDs back into `linear-map.json`
-6. **Report** what was pushed (created/updated/unchanged counts)
+1. **Read** `method.config.md` § Phase Surface for the convention and the Linear team/state references.
+2. **Read** the strategy docs listed in `method.config.md`.
+3. **Build the live hierarchy** from Linear (initiatives → projects → issues) per *Reading the Board* above.
+4. **Detect naming-convention drift:**
+   - Each initiative name matches `i{N}. label`; each project name matches `P{N}. label`.
+   - Prefixes are contiguous and non-duplicated within their scope.
+5. **Detect placement drift:**
+   - Every issue lives in exactly one `P{N}.` project.
+   - Issue subject matter matches the sub-phase the strategy docs assign it to.
+6. **Detect coverage drift:**
+   - Each strategy-doc requirement maps to at least one Linear issue.
+   - Each Linear issue maps to a documented requirement (or is flagged as undocumented).
+7. **Present a drift report** (see *Output Format*). Propose no writes in check mode.
 
-### Pull Mode (Linear → VBW)
+### Fix Mode (propose-then-apply)
 
-1. **Read** `.vbw-planning/linear-map.json` for all ID mappings
-2. **For each initiative:**
-   - Fetch current description from Linear via `mcp__linear-server__linear_getInitiativeById`
-   - Compare with ROADMAP.md content
-   - If Linear description was edited (differs from last push), extract changes
-   - Present diff to user for approval before updating ROADMAP.md
-3. **For each project:**
-   - Fetch current description from Linear via `mcp__linear-server__linear_getProjectById`
-   - Compare with stored content
-   - If Linear description was edited, present diff to user
-4. **For issues:**
-   - Fetch issues in each project via `mcp__linear-server__linear_searchIssues`
-   - Check for new issues created directly in Linear (not via VBW push)
-   - Check for status changes on existing issues
-   - Report new Linear issues that need to be added to VBW plans
-   - Report status changes that should update VBW task state
-5. **Present a sync report** showing all detected changes, asking for confirmation before applying
-
-### Sync Mode (default)
-
-1. Run **Push** first
-2. Run **Pull** second
-3. If conflicts found (both sides changed the same content), present both versions to user and ask which to keep
-4. Update `linear-map.json` with new `last_synced` timestamp
+1. Run **Check Mode** to produce the drift report.
+2. **Present each proposed change** as a table (rename / re-place / create), grouped by drift type.
+3. **Ask for confirmation.** Never auto-apply.
+4. On approval, apply only the approved changes:
+   - Rename initiatives via `mcp__linear-server__linear_updateInitiative`.
+   - Rename / re-parent projects via `mcp__linear-server__linear_updateProject`.
+   - Move issues into the correct project, or create missing issues, via `mcp__linear-server__linear_updateIssue` / `linear_createIssue`.
+5. **Re-run Check Mode** after applying to confirm the drift cleared. Report residual drift, if any.
 
 ### Promote Mode
 
-Analyzes project completion status and recommends moving the next batch of issues up a workflow status level. Runs automatically as part of sync mode, or standalone via `/sync-linear promote`.
+Analyzes sub-phase completion status and recommends moving the next batch of issues up a workflow status level. Runs standalone via `/sync-linear promote`.
 
 #### Workflow Status Ladder
 
@@ -108,44 +106,34 @@ Analyzes project completion status and recommends moving the next batch of issue
 Future Phases → On Deck → Needs Spec → Specced → Approved → In Progress → Building → UAT → [Released →] Done
 ```
 
-State IDs are stored in `linear-map.json` under `states.*`. Always read from there — never hardcode.
+Workflow state IDs come from `method.config.md` or are resolved live via `mcp__linear-server__linear_getWorkflowStates`. Never hardcode them and never read them from `linear-map.json`.
 
 #### Logic
 
-1. **Read** `linear-map.json` for state IDs and project mappings
-2. **For each Stage 2 project** (active stage), in order (P1 → P10):
-   - Fetch all issues via `mcp__linear-server__linear_searchIssues`
+1. **Read** workflow state references from `method.config.md` (or resolve live).
+2. **List the `P{N}.` projects** in numeric-prefix order for the active phase initiative.
+3. **For each project, in order (P1 → Pn):**
+   - Fetch all issues via `mcp__linear-server__linear_searchIssues`.
    - Classify by status bucket:
      - **Done bucket:** Done, Canceled, Duplicate
      - **Active bucket:** In Progress, Building, UAT, Approved, Specced, Needs Spec
      - **Waiting bucket:** On Deck, Future Phases, Triage, Ideas
-   - Determine project completion: all non-canceled issues in Done bucket
-3. **Find the promotion boundary:**
-   - Walk projects in order. The **leading project** is the highest-numbered project where ALL issues are Done.
-   - The **active project** is the next project (being specced/built).
+   - Determine project completion: all non-canceled issues in the Done bucket.
+4. **Find the promotion boundary:**
+   - Walk projects in numeric-prefix order. The **leading project** is the highest-numbered `P{N}.` where ALL issues are Done.
+   - The **active project** is the next one (being specced/built).
    - The **on-deck project** is the one after that.
    - The **next-up project** is the one after on-deck (candidates for Future Phases → On Deck).
-4. **Recommend promotions** for the next-up project's issues:
-   - Issues in `Future Phases` → recommend `On Deck`
-   - Issues in `Triage` or `Ideas` → recommend `On Deck` (they're in a project, so they're real)
-5. **Present the recommendation** as a table showing issue ID, title, current status, and proposed status
-6. **Ask for confirmation** before executing. On approval, batch-update all issues via `mcp__linear-server__linear_updateIssue`
-
-#### Parallel Track Awareness
-
-Stage 2 has two tracks (from ROADMAP):
-- **Critical path:** WP-1 → WP-2 → WP-3 (Foundation → AG Grid → Editor Parity)
-- **Parallel track:** WP-4 → WP-5 → WP-6/WP-7 (Auth → Nav → Dashboard/Notifications)
-
-The promote logic treats each track independently. A project on the parallel track can promote independently of the critical path. Map projects to tracks using the `wp` field in `linear-map.json`:
-- Critical path: `wp` 1, 2, 3
-- Parallel track: `wp` 4, 5, 6, 7, 11
-- Independent: `wp` 8, 9, 10 (can promote when their dependencies are met)
+5. **Recommend promotions** for the next-up project's issues:
+   - Issues in `Future Phases` → recommend `On Deck`.
+   - Issues in `Triage` or `Ideas` → recommend `On Deck` (they're in a project, so they're real).
+6. **Present the recommendation** as a table showing issue ID, title, current status, and proposed status.
+7. **Ask for confirmation** before executing. On approval, batch-update via `mcp__linear-server__linear_updateIssue`.
 
 #### Edge Cases
 
-- **Project with mixed statuses:** If a project has some Done and some In Progress issues, it's still active — don't promote the next project yet.
-- **Skipped projects:** If a project has 0 issues, skip it in the chain.
+- **Project with mixed statuses:** If a `P{N}.` project has some Done and some In Progress issues, it's still active — don't promote the next project yet.
+- **Skipped projects:** If a `P{N}.` project has 0 issues, skip it in the chain.
 - **Already promoted:** If the next-up project's issues are already On Deck or higher, report "already promoted" and look further ahead.
 - **Multiple promotions:** If several projects have completed since last check, recommend promoting multiple batches. Present each separately for confirmation.
 
@@ -170,53 +158,58 @@ The promote logic treats each track independently. A project on the parallel tra
 Approve? (y/n)
 ```
 
-## Conflict Resolution
+## Resolution Discipline
 
-When both VBW and Linear have changes to the same entity:
-- **Show both versions** side by side
-- **Ask the user** which version to keep (or merge manually)
-- **Never auto-resolve conflicts** — the user always decides
+When a proposed change is ambiguous (e.g., an issue plausibly belongs in two sub-phases, or a requirement maps to no obvious project):
+
+- **Show the options** with the evidence from the strategy docs.
+- **Ask the user** which placement to apply — never auto-resolve a judgment call.
+- Apply only what the user approves.
 
 ## Output Format
 
-After sync, display a summary table:
+After a check or fix, display a drift summary:
 
 ```
-## Sync Report (2026-03-29)
+## Linear Hierarchy Report (2026-06-21)
 
-### Push (VBW → Linear)
-| Type | Created | Updated | Unchanged |
-|------|---------|---------|-----------|
-| Initiatives | 0 | 2 | 4 |
-| Projects | 0 | 3 | 22 |
-| Issues | 5 | 1 | 10 |
+### Naming-convention drift
+| Object | Current name | Expected | Action |
+|--------|--------------|----------|--------|
+| Initiative | Foundation | i1. Foundation | rename |
+| Project | Budget Editor | P2. Budget Editor | rename |
 
-### Pull (Linear → VBW)
-| Type | Changes Detected | Applied |
-|------|-----------------|---------|
-| Initiative descriptions | 1 | 1 |
-| Project descriptions | 0 | 0 |
-| New issues (Linear-only) | 2 | pending |
-| Status changes | 3 | 3 |
+### Placement drift
+| Issue | Currently in | Belongs in | Action |
+|-------|--------------|------------|--------|
+| PROJ-XXX | (none) | P3. Auth & Account | move |
 
-### Conflicts: None
+### Coverage drift
+| Requirement (strategy doc) | Linear issue | Action |
+|----------------------------|--------------|--------|
+| OAuth token refresh | (missing) | create in P3. |
+| PROJ-YYY | (undocumented) | flag for review |
+
+### Clean: naming ✓  placement ✓  coverage ✓   (only sections with drift are shown)
 ```
+
+In **check** mode the Action column is advisory only. In **fix** mode each row is presented for approval before any write.
 
 ## Linear MCP Tools Used
 
-- `mcp__linear-server__linear_getInitiativeById` — read initiative details
-- `mcp__linear-server__linear_createInitiative` / `linear_updateInitiative` — create/update initiatives
-- `mcp__linear-server__linear_getProjectById` — read project details
-- `mcp__linear-server__linear_createProject` / `linear_updateProject` — create/update projects
+- `mcp__linear-server__linear_getInitiatives` / `linear_getInitiativeById` — list/read initiatives (phases)
+- `mcp__linear-server__linear_updateInitiative` — rename an initiative to the `i{N}.` convention
+- `mcp__linear-server__linear_getProjects` / `linear_getProjectById` — list/read projects (sub-phases)
+- `mcp__linear-server__linear_updateProject` — rename / re-parent a project to the `P{N}.` convention
 - `mcp__linear-server__linear_searchIssues` — list/filter issues in a project
 - `mcp__linear-server__linear_getIssueById` — read issue details
-- `mcp__linear-server__linear_createIssue` / `linear_updateIssue` — create/update issues
-- `mcp__linear-server__linear_getWorkflowStates` — get workflow states
+- `mcp__linear-server__linear_createIssue` / `linear_updateIssue` — create or re-place an issue
+- `mcp__linear-server__linear_getWorkflowStates` — resolve workflow state IDs (when not in `method.config.md`)
 
 ## Important Notes
 
-- **Initiative descriptions** use Markdown format with `## Phase N: Name`, `### Scope`, `### Success Criteria` headers
-- **Project descriptions** use Markdown format with `## Project Name`, `### Scope`, `### Success Criteria` headers
-- The user edits in Linear's rich text editor, which converts Markdown to its internal format — when pulling back, normalize formatting
-- Always update `linear-map.json` after any sync operation
-- Include `PROJ-{number}` in commit messages when completing tasks linked to Linear issues
+- **Linear is the phase surface.** Parse phase/sub-phase order from the `i{N}.` / `P{N}.` name prefix — never from `sortOrder`, never from a planning file.
+- **`linear-map.json` and `PHASES.md` are retired** — this skill never reads or writes them. Resolve Linear IDs from `method.config.md` or live MCP queries.
+- **`ROADMAP.md`, if present, is optional legacy narrative** — read it for human context only; it is not a reconciliation source or target.
+- **Initiative/project descriptions** use Markdown (`## Phase`, `### Scope`, `### Success Criteria`); normalize formatting when reading edits made in Linear's rich-text editor.
+- Include `PROJ-{number}` in commit messages when completing tasks linked to Linear issues.

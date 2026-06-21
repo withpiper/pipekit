@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.0.0** — Last updated: 2026-06-20  *(**v4.0.0 — VBW executor removed.** Native-on-Workflow is now the **sole** executor; the pluggable `vbw` backend, `--backend=` selection, and the `vbw-dev`/`vbw-scout` dispatch in `/work` are gone (the `auto` router went in v3.2.0). A stale `Backend: vbw`/`auto` in `method.config.md` or a `--backend=vbw` flag now **refuses** with a migration message rather than silently routing. This makes good on the v3.2.0 deprecation promise, backed by SiteLine production evidence (0/30 recent PRs used vbw; native shipped 12/13 clean first-pass with the gate layer — not the executor — catching the one defect). **The VBW planning layer is untouched:** `.vbw-planning/`, `/vbw:init`'s roadmap scaffold, `/roadmap-create`'s phase merge, `/phase-plan`, `/review-plan`, and the `pk_vbw_*` roadmap helpers all stay — retiring the planning layer is a separate, later effort. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. **Carries Pipekit 3.0–3.2:** native-on-Workflow executor; distribution-layer hardening (`bin/pk` smoke suite + CI gate, global `--help` guard, `pipekit/.local-skills` manifest, `pk doctor` upstream-staleness warning, curated-roadmap doctrine — `pk next` stays the operational truth); v2.8.0's `/financial-review` + `/security-review` substrate; and v2.7.x: `/pk-express`, `/pr-fix` pluggable engine, merge-driven Linear transition)*
+**v4.1.0** — Last updated: 2026-06-21  *(**v4.1.0 — Linear-native phase surface.** The roadmap's phase order lives in Linear: Initiatives named `i{N}.` (phases) → Projects named `P{N}.` (sub-phases) → Issues, ordered by the name-prefix number (Linear `sortOrder` is an unreliable drag-rank). `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors the hierarchy and `/phase-plan` advances it; `PHASES.md`/`linear-map.json` are retired to a read-only fallback; Stage 0.5 `/vbw:init` is dropped from the contract. The `i{N}.`/`P{N}.` convention is the contract — `method.config.md § Phase Surface`. Validated live against a production Linear workspace. **The phase surface is now Linear-native; what remains of the VBW planning layer** — `.vbw-planning/` execution state, `/vbw:init`'s scaffold, `/review-plan`, and the `pk_vbw_*` PLAN/SUMMARY helpers — still stands; retiring it is a separate, later effort. **Carries v4.0.0 — VBW executor removed:** native-on-Workflow is the **sole** executor; the pluggable `vbw` backend, `--backend=` selection, and `vbw-dev`/`vbw-scout` dispatch are gone (the `auto` router went in v3.2.0); a stale `Backend: vbw`/`auto` now **refuses** with a migration message. The deep-analysis safety net remains the gate layer (`/financial-review`, `/pr-security-review`), which native runs. **Carries Pipekit 3.0–3.2:** native-on-Workflow executor; distribution-layer hardening (`bin/pk` smoke suite + CI gate, global `--help` guard, `pipekit/.local-skills` manifest, `pk doctor` upstream-staleness warning); v2.8.0's `/financial-review` + `/security-review` substrate; v2.7.x: `/pk-express`, `/pr-fix` pluggable engine, merge-driven Linear transition)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -18,7 +18,7 @@ Origin: extracted from the Piper production finance platform.
 
 ```
 Stage 0: Foundation (a contract — see Entry Modes)
-  /concept → /define → /strategy-create → /startup → /vbw:init → /roadmap-create → /phase-plan
+  /concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan
 
 Stages 1-5: Development — the v2 daily loop (repeats per issue)
   pk next → pk branch → /work → /verify → pk ship (Draft) → pk ready → [PR review + preview UAT] → pk done [--merge] → [dev UAT] → pk promote <env> → (PR merges) → pk promote <env> --finish
@@ -51,10 +51,10 @@ Projects pull from this repo using `sync-method.sh`. The sync copies `skills/`, 
 
 Pipekit wraps VBW — it does not replace VBW's planning layer. The boundary is explicit:
 
-- **VBW owns** `.vbw-planning/ROADMAP.md`, `PLAN.md` files, and execution state.
-- **Pipekit owns** Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (phase-aware as of v2.1.0); v2 retired the `NEXT.md` mirror file.
-- **The two merge once**, at `/roadmap-create` — Pipekit adds strategy-derived requirements into VBW's phase structure without overwriting VBW's phases, goals, or success criteria.
-- **Don't invoke VBW agents directly in Pipekit projects.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear, `PHASES.md`, and the `pk *` state in sync. Direct VBW invocation bypasses Pipekit's visibility layer and causes drift.
+- **VBW (legacy) owns** `.vbw-planning/ROADMAP.md`, `PLAN.md` files, and execution state — present for direct-VBW projects, slated for a separate retirement.
+- **Pipekit owns** Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `P{N}.` → Issues, v4.1.0), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json` (read-only fallback only).
+- **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`P{N}.` hierarchy *is* the roadmap; there is no merge into a VBW phase skeleton.
+- **Don't invoke VBW agents directly in Pipekit projects.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state in sync. Direct VBW invocation bypasses Pipekit's visibility layer and causes drift.
 
 Full ownership model in `method.md` (§ VBW / Pipekit Ownership Model).
 
@@ -89,7 +89,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 
 | Command | Purpose |
 |---------|---------|
-| `pk next` | Phase-aware: reads `## Current Phase:` from `PHASES.md`, queries Linear, groups by status (In Progress / Approved / Needs Spec) with per-group hints. Replaces v1's `cat NEXT.md`. |
+| `pk next` | Phase-aware: derives the current phase live from the Linear-native surface (`i{N}.` initiative → `P{N}.` project, by numeric name prefix; legacy `PHASES.md`/`linear-map.json` fall back), queries Linear, groups by status (In Progress / Approved / Needs Spec) with per-group hints. Replaces v1's `cat NEXT.md`. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
 | `/work <ID>` | Plan + execute in-session. `/work` plans inline (parallel `Agent` grounding), then materializes a task DAG to `.pk-work/<ID>-PLAN.md` and executes on the **Workflow primitive** — atomic commit per task with verify-before-integrate. Native-on-Workflow is the **sole executor** as of v4.0.0; the pluggable `vbw` backend and `--backend=` flag were removed (a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message). |
 | `/verify` | Pre-deploy gate. |
