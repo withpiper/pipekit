@@ -327,6 +327,21 @@ if [ -d "$TEMP/templates/hooks" ]; then
     hname=$(basename "$hook_src")
     sync_file "$hook_src" "$PROJECT_ROOT/.claude/hooks/$hname" ".claude/hooks/$hname"
     chmod +x "$PROJECT_ROOT/.claude/hooks/$hname" 2>/dev/null || true
+    # The hook is a version-controlled Pipekit artifact, but many projects
+    # gitignore .claude/hooks/ (the old "hooks are per-machine" convention).
+    # When they do, the shipped hook lands UNcommitted while its registration
+    # sits in tracked .claude/settings.json — "wired but not really" for anyone
+    # who pulls without running sync. Force-track it so the registration points
+    # at a committed script. Non-fatal, dry-run-safe, no-op outside a git repo.
+    if ! $DRY_RUN && command -v git >/dev/null 2>&1 \
+         && git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1 \
+         && git -C "$PROJECT_ROOT" check-ignore -q ".claude/hooks/$hname"; then
+      if git -C "$PROJECT_ROOT" add -f ".claude/hooks/$hname" 2>/dev/null; then
+        echo "  FORCE-TRACKED .claude/hooks/$hname (.claude/hooks/ is gitignored; committed so the hook reaches the whole repo, not just this machine)"
+      else
+        echo "  NOTE .claude/hooks/$hname is gitignored and could not be auto-tracked — run: git add -f .claude/hooks/$hname"
+      fi
+    fi
   done
 
   # Register validate-commit.sh in .claude/settings.json (idempotent).
