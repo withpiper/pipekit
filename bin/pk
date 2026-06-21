@@ -30,7 +30,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.0.0"
+PK_VERSION="4.1.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -216,10 +216,72 @@ pk_linear_issue() {
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -r '.data.issue // empty'
 }
 
-# Read the current phase name from .vbw-planning/PHASES.md by extracting
-# the heading text after "## Current Phase:". Returns empty if no PHASES.md
-# or no current-phase heading. Used by phase-aware pk next.
-pk_current_phase_name() {
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase context — Linear-native (Initiatives → Projects), file fallback
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Phase order lives in Linear, not a committed file. Initiatives named with an
+# `i<N>.` prefix are the ordered roadmap phases; Projects named `P<N>.` are the
+# ordered sub-phases within them. Order comes from the NAME PREFIX, not Linear's
+# `sortOrder` (an internal drag-rank that does NOT track phase sequence — verified
+# live, Piper 2026-06-21: sortOrder ordered projects P11,P8,P4,P3,P1,...).
+# Lifecycle comes from status/state:
+#   current phase   = lowest i<N> initiative whose status != "Completed"
+#   current project = lowest P<N> project whose state ∉ {completed, canceled}
+# Unprefixed initiatives (strategic themes) are ignored, so no config list is
+# needed. When no i<N>. initiatives exist (un-migrated project, or no Linear
+# key), this falls back to the legacy .vbw-planning/ files.
+
+# Raw initiatives query. Empty on no-key / error (so callers fall back cleanly).
+pk_linear_initiatives_json() {
+  local q='query { initiatives(first: 50) { nodes { id name status projects(first: 50) { nodes { id name state } } } } }'
+  pk_linear_gql "$q" '{}' 2>/dev/null
+}
+
+# Derive "<phase-name>\t<project-id>" from a Linear initiatives response.
+# Emits nothing when there is no roadmap initiative with a live P<N>. project.
+pk_native_phase_context() {
+  local json="$1"
+  [ -z "$json" ] && return 0
+  printf '%s' "$json" | jq -r '
+    (.data.initiatives.nodes // [])
+    | map(select(.name | test("^[iI][0-9]+\\.")))
+    | sort_by(.name | capture("^[iI](?<n>[0-9]+)\\.") | .n | tonumber)
+    | map(select(.status != "Completed"))
+    | .[0]
+    | if . == null then empty else . end
+    | .name as $pname
+    | (.projects.nodes
+       | map(select(.name | test("^[pP][0-9]+\\.")))
+       | sort_by(.name | capture("^[pP](?<n>[0-9]+)\\.") | .n | tonumber)
+       | map(select(.state != "completed" and .state != "canceled"))
+       | .[0]) as $proj
+    | if $proj == null then empty else [$pname, $proj.id] | @tsv end
+  ' 2>/dev/null
+}
+
+# Ordered roadmap walk for `pk status`: one line per i<N>. initiative with its
+# status and current (first non-done) P<N>. project. Silent when none exist.
+pk_native_roadmap_summary() {
+  local json="$1"
+  [ -z "$json" ] && return 0
+  printf '%s' "$json" | jq -r '
+    (.data.initiatives.nodes // [])
+    | map(select(.name | test("^[iI][0-9]+\\.")))
+    | sort_by(.name | capture("^[iI](?<n>[0-9]+)\\.") | .n | tonumber)
+    | .[]
+    | .name as $n | .status as $s
+    | (.projects.nodes
+       | map(select(.name | test("^[pP][0-9]+\\.")))
+       | sort_by(.name | capture("^[pP](?<n>[0-9]+)\\.") | .n | tonumber)
+       | map(select(.state != "completed" and .state != "canceled"))
+       | .[0].name // "all projects done") as $cur
+    | "  \($n)  [\($s)]  → \($cur)"
+  ' 2>/dev/null
+}
+
+# Legacy file-based phase name — .vbw-planning/PHASES.md "## Current Phase:".
+pk_file_current_phase_name() {
   local root phases
   root=$(pk_repo_root)
   phases="$root/.vbw-planning/PHASES.md"
@@ -228,21 +290,16 @@ pk_current_phase_name() {
     | sed -E 's/^## Current Phase:[[:space:]]*//; s/[[:space:]]+$//'
 }
 
-# Match the current phase name to a linear-map.json project entry and return
-# its Linear project ID (UUID). Returns empty if no match.
-#
-# Matching is fuzzy because PHASES.md and linear-map.json may use different
-# separators ("Phase 2.5 — Vault Redesign" vs "Phase 2.5: Vault Redesign").
-# Strategy: normalize both sides to a "phase-key" by extracting the leading
-# "Phase X.Y" or "Phase X" token and lowercasing the rest for substring match.
-pk_current_phase_project_id() {
+# Legacy file-based phase → Linear project UUID via .vbw-planning/linear-map.json.
+# Fuzzy match: PHASES.md and the map may differ on separators ("Phase 2.5 — Foo"
+# vs "Phase 2.5: Foo"); fall back to the leading "Phase X.Y" token.
+pk_file_current_phase_project_id() {
   local root map name
   root=$(pk_repo_root)
   map="$root/.vbw-planning/linear-map.json"
   [ -f "$map" ] || return 0
-  name=$(pk_current_phase_name)
+  name=$(pk_file_current_phase_name)
   [ -z "$name" ] && return 0
-  # Extract leading phase token (e.g. "Phase 2.5" from "Phase 2.5 — Foo")
   local phase_token
   phase_token=$(echo "$name" | grep -oE '^Phase [0-9]+(\.[0-9]+)?' | head -1)
   jq -r --arg name "$name" --arg token "$phase_token" '
@@ -254,6 +311,29 @@ pk_current_phase_project_id() {
     | .[0].id // empty
   ' "$map" 2>/dev/null
 }
+
+# Unified phase context. Emits "<name>\t<project-id>\t<source>" (source =
+# native|file) or nothing. Native (Linear initiatives) wins; falls back to the
+# legacy .vbw-planning/ files during the migration window.
+pk_phase_context() {
+  local native
+  native=$(pk_native_phase_context "$(pk_linear_initiatives_json)")
+  if [ -n "$native" ]; then
+    printf '%s\tnative\n' "$native"
+    return 0
+  fi
+  local fname fproj
+  fname=$(pk_file_current_phase_name)
+  fproj=$(pk_file_current_phase_project_id)
+  if [ -n "$fname" ] && [ -n "$fproj" ]; then
+    printf '%s\t%s\tfile\n' "$fname" "$fproj"
+  fi
+}
+
+# Back-compat thin wrappers (older code paths / external callers). The hot path
+# (cmd_next) calls pk_phase_context once directly to avoid double-querying.
+pk_current_phase_name() { pk_phase_context | cut -f1; }
+pk_current_phase_project_id() { pk_phase_context | cut -f2; }
 
 # Get issues in a state for the current team, scoped to a Linear project ID.
 # Same shape as pk_linear_issues_in_state but adds project filter. Empty
@@ -910,15 +990,21 @@ cmd_next() {
     echo "Switch to $integration first:  git checkout $integration"
     return 0
   fi
-  # Phase-aware mode if PHASES.md + linear-map.json are present and a
-  # current phase is defined. Falls back to the global "next Approved
-  # anywhere" behaviour when no phase context is available.
-  local phase_name phase_project
-  phase_name=$(pk_current_phase_name)
-  phase_project=$(pk_current_phase_project_id)
+  # Phase-aware mode: Linear initiatives (i<N>./P<N>.) when available, else the
+  # legacy .vbw-planning/ files. One fetch via pk_phase_context. Falls back to
+  # "next Approved anywhere" when no phase context exists at all.
+  local phase_ctx phase_name phase_project phase_src
+  phase_ctx=$(pk_phase_context)
+  phase_name=$(printf '%s' "$phase_ctx" | cut -f1)
+  phase_project=$(printf '%s' "$phase_ctx" | cut -f2)
+  phase_src=$(printf '%s' "$phase_ctx" | cut -f3)
 
   if [ -n "$phase_name" ] && [ -n "$phase_project" ]; then
-    echo "On $current — Phase: $phase_name"
+    if [ "$phase_src" = "native" ]; then
+      echo "On $current — Phase: $phase_name (Linear)"
+    else
+      echo "On $current — Phase: $phase_name"
+    fi
     echo ""
     local in_progress approved needs_spec ip_count ap_count ns_count
     in_progress=$(pk_linear_issues_in_state_project "In Progress" "$phase_project" 2>/dev/null || echo "[]")
@@ -955,7 +1041,11 @@ cmd_next() {
     fi
     if [ "$ip_count" = "0" ] && [ "$ap_count" = "0" ] && [ "$ns_count" = "0" ]; then
       echo "Phase $phase_name has no In Progress / Approved / Needs Spec issues."
-      echo "Check  pk status  for the full board, or update PHASES.md to the next phase."
+      if [ "$phase_src" = "native" ]; then
+        echo "Check  pk status  for the full board, or advance the phase in Linear (initiative/project state)."
+      else
+        echo "Check  pk status  for the full board, or update PHASES.md to the next phase."
+      fi
     fi
 
     # Other phases — surface Approved work outside current phase
@@ -998,6 +1088,15 @@ cmd_status() {
     return 1
   fi
   echo "── Linear: $team ──"
+  # Roadmap walk (Linear initiatives) when migrated to the native phase surface.
+  # Silent when no i<N>. initiatives exist (un-migrated project / no Linear key).
+  local roadmap
+  roadmap=$(pk_native_roadmap_summary "$(pk_linear_initiatives_json)")
+  if [ -n "$roadmap" ]; then
+    echo ""
+    echo "Roadmap (i<N>. initiatives → current P<N>. project):"
+    printf '%s\n' "$roadmap"
+  fi
   # Pre-deploy + UAT buckets are universal.
   local states=("In Progress" "Building" "UAT" "Approved")
   # Append "In <env>" buckets for every non-final env in Ship environments
