@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin decoupled — the plugin is no longer required; its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh`. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface — `pk next`/`pk status` derive the current phase from Linear Initiatives (`i{N}.`) → Projects (`P{N}.`), ordered by name-prefix; `PHASES.md`/`linear-map.json` retired to read-only fallback. Carries v4.0.0: VBW executor removed (native-on-Workflow sole executor); Linear MCP camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 artifact rule.)*
+**v4.2.1** — Last updated: 2026-06-21  *(v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — the plugin is no longer required; its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh`. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface — `pk next`/`pk status` derive the current phase from Linear Initiatives (`i{N}.`) → Projects (`P{N}.`), ordered by name-prefix; `PHASES.md`/`linear-map.json` retired to read-only fallback. Carries v4.0.0: VBW executor removed (native-on-Workflow sole executor); Linear MCP camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 artifact rule.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.2.0                 (or latest tag)
+1. ./scripts/sync-method.sh v4.2.1                 (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
