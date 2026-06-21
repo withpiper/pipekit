@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.0.0** — Last updated: 2026-06-20  *(adds the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; carries the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.1.0** — Last updated: 2026-06-21  *(Linear-native phase surface — Initiative `i{N}.` = phase, Project `P{N}.` = sub-phase, ordered by name prefix. The roadmap's phase order now lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. `.vbw-planning/PHASES.md` and `linear-map.json` are retired (bin/pk fallback-only). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -36,11 +36,13 @@ Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create
 
 ## Linear Model
 
+**The Linear hierarchy is the phase surface — the source of truth for roadmap order.** There is no committed phase file; `pk next`/`pk status` derive the current phase live from this hierarchy. `/roadmap-create` authors it; `/phase-plan` advances it.
+
 ```
-Initiative = VBW Phase                 <- "What phase does this ship in?"
-  +-- Project = Feature Cluster        <- "What area of the product?"
-       +-- Issue = Feature/Task        <- "What work needs to happen?"
-            +-- Milestone = Work Package  <- "What execution batch?"
+Initiative "i{N}. label" = ordered roadmap PHASE       <- "Which phase ships this?"
+  +-- Project "P{N}. label" = ordered SUB-PHASE        <- "Which sub-phase within the phase?"
+       +-- Issue = work item                           <- "What work needs to happen?"
+            +-- Milestone = Work Package (optional)     <- "What intra-project batch?"
 
 Labels = Cross-cutting metadata        <- Filterable on everything
   Domain:   [project-specific domain labels]
@@ -50,30 +52,44 @@ Labels = Cross-cutting metadata        <- Filterable on everything
   Audience: Client Request
 ```
 
+### Ordering is the numeric name prefix — never Linear `sortOrder`
+
+Phase and sub-phase order is read from the **integer in the name prefix**, parsed numerically (so `P2` sorts before `P10`). Linear's internal `sortOrder` field is an unreliable drag-rank and is **never** used to order phases.
+
+- **Initiative `i{N}. label`** = an ordered roadmap **phase**. The `i{N}.` prefix is the roadmap opt-in: only prefixed initiatives are delivery phases. **Unprefixed initiatives are strategic themes** and are ignored by `pk next`.
+- **Project `P{N}. label`** = an ordered **sub-phase** within a phase. Issues live in projects.
+- **Issue** = a work item.
+
+**Current phase** = the lowest `i{N}` initiative whose status is not `Completed`. **Current sub-phase** = the lowest `P{N}` project whose state is not `completed` or `canceled`.
+
 ### Each Layer's Job
 
 | Layer | Audience | Question | Lifespan |
 |---|---|---|---|
-| **Initiative** | Partner | "What stage?" | Permanent (one per stage) |
-| **Project** | Partner + You | "What feature area?" | Permanent within stage |
-| **Milestone** | You + VBW | "What execution batch?" | Per-stage |
-| **Issue** | You + VBW | "What feature/task?" | Permanent (work item) |
+| **Initiative** (`i{N}.`) | Partner | "Which roadmap phase?" | Permanent (one per phase) |
+| **Project** (`P{N}.`) | Partner + You | "Which sub-phase?" | Permanent within phase |
+| **Milestone** (optional) | You | "What intra-project batch?" | Per-project |
+| **Issue** | You | "What work item?" | Permanent (work item) |
 | **Labels** | Everyone | Domain? Tier? Type? | Permanent (taxonomy) |
+
+The **Milestone = Work Package** layer is an optional intra-project grouping, orthogonal to the phase surface — use it to batch issues within a single project when useful, or skip it entirely.
 
 ---
 
 ## VBW <> Linear Mapping
 
-| VBW | Linear | Notes |
-|---|---|---|
-| Phase | Initiative | 1:1 match |
-| Feature cluster | Project | Grouped by product area |
-| Work Package | Milestone | Execution batches within projects |
-| Plan (phase) | -- | VBW internal only. `.vbw-planning/` |
-| Task | -- | VBW internal only. `.vbw-planning/` |
-| Issue (ISSUES.md) | Issue | Issue IDs shared across both systems |
+The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. The phase-source files `.vbw-planning/PHASES.md` and `.vbw-planning/linear-map.json` are **retired** — no skill writes them; `bin/pk` reads them only as a fallback when the Linear hierarchy is unreachable.
 
-**VBW is the planning engine. Linear is the view layer.** VBW pushes structure and tasks to Linear; human edits in Linear; VBW pulls changes back. The `/sync-linear` skill handles both directions.
+| Concept | Linear | Notes |
+|---|---|---|
+| Roadmap phase | Initiative `i{N}. label` | Ordered by the `i{N}` name prefix. The source of truth for phase order. |
+| Sub-phase | Project `P{N}. label` | Ordered by the `P{N}` name prefix, within a phase. Issues live here. |
+| Work Package (optional) | Milestone | Optional intra-project batch within a project. |
+| Plan (phase) | -- | VBW planning-layer internal. `.vbw-planning/phases/*/PLAN.md` |
+| Task | -- | VBW planning-layer internal. `.vbw-planning/` |
+| Issue | Issue | Issue IDs shared across both systems |
+
+**The Linear hierarchy is the source of truth for phase order.** The VBW planning layer still owns task decomposition (`PLAN.md`) and execution state under `.vbw-planning/`; `.vbw-planning/ROADMAP.md` is retained as optional legacy. The `/sync-linear` skill keeps planning state and Linear coherent.
 
 ### What Lives Where
 
@@ -164,14 +180,16 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 
 ### Phase Management
 
-The backlog is ordered by **phase proximity** (furthest out → closest to execution):
+**Which phase an issue belongs to is defined by the Linear hierarchy** — the `i{N}.` initiative (phase) and `P{N}.` project (sub-phase) it sits under, ordered by name prefix. `pk next`/`pk status` resolve the current phase live from that hierarchy (lowest non-`Completed` `i{N}` initiative). `/roadmap-create` authors the hierarchy; `/phase-plan` advances it. The workflow states below track *pipeline position within* the current phase, not phase membership.
+
+Within the active phase, the backlog is ordered by **pipeline proximity** (furthest out → closest to execution):
 
 ```
 Ideas → Future Phases → On Deck → Needs Spec
 ```
 
-- **Current phase** = issues in Needs Spec + Specced + Approved + Building + UAT + any In `<Env>` state
-- **Next phase** = issues in On Deck
+- **In-flight (current phase)** = issues in Needs Spec + Specced + Approved + Building + UAT + any In `<Env>` state
+- **Queued (next phase)** = issues in On Deck
 - **Future** = issues in Future Phases
 - **Someday** = issues in Ideas
 
@@ -182,9 +200,9 @@ When the current phase ships, promote On Deck → Needs Spec and refill On Deck 
 ## Conventions
 
 - **No sub-issues in Linear.** Task decomposition lives in `.vbw-planning/` only. Linear stays clean — one Issue per feature.
-- **Projects don't overlap.** Each issue lives in exactly one project at a time.
-- **Milestones = Work Packages.** Each issue belongs to one milestone (its WP).
-- **Tier labels are redundant with Initiatives** — intentional. Labels persist after stages complete.
+- **Projects (`P{N}.`) don't overlap.** Each issue lives in exactly one sub-phase project at a time.
+- **Milestones = Work Packages (optional).** When used, a milestone is an intra-project batch; an issue belongs to at most one. Orthogonal to the phase surface — skip it entirely when not useful.
+- **Tier labels are redundant with phase initiatives** — intentional. Labels persist after phases complete.
 - **Urgent priority is reserved** for hotfixes and production emergencies only.
 - **VBW trigger:** VBW planning triggers when a batch of related features in a Work Package reach "Building" — not when individual features are approved.
 
@@ -302,8 +320,11 @@ Key implementation details, architecture decisions, or constraints.
 
 ## Key IDs
 
-All Linear IDs (team, states, initiatives, projects) should be stored in:
-1. `method.config.md` — state IDs for skill consumption
-2. `.vbw-planning/linear-map.json` — full ID mapping for VBW ↔ Linear sync
+The **Linear hierarchy itself is the source of truth** for the roadmap's phase order (Initiative `i{N}.` / Project `P{N}.`, ordered by name prefix) — there is no committed phase file to keep in sync. Skills resolve initiatives and projects live by their name prefixes.
+
+Linear IDs that skills consume directly:
+1. `method.config.md` — team ID and state IDs for skill consumption (see the § Phase Surface contract).
+
+`.vbw-planning/linear-map.json` is **retired**: no skill writes it, and it is no longer the ID map. `bin/pk` reads it only as a fallback when the Linear hierarchy is unreachable.
 
 See `method.config.template.md` for the template.

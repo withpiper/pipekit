@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v2.4.0** — Last updated: 2026-05-13  *(Phase 3.6 project signal probes; latest template revision)*
+**v4.1.0** — Last updated: 2026-06-21  *(Linear-native phase surface — added § Phase Surface: `i{N}.`/`P{N}.` naming convention replaces `PHASES.md`/`linear-map.json`; legacy files fall back automatically)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -44,6 +44,33 @@ Skills use these IDs to transition issues. Get them from Linear API or the Linea
 | Done | `` |
 | Canceled | `` |
 | Duplicate | `` |
+
+## Phase Surface (Linear-native)
+
+The roadmap's phase order lives in **Linear**, not a committed file. `pk next` and `pk status`
+derive the current phase live from the Linear hierarchy; `/roadmap-create` authors it and
+`/phase-plan` advances it. There is no `PHASES.md` or `linear-map.json` to keep in sync.
+
+**The naming convention is the contract** (ordering comes from the name prefix, never Linear's
+`sortOrder` — that field is an internal drag-rank and does not track phase sequence):
+
+| Level | Linear construct | Naming | Meaning |
+|-------|-----------------|--------|---------|
+| Phase | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | An ordered roadmap phase. `pk next` walks these by `{N}`. |
+| Sub-phase | **Project** | `P{N}. label` (e.g. `P2. Budget Editor`) | An ordered batch within a phase. Issues live here. |
+| Work item | **Issue** | (Linear identifier) | The unit `/work` builds. |
+
+- **Order** = the integer in the prefix, parsed numerically (`P2` before `P10`).
+- **Current phase** = lowest `i{N}` initiative whose status ≠ `Completed`.
+- **Current sub-phase** = lowest `P{N}` project in it whose state ∉ {`completed`, `canceled`}.
+- **Roadmap opt-in** = the `i{N}.` prefix. Unprefixed initiatives (strategic themes) are ignored
+  by `pk next`/`pk status` — no config list needed.
+- **Milestones** (Work Packages) remain an optional intra-project grouping, orthogonal to phases.
+
+> **Transitional:** projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the
+> legacy `.vbw-planning/PHASES.md` + `linear-map.json` automatically. Rename your delivery
+> initiatives with `i{N}.` prefixes to switch a project to the native surface, then the files can be
+> deleted. New projects are native from `/roadmap-create`.
 
 ## Slack (optional)
 

@@ -1,11 +1,13 @@
 ---
 name: phase-plan
-description: Compose the next execution phase from the roadmap, track phase state, promote to Needs Spec. Use when current phase is closing and you need to pick the next batch. Use when PHASES.md needs a fresh Current Phase entry.
+description: Confirm and advance the current execution phase on the Linear-native surface — derive the active i{N}. initiative / P{N}. project, promote its issues to Needs Spec, and roll the phase pointer forward by flipping Linear initiative/project state. Use when a phase is closing and you need to open the next one.
 ---
 
 # Phase Plan Skill
 
-You are a phase composition planner. Your job is to define, track, and manage execution phases. Read `method.config.md` for project context. A phase is a batch of issues selected for the current execution cycle — pulled from the roadmap, validated for dependencies, and promoted to "Needs Spec" so the spec pipeline can begin.
+You are a phase manager. Your job is to confirm which phase is current, promote its issues into the spec
+pipeline, and advance the phase pointer when it closes. Read `method.config.md § Phase Surface` for the
+naming-convention contract. **Phase state lives in Linear, not a file** — there is no `PHASES.md`.
 
 ## Triggers
 
@@ -18,240 +20,169 @@ You are a phase composition planner. Your job is to define, track, and manage ex
 
 | Argument | What it does |
 |----------|--------------|
-| (none) | Plan the next phase (or first phase if none exists) |
-| `--next` | Propose the next phase after the current one ships |
-| `--status` | Show current phase progress dashboard |
-| `--rebalance` | Adjust current phase composition (add/remove issues) |
-| `--dry-run` | Show proposed phase without promoting issues |
+| (none) | Confirm the current phase; promote its issues to Needs Spec |
+| `--next` | Advance the phase pointer: close the current sub-phase, open the next |
+| `--status` | Current-phase progress dashboard (derived live from Linear) |
+| `--rebalance` | Move issues between projects (re-scope the current sub-phase) |
+| `--dry-run` | Show what would change without writing to Linear |
 
 ## Prerequisites
 
-- `.vbw-planning/ROADMAP.md` must exist (output of `/roadmap-create`)
-- Linear board must be populated with issues
-- `method.config.md` must have Linear state IDs configured
+- Linear board populated with the native phase surface (run `/roadmap-create` first)
+- `method.config.md` with Linear state IDs and `§ Phase Surface`
 
-## Phase Model
+## Phase Model (Linear-native)
 
-### How Phases Relate to Milestones and Cycles
+| Concept | Linear construct | Naming | Role |
+|---------|-----------------|--------|------|
+| **Phase / wave** | Initiative | `i{N}. label` | Ordered roadmap phase. Status `Active`/`Planned`/`Completed`. |
+| **Sub-phase / execution batch** | Project | `P{N}. label` | The batch you're building now. State `started`/`planned`/`completed`. Issues live here. |
+| **Work item** | Issue | identifier | Moves On Deck → Needs Spec → … → Done. |
+| **Milestone** (optional) | Milestone | free | Intra-project gating, orthogonal to phases. |
 
-| Concept | Purpose | Linear Construct | Relationship to Phases |
-|---------|---------|-----------------|----------------------|
-| **Milestone (Work Package)** | Feature cluster — groups related issues for gating | Linear Milestone | A phase may pull from multiple milestones. A large milestone may span multiple phases. |
-| **Phase** | Execution batch — what we're building right now | Tracked in `.vbw-planning/PHASES.md` | The unit of work between `/phase-plan` and `/phase-plan --next`. |
-| **Cycle** (optional) | Time-boxed sprint — capacity planning and velocity tracking | Linear Cycle | Optional overlay. If used, a phase maps to a cycle for time-boxing. Not required. |
-
-**Milestones group by feature. Phases group by execution order.** These are different dimensions — milestones are permanent structure, phases are temporal.
-
-### Phase State
-
-Phases are tracked in `.vbw-planning/PHASES.md`, not in Linear. Linear tracks individual issue status; PHASES.md tracks which issues belong to which phase.
+**The current phase is *derived*, not declared.** Current phase = lowest `i{N}` initiative whose status
+≠ `Completed`; current sub-phase = lowest `P{N}` project in it whose state ∉ {`completed`,`canceled`}.
+This is exactly what `pk next` / `pk status` compute — this skill is the human-facing tool for the same
+surface. Order is the prefix number (numeric), never Linear `sortOrder`.
 
 ---
 
 ## Execution Steps
 
-### Default: Plan a Phase
+### Default: Confirm the current phase and promote its issues
 
-#### Step 1 — Assess Current State
+#### Step 1 — Derive current state from Linear
 
-1. Read `.vbw-planning/PHASES.md` if it exists
-2. Read `.vbw-planning/ROADMAP.md` for phase priorities
-3. Read `method.config.md` for Linear state IDs
-4. Fetch all issues in the current phase from Linear:
-   - Issues in On Deck, Needs Spec, Specced, Approved, Building, UAT
-   - Group by status to understand pipeline state
-
-If a current phase exists and has unfinished issues, warn:
-_"Phase {N} is still in progress ({M} issues not yet Done). Plan the next phase anyway, or check status with `--status`?"_
-
-#### Step 2 — Identify Candidates
-
-1. Fetch issues in "On Deck" status (next phase candidates)
-2. If On Deck is empty, check "Future Phases" for promotable issues
-3. For each candidate:
-   - Check dependencies via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`
-   - Classify as **ready** (no unresolved blockers) or **blocked** (list blockers)
-   - Note milestone membership
-   - Note complexity if available from existing description
-
-#### Step 3 — Compose the Phase
-
-Propose a phase following these guidelines:
-
-| Guideline | Target |
-|-----------|--------|
-| Phase size | 3-8 issues |
-| Complexity mix | At least 1 Low for quick wins, no more than 2 High |
-| Dependency safety | No issue blocked by another issue outside the phase (unless the blocker is Done) |
-| Milestone coverage | Prefer completing milestones over splitting them |
-| Phase progress | Prioritize issues that unblock downstream work |
-
-Present the proposal:
+1. Fetch initiatives + their projects (with `status`/`state`). The current phase/sub-phase fall out of
+   the rule above. Cross-check with `pk status` (its Roadmap section shows the same walk).
+2. Fetch the current project's issues from Linear, grouped by status (On Deck, Needs Spec, Specced,
+   Approved, Building, UAT, Done).
+3. Report the derived position:
 
 ```
-## Proposed Phase {N}: {Theme or Phase Name}
-
-Issues (6):
-  1. PROJ-1  — User authentication [Low] (WP-1: Foundation)
-  2. PROJ-2  — Core data model [Medium] (WP-1: Foundation)
-  3. PROJ-3  — Basic search [Medium] (WP-2: Search)
-  4. PROJ-4  — Search filters [Low] (WP-2: Search)
-  5. PROJ-5  — Record detail view [Medium] (WP-2: Search)
-  6. PROJ-6  — Admin dashboard [Low] (WP-3: Admin)
-
-Milestones touched: WP-1 (2/4 issues), WP-2 (3/5 issues), WP-3 (1/6 issues)
-Complexity: 3 Low, 3 Medium, 0 High
-Dependencies: PROJ-3 depends on PROJ-2 (both in phase — OK)
-
-Not included (blocked):
-  - PROJ-7 — Advanced search (blocked by PROJ-3)
-  - PROJ-8 — Export reports (blocked by PROJ-5)
-
-Remaining On Deck: 4 issues for future phases
-
-Approve this phase? (y/n/edit)
+Current phase:     i1. Foundation   [Active]
+Current sub-phase: P2. Auth & Permissions   [started]
+  On Deck:     PROJ-3, PROJ-4, PROJ-5
+  Needs Spec:  PROJ-6
+  In flight:   PROJ-2 (Building)
+  Done:        PROJ-1
 ```
 
-#### Step 4 — Promote Issues
+If the current project's issues are **all Done**, this sub-phase is complete — recommend `--next`.
 
-On approval:
+#### Step 2 — Promote this sub-phase's issues to Needs Spec
 
-1. Move selected issues from "On Deck" to "Needs Spec" via `mcp__linear-server__linear_updateIssue`:
-   - `stateId`: Needs Spec state ID from `method.config.md`
-2. If On Deck is now depleted, promote issues from "Future Phases" to "On Deck" for the next phase pipeline
-3. Post a Linear comment on each promoted issue: `"Assigned to Phase {N}. Ready for /light-spec."`
+The project membership *is* the batch (set at `/roadmap-create`). This skill moves that batch into the
+spec pipeline. On confirmation:
 
-#### Step 5 — Write PHASES.md
+1. Move the current project's `On Deck` issues → `Needs Spec` via `mcp__linear-server__linear_updateIssue`
+   (`stateId` from `method.config.md`). Skip issues blocked by an unfinished issue outside the project.
+2. Post a Linear comment on each: `"Promoted in {i{N}. phase} / {P{N}. sub-phase}. Ready for /light-spec."`
+3. Do **not** write any file. The Linear state change *is* the record.
 
-Create or update `.vbw-planning/PHASES.md`:
-
-```markdown
-# Phases
-
-## Current Phase: Phase {N}
-- **Started:** {date}
-- **Theme:** {theme or phase name}
-- **Milestone(s):** {list}
-- **Issues:**
-  - PROJ-1 — User authentication [Needs Spec]
-  - PROJ-2 — Core data model [Needs Spec]
-  - PROJ-3 — Basic search [Needs Spec]
-  - PROJ-4 — Search filters [Needs Spec]
-  - PROJ-5 — Record detail view [Needs Spec]
-  - PROJ-6 — Admin dashboard [Needs Spec]
-
-## Next Phase (proposed)
-- **Issues (On Deck):** PROJ-9, PROJ-10, PROJ-11, PROJ-12
-- **Blocked until Phase {N} completes:** PROJ-7, PROJ-8
-
-## Completed Phases
-(none yet)
-```
-
-#### Step 6 — Summary
+#### Step 3 — Summary
 
 ```
-## Phase {N} Planned
+## Phase confirmed: i1. Foundation / P2. Auth & Permissions
 
-Issues promoted to "Needs Spec": {N}
-On Deck refilled: {N} issues promoted from Future Phases
+Promoted to Needs Spec: {N}
+Held (blocked):         {M}  — {ids + blockers}
 
 Next steps:
-  - /roadmap-review — validate the phase before speccing
-  - /light-spec PROJ-1 — start speccing the first issue
-  - /phase-plan --status — check progress anytime
+  - /roadmap-review   — validate before speccing
+  - /light-spec PROJ-3 — start the first issue
+  - pk next            — same view, anytime
 ```
 
 ---
 
-### `--status`: Phase Progress Dashboard
+### `--next`: Advance the phase pointer
 
-1. Read `.vbw-planning/PHASES.md` for current phase composition
-2. Fetch current status of each phase issue from Linear
+Close the current sub-phase and open the next. Order is by `P{N}.`, then by `i{N}.` at a phase boundary.
+
+1. **Confirm the current sub-phase is done** (all its issues Done/Canceled). If not, warn and require
+   explicit confirmation to advance anyway.
+2. Set the current project's state → `completed` (`linear_updateProject`).
+3. **Find the next live sub-phase:**
+   - Next `P{N}.` project in the same initiative (by number) that isn't completed → set it `started`.
+   - If none remain, the **phase** is done: set the current initiative `Completed`, set the next `i{N}.`
+     initiative `Active`, and `started` on its first `P{N}.` project.
+4. Run the default flow (Steps 1–3) on the newly-current sub-phase to promote its issues.
+5. Brief retrospective:
+
+```
+## i1.P1 (Data Foundation) closed
+Issues: {done}/{total} Done   ({failed} returned to Approved)
+Advanced to: i1. Foundation / P2. Auth & Permissions
+```
+
+---
+
+### `--status`: Phase Progress Dashboard (derived from Linear)
+
+1. Derive current phase/sub-phase from Linear (the rule above).
+2. Fetch each current-project issue's status.
 3. Display:
 
 ```
-## Phase {N} Status — {date}
+## i1. Foundation / P2. Auth & Permissions — {date}
 
-| Issue | Title | Status | Days in Status |
-|-------|-------|--------|---------------|
-| PROJ-1 | User authentication | Done | — |
-| PROJ-2 | Core data model | Building | 2d |
-| PROJ-3 | Basic search | Specced | 1d |
-| PROJ-4 | Search filters | Needs Spec | 3d |
-| PROJ-5 | Record detail view | UAT | 0d |
-| PROJ-6 | Admin dashboard | Approved | 1d |
+| Issue  | Title               | Status     | Days in status |
+|--------|---------------------|------------|----------------|
+| PROJ-1 | Login / session     | Done       | —              |
+| PROJ-2 | Roles + RLS         | Building   | 2d             |
+| PROJ-3 | Permission UI       | Needs Spec | 3d             |
 
-Progress: 1/6 Done (17%)
-Pipeline: 1 Needs Spec → 1 Specced → 1 Approved → 1 Building → 1 UAT → 1 Done
+Sub-phase progress: 1/3 Done
+Roadmap:  i1[Active] → P2(current) → P3 …   |   i2[Planned] …
 
 Alerts:
-  - PROJ-4 has been in "Needs Spec" for 3 days — run /light-spec PROJ-4
-  - PROJ-2 has been in "Building" for 2 days — check progress
-
-Phase started: {date} ({N} days ago)
+  - PROJ-3 in "Needs Spec" 3d — run /light-spec PROJ-3
 ```
+
+(`pk status` shows the cross-phase roadmap walk; `--status` zooms into the current sub-phase.)
 
 ---
 
-### `--next`: Plan the Next Phase
+### `--rebalance`: Re-scope the current sub-phase
 
-1. Archive the current phase to "Completed Phases" in PHASES.md
-2. Run the default phase planning flow (Steps 1-6)
-3. Include a brief retrospective:
+Move issues between projects in Linear (the membership *is* the batch):
 
-```
-## Phase {N-1} Retrospective
-
-Completed: {date} ({N} days)
-Issues: {done}/{total} completed
-  - {failed} failed (returned to Approved)
-
-Complexity accuracy:
-  - Low estimates: averaged {X}h (target: 2-4h)
-  - Medium estimates: averaged {X}h (target: 6-10h)
-```
-
----
-
-### `--rebalance`: Adjust Current Phase
-
-1. Show current phase composition
-2. Options:
-   - **Add issues:** Move from On Deck → Needs Spec, add to PHASES.md
-   - **Remove issues:** Move from Needs Spec → On Deck (only if not yet started), remove from PHASES.md
-   - **Replace:** Remove one, add another
-3. Validate dependencies after rebalance
-4. Update PHASES.md
+1. Show the current project's issues + adjacent projects' On Deck issues.
+2. **Add:** reassign an issue's `projectId` to the current project (`linear_updateIssue`), then promote.
+3. **Remove:** reassign an issue out to a later `P{N}.` project (only if not yet started).
+4. Validate dependencies after the move (no issue left blocked by one outside its phase).
 
 ---
 
 ## Rules
 
-- **Target 3-8 issues per phase.** Fewer is fine for a first phase or complex work. More than 8 creates coordination overhead.
-- **Dependencies within the phase should be satisfiable.** If PROJ-3 depends on PROJ-2, both should be in the phase (or PROJ-2 should already be Done).
-- **Prefer completing milestones over splitting them.** Split only when the WP is too large (>8 issues) or has mixed priorities.
-- **On Deck is the staging area.** Issues move: Future Phases → On Deck → Needs Spec. `/phase-plan` manages the On Deck → Needs Spec promotion. Refilling On Deck from Future Phases happens automatically.
-- **PHASES.md is the phase registry.** Linear tracks individual issue status. PHASES.md tracks phase composition and history.
-- **Human decides phase composition.** Present a recommendation with rationale, but the user approves.
+- **The current phase is derived, never declared.** Don't write a "Current Phase" anywhere — read it
+  from Linear initiative/project state.
+- **Order is the prefix number.** `P2` before `P10`; `i1` before `i2`. Never Linear `sortOrder`.
+- **A project is the execution batch.** Roadmap-create sets membership; phase-plan promotes and advances.
+  Keep projects to ~3–8 issues; if a `P{N}.` is too big, split it into `P{N}a`/renumber in `/roadmap-create`.
+- **Dependencies within the sub-phase should be satisfiable** (blocker Done, or in the same project).
+- **Advance deliberately.** `--next` only closes a sub-phase the human confirms is done.
+- **No files.** Phase state is Linear state. Never write `PHASES.md` / `linear-map.json`.
 
 ## Common Drifts to Avoid
 
-When you encounter these situations, take the safer path:
-
-- **Overloading a phase** → Keep to 3-8 issues. Larger phases create coordination overhead and hide priorities.
-- **Including blocked issues optimistically** → Only include issues whose blockers are Done. Planning on hope leads to stalled phases.
-- **Splitting a milestone across many phases** → If you're splitting across 4+ phases, the milestone itself may be too big — consider breaking it up in Linear.
-- **Stale issues in "Needs Spec"** → If an issue has been in "Needs Spec" for >3 days, investigate. Either spec it or swap it out for something ready.
+- **Declaring a "current phase"** → it's derived. If `pk next` and this skill disagree, a prefix is
+  malformed or a Linear state is stale — fix the Linear state, don't add a pointer file.
+- **Advancing with issues unfinished** → only `--next` past a sub-phase whose issues are Done. Planning
+  on hope leaves stalled phases.
+- **Over-stuffing a project** → keep ~3–8 issues. Re-scope via `--rebalance` or split in `/roadmap-create`.
 
 ## Next-step output
 
-After phase planning completes, emit an inline `➜ Next:` line in your terminal output pointing to the highest-leverage first `/01-light-spec` call. Include why that issue was picked, what parallelizes after it, and what's blocked until it lands. Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear.
+After phase work, emit an inline `➜ Next:` line pointing to the highest-leverage first `/01-light-spec`
+call. Do **not** write a `NEXT.md` — `pk next` reads "what's next?" live from Linear.
 
 ## Related
 
-- `/roadmap-create` — previous step: creates the roadmap and populates Linear
-- `/roadmap-review` — run after phase planning to validate before speccing
-- `/light-spec` — next step: spec the first issue in the phase
-- `/work` — executes specced issues (uses milestones for gating, not phases)
-- `pk status` / `pk next` — quick board view (complementary to `--status`)
+- `/roadmap-create` — previous step: authors the Linear Initiative→Project→Issue hierarchy
+- `/roadmap-review` — validate the hierarchy before speccing
+- `/light-spec` — next step: spec the first promoted issue
+- `pk status` / `pk next` — the same derived phase surface, from the CLI
+- `method.config.md § Phase Surface` — the naming-convention contract

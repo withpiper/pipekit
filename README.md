@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.0.0** — Last updated: 2026-06-20  *(Pipekit 4.0: native-on-Workflow is the **sole** executor — the pluggable `vbw` backend and `--backend=` flag are removed (the `auto` router went in v3.2.0); a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The VBW **planning layer** (`.vbw-planning/`, `/vbw:init` roadmap scaffold) is untouched. Carries 3.0's "wraps VBW" → "native default" reframe + ownership split, 3.1's distribution-layer hardening, 3.2's deprecation, and the v2.8.x substrate)*
+**v4.1.0** — Last updated: 2026-06-21  *(Pipekit 4.1: **Linear-native phase surface.** The roadmap's phase order lives in Linear — Initiatives named `i{N}.` (phases) → Projects named `P{N}.` (sub-phases) → Issues, ordered by the name-prefix number. `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors the hierarchy and `/phase-plan` advances it; `PHASES.md`/`linear-map.json` are retired (read-only fallback); `/vbw:init` is dropped from Stage 0. Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed; a stale `Backend: vbw` refuses with a migration message). Plus 3.x's ownership split + distribution-layer hardening and the v2.8.x substrate)*
 
 A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); the pluggable VBW execution backend was removed in v4.0.0 ([VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) remains only as Stage 0's roadmap-scaffolding tool).
 
@@ -8,7 +8,7 @@ A structured AI-assisted software delivery system — from idea to production wi
 
 Pipekit is the **structure around an executor** — spec creation, independent review, human sign-off, quality gates, Linear visibility, and promotion. It is **not** itself a planner or code executor: it runs the build step on the native-on-Workflow executor and owns everything around it.
 
-As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer an execution dependency — it survives only as the Stage 0 roadmap scaffold (`/vbw:init`).
+As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). As of **4.1**, [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer part of Stage 0 either — `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `P{N}.` Projects → Issues). VBW survives only as an optional direct-use planning layer, slated for a separate retirement.
 
 | Stage | What Pipekit handles |
 |-------|----------------------|
@@ -25,7 +25,7 @@ The deep-analysis safety net is the **gate layer** — `/financial-review`, `/pr
 To avoid drift between the two systems, the boundaries are explicit:
 
 - **VBW owns the `.vbw-planning/` directory** — `ROADMAP.md` (the roadmap, written at Stage 0) plus the `PLAN.md` files produced in direct VBW planning use. `/work` (native) writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead. Pipekit reads these but does not overwrite them.
-- **Pipekit owns the visibility layer** — Linear issues, `linear-map.json`, `PHASES.md`, strategy docs, and `method.config.md`. VBW does not touch these. "What's next?" is read live from Linear via `pk next` (phase-aware as of v2.1.0); v2 retired the old `NEXT.md` mirror file.
+- **Pipekit owns the visibility layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `P{N}.` → Issues), strategy docs, and `method.config.md`. VBW does not touch these. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
 - **The merge happens once**, at `/roadmap-create`. Strategy-derived requirements are added **into** VBW's phase structure; VBW's phases, goals, and success criteria are preserved.
 - **Don't invoke VBW agents directly.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state machine in sync. Direct VBW invocation bypasses the visibility layer.
 
@@ -55,9 +55,8 @@ A bigger context window changes how much an agent can hold. It does not change w
 | Define | `/define` | `project-definition.md` |
 | Strategy | `/strategy-create` | `Strategy/` docs (incl. Design Direction) |
 | Setup | `/startup` | Repo, DB, deploy, Linear workspace |
-| VBW Init | `/vbw:init` | `.vbw-planning/` scaffold |
-| Roadmap | `/roadmap-create` | `ROADMAP.md` + Linear issues |
-| Phase Plan | `/phase-plan` | First phase in "Needs Spec" |
+| Roadmap | `/roadmap-create` | Linear `i{N}.`/`P{N}.` hierarchy (Initiatives → Projects → Issues) |
+| Phase Plan | `/phase-plan` | First sub-phase's issues in "Needs Spec" |
 
 **Development Pipeline — the v2 daily loop** (repeats per issue)
 
@@ -144,7 +143,7 @@ The sync script creates a `method.config.md` file in your project — this is wh
 
 Open Claude Code **in your project directory** and install the dependencies:
 
-**VBW** — the Stage 0 roadmap-scaffolding tool (no longer an execution backend; the `vbw` executor was removed in v4.0.0). Pipekit's executor is native-on-Workflow (built into Claude Code, nothing to install), but Stage 0's `/vbw:init` uses VBW to scaffold the `.vbw-planning/` roadmap directory — so install it once during setup. Run these as two separate commands (don't paste them together):
+**VBW (optional)** — As of **v4.1.0**, VBW is **not required** for the standard Pipekit flow. Stage 0 authors the roadmap directly into Linear (`/roadmap-create` — no `/vbw:init` scaffold), and the executor is native-on-Workflow (built into Claude Code, nothing to install). Install VBW only if you want its optional direct-use planning layer (`/vbw:*` agents, `.vbw-planning/` PLAN/SUMMARY artifacts) — slated for a separate retirement. If you do, run these as two separate commands (don't paste them together):
 
 ```
 /plugin marketplace add yidakee/vibe-better-with-claude-code-vbw
@@ -156,11 +155,13 @@ Open Claude Code **in your project directory** and install the dependencies:
 
 To update later: `/vbw:update`. See the [VBW repo](https://github.com/yidakee/vibe-better-with-claude-code-vbw) for details.
 
-**Linear** — the issue tracker Pipekit uses for visibility. Close Claude Code, then run in your terminal:
+**Linear** — the issue tracker Pipekit uses for visibility **and the phase surface** (Initiatives `i{N}.` → Projects `P{N}.`). Close Claude Code, then run in your terminal:
 
 ```bash
 claude mcp add --transport http --scope user linear-server https://mcp.linear.app/mcp
 ```
+
+> **Initiative support required (v4.1.0).** The native phase surface reads Linear **Initiatives**. Pipekit's interactive skills target `@tacticlaunch/mcp-linear` (registered as `linear-server`, camelCase `linear_*` tools), which exposes initiative + relation tools the first-party `mcp.linear.app` remote lacks. If `pk status` shows no Roadmap section on a project that has `i{N}.` initiatives, you're likely on the first-party remote — switch `linear-server` to `@tacticlaunch/mcp-linear`. (`bin/pk` itself uses the Linear GraphQL API directly via `LINEAR_API_KEY` and is unaffected.)
 
 Reopen Claude Code and run `/mcp` to complete the OAuth authorization flow. If you don't have a Linear workspace yet, create a free one at [linear.app](https://linear.app/) first.
 

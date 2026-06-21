@@ -45,7 +45,7 @@ The `plan-reviewer` agent fills that gap. This skill orchestrates the call.
 Determine which `PLAN.md`(s) to review:
 
 1. **Explicit phase slug** (`/review-plan phase-1-data-foundation`) — use directly
-2. **Linear issue ID** (`/review-plan PROJ-123`) — resolve via `.vbw-planning/linear-map.json` or by reading the current git branch (`feature/proj-123-*` → look up phase containing this plan)
+2. **Linear issue ID** (`/review-plan PROJ-123`) — resolve by reading the current git branch (`feature/proj-123-*` → look up the phase directory containing this plan)
 3. **No argument** — auto-detect: read `.vbw-planning/STATE.md` for the active phase; if ambiguous, list phases with un-reviewed PLAN.md and ask the user to pick
 
 Find every `*-PLAN.md` in the phase dir:

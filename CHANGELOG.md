@@ -46,6 +46,32 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.1.0 — 2026-06-21
+
+> **Linear-native phase surface.** The roadmap's phase order moves out of committed files and into Linear itself. An Initiative named `i{N}. label` is an ordered roadmap **phase**; a Project named `P{N}. label` is an ordered **sub-phase** that holds the issues; ordering is the integer in the name prefix, parsed numerically (`P2` before `P10`). `pk next` / `pk status` derive the current phase live; `/roadmap-create` authors the hierarchy; `/phase-plan` advances it. `.vbw-planning/PHASES.md` + `linear-map.json` are **retired** to a read-only fallback, and `/vbw:init` is dropped from the Stage 0 contract. Validated live against a production Linear workspace before shipping.
+
+**Why the name prefix, not Linear `sortOrder`:** the live probe showed `sortOrder` is an internal drag-rank that does **not** track phase sequence (it ordered one initiative's projects `P11, P8, P4, P3, P1, …`). The `i{N}.`/`P{N}.` name prefix is the only reliable order, and it doubles as the roadmap opt-in — unprefixed initiatives (strategic themes) are ignored by `pk next`. No config list of "which initiatives are phases" is needed.
+
+**`bin/pk`:**
+- New `pk_linear_initiatives_json` (one GraphQL query for initiatives + their projects) and `pk_native_phase_context` — derive `<current phase>\t<current project-id>` from the lowest non-`Completed` `i{N}.` initiative and its lowest non-`completed`/`canceled` `P{N}.` project, by numeric name prefix.
+- `pk_phase_context` dispatcher: native (Linear) wins; falls back to the legacy `.vbw-planning/` files (renamed `pk_file_current_phase_*`) so un-migrated projects keep working — no flag-day. `cmd_next` shows `Phase: X (Linear)` when native.
+- `pk status` gains a **Roadmap** section: the ordered `i{N}.` → current-`P{N}.` walk (silent until a project is migrated).
+- Issue grouping (`pk_linear_issues_in_state_project`) is reused unchanged.
+- 4 new sourced-mode smoke unit-tests guard the derivation jq (derivation, empty-input, no-prefix fallback, roadmap walk). **Suite 39/39, zero network.**
+
+**Skills:**
+- **`/roadmap-create`** rewritten to author the Linear `i{N}.`/`P{N}.` hierarchy directly (Initiatives → Projects → Issues). No `.vbw-planning/ROADMAP.md` merge dependency, no `linear-map.json`, no `/vbw:init` prerequisite. ROADMAP.md survives only as an optional human-readable narrative.
+- **`/phase-plan`** pivoted from "compose a batch into `PHASES.md`" to "derive the current phase from Linear, promote its issues to Needs Spec, and advance the pointer by flipping initiative/project state." No file writes.
+- **`/sync-linear`** reframed: reconciles strategy/requirement drift against the Linear board's `i{N}.`/`P{N}.` hierarchy; no `PHASES.md`/`linear-map.json` to sync.
+- **`/00-roadmap-review`** validates the Linear-native surface (prefix naming, ordering, issue placement, lifecycle sanity) instead of the retired files.
+- **`/startup`, `/01-light-spec`, `/review-plan`, `/pk-exit`** repointed: phase context is derived live from Linear; `/vbw:init` dropped from the Stage 0 orchestration.
+
+**Config + docs:** `method.config.template.md` gains **§ Phase Surface** — the `i{N}.`/`P{N}.` naming contract. `method.md`, `RUNBOOK.md`, `GUIDE.md` (constitutional, re-stamped `v4.1.0`), plus `CLAUDE.md`, `README.md`, `STARTUP.md`, `sop/Linear_SOP.md`, `sop/Skills_SOP.md` migrated to the Linear-native model. README flags that the phase surface needs a Linear MCP with **initiative** support (`@tacticlaunch/mcp-linear`), which the first-party `mcp.linear.app` remote lacks.
+
+**Deliberately deferred (separate, later retirement):** the broader VBW *planning layer* — `.vbw-planning/phases/*/PLAN.md`, `SUMMARY.md`, `.execution-state.json`, the `pk done` SUMMARY/PLAN lifecycle, and `/vbw:init`'s greenfield codebase analysis — is untouched. v4.1.0 migrates the **phase surface** only.
+
+---
+
 ## v4.0.0 — 2026-06-20
 
 > **Final cut of the v4.0.0 line.** Promotes `v4.0.0-rc5` to stable — no code change from rc5, only the release label, the consolidated changelog, and doc-stamp normalization (every `v4.0.0-rc*` stamp → `v4.0.0`). The five release candidates (rc1–rc5) below carry the full detail; this is the one-stop summary of what v3.2.0 → v4.0.0 delivers.

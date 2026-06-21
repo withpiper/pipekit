@@ -112,6 +112,45 @@ v=$(unit_config "Backend" "")
 
 cleanup
 
+# ── Unit tests: native phase derivation (sourced mode, no network) ───────────
+# pk_native_phase_context / pk_native_roadmap_summary are pure: initiatives JSON
+# in → derivation out. Order comes from the i<N>./P<N>. NAME PREFIX (Linear's
+# sortOrder is an unreliable drag-rank); lifecycle from status/state. These guard
+# the load-bearing jq against regression.
+
+echo "== native phase derivation =="
+
+NATIVE_FIXTURE='{"data":{"initiatives":{"nodes":[
+  {"name":"i0. Setup","status":"Completed","projects":{"nodes":[{"id":"s1","name":"P1. Boot","state":"completed"}]}},
+  {"name":"i1. Build","status":"Active","projects":{"nodes":[
+    {"id":"p1","name":"P1. Foundation","state":"completed"},
+    {"id":"p2","name":"P2. Editor","state":"planned"},
+    {"id":"p10","name":"P10. Later","state":"backlog"}]}},
+  {"name":"i2. Next","status":"Planned","projects":{"nodes":[{"id":"q1","name":"P1. Vendor","state":"backlog"}]}},
+  {"name":"Strategic Theme","status":"Active","projects":{"nodes":[{"id":"z1","name":"Anything","state":"planned"}]}}
+]}}}'
+
+unit_native_ctx() { ( cd "$REPO_ROOT" && source "$PK" && pk_native_phase_context "$1" ); }
+unit_roadmap()    { ( cd "$REPO_ROOT" && source "$PK" && pk_native_roadmap_summary "$1" ); }
+
+v=$(unit_native_ctx "$NATIVE_FIXTURE")
+[ "$v" = "$(printf 'i1. Build\tp2')" ] \
+  && ok "native: phase=i1 (i0 Completed skipped), project=P2 (P1 done; P2<P10 numeric)" \
+  || fail "native: derivation" "got '$v', want 'i1. Build<TAB>p2'"
+
+v=$(unit_native_ctx '')
+[ -z "$v" ] && ok "native: empty input → empty (no crash)" || fail "native: empty input" "got '$v'"
+
+v=$(unit_native_ctx '{"data":{"initiatives":{"nodes":[{"name":"No Prefix","status":"Active","projects":{"nodes":[]}}]}}}')
+[ -z "$v" ] && ok "native: no i<N>. prefix → empty (triggers file fallback)" || fail "native: no prefix" "got '$v'"
+
+RM=$(unit_roadmap "$NATIVE_FIXTURE")
+if   ! printf '%s\n' "$RM" | grep -q 'i1. Build  \[Active\]  → P2. Editor'; then fail "native: roadmap" "missing i1 line: $RM"
+elif ! printf '%s\n' "$RM" | grep -q 'i2. Next  \[Planned\]  → P1. Vendor'; then fail "native: roadmap" "missing i2 line: $RM"
+elif ! printf '%s\n' "$RM" | grep -q 'i0. Setup  \[Completed\]  → all projects done'; then fail "native: roadmap" "missing i0 done line: $RM"
+elif   printf '%s\n' "$RM" | grep -q 'Strategic Theme'; then fail "native: roadmap" "strategic theme not excluded: $RM"
+else ok "native: roadmap walk ordered by prefix, theme excluded, completed shown done"; fi
+
 # ── CLI tests: dispatch + help guard ─────────────────────────────────────────
 
 echo "== dispatch =="

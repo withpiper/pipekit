@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.0.0** — Last updated: 2026-06-20 09:50  *(Final cut — VBW executor removed; native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning layer is untouched. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
+**v4.1.0** — Last updated: 2026-06-21 10:30  *(Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
 
 ---
 
@@ -16,9 +16,8 @@ A complete guide to using Pipekit from project inception through production deli
    - [Step 0.2: Define](#step-02-define)
    - [Step 0.3: Strategy Create](#step-03-strategy-create)
    - [Step 0.4: Infrastructure Setup](#step-04-infrastructure-setup)
-   - [Step 0.5: VBW Init](#step-05-vbw-init)
-   - [Step 0.6: Roadmap Create](#step-06-roadmap-create)
-   - [Step 0.7: Phase Plan](#step-07-phase-plan)
+   - [Step 0.5: Roadmap Create](#step-05-roadmap-create)
+   - [Step 0.6: Phase Plan](#step-06-phase-plan)
 5. [Stage 0 Gate: Roadmap Review](#stage-0-gate-roadmap-review)
 6. [Stage 1: Spec](#stage-1-spec)
    - [Light Spec](#light-spec)
@@ -78,16 +77,17 @@ When ambiguity is detected, the pipeline sends work **backward** — not forward
 STAGE 0: FOUNDATION (a contract — greenfield path shown below)
 ──────────────────────────────────────────────────────────────────────
 
-  /concept ──→ /define ──→ /strategy-create ──→ /startup ──→ /vbw:init
-      │            │               │                │            │
-  concept-     project-       Strategy/         repo, DB,    .vbw-planning/
-  brief.md    definition.md    docs           deploy, MCP     scaffold
+  /concept ──→ /define ──→ /strategy-create ──→ /startup
+      │            │               │                │
+  concept-     project-       Strategy/         repo, DB,
+  brief.md    definition.md    docs           deploy, MCP
 
       ──→ /roadmap-create ──→ /phase-plan ──→ /roadmap-review (GATE)
                 │                   │                │
-          ROADMAP.md +          PHASES.md        Stage 0
-          Linear board      (first phase in    validated ✓
-          populated         "Needs Spec")
+          Linear hierarchy      current phase    Stage 0
+          (i{N}. → P{N}. →     derived live;     validated ✓
+          Issue) authored      first sub-phase
+          in Linear            issues → "Needs Spec"
 
 
 STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
@@ -154,7 +154,7 @@ Pick the mode that matches your situation. Full description in [method.md § Ent
 | Mode | Who | Skills run | Skills skipped |
 |---|---|---|---|
 | **Greenfield** | Founder, fresh idea, no code yet | Full Stage 0 chain | None |
-| **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/vbw:init`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
+| **Brownfield** | Team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
 | **Inherited** | New contributor joining a Pipekit project | None — verify foundation, jump to dev pipeline | All of Stage 0 |
 
 `/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/work`). `/strategy-from-code` (auto-audit for brownfield) is deferred — originally promised for v1.4.0 but never built; brownfield currently routes through `/strategy-create` with a manual-edit note.
@@ -336,44 +336,27 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
 
 ---
 
-### Step 0.5: VBW Init
-
-**Skill:** `/vbw:init`
-**Input:** —
-**Output:** `.vbw-planning/` directory scaffold
-
-VBW is no longer an execution backend — native-on-Workflow is the sole executor as of v4.0.0 — but `/vbw:init` still scaffolds the `.vbw-planning/` directory Pipekit uses to track the roadmap and state. The directory is created here because the roadmap lives in it; `/work` writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead.
-
-This step is simple — run `/vbw:init` and it scaffolds:
-```
-.vbw-planning/
-├── ROADMAP.md        ← populated by /roadmap-create (next step)
-├── STATE.md          ← tracks progress
-├── linear-map.json   ← Linear ID mappings
-└── phases/           ← PLAN.md files go here during execution
-```
-
----
-
-### Step 0.6: Roadmap Create
+### Step 0.5: Roadmap Create
 
 **Skill:** `/roadmap-create`
 **Input:** Strategy docs + `project-definition.md`
-**Output:** `.vbw-planning/ROADMAP.md` + populated Linear board + `.vbw-planning/linear-map.json`
+**Output:** The Linear Initiative→Project→Issue hierarchy (`i{N}.`/`P{N}.`), populated directly in Linear
 
-This is where strategy becomes work items. The skill reads your strategy docs and project definition, extracts requirements, groups them into feature clusters, identifies dependencies, and populates both ROADMAP.md and Linear.
+This is where strategy becomes work items. The skill reads your strategy docs and project definition, extracts requirements, groups them into feature clusters, identifies dependencies, and authors the phase hierarchy **directly in Linear** — no `.vbw-planning/ROADMAP.md` merge dependency and no `linear-map.json`.
 
 **What it produces:**
 
-1. **ROADMAP.md** — requirements organized by stage, grouped into feature clusters, with dependency mapping and strategy doc traceability
-2. **Linear Issues** — one issue per requirement, with:
+1. **Linear Initiatives** named `i{N}. label` — one per roadmap phase, ordered by the numeric prefix (`i1.`, `i2.`, …). This is the phase surface `pk next`/`pk status` read live.
+2. **Linear Projects** named `P{N}. label` — ordered sub-phases (execution batches) within a phase; the issues live here.
+3. **Linear Issues** — one issue per requirement, with:
    - Correct status (On Deck for Stage 1, Future Phases for Stage 2+, Ideas for parking lot)
    - Dependency relations (`blocked_by`)
    - Type and domain labels
    - Milestone (Work Package) assignment
-3. **linear-map.json** — ID mappings between roadmap and Linear
 
-**Feature clusters become Linear Projects.** A feature cluster is a logical grouping of related requirements — "Data Foundation", "Search & CRUD", "Auth & Permissions." Each becomes a Linear Project under its stage's Initiative.
+A narrative `ROADMAP.md` may still be written as an optional legacy/handoff artifact, but it is no longer a required output or a state file the pipeline reads.
+
+**Feature clusters become `P{N}.` Linear Projects.** A feature cluster is a logical grouping of related requirements — "Data Foundation", "Search & CRUD", "Auth & Permissions." Each becomes a `P{N}.` Project (sub-phase) under its phase's `i{N}.` Initiative.
 
 **Manual vs. automated:** The skill automates issue creation, relations, and labels via MCP. For things that require the Linear UI (initiatives, workflow states), it gives explicit step-by-step instructions.
 
@@ -381,13 +364,13 @@ This is where strategy becomes work items. The skill reads your strategy docs an
 
 ---
 
-### Step 0.7: Phase Plan
+### Step 0.6: Phase Plan
 
 **Skill:** `/phase-plan`
-**Input:** Populated Linear board + `.vbw-planning/ROADMAP.md`
-**Output:** `.vbw-planning/PHASES.md` + issues promoted to "Needs Spec"
+**Input:** The populated Linear hierarchy (`i{N}.` Initiatives → `P{N}.` Projects → Issues)
+**Output:** Current phase derived live from Linear + issues in the current sub-phase promoted to "Needs Spec"
 
-A phase is a batch of issues selected for the current execution cycle. This skill selects which issues to work on next, validates dependencies, and promotes them so the spec pipeline can begin.
+A phase is a batch of issues selected for the current execution cycle. This skill selects which issues to work on next, validates dependencies, and promotes them so the spec pipeline can begin. It **derives and advances phase state via Linear initiative/project status** — there is no `PHASES.md` registry to write.
 
 **Phase composition guidelines:**
 
@@ -403,22 +386,8 @@ A phase is a batch of issues selected for the current execution cycle. This skil
 1. Selected issues move from "On Deck" → "Needs Spec"
 2. If On Deck is now empty, issues from "Future Phases" get promoted to On Deck
 3. A Linear comment is posted on each issue noting its phase assignment
-4. `.vbw-planning/PHASES.md` is created/updated with the phase registry
 
-**PHASES.md tracks phase history:**
-```markdown
-## Current Phase: Phase 1
-- Started: 2026-04-08
-- Theme: Foundation
-- Milestone(s): WP-1 Data Foundation, WP-2 Search
-- Issues:
-  - PROJ-1 — Core data model [Needs Spec]
-  - PROJ-2 — Basic search [Needs Spec]
-  - PROJ-3 — User authentication [Needs Spec]
-
-## Completed Phases
-- (none yet)
-```
+**Phase state is derived from Linear, not a file.** The current phase is the lowest-numbered `i{N}.` Initiative whose status is not `Completed`; the current sub-phase is the lowest-numbered `P{N}.` Project in it whose state is not `completed`/`canceled`. `/phase-plan` advances the phase by transitioning that initiative/project state in Linear — `pk next`/`pk status` then read the new current phase live. (Projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
 
 ---
 
@@ -430,15 +399,14 @@ Before the spec pipeline begins, `/roadmap-review` validates that Stage 0 is com
 
 **Stage 0 checks:**
 
-| Check | File | If Missing |
-|-------|------|-----------|
+| Check | Surface | If Missing |
+|-------|---------|-----------|
 | Concept brief | `concept-brief.md` | Run `/concept` |
 | Project definition | `project-definition.md` | Run `/define` |
 | Strategy docs | `Strategy/` matching config | Run `/strategy-create` |
-| VBW scaffold | `.vbw-planning/` | Run `/vbw:init` |
-| Roadmap | `.vbw-planning/ROADMAP.md` | Run `/roadmap-create` |
+| Roadmap | Linear `i{N}.` Initiatives + `P{N}.` Projects exist | Run `/roadmap-create` |
 | Linear board | Issues exist for requirements | Run `/roadmap-create` |
-| Phase defined | `.vbw-planning/PHASES.md` | Run `/phase-plan` |
+| Phase defined | A non-`Completed` `i{N}.` Initiative with a current `P{N}.` Project | Run `/phase-plan` |
 
 **Ongoing health checks** (run every phase):
 
@@ -531,7 +499,7 @@ After agent review passes, you review the spec in Linear. This is where product 
 **Input:** Approved spec
 **Output:** Worktree + feature branch + Linear → In Progress
 
-`pk next` is phase-aware (v2.1.0+): it reads `## Current Phase:` from `.vbw-planning/PHASES.md`, matches to `linear-map.json`, and groups Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Falls back to global "next Approved" when no phase context.
+`pk next` is phase-aware (v2.1.0+): it **derives the current phase live from the Linear hierarchy** — the lowest-numbered `i{N}.` Initiative that isn't `Completed`, then its lowest-numbered open `P{N}.` Project (by numeric name prefix, `P2` before `P10`; Linear's `sortOrder` is never used) — and groups that phase's Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Legacy `.vbw-planning/PHASES.md` + `linear-map.json` fall back automatically for un-migrated projects. Falls back to global "next Approved" when no phase context.
 
 `pk branch <ID>` is mechanical setup — idempotent against Linear+git ground truth. It creates the worktree, the branch, and transitions Linear:
 
@@ -798,8 +766,9 @@ Phases, milestones, and cycles serve different purposes. Understanding their rel
 
 | Concept | What It Is | Linear Construct | Lifespan |
 |---------|-----------|-----------------|----------|
-| **Milestone (Work Package)** | A feature cluster — groups related issues for gating | Linear Milestone | Permanent within a stage |
-| **Phase** | An execution batch — what we're building right now | `.vbw-planning/PHASES.md` | Temporary (one cycle) |
+| **Phase** | An ordered roadmap phase | Linear **Initiative** named `i{N}. label` | Permanent (ordered by `{N}`) |
+| **Sub-phase** | An execution batch — what we're building right now; holds the issues | Linear **Project** named `P{N}. label` | Ordered within its phase by `{N}` |
+| **Milestone (Work Package)** (optional) | A feature cluster — groups related issues for gating; orthogonal to phases | Linear Milestone | Intra-project grouping |
 | **Cycle** (optional) | A time-boxed sprint — capacity planning | Linear Cycle | Configurable duration |
 
 ### How They Relate
@@ -835,7 +804,7 @@ If you want time-boxed sprints with capacity tracking, map phases to Linear Cycl
 
 ### Phase State Tracking
 
-Phases are tracked in `.vbw-planning/PHASES.md`, not in Linear. Linear tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). PHASES.md tracks which issues belong to which phase and the phase's overall progress.
+Phases are tracked **live in Linear**, not in a committed file. A phase is a `i{N}.` Initiative; its sub-phases are `P{N}.` Projects that hold the issues. The current phase is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}.` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current phase and the phase's overall progress straight from this hierarchy. (Un-migrated projects fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
 
 ---
 
@@ -889,11 +858,13 @@ Linear is the view layer. The executor (`/work`, native by default) plans and bu
 ### Hierarchy
 
 ```
-Initiative = Stage              "What stage does this ship in?"
-  └── Project = Feature Cluster   "What area of the product?"
-       └── Issue = Feature/Task     "What work needs to happen?"
-            └── Milestone = Work Package  "What execution batch?"
+Initiative `i{N}. label` = Phase          "Which ordered roadmap phase?"
+  └── Project `P{N}. label` = Sub-phase      "Which ordered execution batch? (issues live here)"
+       └── Issue = Feature/Task                "What work needs to happen?"
+            └── Milestone = Work Package (opt)   "Optional feature-cluster grouping, orthogonal to phases"
 ```
+
+Ordering is the integer in the `i{N}.`/`P{N}.` name prefix, parsed numerically (`P2` before `P10`). Linear's `sortOrder` is never used. Unprefixed initiatives are strategic themes — `pk next`/`pk status` ignore them.
 
 ### Workflow States
 
@@ -944,7 +915,7 @@ Terminal:
 | Task decomposition | `.vbw-planning/` PLAN files | Linear |
 | Execution status | Both (synced via `/sync-linear`) | — |
 | Code | Git | Linear or VBW |
-| Phase composition | `.vbw-planning/PHASES.md` | Linear |
+| Phase composition | Linear `i{N}.` Initiatives + `P{N}.` Projects (derived live) | a committed file |
 
 **Never create Linear issues for VBW tasks.** Features are the bridge between Linear and VBW.
 
@@ -952,13 +923,12 @@ Terminal:
 
 ## VBW Integration (roadmap scaffold — executor removed v4.0.0)
 
-Native-on-Workflow is the sole executor — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. **VBW is no longer an execution backend**: the pluggable `vbw` executor and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0), and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The removal is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. What VBW still provides is the **roadmap scaffold**: `/vbw:init` creates `.vbw-planning/`, and Pipekit owns the roadmap there. Everything below is about that scaffold, not an executor.
+Native-on-Workflow is the sole executor — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. **VBW is no longer an execution backend**: the pluggable `vbw` executor and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0), and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The removal is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. The roadmap's phase order now lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), not a scaffolded file — `/vbw:init` is dropped from Stage 0 and `/roadmap-create` authors the Linear hierarchy directly. What VBW still provides is the **planning-layer scaffold** that holds per-issue PLAN/SUMMARY/state artifacts under `.vbw-planning/`; everything below is about that scaffold, not an executor and not the phase surface.
 
 | Pipeline Stage | Tool | Used when | Purpose |
 |---------------|------|-----------|---------|
-| Stage 0.5 | `/vbw:init` | Always | Scaffold `.vbw-planning/` |
-| Stage 0.6 | `/roadmap-create` writes to `.vbw-planning/ROADMAP.md` | Always | Populate roadmap |
-| Stage 0.7 (optional) | `/vbw:discuss` | Optional | Discuss first phase before speccing |
+| Stage 0.5 | `/roadmap-create` authors the Linear `i{N}.`/`P{N}.` hierarchy | Always | Populate roadmap in Linear |
+| Stage 0.6 (optional) | `/vbw:discuss` | Optional | Discuss first phase before speccing |
 | Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — **native and vbw both plan here; `/work` has no separate "VBW Lead" step** |
 | Stage 3 (execute) | native-on-Workflow | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify-before-integrate (the `vbw-dev` executor was removed in v4.0.0) |
 | Anytime | `/vbw:status` | If VBW installed | Project progress dashboard |
@@ -1146,7 +1116,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Define | `/define` | Concept → project definition |
 | Strategy Create | `/strategy-create` | Definition → strategy docs |
 | Startup | `/startup` | Full orchestrator (chains everything) |
-| Roadmap Create | `/roadmap-create` | Strategy → ROADMAP.md + Linear |
+| Roadmap Create | `/roadmap-create` | Strategy → Linear `i{N}.`/`P{N}.` hierarchy (authored directly in Linear) |
 | Roadmap Verify | `/roadmap-create --verify` | Check Linear matches roadmap |
 | Phase Plan | `/phase-plan` | Select first/next phase |
 | Phase Status | `/phase-plan --status` | Current phase progress |

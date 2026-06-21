@@ -5,7 +5,9 @@ description: Audit roadmap health — issues, dependency order, spec coverage, d
 
 # Roadmap Review Skill
 
-You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context. Run this before speccing a new phase to ensure the roadmap is coherent and complete.
+**v4.1.0** — Last updated: 2026-06-21 *(validate the Linear-native phase surface — phase order lives in Linear `i{N}.` initiatives / `P{N}.` projects per `method.config.md` § Phase Surface, not in `.vbw-planning/PHASES.md` or `linear-map.json`)*
+
+You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context — including the **§ Phase Surface** contract that defines the Linear-native phase model this skill validates. Run this before speccing a new phase to ensure the roadmap is coherent and complete.
 
 ## Triggers
 
@@ -17,9 +19,9 @@ You are a roadmap health auditor. Your job is to run a comprehensive health chec
 ## Purpose
 
 Validate that:
-1. **Stage 0 outputs exist** — concept, definition, strategy docs, roadmap, phase
-2. Every ROADMAP requirement has corresponding Linear issues
-3. Issues are in the correct stage/project
+1. **Stage 0 outputs exist** — concept, definition, strategy docs, roadmap, Linear phase hierarchy
+2. The **Linear-native phase surface is well-formed** — `i{N}.` initiatives and `P{N}.` projects are correctly named, ordered, and placed (see § Phase Surface in `method.config.md`)
+3. Every requirement is placed in a `P{N}.` project — no orphan issues that should live in a phase
 4. Dependencies and blockers are set correctly
 5. Workflow states are consistent with dependency ordering
 6. Spec coverage is adequate for the next planned phase
@@ -33,15 +35,17 @@ This is the **gate between Stage 0 (Foundation) and Stage 1 (Definition)** in th
 
 Validate that pre-pipeline outputs exist. If any are missing, report which skill to run.
 
-| Check | File | If Missing |
-|-------|------|-----------|
+| Check | Surface | If Missing |
+|-------|---------|-----------|
 | Concept brief | `concept-brief.md` | Run `/concept` |
 | Project definition | `project-definition.md` | Run `/define` |
 | Strategy docs | `Strategy/` matching `method.config.md` manifest | Run `/strategy-create` |
-| VBW scaffold | `.vbw-planning/` directory | Run `/vbw:init` |
-| Roadmap | `.vbw-planning/ROADMAP.md` with content | Run `/roadmap-create` |
-| Linear board | Issues exist for roadmap requirements | Run `/roadmap-create` |
-| Phase defined | `.vbw-planning/PHASES.md` with current phase | Run `/phase-plan` |
+| Roadmap source | `.vbw-planning/ROADMAP.md` with content (optional legacy — strategy docs are the live source) | Run `/roadmap-create` |
+| Phase initiatives | At least one Linear delivery initiative named `i{N}.` exists | Run `/roadmap-create` |
+| Phase projects | The current initiative has at least one `P{N}.` project | Run `/roadmap-create` |
+| Linear board | Issues exist, placed in `P{N}.` projects | Run `/roadmap-create` |
+
+The phase surface lives in **Linear**, not in a file: an initiative named `i{N}. label` is an ordered PHASE; a project named `P{N}. label` is an ordered SUB-PHASE; issues live in projects. `.vbw-planning/PHASES.md` and `linear-map.json` are **retired** — do not assert they exist or are consistent (a stale copy may linger as a `bin/pk` fallback, but no skill writes them).
 
 If any Stage 0 check fails, report it prominently at the top of the health report:
 
@@ -50,7 +54,7 @@ If any Stage 0 check fails, report it prominently at the top of the health repor
 
 Missing:
   - concept-brief.md → run /concept
-  - .vbw-planning/PHASES.md → run /phase-plan
+  - no `i{N}.` delivery initiatives in Linear → run /roadmap-create
 
 Complete Stage 0 before entering the spec pipeline.
 ```
@@ -59,37 +63,65 @@ If all Stage 0 checks pass, continue to the next check.
 
 ### Phase 1 — Gather State
 
-1. Read `.vbw-planning/ROADMAP.md` for requirements by stage
-2. Read `.vbw-planning/linear-map.json` for ID mappings
-3. Read `.vbw-planning/STATE.md` for current progress
-4. Read `.vbw-planning/PHASES.md` for current phase composition
-5. Fetch all initiatives via `mcp__linear-server__linear_getInitiatives`
-6. For each active and next-up initiative, fetch projects via `mcp__linear-server__linear_getProjects`
-7. For each project, fetch issues via `mcp__linear-server__linear_searchIssues`
+Linear is the source of truth for the phase surface. Read it live; the retired `.vbw-planning/PHASES.md` and `linear-map.json` are not consulted.
+
+1. (Optional legacy) Read `.vbw-planning/ROADMAP.md` for the strategy-derived requirements list, if present. Strategy docs are the live requirement source; ROADMAP.md is a legacy mirror.
+2. Fetch all initiatives via `mcp__linear-server__linear_getInitiatives`. Partition them:
+   - **Delivery initiatives** = names matching `^i(\d+)\.` — these are the ordered PHASES.
+   - **Strategic initiatives** = unprefixed names — themes, not phases; carried into Phase 2's strategic-initiative check.
+3. Determine the **current phase** = the lowest `i{N}` delivery initiative whose status is not `Completed`.
+4. For each delivery initiative (current + next-up), fetch projects via `mcp__linear-server__linear_getProjects`. Projects named `^P(\d+)\.` are the ordered SUB-PHASES; `{N}` orders them within the initiative.
+5. Determine the **current sub-phase** = the lowest `P{N}` project (within the current initiative) whose state is not in {`completed`, `canceled`}.
+6. For each project, fetch issues via `mcp__linear-server__linear_searchIssues`.
+
+Throughout: order comes from the integer in the `i{N}.` / `P{N}.` name prefix (numeric), **never** from Linear's `sortOrder` field.
 
 ### Phase 2 — Completeness Check
 
-For each stage in ROADMAP.md:
+Source the requirements list from the strategy docs (the live source) or, if present, the legacy `.vbw-planning/ROADMAP.md`. For each phase (`i{N}.` initiative):
 
-1. Extract the requirements list from the stage section
+1. Extract the requirements that map to this phase
 2. Match each requirement to Linear issues by:
    - Title keyword matching
-   - Project assignment (requirement area → project cluster)
+   - Project assignment (requirement area → `P{N}.` project)
    - Description cross-references
 3. **Gaps:** Requirements with NO matching issue → these need issues created
 4. **Orphans:** Issues with NO matching requirement → flag for review (may be valid additions from brainstorming, or may be misassigned)
 
-Output: Completeness table per stage.
+Output: Completeness table per phase (`i{N}.`).
 
-### Phase 3 — Assignment Validation
+### Phase 3 — Phase Surface Well-Formedness
 
-For each issue in the active and upcoming stages:
+This is the core Linear-native validation. The phase surface (per `method.config.md` § Phase Surface) is: delivery initiative `i{N}. label` = ordered PHASE; project `P{N}. label` = ordered SUB-PHASE within its initiative; issues live in `P{N}.` projects. Validate that this structure is well-formed:
 
-1. Verify it belongs to the correct initiative (stage)
-2. Verify it belongs to a project within that initiative
-3. Verify it has a milestone (work package) if applicable
-4. Verify labels are consistent (Tier label matches Initiative, Domain label matches Project)
-5. Flag misassignments
+**Initiative naming & order:**
+
+1. Every delivery initiative is named `i{N}.` where `{N}` is an integer. Flag any initiative that looks like a phase (has delivery projects/issues under it) but is missing the `i{N}.` prefix — it would be silently treated as a strategic theme and dropped from the phase walk.
+2. The `{N}` values are **unique** across delivery initiatives (no two `i2.` initiatives) and ordered (contiguous `i1, i2, i3…` is ideal; a gap is a warning, a duplicate is an error).
+
+**Project naming & order:**
+
+3. Every project under a delivery initiative is named `P{N}.` where `{N}` is an integer.
+4. The `{N}` values are **unique within their initiative** (no two `P3.` projects in the same `i{N}.`). Duplicates are an error; gaps are a warning.
+
+**Issue placement:**
+
+5. Every requirement/issue that belongs to a phase is placed in a `P{N}.` project. Flag **orphan issues** — issues attached directly to a delivery initiative with no project, or issues in an unprefixed project under a delivery initiative — that should live in a `P{N}.` phase project.
+
+**Lifecycle sanity:**
+
+6. The **earliest non-`Completed` delivery initiative** (the current phase, by lowest `{N}`) has status `Active`. Flag if it is still `Planned`/`Backlog` (work has nowhere to land) or if multiple delivery initiatives are simultaneously `Active`.
+7. Within that current initiative, its **earliest live project** (lowest `P{N}` whose state is not `completed`/`canceled`) is `started`. Flag if the current sub-phase is still `planned`/`backlog`.
+
+**Strategic-initiative intent:**
+
+8. For each **unprefixed** (strategic) initiative, confirm it is *intentionally* a theme, not an accidentally-unprefixed phase. Heuristic: a strategic initiative with active delivery projects/issues under it is suspicious — surface it and ask the user to confirm it should be ignored by the phase walk, or rename it `i{N}.`.
+
+**Within-issue assignment (secondary):**
+
+9. For issues in the current and upcoming phases, verify labels are consistent (Tier label matches phase intent, Domain label matches the `P{N}.` project cluster) and flag misassignments.
+
+Output: a Phase Surface section listing any naming/order/placement/lifecycle violations, each with the exact rename or re-parent to apply.
 
 ### Phase 4 — Dependency Validation
 
@@ -114,7 +146,7 @@ For each issue that has blockers:
 
 ### Phase 6 — Spec Coverage
 
-For the next planned phase (issues in On Deck/Needs Spec/Specced for the active stage):
+For the next planned phase (issues in On Deck/Needs Spec/Specced in the current `i{N}.` initiative's live `P{N}.` projects):
 
 1. List all issues that would enter the pipeline
 2. For each issue, check spec status:
@@ -147,23 +179,39 @@ Present a summary dashboard:
 ```markdown
 ## Roadmap Health — YYYY-MM-DD
 
+### Phase Surface (Linear-native)
+| Check | Result |
+|-------|--------|
+| Delivery initiatives named `i{N}.` | X/Y |
+| Initiative `{N}` unique & ordered | OK / gaps / DUPLICATE |
+| Projects named `P{N}.` | X/Y |
+| Project `{N}` unique within initiative | OK / DUPLICATE |
+| Orphan issues (not in a `P{N}.` project) | X |
+| Current initiative `i{N}.` is `Active` | OK / FLAG |
+| Current sub-phase `P{N}.` is `started` | OK / FLAG |
+| Unprefixed initiatives confirmed strategic | X (Y need confirmation) |
+
+**Violations:**
+- Initiative "Onboarding" has delivery issues but no `i{N}.` prefix → rename to `i4. Onboarding` or confirm it is a strategic theme
+- PROJ-176: attached to initiative `i2.` with no project → re-parent into a `P{N}.` project
+
 ### Completeness
-| Stage | Requirements | Issues | Gaps | Orphans |
+| Phase | Requirements | Issues | Gaps | Orphans |
 |-------|-------------|--------|------|---------|
-| 01    | 3           | 3      | 0    | 0       |
-| 02    | 18          | 81     | 2    | 5       |
-| 03    | 22          | 0      | 22   | 0       |
+| i1    | 3           | 3      | 0    | 0       |
+| i2    | 18          | 81     | 2    | 5       |
+| i3    | 22          | 0      | 22   | 0       |
 | ...   |             |        |      |         |
 
 **Gaps (requirements without issues):**
-- Stage 02: "Persistent AI Memory (mem0)" — no matching issue
-- Stage 02: "Slash Command Palette" — no matching issue
+- i2: "Persistent AI Memory (mem0)" — no matching issue
+- i2: "Slash Command Palette" — no matching issue
 
 **Orphans (issues without matching requirements):**
-- PROJ-176: "Entities blocked from 2 budgets with same name" — bug, not in ROADMAP
+- PROJ-176: "Entities blocked from 2 budgets with same name" — bug, not in roadmap
 
 ### Assignment
-- X issues verified in correct stage/project
+- X issues verified in correct `i{N}.` → `P{N}.` placement
 - Y misassignments found (list with corrections)
 
 ### Dependencies
@@ -239,19 +287,30 @@ Use `mcp__linear-server__linear_searchIssues` filtered by the `Parked` label. Fo
 | ... | | | |
 - **Recommendation:** Run `/strategy-sync` if any doc has >3 unsynced features
 
+### End-to-End Check — `pk status` Roadmap walk
+
+Run `pk status` and confirm its **Roadmap** section renders the `i{N}.` → current `P{N}.` walk correctly (current phase initiative, current sub-phase project, and the next issues underneath). This is the integration test for the whole phase surface: if `pk status` resolves the current phase to a different `i{N}.`/`P{N}.` than this audit computed, the naming/order/lifecycle is inconsistent somewhere above — reconcile before proceeding.
+
+| Source | Current phase | Current sub-phase |
+|--------|---------------|-------------------|
+| This audit (lowest non-Completed `i{N}.` / lowest live `P{N}.`) | i2 | P3 |
+| `pk status` Roadmap section | i2 | P3 |
+
+A mismatch is a hard flag — fix the surface, don't proceed to spec.
+
 ### Action Items (Priority Order)
 1. [Most critical action]
 2. [Next action]
 ...
 ```
 
-Ask the user: _"Want me to fix any of these issues now? I can create missing issues, set dependency links, or flag items for spec generation."_
+Ask the user: _"Want me to fix any of these issues now? I can create missing issues, rename/re-parent phase initiatives and projects, set dependency links, or flag items for spec generation."_
 
 ## Cadence
 
 Run at these moments:
 - **Before speccing a new phase** — ensures the plan is sound before you invest in specs
-- **At the start of a new stage** — validates stage setup is complete
+- **At the start of a new phase (`i{N}.` / `P{N}.`)** — validates the Linear phase surface is well-formed before work lands
 - **Monthly** — routine health check
 - **After major scope changes** — re-validate after adding/removing features
 

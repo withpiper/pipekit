@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.0.0** — Last updated: 2026-06-20 09:50  *(Final cut — VBW executor removed; native-on-Workflow is the sole executor (planning layer untouched). Folds in the rc train: Linear MCP camelCase migration (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1 artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate (rc5).)*
+**v4.1.0** — Last updated: 2026-06-21 10:30  *(Linear-native phase surface — `pk next`/`pk status` derive the current phase from Linear Initiatives (`i{N}.`) → Projects (`P{N}.`), ordered by name-prefix; `PHASES.md`/`linear-map.json` retired to read-only fallback. Carries v4.0.0: VBW executor removed (native-on-Workflow sole executor); Linear MCP camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 artifact rule.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.0.0                 (or latest tag)
+1. ./scripts/sync-method.sh v4.1.0                 (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -39,7 +39,7 @@ Run from the parent repo. No worktree needed — specs are Linear-side artifacts
   │ [S1] Find next spec target                               │
   │     pk next                                              │
   │     • look for the "Needs Spec" group in the output      │
-  │     • phase-aware (reads PHASES.md + linear-map.json)    │
+  │     • phase-aware (Linear i{N}./P{N}. surface)           │
   │                                                          │
   │     For a brand-new idea:                                │
   │     /brainstorm <idea>                                   │
@@ -109,17 +109,17 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
        │
        ▼
   ┌──────────────────────────────────────────────────────────┐
-  │ [1] Find next issue   (phase-aware as of v2.1.0)         │
+  │ [1] Find next issue   (phase-aware, Linear-native)       │
   │     pk next                                              │
-  │     • reads "## Current Phase:" from PHASES.md           │
-  │     • matches to linear-map.json project entry           │
+  │     • derives current phase from Linear initiatives      │
+  │       (i{N}. initiative → P{N}. project, by prefix)      │
   │     • groups Linear results by status:                   │
   │         In Progress  (with /work hint)                   │
   │         Approved     (with pk branch hint)               │
   │         Needs Spec   (with /light-spec hint)             │
   │     • surfaces "Other phases: N Approved outside" footer │
   │     • falls back to global "next Approved" when no       │
-  │       PHASES.md or linear-map.json present               │
+  │       i{N}. initiatives present (PHASES.md fallback)     │
   │     • optional: pk status   (full unscoped board view)   │
   └──────────────────────────────────────────────────────────┘
        │
@@ -375,7 +375,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 
 | # | Step | Command (global) | Command (repo-local) | Where | Auth |
 |---|---|---|---|---|---|
-| 1 | Find next (phase-aware) | `pk next` | `./bin/pk next` | parent, dev | reads PHASES.md + Linear |
+| 1 | Find next (phase-aware) | `pk next` | `./bin/pk next` | parent, dev | derives phase from Linear (`i{N}.`/`P{N}.`) |
 | 1 | Quick status | `pk status` | `./bin/pk status` | parent | reads Linear (full board, unscoped) |
 | 2 | Branch | `pk branch <ID>` | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
 | 3 | Plan + execute | `/work <ID>` | — (skill) | worktree | reads Linear |

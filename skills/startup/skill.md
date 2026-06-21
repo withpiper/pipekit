@@ -46,12 +46,11 @@ The first thing `/startup` does is create (or read) a **`{folder-name}-startup.m
 | 5 | Strategy Docs | ⬜ Not started | — |
 | 5.5 | Design Direction | ⬜ Not started | — |
 | 6 | Method Sync | ⬜ Not started | — |
-| 7 | VBW Init | ⬜ Not started | — |
-| 8 | Roadmap | ⬜ Not started | — |
-| 9 | Project Skills | ⬜ Not started | — |
-| 10 | CLAUDE.md & Rules | ⬜ Not started | — |
-| 11 | Validate | ⬜ Not started | — |
-| 12 | Phase Plan | ⬜ Not started | — |
+| 7 | Roadmap | ⬜ Not started | — |
+| 8 | Project Skills | ⬜ Not started | — |
+| 9 | CLAUDE.md & Rules | ⬜ Not started | — |
+| 10 | Validate | ⬜ Not started | — |
+| 11 | Phase Plan | ⬜ Not started | — |
 
 ## Project Summary
 
@@ -121,9 +120,8 @@ For each artifact in the foundation contract (see `method.md` § Foundation Cont
 | Project definition | `project-definition.md` | Run `/define` to retrofit |
 | Strategy docs | `Strategy/*.md` (matching `method.config.md` manifest) | Run `/strategy-create` to retrofit, or wait for `/strategy-from-code` in v1.4.0 |
 | Project config | `method.config.md` | Run `/startup --mode=brownfield` (it populates config from existing project state) |
-| VBW scaffold | `.vbw-planning/` | Run `/vbw:init` |
-| Linear-VBW map | `.vbw-planning/linear-map.json` | Run `/roadmap-create` (creates the map) |
-| Phase plan | `.vbw-planning/PHASES.md` | Run `/phase-plan` |
+| Phase hierarchy | Linear `i{N}.` initiatives with `P{N}.` projects | Run `/roadmap-create` (authors the `i{N}.`/`P{N}.` hierarchy directly in Linear) |
+| Phase plan | Current phase derivable live from Linear (`pk next` / `pk status`) | Run `/phase-plan` |
 
 For the Strategy docs check, read `method.config.md` § Strategy Docs to get the manifest, then verify each listed file exists. If `method.config.md` itself is missing, treat the manifest check as deferred — flag the config gap as the blocker.
 
@@ -134,14 +132,14 @@ For the Strategy docs check, read `method.config.md` § Strategy Docs to get the
 ```
 Foundation OK.
 
-  Current phase: {phase name from PHASES.md}
-  Issues in flight: {N from PHASES.md current phase}
+  Current phase: {phase name derived live from Linear}
+  Issues in flight: {N in the current phase's projects}
 
 ➜ Next: pk next  (phase-aware: groups Linear by status with per-group hints)
    or:   /light-spec PROJ-XXX  (begin speccing an issue from the current phase)
 ```
 
-Read `.vbw-planning/PHASES.md` to extract the current phase name and issue list. If multiple issues are in flight (status In Progress / Building), recommend `pk status` instead so the user sees the full board.
+Derive the current phase live from Linear (`i{N}.` initiative → `P{N}.` project, ordered by the integer in each name prefix) — e.g. via `pk next` — to extract the current phase name and issue list. If multiple issues are in flight (status In Progress / Building), recommend `pk status` instead so the user sees the full board.
 
 **If anything is missing:**
 
@@ -197,9 +195,9 @@ When `--mode=` is passed explicitly, skip auto-detection entirely. Do **not** co
 
 | Mode | What runs |
 |---|---|
-| **greenfield** | The existing 12-step flow in [Execution](#execution) below. No behavioral change from prior versions. |
-| **brownfield** | Skip Step 1 (Concept) and Step 2 (Define). Prompt for project metadata (name, one-liner, audience) and write a minimal `project-definition.md` from the answers — enough for `/strategy-create` to consume. Route to Step 5 (Strategy Docs) via `/strategy-create` with this banner: _"The generated strategy docs reflect the project definition you just provided, not the existing code. You'll likely want to edit them against reality before the first `/light-spec`. Auto-audit via `/strategy-from-code` is planned for v1.4.0."_ Then continue with Step 7 (VBW Init) → Step 8 (Roadmap) → Step 9 → 10 → 11 → 12 (Phase Plan). Skip Steps 3, 4 (Tech Stack, Infrastructure) since the codebase already has these — instead, populate the relevant `method.config.md` sections (Stack, Environments, Pre-Deploy Gate) by inspecting the existing project (`package.json`, deployment config, CI files). |
-| **inherited** | Run the [Foundation Check](#foundation-check-inherited-mode-subroutine) subroutine above. Do not run any of the 12 steps. Exit with the next-step recommendation from the check's output. |
+| **greenfield** | The full step flow in [Execution](#execution) below. No behavioral change from prior versions. |
+| **brownfield** | Skip Step 1 (Concept) and Step 2 (Define). Prompt for project metadata (name, one-liner, audience) and write a minimal `project-definition.md` from the answers — enough for `/strategy-create` to consume. Route to Step 5 (Strategy Docs) via `/strategy-create` with this banner: _"The generated strategy docs reflect the project definition you just provided, not the existing code. You'll likely want to edit them against reality before the first `/light-spec`. Auto-audit via `/strategy-from-code` is planned for v1.4.0."_ Then continue with Step 7 (Roadmap) → Step 8 → 9 → 10 → 11 (Phase Plan). Skip Steps 3, 4 (Tech Stack, Infrastructure) since the codebase already has these — instead, populate the relevant `method.config.md` sections (Stack, Environments, Pre-Deploy Gate) by inspecting the existing project (`package.json`, deployment config, CI files). |
+| **inherited** | Run the [Foundation Check](#foundation-check-inherited-mode-subroutine) subroutine above. Do not run any of the 11 steps. Exit with the next-step recommendation from the check's output. |
 
 ### Tracker handling
 
@@ -216,6 +214,8 @@ For **inherited** mode, the tracker is read-only — the foundation check produc
 ## Execution
 
 The steps below describe the **greenfield** flow in full. Brownfield skips Steps 1-2 (and Steps 3-4, since the codebase already exists) and adapts the others as noted in [Mode Routing](#mode-routing) above. Inherited mode does not execute these steps — it runs the Foundation Check and exits.
+
+Stage 0 chain (greenfield): `/concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan`. `/vbw:init` is **not** part of this chain — the Linear `i{N}.`/`P{N}.` hierarchy that `/roadmap-create` authors is the phase surface; there is no `.vbw-planning/` scaffold step.
 
 Each step checks if its output already exists and offers to skip — making `/startup` resumable. If you stop after Step 4, re-running picks up at Step 5.
 
@@ -559,40 +559,25 @@ Fill in `method.config.md` with any remaining project-specific values.
 
 **Output:** Method synced, config complete
 
-### Step 7 — VBW Init
+### Step 7 — Roadmap
 
-**Check:** Does `.vbw-planning/` exist?
-- If yes: _"VBW already initialized. Skip or reinit?"_
-- If no: Run `/vbw:init`
+**Check:** Does the Linear board already have an `i{N}.`/`P{N}.` phase hierarchy?
 
-**What VBW creates:** `/vbw:init` scaffolds `.vbw-planning/` with several files including `ROADMAP.md` — a skeleton roadmap derived from codebase analysis (usually 4 phases from `.vbw-planning/codebase/` mapping docs). This is a first-pass outline, **not the final roadmap**. Step 8 will merge strategy-derived requirements into it.
-
-**After `/vbw:init` finishes, VBW prints its own "Next steps" message that suggests two options:** `/roadmap-create` (Pipekit path) **or** `/vbw:vibe` (VBW-only path). **Always choose `/roadmap-create`.** Ignore the `/vbw:vibe` suggestion — it bypasses Linear, which defeats Pipekit's purpose. Tell the user explicitly:
-
-_"VBW suggests either `/roadmap-create` or `/vbw:vibe`. In Pipekit you always use `/roadmap-create` — `/vbw:vibe` skips Linear entirely, which breaks the pipeline."_
-
-**Output:** `.vbw-planning/` scaffolded (includes a skeleton ROADMAP.md from VBW that Step 8 will enrich)
-
-### Step 8 — Roadmap
-
-**Check:** Does `.vbw-planning/ROADMAP.md` have content?
-
-Three possible states:
-1. **VBW-generated skeleton only** (most common after Step 7) → Run `/roadmap-create`. It will **merge** strategy-derived requirements into VBW's existing phase structure, preserving VBW's phases and adding Requirements subsections. This is the expected flow for new projects.
+Two possible states:
+1. **No phase hierarchy yet** (most common — fresh project) → Run `/roadmap-create`. It authors the Linear `i{N}.` initiative / `P{N}.` project hierarchy directly from the strategy docs and seeds the issues underneath. This is the expected flow for new projects.
 2. **Already populated by `/roadmap-create`** (re-running `/startup`) → Ask: _"Roadmap appears fully populated. Skip, or redo?"_
-3. **Doesn't exist** (skipped Step 7 somehow) → Run `/vbw:init` first, then `/roadmap-create`.
 
-To tell skeleton vs. populated: check for Linear issue IDs or strategy doc references in the Requirements sections. VBW's skeleton has phases but no Linear-traced requirements.
+To tell empty vs. populated: check whether the Linear board has any `i{N}.` initiatives with `P{N}.` projects and Linear-traced issues underneath. An optional legacy `.vbw-planning/ROADMAP.md` may exist from a prior version, but the Linear hierarchy is the authoritative phase surface.
 
-**Critical reminder:** Do NOT run `/vbw:vibe` as an alternative to `/roadmap-create`. VBW's own output after `/vbw:init` suggests it as a path — but in Pipekit it's a dead end. The Pipekit flow is:
+The Pipekit flow is:
 
 ```
-/vbw:init (skeleton) → /roadmap-create (merges + populates Linear) → /phase-plan → /light-spec → pk branch → /work (native-on-Workflow)
+/roadmap-create (authors the Linear i{N}./P{N}. hierarchy + seeds issues) → /phase-plan → /light-spec → pk branch → /work (native-on-Workflow)
 ```
 
-**Output:** ROADMAP.md populated (merged with VBW's phase structure), Linear board seeded with initiatives, projects, milestones, and issues
+**Output:** Linear board seeded with the `i{N}.` initiative / `P{N}.` project hierarchy and the issues underneath. The phase order lives in Linear (the integer prefix in each `i{N}.`/`P{N}.` name) — `pk next` / `pk status` derive the current phase live from it.
 
-### Step 9 — Project-Specific Skills
+### Step 8 — Project-Specific Skills
 
 Based on the tech stack chosen in Step 3, identify which project-specific skills are needed (see `STARTUP.md` Step 4 for the mapping).
 
@@ -608,9 +593,9 @@ Create each skill with the user's input. Test after creation.
 
 **Output:** Project-specific skills created and working
 
-### Step 10 — CLAUDE.md & Rules
+### Step 9 — CLAUDE.md & Rules
 
-#### Step 10a — Scaffold from templates
+#### Step 9a — Scaffold from templates
 
 `sync-method.sh` should have already copied Pipekit's canonical rule templates into `.claude/rules/`. Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames:
 
@@ -635,9 +620,9 @@ Then fill in:
 - **Environments & Branch Strategy** — from `method.config.md` → `## Git Architecture`
 - **Working Style** step 3 — project-specific reference reading (e.g., "Read POC in `src_poc/`") or delete the bullet if not applicable
 - **Decision-Making Protocol** — start with the two baseline rules; add project-specific rules here as feedback patterns emerge
-- **Routing Pointers table** — keep the three canonical rules rows; add rows for project-specific rules as they're created in Step 10b
+- **Routing Pointers table** — keep the three canonical rules rows; add rows for project-specific rules as they're created in Step 9b
 
-#### Step 10b — Project-specific rules
+#### Step 9b — Project-specific rules
 
 Based on the stack and domain, create project-specific `.claude/rules/*.md` files as needed. These sit alongside the canonical files and cover what the portable rules cannot:
 
@@ -654,13 +639,13 @@ Keep each file under ~100 lines. Add a row to CLAUDE.md's Routing Pointers table
 
 **Do not duplicate what's in the canonical files.** If the canonical `security.md` already covers RLS baseline, extend it with project-specific RLS patterns in a dedicated `security-rls.md` or append to the canonical (the sync script won't clobber additions; it only overwrites lines it knows about — verify this behavior per your sync tooling).
 
-#### Step 10c — Final review
+#### Step 9c — Final review
 
 Read `method.config.md` back to the user, confirm all fields populated, flag TBD values.
 
 **Output:** CLAUDE.md filled in from template; `.claude/rules/` contains the three canonical files plus any project-specific additions; Routing Pointers table reflects all rules.
 
-### Step 11 — Validate
+### Step 10 — Validate
 
 Before selecting an execution phase, validate the full setup. Catching gaps here prevents starting execution on a broken foundation.
 
@@ -668,23 +653,23 @@ Run `/roadmap-review` to validate:
 - Concept brief exists
 - Project definition exists
 - Strategy docs match config
-- ROADMAP.md populated
+- Linear `i{N}.`/`P{N}.` phase hierarchy populated
 - Linear board seeded (initiatives, projects, milestones, issues)
 - Dependencies correctly set
 - All method.config.md fields populated (no TBDs)
 - Linear MCP connected and workflow states configured
 
-If any check fails, diagnose and fix before proceeding to Step 12. Do not move issues into "Needs Spec" (Step 12's job) until validation passes.
+If any check fails, diagnose and fix before proceeding to Step 11. Do not move issues into "Needs Spec" (Step 11's job) until validation passes.
 
 **Output:** All validation checks pass — pipeline is ready for execution
 
-### Step 12 — Phase Plan
+### Step 11 — Phase Plan
 
-**Check:** Does `.vbw-planning/PHASES.md` exist?
+**Check:** Is a current phase already derivable live from Linear (`pk next` / `pk status` resolve a phase)?
 - If yes: _"Phase already planned. Skip or replan?"_
 - If no: Run `/phase-plan`
 
-`/phase-plan` selects 3-8 issues for the first execution phase and promotes them from "On Deck" → "Needs Spec" in Linear. This is the point where execution begins — the first issues become actionable.
+`/phase-plan` selects 3-8 issues for the first execution phase and promotes them from "On Deck" → "Needs Spec" in Linear. It derives/advances phase state via Linear (`i{N}.` initiative → `P{N}.` project). This is the point where execution begins — the first issues become actionable.
 
 **Output:** First phase defined, issues in "Needs Spec", ready for `/light-spec`
 
