@@ -312,6 +312,54 @@ if [ -d "$TEMP/agents" ]; then
   done
 fi
 
+# --- Sync canonical .claude/hooks/ + register them ---
+# Pipekit owns the advisory commit-format hook (re-homed from the retired VBW
+# plugin so the {type}({scope}): {desc} nudge survives plugin removal). Ship the
+# script, then idempotently register it in the consumer's committed
+# .claude/settings.json. Project-authored hooks + other settings.json content are
+# preserved — we append our block only if validate-commit.sh isn't already wired.
+if [ -d "$TEMP/templates/hooks" ]; then
+  echo ""
+  echo "Canonical hooks (.claude/hooks/):"
+  mkdir -p "$PROJECT_ROOT/.claude/hooks"
+  for hook_src in "$TEMP/templates/hooks"/*.sh; do
+    [ -f "$hook_src" ] || continue
+    hname=$(basename "$hook_src")
+    sync_file "$hook_src" "$PROJECT_ROOT/.claude/hooks/$hname" ".claude/hooks/$hname"
+    chmod +x "$PROJECT_ROOT/.claude/hooks/$hname" 2>/dev/null || true
+  done
+
+  # Register validate-commit.sh in .claude/settings.json (idempotent).
+  SETTINGS="$PROJECT_ROOT/.claude/settings.json"
+  HOOK_CMD='"$CLAUDE_PROJECT_DIR"/.claude/hooks/validate-commit.sh'
+  if [ -f "$TEMP/templates/hooks/validate-commit.sh" ]; then
+    if ! command -v jq >/dev/null 2>&1; then
+      echo "  NOTE jq not found — register the commit-format hook in .claude/settings.json manually (snippet in templates/hooks/validate-commit.sh header)."
+    elif [ -f "$SETTINGS" ] && ! jq empty "$SETTINGS" >/dev/null 2>&1; then
+      echo "  NOTE .claude/settings.json is not valid JSON — register the commit-format hook manually."
+    elif [ -f "$SETTINGS" ] && jq -e '[.. | .command? // empty] | any(type=="string" and test("validate-commit\\.sh"))' "$SETTINGS" >/dev/null 2>&1; then
+      echo "  OK validate-commit.sh already registered in .claude/settings.json"
+    elif $DRY_RUN; then
+      echo "  WOULD REGISTER validate-commit.sh in .claude/settings.json"
+      CHANGES=$((CHANGES + 1))
+    else
+      [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+      tmp=$(mktemp)
+      if jq --arg cmd "$HOOK_CMD" '
+            (.hooks //= {})
+            | (.hooks.PostToolUse //= [])
+            | .hooks.PostToolUse += [{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10}]}]
+          ' "$SETTINGS" > "$tmp" 2>/dev/null && mv "$tmp" "$SETTINGS"; then
+        echo "  REGISTERED validate-commit.sh in .claude/settings.json"
+        CHANGES=$((CHANGES + 1))
+      else
+        rm -f "$tmp"
+        echo "  NOTE could not auto-register validate-commit.sh — add it to .claude/settings.json manually."
+      fi
+    fi
+  fi
+fi
+
 # --- Sync portable skills ---
 echo ""
 echo "Portable skills:"
