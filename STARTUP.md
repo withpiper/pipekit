@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v4.1.0** — Last updated: 2026-06-21  *(Linear-native phase surface; `/vbw:init` dropped from Stage 0. The roadmap's phase order lives in Linear — `i{N}.` initiatives are PHASES, `P{N}.` projects are SUB-PHASES, issues live in projects, ordering is by the integer name prefix. Carries v4.0.0's native-only Backend row — the `vbw` executor was removed — and the v2.7.0 Step 3 `method.config.md` key reference: `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
+**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin decoupled — the VBW plugin is no longer required to bootstrap a Pipekit project; the roadmap is authored directly into Linear at `/roadmap-create`, with no `/vbw:init` scaffold. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface; `/vbw:init` is not part of Stage 0. The roadmap's phase order lives in Linear — `i{N}.` initiatives are PHASES, `P{N}.` projects are SUB-PHASES, issues live in projects, ordering is by the integer name prefix. Carries v4.0.0's native-only Backend row — the `vbw` executor was removed — and the v2.7.0 Step 3 `method.config.md` key reference: `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -241,7 +241,7 @@ For each one you build: trigger name, one-sentence description, and the project-
 
 ## Step 5: Configure CLAUDE.md
 
-Your `CLAUDE.md` is the single document VBW agents and Claude Code sessions read to understand your project. Build it up as the project grows.
+Your `CLAUDE.md` is the single document the executor (native-on-Workflow) and Claude Code sessions read to understand your project. Build it up as the project grows.
 
 ### Minimum viable CLAUDE.md
 

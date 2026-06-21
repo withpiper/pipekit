@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.1.0** — Last updated: 2026-06-21  *(Linear-native phase surface — Initiative `i{N}.` = phase, Project `P{N}.` = sub-phase, ordered by name prefix. The roadmap's phase order now lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. `.vbw-planning/PHASES.md` and `linear-map.json` are retired (bin/pk fallback-only). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin no longer required — the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement; the VBW↔Linear mapping below stays accurate for projects that still run it. Carries v4.1.0's Linear-native phase surface — Initiative `i{N}.` = phase, Project `P{N}.` = sub-phase, ordered by name prefix. The roadmap's phase order now lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. `.vbw-planning/PHASES.md` and `linear-map.json` are retired (bin/pk fallback-only). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -89,7 +89,7 @@ The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` 
 | Task | -- | VBW planning-layer internal. `.vbw-planning/` |
 | Issue | Issue | Issue IDs shared across both systems |
 
-**The Linear hierarchy is the source of truth for phase order.** The VBW planning layer still owns task decomposition (`PLAN.md`) and execution state under `.vbw-planning/`; `.vbw-planning/ROADMAP.md` is retained as optional legacy. The `/sync-linear` skill keeps planning state and Linear coherent.
+**The Linear hierarchy is the source of truth for phase order.** The VBW plugin is no longer required (v4.2.0). For projects that still run the legacy planning layer, it owns task decomposition (`PLAN.md`) and execution state under `.vbw-planning/`; `.vbw-planning/ROADMAP.md` is retained as optional legacy. The `/sync-linear` skill keeps that planning state and Linear coherent. The layer is slated for separate, later retirement.
 
 ### What Lives Where
 
@@ -132,9 +132,9 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | **On Deck** | backlog | Scanning | Pre-pipeline | Next phase's batch. Start getting eyes on these, light-spec proactively if you get ahead. |
 | **Needs Spec** | backlog | You + Claude | Step 1 ready | Current phase. Needs `/light-spec` applied. |
 | **Specced** | unstarted | You | Steps 2-3 | Light spec applied, agent reviewed. Awaiting your sign-off. **Config-driven (v2.7.0+):** this is the default `Spec ready state`, but the state `/light-spec` publishes to and `pk spec-cycle` requires is whatever `method.config.md` § `Spec ready state` names. Two-state boards with no `Specced` state set it to `Needs Spec`. |
-| **Approved** | unstarted | VBW (queued) | Post Step 3 | Human approved. Ready for VBW when a phase batch is complete. |
-| **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not VBW-managed. |
-| **Building** | started | VBW + `/work` | Steps 4-7 | VBW planning; native `/work` execution + `/verify` QA. Current-phase execution queue only. |
+| **Approved** | unstarted | `/work` (queued) | Post Step 3 | Human approved. Ready for execution when a phase batch is complete. |
+| **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not phase-managed. |
+| **Building** | started | `/work` | Steps 4-7 | Plan + native `/work` execution + `/verify` QA. Current-phase execution queue only. |
 | **UAT** | started | You | Step 8a | PR open on preview branch (pre-merge — v2.6.0+ opens as Draft; `pk ready` flips to Ready to fire outside reviewers). Code review + preview-URL acceptance testing happens here. **v2.4.3+**: `pk promote` (Phase 1) refuses if any bundled issue is still in UAT (PR not merged) — pass `--confirmed` to bypass after env-UAT signoff. |
 | **In `<FirstEnv>`** (e.g. `In Dev`) | started | You | Step 8b | Code merged to first deploy env. Interactive UAT in progress, or signed-off-awaiting-promote. Set by `pk done` after merge confirmation. |
 | **In `<Env>`** (e.g. `In Beta`) | started | You | Step 8c+ | Code promoted to a non-final env. One state per non-final env in `Ship environments`. **v2.6.0+**: set by `pk promote <env> --finish` (Phase 2, after the promote PR merges) — replaces the pre-v2.6.0 optimistic-at-PR-open transition. |
@@ -153,7 +153,7 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | Needs Spec | Specced | `/light-spec` applied + agent reviewed | Claude + You |
 | Specced | Needs Spec | Agent or human sends back for revision | You |
 | Specced | Approved | You approve scope, decisions, priority | You |
-| Approved | Building | Phase batch is ready for execution | You (or VBW pickup) |
+| Approved | Building | Phase batch is ready for execution | You (or `/work` pickup) |
 | Building | UAT | `/verify` QA passes + `pk ship` | `/verify` QA + you |
 | UAT | In `<FirstEnv>` | `pk done` after PR merge (or `pk done --merge`) | You + `pk done` |
 | UAT | Done | `pk done` on 1-tier project (first env IS final env) | You + `pk done` |
@@ -168,15 +168,15 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 
 | Lane | Path | Managed By |
 |---|---|---|
-| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | VBW |
-| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | VBW (enters the phase) |
+| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | Phase pipeline (`/work`) |
+| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | Phase pipeline (enters the phase) |
 | **Hotfix** | Triage → In Progress → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | You (manual fix) |
 | **Quick fix** | Triage → In Progress → Done | You (no UAT needed) |
 
 `[In <Env> →]*` is one state per non-final env in `Ship environments`. 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. 2-tier (`dev,main`): `In Dev → Done`. 1-tier (`main`): `UAT → Done` (no intermediate `In <Env>`).
 
-**Building** = phase-managed (VBW plans the batch; `/work` executes). Phase-batched, trigger rules apply. Never put ad-hoc work here.
-**In Progress** = You're doing it by hand, outside the phase. VBW ignores these.
+**Building** = phase-managed (`/work` plans and executes the batch). Phase-batched, trigger rules apply. Never put ad-hoc work here.
+**In Progress** = You're doing it by hand, outside the phase. The phase pipeline ignores these.
 
 ### Phase Management
 
@@ -204,11 +204,11 @@ When the current phase ships, promote On Deck → Needs Spec and refill On Deck 
 - **Milestones = Work Packages (optional).** When used, a milestone is an intra-project batch; an issue belongs to at most one. Orthogonal to the phase surface — skip it entirely when not useful.
 - **Tier labels are redundant with phase initiatives** — intentional. Labels persist after phases complete.
 - **Urgent priority is reserved** for hotfixes and production emergencies only.
-- **VBW trigger:** VBW planning triggers when a batch of related features in a Work Package reach "Building" — not when individual features are approved.
+- **Execution trigger:** phase execution triggers when a batch of related features in a Work Package reach "Building" — not when individual features are approved.
 
 ### Ticket ID Convention
 
-Issue IDs (e.g., `{PREFIX}-XXX`) are carried through both VBW config and commit messages:
+Issue IDs (e.g., `{PREFIX}-XXX`) are carried through the work plan and commit messages:
 
 ```
 feat(grid): add column definitions ({PREFIX}-42)

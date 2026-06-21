@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.7.0** — Last updated: 2026-06-05  *(v2.7.0 final: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
+**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin no longer required — execution framing points at the native-on-Workflow executor, not VBW agents; the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement. Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
 
 ---
 
@@ -12,11 +12,11 @@ This method uses three layers to enforce development conventions:
 
 | Layer | Purpose | Who it serves |
 |---|---|---|
-| **CLAUDE.md** | Documents conventions so VBW agents follow them automatically | VBW dev agents during plan execution |
+| **CLAUDE.md** | Documents conventions so the executor follows them automatically | The native-on-Workflow executor during plan execution |
 | **CI / Hooks** | Hard enforcement — blocks merges that violate conventions | Everyone (agents and humans) |
 | **Skills** | Interactive shortcuts for hands-on sessions | You, when working with Claude directly |
 
-Skills are convenience wrappers. They automate the same conventions documented in CLAUDE.md. VBW agents don't call skills — they read CLAUDE.md and write code directly.
+Skills are convenience wrappers. They automate the same conventions documented in CLAUDE.md. The executor doesn't call skills — it reads CLAUDE.md and writes code directly.
 
 ---
 
@@ -153,7 +153,7 @@ ${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/
     └── <issue-id>.json            # per-skill transition state
 ```
 
-**Why out-of-repo:** earlier Pipekit placed these files at `<repo>/.pipekit/`, which sits inside the repo and got blocked by VBW's file-guard hook during active-plan scope. Moving the directory outside the repo lets VBW's file-guard ignore it entirely, so writes succeed unconditionally.
+**Why out-of-repo:** earlier Pipekit placed these files at `<repo>/.pipekit/`, which sits inside the repo and got blocked by the legacy VBW file-guard hook during active-plan scope. Moving the directory outside the repo lets that file-guard ignore it entirely, so writes succeed unconditionally — and the out-of-repo location no longer depends on the VBW plugin being installed at all.
 
 **Resolving the path:** every skill that reads/writes Pipekit state uses the helper:
 
@@ -271,7 +271,7 @@ Disable any time by removing the entry from `settings.local.json`. To customize 
 
 ## Canonical-file protection (agent-protected paths)
 
-Some files in a Pipekit project are **canonical** — they encode conventions that VBW agents should *read* but not *mutate*. The default protected set lives under `.claude/rules/*` (the portable `pipekit-discipline.md`, `pipekit-tooling.md`, `pipekit-security.md` hub-and-spoke template). Projects can opt additional paths into protection — `Strategy/`, `method.config.md`, and `PHASES.md` are common candidates.
+Some files in a Pipekit project are **canonical** — they encode conventions that the executor (and any agent) should *read* but not *mutate*. The default protected set lives under `.claude/rules/*` (the portable `pipekit-discipline.md`, `pipekit-tooling.md`, `pipekit-security.md` hub-and-spoke template). Projects can opt additional paths into protection — `Strategy/`, `method.config.md`, and `PHASES.md` are common candidates.
 
 Protection is enforced by **hook**, not by skill prose. A `PreToolUse` hook on `Edit` and `Write` blocks the call when the target path matches the protected set; the agent receives `EditPermissionDenied` (or `HookFeedbackBlocked`, depending on the hook variant). This is intentional: hooks win over `bypassPermissions` mode because hook-level guards are the project's last line of defense, and orchestrator-spawned agents are not exempt from project policy.
 

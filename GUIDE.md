@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.1.0** — Last updated: 2026-06-21 10:30  *(Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
+**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
 
 ---
 
@@ -464,7 +464,7 @@ After the spec is written, the Spec Review Agent evaluates it for planning readi
 
 **It WILL fail a spec if:**
 - Concision hides ambiguity
-- `[TBD]` forces VBW to guess
+- `[TBD]` forces the planner (`/work`) to guess
 - Core decisions are missing
 - Source of truth is unclear for calculations/data
 - Acceptance criteria aren't testable
@@ -487,7 +487,7 @@ After agent review passes, you review the spec in Linear. This is where product 
 - Is the priority right relative to other work?
 - Anything the agent missed that you know from context?
 
-**Outcome:** Move the issue to "Approved" in Linear. This signals that the spec is locked — no more scope changes. VBW planning can begin.
+**Outcome:** Move the issue to "Approved" in Linear. This signals that the spec is locked — no more scope changes. Planning (`/work`'s inline plan step) can begin.
 
 ---
 
@@ -911,25 +911,27 @@ Terminal:
 
 | Content | Home | Never In |
 |---------|------|----------|
-| Feature specs, AC, scope | Linear issue description | VBW plans |
-| Task decomposition | `.vbw-planning/` PLAN files | Linear |
+| Feature specs, AC, scope | Linear issue description | plan files |
+| Task decomposition | `.pk-work/` PLAN files (native; legacy direct-VBW: `.vbw-planning/`) | Linear |
 | Execution status | Both (synced via `/sync-linear`) | — |
-| Code | Git | Linear or VBW |
+| Code | Git | Linear or plan files |
 | Phase composition | Linear `i{N}.` Initiatives + `P{N}.` Projects (derived live) | a committed file |
 
-**Never create Linear issues for VBW tasks.** Features are the bridge between Linear and VBW.
+**Never create Linear issues for plan tasks** (native task DAGs in `.pk-work/`, or legacy `.vbw-planning/` PLAN files for direct-VBW projects). Features are the bridge between Linear and the executor's plan.
 
 ---
 
-## VBW Integration (roadmap scaffold — executor removed v4.0.0)
+## VBW Integration
 
-Native-on-Workflow is the sole executor — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. **VBW is no longer an execution backend**: the pluggable `vbw` executor and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0), and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The removal is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. The roadmap's phase order now lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), not a scaffolded file — `/vbw:init` is dropped from Stage 0 and `/roadmap-create` authors the Linear hierarchy directly. What VBW still provides is the **planning-layer scaffold** that holds per-issue PLAN/SUMMARY/state artifacts under `.vbw-planning/`; everything below is about that scaffold, not an executor and not the phase surface.
+**The VBW plugin is no longer required (v4.2.0).** Its one functional dependency — the advisory commit-format hook — is now a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`), so no Pipekit skill or gate depends on VBW being installed. A *legacy VBW planning layer* (`.vbw-planning/` ROADMAP/PLAN/SUMMARY/state artifacts) still exists for direct-VBW projects; no Pipekit skill depends on it, and it is slated for a separate, later retirement. Everything below is reference for that legacy layer and the direct-`/vbw:*` agent roster — not a Pipekit requirement.
+
+Native-on-Workflow is the sole executor — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. **VBW is no longer an execution backend**: the pluggable `vbw` executor and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0), and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The removal is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. The roadmap's phase order now lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), not a scaffolded file — `/vbw:init` is dropped from Stage 0 and `/roadmap-create` authors the Linear hierarchy directly. The **planning-layer scaffold** that holds per-issue PLAN/SUMMARY/state artifacts under `.vbw-planning/` is legacy — present only for direct-VBW projects, not used by Pipekit; everything below describes that legacy scaffold, not an executor and not the phase surface.
 
 | Pipeline Stage | Tool | Used when | Purpose |
 |---------------|------|-----------|---------|
 | Stage 0.5 | `/roadmap-create` authors the Linear `i{N}.`/`P{N}.` hierarchy | Always | Populate roadmap in Linear |
 | Stage 0.6 (optional) | `/vbw:discuss` | Optional | Discuss first phase before speccing |
-| Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — **native and vbw both plan here; `/work` has no separate "VBW Lead" step** |
+| Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — **native planning runs here; `/work` has no separate "VBW Lead" step** |
 | Stage 3 (execute) | native-on-Workflow | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify-before-integrate (the `vbw-dev` executor was removed in v4.0.0) |
 | Anytime | `/vbw:status` | If VBW installed | Project progress dashboard |
 
@@ -947,9 +949,9 @@ Native-on-Workflow is the sole executor — `/work` plans the issue inline and e
 
 > **In Pipekit, `/work` no longer dispatches any VBW agent** (the `vbw-dev` executor was removed in v4.0.0). The agents above — Lead, Dev, QA, Architect, and the rest — run only under direct `/vbw:*` invocation, which Pipekit advises against (it bypasses the visibility layer). Planning is `/work`'s inline step, execution is native-on-Workflow, and verification is the `/verify` gate plus the antagonistic review gates — not a VBW QA pass.
 
-### Keeping VBW Updated
+### Keeping the legacy VBW state in sync (direct-VBW projects only)
 
-When `/work` runs with `Backend: native` (plan + execute in-context; task DAG and run trail land in gitignored `.pk-work/`, not `.vbw-planning/`), `.vbw-planning/STATE.md` must still be updated to reflect progress. The method tracks all work — not just VBW-planned work.
+`/work` runs native: it plans + executes in-context and its task DAG and run trail land in gitignored `.pk-work/`, not `.vbw-planning/`. No Pipekit skill depends on the legacy `.vbw-planning/` layer. On a *direct-VBW project* that still carries one, keep `.vbw-planning/STATE.md` updated to reflect progress so its planning surface doesn't drift — Pipekit itself needs nothing here.
 
 ---
 
