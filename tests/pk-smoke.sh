@@ -466,6 +466,25 @@ else
     *) fail "hook: newline-preceded commit validated" "output: $out" ;;
   esac
 
+  # "git commit -m" inside a heredoc BODY is documentation/prose, not an invocation —
+  # the classic misfire is documenting commits in a gh pr comment --body "$(cat <<EOF…)".
+  out=$(hook_run '{"tool_input":{"command":"gh pr comment 1 --body \"$(cat <<EOF\nFix: git commit -m \\\"feat: x\\\" now works.\nEOF\n)\""}}')
+  [ -z "$out" ] && ok "hook: -m inside heredoc body not validated" || fail "hook: -m inside heredoc body not validated" "output: $out"
+
+  # A prose heredoc with no -m and a bare "git commit" must not be grabbed as a subject.
+  out=$(hook_run '{"tool_input":{"command":"cat <<EOF\nHow to commit: run git commit then push.\nEOF"}}')
+  [ -z "$out" ] && ok "hook: prose heredoc (no -m) not validated" || fail "hook: prose heredoc (no -m) not validated" "output: $out"
+
+  # Legit heredoc-authored commit (git commit -F- <<EOF): first body line IS the subject.
+  out=$(hook_run '{"tool_input":{"command":"git commit -F- <<EOF\nbad subject no scope\nbody\nEOF"}}')
+  case "$out" in
+    *"bad subject no scope"*) ok "hook: -F- heredoc subject validated" ;;
+    *) fail "hook: -F- heredoc subject validated" "output: $out" ;;
+  esac
+
+  out=$(hook_run '{"tool_input":{"command":"git commit -F- <<EOF\nfeat(x): proper subject\nbody\nEOF"}}')
+  [ -z "$out" ] && ok "hook: -F- heredoc good subject silent" || fail "hook: -F- heredoc good subject silent" "output: $out"
+
   printf '%s' '{"tool_input":{"command":"git commit -m \"nope\""}}' | bash "$HOOK" >/dev/null 2>&1
   [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
 fi
