@@ -30,7 +30,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.4.0"
+PK_VERSION="4.5.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -225,6 +225,10 @@ pk_linear_issue() {
 # ordered sub-phases within them. Order comes from the NAME PREFIX, not Linear's
 # `sortOrder` (an internal drag-rank that does NOT track phase sequence — verified
 # live, Piper 2026-06-21: sortOrder ordered projects P11,P8,P4,P3,P1,...).
+# A project name MAY also carry its initiative number as a leading `I<N>.` prefix
+# (v4.5.0+: `I1.P2. label`) — projects are the navigable unit in Linear, so the
+# phase reads at the project level. The parser accepts both `P<N>.` and
+# `I<N>.P<N>.`; the P-number still sets sub-phase order either way.
 # Lifecycle comes from status/state:
 #   current phase   = lowest i<N> initiative whose status != "Completed"
 #   current project = lowest P<N> project whose state ∉ {completed, canceled}
@@ -252,8 +256,8 @@ pk_native_phase_context() {
     | if . == null then empty else . end
     | .name as $pname
     | (.projects.nodes
-       | map(select(.name | test("^[pP][0-9]+\\.")))
-       | sort_by(.name | capture("^[pP](?<n>[0-9]+)\\.") | .n | tonumber)
+       | map(select(.name | test("^([iI][0-9]+\\.)?[pP][0-9]+\\.")))
+       | sort_by(.name | capture("^([iI][0-9]+\\.)?[pP](?<n>[0-9]+)\\.") | .n | tonumber)
        | map(select(.state != "completed" and .state != "canceled"))
        | .[0]) as $proj
     | if $proj == null then empty else [$pname, $proj.id] | @tsv end
@@ -272,8 +276,8 @@ pk_native_roadmap_summary() {
     | .[]
     | .name as $n | .status as $s
     | (.projects.nodes
-       | map(select(.name | test("^[pP][0-9]+\\.")))
-       | sort_by(.name | capture("^[pP](?<n>[0-9]+)\\.") | .n | tonumber)
+       | map(select(.name | test("^([iI][0-9]+\\.)?[pP][0-9]+\\.")))
+       | sort_by(.name | capture("^([iI][0-9]+\\.)?[pP](?<n>[0-9]+)\\.") | .n | tonumber)
        | map(select(.state != "completed" and .state != "canceled"))
        | .[0].name // "all projects done") as $cur
     | "  \($n)  [\($s)]  → \($cur)"

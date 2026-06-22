@@ -36,9 +36,13 @@ naming-convention contract. **Phase state lives in Linear, not a file** — ther
 | Concept | Linear construct | Naming | Role |
 |---------|-----------------|--------|------|
 | **Phase / wave** | Initiative | `i{N}. label` | Ordered roadmap phase. Status `Active`/`Planned`/`Completed`. |
-| **Sub-phase / execution batch** | Project | `P{N}. label` | The batch you're building now. State `started`/`planned`/`completed`. Issues live here. |
+| **Sub-phase / execution batch** | Project | `I{N}.P{N}. label` (v4.5.0+; legacy bare `P{N}.` still parses) | The batch you're building now. State `started`/`planned`/`completed`. Issues live here. |
 | **Work item** | Issue | identifier | Moves On Deck → Needs Spec → … → Done. |
 | **Milestone** (optional) | Milestone | free | Intra-project gating, orthogonal to phases. |
+
+Projects carry their initiative number as a leading `I{N}.` prefix (`I1.P2. label`) so the phase reads at
+the project level — the unit you navigate in Linear. The `P{N}` number still sets sub-phase order; `bin/pk`
+accepts both `I{N}.P{N}.` and legacy bare `P{N}.`.
 
 **The current phase is *derived*, not declared.** Current phase = lowest `i{N}` initiative whose status
 ≠ `Completed`; current sub-phase = lowest `P{N}` project in it whose state ∉ {`completed`,`canceled`}.
@@ -61,7 +65,7 @@ surface. Order is the prefix number (numeric), never Linear `sortOrder`.
 
 ```
 Current phase:     i1. Foundation   [Active]
-Current sub-phase: P2. Auth & Permissions   [started]
+Current sub-phase: I1.P2. Auth & Permissions   [started]
   On Deck:     PROJ-3, PROJ-4, PROJ-5
   Needs Spec:  PROJ-6
   In flight:   PROJ-2 (Building)
@@ -83,7 +87,7 @@ spec pipeline. On confirmation:
 #### Step 3 — Summary
 
 ```
-## Phase confirmed: i1. Foundation / P2. Auth & Permissions
+## Phase confirmed: i1. Foundation / I1.P2. Auth & Permissions
 
 Promoted to Needs Spec: {N}
 Held (blocked):         {M}  — {ids + blockers}

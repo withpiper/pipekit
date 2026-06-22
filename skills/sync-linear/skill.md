@@ -1,6 +1,6 @@
 ---
 name: sync-linear
-description: Reconcile strategy-doc / requirement drift against the Linear board's i{N}./P{N}. phase hierarchy. Use when issues are mis-placed across P{N}. projects, or initiatives/projects drift from the naming convention. Linear is the source of truth; there is no PHASES.md/linear-map.json to sync.
+description: Reconcile strategy-doc / requirement drift against the Linear board's i{N}./I{N}.P{N}. phase hierarchy. Use when issues are mis-placed across projects, or initiatives/projects drift from the naming convention (projects are named I{N}.P{N}.; bare P{N}. is legacy-valid). Linear is the source of truth; there is no PHASES.md/linear-map.json to sync.
 ---
 
 # Sync Linear Skill
@@ -18,10 +18,10 @@ Per `method.config.md` § Phase Surface:
 | Linear object | Role | Order |
 |---------------|------|-------|
 | **Initiative** `i{N}. label` | ordered **PHASE** | integer `{N}` in the name prefix |
-| **Project** `P{N}. label` | ordered **SUB-PHASE** | integer `{N}` in the name prefix |
-| **Issue** | individual requirement/task | lives inside the right `P{N}.` project |
+| **Project** `I{N}.P{N}. label` | ordered **SUB-PHASE** | the `P{N}` integer in the name prefix |
+| **Issue** | individual requirement/task | lives inside the right `I{N}.P{N}.` project |
 
-Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / `P1.`, `P2.`, …). Linear's `sortOrder` is **never** used to determine phase order — always parse the name prefix.
+Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / the `P{N}` number). Linear's `sortOrder` is **never** used to determine phase order — always parse the name prefix. **Projects carry their initiative number** (v4.5.0+: `I1.P2. label`) so the phase reads at the project level; legacy bare `P{N}.` is still valid (`bin/pk` accepts both) — treat a bare `P{N}.` as a rename candidate, not an error.
 
 **Retired surfaces** — this skill never reads or writes them; they exist only as a `bin/pk` fallback for un-migrated projects:
 - `.vbw-planning/PHASES.md`
@@ -42,8 +42,8 @@ This skill is invoked when the user says:
 
 It detects and proposes fixes for **drift between the project's strategy docs / requirements and the Linear board's phase hierarchy**:
 
-1. **Naming-convention drift** — initiatives not named `i{N}. label`, projects not named `P{N}. label`, duplicate or gapped prefixes (`i1, i3` with no `i2`), or out-of-order numbering.
-2. **Placement drift** — issues sitting in the wrong `P{N}.` project (or no project at all) given what the strategy docs say belongs in that sub-phase.
+1. **Naming-convention drift** — initiatives not named `i{N}. label`, projects not named `I{N}.P{N}. label` (a bare `P{N}.` is legacy-valid but a rename candidate; flag it as such, not as an error), duplicate or gapped prefixes (`i1, i3` with no `i2`), an `I{N}.` prefix that disagrees with the project's parent initiative, or out-of-order numbering.
+2. **Placement drift** — issues sitting in the wrong `I{N}.P{N}.` project (or no project at all) given what the strategy docs say belongs in that sub-phase.
 3. **Coverage drift** — strategy-doc requirements with no corresponding Linear issue, or Linear issues that no longer map to any documented requirement.
 
 It does **not** reconcile a planning-file mirror — there is none. All reconciliation targets are live Linear objects.

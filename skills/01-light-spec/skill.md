@@ -57,7 +57,7 @@ Do NOT inline the exploration into the main session even if you think "I can jus
    - What patterns does the codebase already use for similar features?
    - What database tables, APIs, or UI components are involved?
    - Are there any obvious constraints or blockers?
-2. Identify the issue's **phase context** from Linear: which `i{N}.` initiative (phase) and `P{N}.` project (sub-phase) its Linear project belongs to. Derive it live (the issue's Linear project, or `pk next`) — there is no `linear-map.json` or `PHASES.md` to read. This anchors the spec to the right phase without guessing.
+2. Identify the issue's **phase context** from Linear: which `i{N}.` initiative (phase) and `I{N}.P{N}.` project (sub-phase) its Linear project belongs to. Derive it live (the issue's Linear project, or `pk next`) — there is no `linear-map.json` or `PHASES.md` to read. This anchors the spec to the right phase without guessing.
 
 ### Phase 3 — Draft Light Spec
 

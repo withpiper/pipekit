@@ -47,6 +47,18 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.5.0 — 2026-06-22
+
+> **Phase surface: projects carry their initiative number.** A Linear project under initiative `i1.` is now named **`I1.P2. label`** (initiative number + project number), not bare `P2.`. Initiatives sit *above* projects in Linear and get buried in the UI; projects are the unit you actually navigate — so putting the initiative number in the project name makes the phase legible at the level you work at.
+
+**Backward-compatible parser.** `bin/pk`'s phase derivation (`pk_native_phase_context` / `pk_native_roadmap_summary`) widened its project-name match from `^P[0-9]+\.` to `^([iI][0-9]+\.)?[pP][0-9]+\.` — it now accepts **both** `I{N}.P{N}.` and legacy bare `P{N}.`. The `P{N}` number still sets sub-phase order either way, so a workspace can be renamed gradually without breaking `pk next` / `pk status`. 2 new smoke tests prove an `I{N}.P{N}.` fixture derives correctly and coexists with bare `P{N}.`; suite **54 → 56**.
+
+**Authoring + docs updated to the new form.** `/roadmap-create` authors projects as `I{N}.P{N}. label`; `/phase-plan` displays and advances them; the drift-detectors `/sync-linear` and `/00-roadmap-review` treat `I{N}.P{N}.` as the correct form and a bare `P{N}.` as a rename candidate (not an error). The contract (`method.config.md § Phase Surface`) and every doc that states the naming (method.md, CLAUDE.md, GUIDE.md, RUNBOOK.md, STARTUP.md, `sop/Linear_SOP.md`) now show `I{N}.P{N}.`.
+
+This is a convention + tooling change only — no change to how phases are *derived* (lowest non-complete initiative → lowest non-complete project, by numeric prefix) and no `bin/pk` command behavior change beyond the widened regex.
+
+---
+
 ## v4.4.0 — 2026-06-22
 
 > **New: `/security-gate` — the feature-scoped security gate (gap #3).** Pipekit has had `/security-review` (whole-repo audit) and `/pr-security-review` (PR-scoped, antagonistic) for a while, but both are **opt-in** — a human decides to run them. The gap that left: a security-sensitive feature can sail Building → UAT → production without anyone *deciding* it needed a look. `/security-gate` closes that — it runs automatically at the Building → UAT seam (in the v2 loop, the `pk ship` transition), beside `/verify`. This is the third of the five production-readiness gaps (gap #1 migrations in v4.0.0-rc5, gap #2 `/prod-ready` in v4.3.0).

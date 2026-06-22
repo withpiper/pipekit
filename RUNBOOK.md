@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.4.0** — Last updated: 2026-06-22 10:56  *(v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3), step [4a] in the daily loop between `/verify` and `pk ship`. Classifies the feature diff into six sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); none matched → instant PASS, a match → category checklist vs the diff. Advisory this release (no `pk ship` block); projects with a `resources/security-categories.md` file. Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples) no longer trips the advisory nudge. Hook-only. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). Runs once per feature at the production boundary (before `pk promote <last-env>`, or the merge to `main` on 1-tier), beside the per-task `/verify` code gate. Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — the plugin is no longer required; its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh`. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface — `pk next`/`pk status` derive the current phase from Linear Initiatives (`i{N}.`) → Projects (`P{N}.`), ordered by name-prefix; `PHASES.md`/`linear-map.json` retired to read-only fallback. Carries v4.0.0: VBW executor removed (native-on-Workflow sole executor); Linear MCP camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 artifact rule.)*
+**v4.5.0** — Last updated: 2026-06-22 13:30  *(v4.5.0: phase surface — Linear projects carry their initiative number (`I{N}.P{N}. label`, e.g. `I1.P2.`), so the phase reads at the project level; `pk next`/`pk status` accept both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3), step [4a] in the daily loop between `/verify` and `pk ship`. Classifies the feature diff into six sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); none matched → instant PASS, a match → category checklist vs the diff. Advisory this release (no `pk ship` block); projects with a `resources/security-categories.md` file. Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples) no longer trips the advisory nudge. Hook-only. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). Runs once per feature at the production boundary (before `pk promote <last-env>`, or the merge to `main` on 1-tier), beside the per-task `/verify` code gate. Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — the plugin is no longer required; its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh`. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface — `pk next`/`pk status` derive the current phase from Linear Initiatives (`i{N}.`) → Projects (`P{N}.`), ordered by name-prefix; `PHASES.md`/`linear-map.json` retired to read-only fallback. Carries v4.0.0: VBW executor removed (native-on-Workflow sole executor); Linear MCP camelCase; `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop; gap #1 artifact rule.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.4.0                 (or latest tag)
+1. ./scripts/sync-method.sh v4.5.0                 (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -39,7 +39,7 @@ Run from the parent repo. No worktree needed — specs are Linear-side artifacts
   │ [S1] Find next spec target                               │
   │     pk next                                              │
   │     • look for the "Needs Spec" group in the output      │
-  │     • phase-aware (Linear i{N}./P{N}. surface)           │
+  │     • phase-aware (Linear i{N}./I{N}.P{N}. surface)      │
   │                                                          │
   │     For a brand-new idea:                                │
   │     /brainstorm <idea>                                   │
@@ -112,7 +112,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │ [1] Find next issue   (phase-aware, Linear-native)       │
   │     pk next                                              │
   │     • derives current phase from Linear initiatives      │
-  │       (i{N}. initiative → P{N}. project, by prefix)      │
+  │       (i{N}. initiative → I{N}.P{N}. project, by prefix) │
   │     • groups Linear results by status:                   │
   │         In Progress  (with /work hint)                   │
   │         Approved     (with pk branch hint)               │
@@ -389,7 +389,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
 
 | # | Step | Command (global) | Command (repo-local) | Where | Auth |
 |---|---|---|---|---|---|
-| 1 | Find next (phase-aware) | `pk next` | `./bin/pk next` | parent, dev | derives phase from Linear (`i{N}.`/`P{N}.`) |
+| 1 | Find next (phase-aware) | `pk next` | `./bin/pk next` | parent, dev | derives phase from Linear (`i{N}.`/`I{N}.P{N}.`) |
 | 1 | Quick status | `pk status` | `./bin/pk status` | parent | reads Linear (full board, unscoped) |
 | 2 | Branch | `pk branch <ID>` | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
 | 3 | Plan + execute | `/work <ID>` | — (skill) | worktree | reads Linear |
