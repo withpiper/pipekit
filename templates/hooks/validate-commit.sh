@@ -26,25 +26,33 @@ if ! echo "$COMMAND" | grep -q "git commit"; then
   exit 0
 fi
 
-# Extract the SUBJECT line of each `git commit` in the command. Only the FIRST
-# line of the FIRST -m after each `git commit` is a subject; everything else is
-# body or noise and must not be validated. This avoids the false-positive classes:
+# Extract the SUBJECT line of each REAL `git commit` invocation in the command.
+# A "git commit" occurrence only counts when it is an actual invocation —
+# command-initial or preceded by a shell operator (; & | ( ) { } ` or newline).
+# This rejects the false-positive class where "git commit" appears as DATA:
+#   - a grep/search pattern:     grep -m1 "git commit" app.log   (was extracting "1")
+#   - embedded in a quoted arg:  printf '... git commit -m "x" ...'
+#   - a JSON literal / echo:     echo '{"cmd":"git commit -m ..."}'
+# For a real commit, only the FIRST line of its FIRST -m is the subject; everything
+# else is body or noise. This also handles, without false-positives:
 #   - multi-line -m body:        git commit -m "feat(x): s\n\nbody"
 #   - subject + body via two -m: git commit -m "feat(x): s" -m "body paragraph"
 #   - chained commits:           git commit -m "fix(a): 1" && git commit -m "fix(b): 2"
-#   - unrelated heredoc in the same line: gh pr create --body "$(cat <<EOF ...)"
-# Per `git commit`: take its first -m, subject = text up to the first newline or
-# the closing quote (whichever comes first). Commits with no -m (authored via
-# -F-/heredoc/editor) fall through to the heredoc handler below.
+# Subject = text up to the first newline or the closing quote (whichever first).
+# Commits with no -m (-F-/heredoc/editor) fall through to the heredoc handler below.
 SUBJECTS=$(printf '%s\n' "$COMMAND" | awk '
   { buf = buf $0 "\n" }
   END {
     s = buf
     while ((gc = index(s, "git commit")) > 0) {
+      pre = substr(s, 1, gc - 1)                  # text before this occurrence
+      sub(/[ \t]+$/, "", pre)                     # trim trailing spaces/tabs only
+      bc = substr(pre, length(pre), 1)            # char just before "git commit"
+      real = (length(pre) == 0 || bc ~ /[;&|(){}`\n]/)  # invocation, not data?
       s = substr(s, gc + 10)                      # past this "git commit"
       ngc = index(s, "git commit")                # bound: next commit in chain
       seg = (ngc > 0) ? substr(s, 1, ngc - 1) : s
-      if (match(seg, /-m[ \t]+("|'\'')/)) {       # first -m of this commit
+      if (real && match(seg, /-m[ \t]+("|'\'')/)) {  # first -m of a real commit
         q = substr(seg, RSTART + RLENGTH - 1, 1)
         rest = substr(seg, RSTART + RLENGTH)
         nl = index(rest, "\n"); cq = index(rest, q)

@@ -445,6 +445,27 @@ else
     *) fail "hook: chained nudges only the bad subject" "output: $out" ;;
   esac
 
+  # "git commit" as DATA (search pattern / echoed reminder) must NOT be validated —
+  # it is only a commit when command-initial or shell-operator/newline-preceded.
+  out=$(hook_run '{"tool_input":{"command":"grep -rn \"git commit\" docs/"}}')
+  [ -z "$out" ] && ok "hook: grep-pattern data not validated" || fail "hook: grep-pattern data not validated" "output: $out"
+
+  out=$(hook_run '{"tool_input":{"command":"echo git commit -m \"x\" >> notes.log"}}')
+  [ -z "$out" ] && ok "hook: embedded -m data not validated" || fail "hook: embedded -m data not validated" "output: $out"
+
+  # The boundary anchor must NOT over-reject real commits preceded by ( / && / newline.
+  out=$(hook_run '{"tool_input":{"command":"(cd sub && git commit -m \"nope\")"}}')
+  case "$out" in
+    *"nope"*) ok "hook: subshell/operator-preceded commit validated" ;;
+    *) fail "hook: subshell/operator-preceded commit validated" "output: $out" ;;
+  esac
+
+  out=$(hook_run '{"tool_input":{"command":"cd sub\ngit commit -m \"nope\""}}')
+  case "$out" in
+    *"nope"*) ok "hook: newline-preceded commit validated" ;;
+    *) fail "hook: newline-preceded commit validated" "output: $out" ;;
+  esac
+
   printf '%s' '{"tool_input":{"command":"git commit -m \"nope\""}}' | bash "$HOOK" >/dev/null 2>&1
   [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
 fi
