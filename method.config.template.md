@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.4.0** — Last updated: 2026-06-22  *(added `Security categories` + `Security gate report path` keys for the `/security-gate` feature-scoped security gate (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for the `/prod-ready` production-readiness gate. Carries v4.1.0: Linear-native phase surface — § Phase Surface `i{N}.`/`P{N}.` naming convention replaces `PHASES.md`/`linear-map.json`; legacy files fall back automatically)*
+**v4.5.0** — Last updated: 2026-06-22  *(§ Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -57,9 +57,10 @@ derive the current phase live from the Linear hierarchy; `/roadmap-create` autho
 | Level | Linear construct | Naming | Meaning |
 |-------|-----------------|--------|---------|
 | Phase | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | An ordered roadmap phase. `pk next` walks these by `{N}`. |
-| Sub-phase | **Project** | `P{N}. label` (e.g. `P2. Budget Editor`) | An ordered batch within a phase. Issues live here. |
+| Sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Budget Editor`) | An ordered batch within a phase. Issues live here. |
 | Work item | **Issue** | (Linear identifier) | The unit `/work` builds. |
 
+- **Project names carry their initiative number** (v4.5.0+): a project under `i1.` is `I1.P2. label`, not bare `P2.` — initiatives sit above projects in Linear and get buried, so the phase reads at the project level (the unit you navigate). `bin/pk` accepts **both** `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets sub-phase order either way. Author the `I{N}.P{N}.` form.
 - **Order** = the integer in the prefix, parsed numerically (`P2` before `P10`).
 - **Current phase** = lowest `i{N}` initiative whose status ≠ `Completed`.
 - **Current sub-phase** = lowest `P{N}` project in it whose state ∉ {`completed`, `canceled`}.

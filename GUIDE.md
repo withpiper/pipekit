@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.4.0** — Last updated: 2026-06-22 10:56  *(v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3). Runs at the Building → UAT seam (after `/verify`, before `pk ship`): classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the category checklist against the diff on a match — none matched → instant PASS. Portable framework with project signals in `resources/security-categories.md`; new `sop/Security_Gate_SOP.md`; advisory this release. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples, e.g. a `gh pr comment --body`) no longer trips the advisory format nudge; the `cat <<` fallback is replaced by an in-`awk` `-F-` heredoc message extractor (smoke 50→54). Hook-only, no methodology change. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). A second gate beside `/verify`: `/verify` proves the code is correct (every task, at ship), `/prod-ready` proves production can absorb it safely (once per feature, at the production boundary — before the final `pk promote`, or the merge to `main` on 1-tier). Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); portable framework with project checks in `resources/prod-readiness-checks.md`; new `sop/Production_Readiness_SOP.md`. Advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
+**v4.5.0** — Last updated: 2026-06-22 13:30  *(v4.5.0: projects carry their initiative number in the phase surface — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`, so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`; `/roadmap-create` + `/phase-plan` author the new form. Carries v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3). Runs at the Building → UAT seam (after `/verify`, before `pk ship`): classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the category checklist against the diff on a match — none matched → instant PASS. Portable framework with project signals in `resources/security-categories.md`; new `sop/Security_Gate_SOP.md`; advisory this release. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples, e.g. a `gh pr comment --body`) no longer trips the advisory format nudge; the `cat <<` fallback is replaced by an in-`awk` `-F-` heredoc message extractor (smoke 50→54). Hook-only, no methodology change. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). A second gate beside `/verify`: `/verify` proves the code is correct (every task, at ship), `/prod-ready` proves production can absorb it safely (once per feature, at the production boundary — before the final `pk promote`, or the merge to `main` on 1-tier). Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); portable framework with project checks in `resources/prod-readiness-checks.md`; new `sop/Production_Readiness_SOP.md`. Advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
 
 ---
 
@@ -85,8 +85,8 @@ STAGE 0: FOUNDATION (a contract — greenfield path shown below)
       ──→ /roadmap-create ──→ /phase-plan ──→ /roadmap-review (GATE)
                 │                   │                │
           Linear hierarchy      current phase    Stage 0
-          (i{N}. → P{N}. →     derived live;     validated ✓
-          Issue) authored      first sub-phase
+          (i{N}. → I{N}.P{N}.  derived live;     validated ✓
+          → Issue) authored    first sub-phase
           in Linear            issues → "Needs Spec"
 
 
@@ -340,14 +340,14 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
 
 **Skill:** `/roadmap-create`
 **Input:** Strategy docs + `project-definition.md`
-**Output:** The Linear Initiative→Project→Issue hierarchy (`i{N}.`/`P{N}.`), populated directly in Linear
+**Output:** The Linear Initiative→Project→Issue hierarchy (`i{N}.` / `I{N}.P{N}.`), populated directly in Linear
 
 This is where strategy becomes work items. The skill reads your strategy docs and project definition, extracts requirements, groups them into feature clusters, identifies dependencies, and authors the phase hierarchy **directly in Linear** — no `.vbw-planning/ROADMAP.md` merge dependency and no `linear-map.json`.
 
 **What it produces:**
 
 1. **Linear Initiatives** named `i{N}. label` — one per roadmap phase, ordered by the numeric prefix (`i1.`, `i2.`, …). This is the phase surface `pk next`/`pk status` read live.
-2. **Linear Projects** named `P{N}. label` — ordered sub-phases (execution batches) within a phase; the issues live here.
+2. **Linear Projects** named `I{N}.P{N}. label` — ordered sub-phases (execution batches) within a phase; the issues live here. The project carries its initiative number (e.g. `I1.P2.`) so the phase reads at the project level — the unit you navigate in Linear. (`bin/pk` accepts legacy bare `P{N}.` too; the `P{N}` number sets order either way.)
 3. **Linear Issues** — one issue per requirement, with:
    - Correct status (On Deck for Stage 1, Future Phases for Stage 2+, Ideas for parking lot)
    - Dependency relations (`blocked_by`)
@@ -356,7 +356,7 @@ This is where strategy becomes work items. The skill reads your strategy docs an
 
 A narrative `ROADMAP.md` may still be written as an optional legacy/handoff artifact, but it is no longer a required output or a state file the pipeline reads.
 
-**Feature clusters become `P{N}.` Linear Projects.** A feature cluster is a logical grouping of related requirements — "Data Foundation", "Search & CRUD", "Auth & Permissions." Each becomes a `P{N}.` Project (sub-phase) under its phase's `i{N}.` Initiative.
+**Feature clusters become `I{N}.P{N}.` Linear Projects.** A feature cluster is a logical grouping of related requirements — "Data Foundation", "Search & CRUD", "Auth & Permissions." Each becomes an `I{N}.P{N}.` Project (sub-phase) under its phase's `i{N}.` Initiative (e.g. `I1.P2. Auth & Permissions`).
 
 **Manual vs. automated:** The skill automates issue creation, relations, and labels via MCP. For things that require the Linear UI (initiatives, workflow states), it gives explicit step-by-step instructions.
 
@@ -777,7 +777,7 @@ Phases, milestones, and cycles serve different purposes. Understanding their rel
 | Concept | What It Is | Linear Construct | Lifespan |
 |---------|-----------|-----------------|----------|
 | **Phase** | An ordered roadmap phase | Linear **Initiative** named `i{N}. label` | Permanent (ordered by `{N}`) |
-| **Sub-phase** | An execution batch — what we're building right now; holds the issues | Linear **Project** named `P{N}. label` | Ordered within its phase by `{N}` |
+| **Sub-phase** | An execution batch — what we're building right now; holds the issues | Linear **Project** named `I{N}.P{N}. label` (legacy bare `P{N}.` still parses) | Ordered within its phase by the `P{N}` number |
 | **Milestone (Work Package)** (optional) | A feature cluster — groups related issues for gating; orthogonal to phases | Linear Milestone | Intra-project grouping |
 | **Cycle** (optional) | A time-boxed sprint — capacity planning | Linear Cycle | Configurable duration |
 
@@ -814,7 +814,7 @@ If you want time-boxed sprints with capacity tracking, map phases to Linear Cycl
 
 ### Phase State Tracking
 
-Phases are tracked **live in Linear**, not in a committed file. A phase is a `i{N}.` Initiative; its sub-phases are `P{N}.` Projects that hold the issues. The current phase is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}.` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current phase and the phase's overall progress straight from this hierarchy. (Un-migrated projects fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
+Phases are tracked **live in Linear**, not in a committed file. A phase is a `i{N}.` Initiative; its sub-phases are `I{N}.P{N}.` Projects that hold the issues (v4.5.0 — the project carries its initiative number so the phase reads at the project level; legacy bare `P{N}.` still parses). The current phase is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current phase and the phase's overall progress straight from this hierarchy. (Un-migrated projects fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
 
 ---
 
@@ -868,8 +868,8 @@ Linear is the view layer. The executor (`/work`, native by default) plans and bu
 ### Hierarchy
 
 ```
-Initiative `i{N}. label` = Phase          "Which ordered roadmap phase?"
-  └── Project `P{N}. label` = Sub-phase      "Which ordered execution batch? (issues live here)"
+Initiative `i{N}. label` = Phase             "Which ordered roadmap phase?"
+  └── Project `I{N}.P{N}. label` = Sub-phase  "Which ordered execution batch? (issues live here)"
        └── Issue = Feature/Task                "What work needs to happen?"
             └── Milestone = Work Package (opt)   "Optional feature-cluster grouping, orthogonal to phases"
 ```

@@ -151,6 +151,28 @@ elif ! printf '%s\n' "$RM" | grep -q 'i0. Setup  \[Completed\]  → all projects
 elif   printf '%s\n' "$RM" | grep -q 'Strategic Theme'; then fail "native: roadmap" "strategic theme not excluded: $RM"
 else ok "native: roadmap walk ordered by prefix, theme excluded, completed shown done"; fi
 
+# v4.5.0: projects may carry the initiative number as a leading I<N>. prefix
+# (I1.P2. label). The parser accepts both P<N>. and I<N>.P<N>.; the P-number still
+# sets sub-phase order. This fixture mixes an I-prefixed phase with a P-only phase
+# to prove backward compatibility in the same run.
+NATIVE_FIXTURE_IPREFIX='{"data":{"initiatives":{"nodes":[
+  {"name":"i1. Build","status":"Active","projects":{"nodes":[
+    {"id":"p1","name":"I1.P1. Foundation","state":"completed"},
+    {"id":"p2","name":"I1.P2. Editor","state":"planned"},
+    {"id":"p10","name":"I1.P10. Later","state":"backlog"}]}},
+  {"name":"i2. Next","status":"Planned","projects":{"nodes":[{"id":"q1","name":"P1. Vendor","state":"backlog"}]}}
+]}}}'
+
+v=$(unit_native_ctx "$NATIVE_FIXTURE_IPREFIX")
+[ "$v" = "$(printf 'i1. Build\tp2')" ] \
+  && ok "native: I<N>.P<N>. prefix parses (project=I1.P2; P2<P10 numeric)" \
+  || fail "native: I-prefix derivation" "got '$v', want 'i1. Build<TAB>p2'"
+
+RM2=$(unit_roadmap "$NATIVE_FIXTURE_IPREFIX")
+if   ! printf '%s\n' "$RM2" | grep -q 'i1. Build  \[Active\]  → I1.P2. Editor'; then fail "native: I-prefix roadmap" "missing i1 line: $RM2"
+elif ! printf '%s\n' "$RM2" | grep -q 'i2. Next  \[Planned\]  → P1. Vendor'; then fail "native: I-prefix roadmap" "P<N>.-only project not handled alongside I-prefix: $RM2"
+else ok "native: I<N>.P<N>. and bare P<N>. projects coexist (backward-compatible)"; fi
+
 # ── CLI tests: dispatch + help guard ─────────────────────────────────────────
 
 echo "== dispatch =="

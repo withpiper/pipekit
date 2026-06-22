@@ -120,7 +120,7 @@ For each artifact in the foundation contract (see `method.md` § Foundation Cont
 | Project definition | `project-definition.md` | Run `/define` to retrofit |
 | Strategy docs | `Strategy/*.md` (matching `method.config.md` manifest) | Run `/strategy-create` to retrofit, or wait for `/strategy-from-code` in v1.4.0 |
 | Project config | `method.config.md` | Run `/startup --mode=brownfield` (it populates config from existing project state) |
-| Phase hierarchy | Linear `i{N}.` initiatives with `P{N}.` projects | Run `/roadmap-create` (authors the `i{N}.`/`P{N}.` hierarchy directly in Linear) |
+| Phase hierarchy | Linear `i{N}.` initiatives with `I{N}.P{N}.` projects | Run `/roadmap-create` (authors the `i{N}.`/`I{N}.P{N}.` hierarchy directly in Linear) |
 | Phase plan | Current phase derivable live from Linear (`pk next` / `pk status`) | Run `/phase-plan` |
 
 For the Strategy docs check, read `method.config.md` § Strategy Docs to get the manifest, then verify each listed file exists. If `method.config.md` itself is missing, treat the manifest check as deferred — flag the config gap as the blocker.
@@ -564,7 +564,7 @@ Fill in `method.config.md` with any remaining project-specific values.
 **Check:** Does the Linear board already have an `i{N}.`/`P{N}.` phase hierarchy?
 
 Two possible states:
-1. **No phase hierarchy yet** (most common — fresh project) → Run `/roadmap-create`. It authors the Linear `i{N}.` initiative / `P{N}.` project hierarchy directly from the strategy docs and seeds the issues underneath. This is the expected flow for new projects.
+1. **No phase hierarchy yet** (most common — fresh project) → Run `/roadmap-create`. It authors the Linear `i{N}.` initiative / `I{N}.P{N}.` project hierarchy directly from the strategy docs and seeds the issues underneath. This is the expected flow for new projects.
 2. **Already populated by `/roadmap-create`** (re-running `/startup`) → Ask: _"Roadmap appears fully populated. Skip, or redo?"_
 
 To tell empty vs. populated: check whether the Linear board has any `i{N}.` initiatives with `P{N}.` projects and Linear-traced issues underneath. An optional legacy `.vbw-planning/ROADMAP.md` may exist from a prior version, but the Linear hierarchy is the authoritative phase surface.

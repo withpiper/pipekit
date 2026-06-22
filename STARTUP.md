@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin decoupled — the VBW plugin is no longer required to bootstrap a Pipekit project; the roadmap is authored directly into Linear at `/roadmap-create`, with no `/vbw:init` scaffold. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface; `/vbw:init` is not part of Stage 0. The roadmap's phase order lives in Linear — `i{N}.` initiatives are PHASES, `P{N}.` projects are SUB-PHASES, issues live in projects, ordering is by the integer name prefix. Carries v4.0.0's native-only Backend row — the `vbw` executor was removed — and the v2.7.0 Step 3 `method.config.md` key reference: `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
+**v4.5.0** — Last updated: 2026-06-22  *(phase surface — projects carry their initiative number: `I{N}.P{N}.`-prefixed SUB-PHASES (e.g. `I1.P2. Search`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.2.0: VBW plugin decoupled — the VBW plugin is no longer required to bootstrap a Pipekit project; the roadmap is authored directly into Linear at `/roadmap-create`, with no `/vbw:init` scaffold. A legacy VBW planning layer (`.vbw-planning/`) remains for direct-VBW projects, slated for separate, later retirement. Carries v4.1.0's Linear-native phase surface; `/vbw:init` is not part of Stage 0. The roadmap's phase order lives in Linear — `i{N}.` initiatives are PHASES, `I{N}.P{N}.` projects are SUB-PHASES, issues live in projects, ordering is by the integer name prefix. Carries v4.0.0's native-only Backend row — the `vbw` executor was removed — and the v2.7.0 Step 3 `method.config.md` key reference: `Spec ready state` / `Spec approved state` as the `/light-spec` ↔ `pk spec-cycle` interlock)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
@@ -48,9 +48,9 @@ Break the build into stages. Each stage should be independently deployable and t
 | **Issue prefix** | e.g., `PROJ`, `ACME` | Short, unique, used in commit messages and branch names |
 | **Workflow states** | Use the method standard (13 states) or simplify | Recommendation: start with the full set. You can always skip states, but adding them later means migrating issues. |
 | **Initiatives** | `i{N}.`-prefixed PHASES | Each initiative is an ordered roadmap phase (e.g., `i1. Foundation`, `i2. Search`). Ordering is the integer in the name prefix, parsed numerically (`i2` before `i10`); Linear `sortOrder` is never used. |
-| **Projects** | `P{N}.`-prefixed SUB-PHASES within a phase | Issues live in projects (e.g., `P1. Data Foundation`, `P2. Search & CRUD`). Same prefix-integer ordering. |
+| **Projects** | `I{N}.P{N}.`-prefixed SUB-PHASES within a phase | Issues live in projects (e.g., `I1.P1. Data Foundation`, `I1.P2. Search & CRUD`). The project carries its initiative number (v4.5.0+) so the phase reads at the project level — the navigable unit in Linear. Ordering is the `P{N}` integer; `bin/pk` accepts legacy bare `P{N}.` too. |
 
-This `i{N}.` initiative → `P{N}.` project → issue hierarchy **is** the phase surface — `pk next` / `pk status` derive the current phase live from it, not from a committed file.
+This `i{N}.` initiative → `I{N}.P{N}.` project → issue hierarchy **is** the phase surface — `pk next` / `pk status` derive the current phase live from it, not from a committed file.
 | **Labels** | Domain, Type, Flag, Tier | Domain labels are project-specific. Type/Flag labels are standard. |
 
 **Action:** Create the workspace/team, set up states, create initial initiatives and projects.
@@ -344,7 +344,7 @@ If all steps work, the pipeline is ready. Start building.
 - [ ] Workflow states configured (13 standard states)
 - [ ] Issue prefix chosen
 - [ ] Initial initiatives created (`i{N}.`-prefixed PHASES)
-- [ ] Initial projects created (`P{N}.`-prefixed SUB-PHASES; issues live in projects)
+- [ ] Initial projects created (`I{N}.P{N}.`-prefixed SUB-PHASES; issues live in projects)
 - [ ] Labels configured (Domain, Type, Flag)
 - [ ] State IDs copied into method.config.md
 

@@ -37,12 +37,16 @@ file to drift.
 | Roadmap concept | Linear construct | Naming | Ordering |
 |-----------------|-----------------|--------|----------|
 | Stage / phase | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | by `{N}`, numeric |
-| Feature cluster / sub-phase | **Project** | `P{N}. label` (e.g. `P2. Search`) | by `{N}`, numeric, within its initiative |
+| Feature cluster / sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Search`) | by the `P{N}` number, numeric, within its initiative |
 | Requirement | **Issue** | (Linear identifier) | priority / state |
 | Work Package (optional) | **Milestone** | (free) | orthogonal grouping inside a project |
 
-- **The `i{N}.` / `P{N}.` prefixes are mandatory** — they carry order *and* mark which initiatives are
+- **The `i{N}.` / `I{N}.P{N}.` prefixes are mandatory** — they carry order *and* mark which initiatives are
   delivery phases. Linear's `sortOrder` is NOT used (it's an unreliable drag-rank).
+- **Projects carry their initiative number** (v4.5.0+): a project under `i1.` is named `I1.P2. label`, not
+  bare `P2.` — initiatives sit above projects in Linear and get buried, so the phase reads at the project
+  level (the unit you navigate). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}`
+  number still sets sub-phase order. **Author the `I{N}.P{N}.` form.**
 - Number phases and sub-phases by execution order. Leave gaps if useful (`i1, i2, i3`).
 - Strategic / north-star initiatives that aren't delivery phases: **do not** give them an `i{N}.`
   prefix — they'll be correctly ignored by the roadmap walk.
@@ -59,9 +63,9 @@ file to drift.
    - **Independent** — buildable as a single Linear issue
    - **Traceable** — references the strategy doc section it comes from
    - Note dependencies between requirements.
-5. Group each stage's requirements into **feature clusters → Projects** (`P{N}.`), ordered by execution
+5. Group each stage's requirements into **feature clusters → Projects** (`I{N}.P{N}.`), ordered by execution
    priority within the stage. Each cluster is cohesive (related features) and focused (not a catch-all):
-   - e.g. `i1.` Foundation → `P1. Data Foundation`, `P2. Auth & Permissions`, `P3. Search & CRUD`.
+   - e.g. `i1.` Foundation → `I1.P1. Data Foundation`, `I1.P2. Auth & Permissions`, `I1.P3. Search & CRUD`.
 
 ### Phase 2 — Draft the roadmap for approval
 
@@ -69,16 +73,16 @@ Present the proposed hierarchy as a tree for the human to approve **before** cre
 
 ```
 i1. Foundation (Stage 1 — MVP)
-  P1. Data Foundation
+  I1.P1. Data Foundation
     - REQ-001 Core data model            ← Strategy/DataModel §2
     - REQ-002 Migrations + RLS baseline   ← Strategy/Permissions §1
-  P2. Auth & Permissions
+  I1.P2. Auth & Permissions
     - REQ-003 Login / session             ← Strategy/Permissions §3  (blocked by REQ-001)
-  P3. Search & CRUD
+  I1.P3. Search & CRUD
     - REQ-004 Record list + detail        ← Strategy/UXReference §4
 
 i2. Reporting (Stage 2)
-  P1. Dashboards
+  I2.P1. Dashboards
     - REQ-010 ...
 ```
 
@@ -102,10 +106,11 @@ On approval, create top-down. Apply the naming convention exactly.
      `Planned`.
    - **Verify the tool name against your installed MCP** — initiative create/update support varies by
      server. Naming carries the order regardless, so manual UI creation is always a valid fallback.
-2. **Projects** (sub-phases) — within each initiative, named `P{N}. label`, via `linear_createProject`
-   (set its `initiativeId`/parent initiative, and `state`: current → `started`, else `planned`/`backlog`).
+2. **Projects** (sub-phases) — within each initiative, named `I{N}.P{N}. label` (the initiative number then
+   the project number, e.g. `I1.P2. Search`), via `linear_createProject` (set its `initiativeId`/parent
+   initiative, and `state`: current → `started`, else `planned`/`backlog`).
 3. **Issues** — for each requirement, via `mcp__linear-server__linear_createIssue`:
-   - `team`: from `method.config.md`; `project`: the `P{N}.` project it belongs to
+   - `team`: from `method.config.md`; `project`: the `I{N}.P{N}.` project it belongs to
    - `title`, `description` (+ strategy doc reference)
    - `state`: Stage 1 → `On Deck` | later stages → `Future Phases`
    - `priority`: 0 (None) — triage sets real priority
@@ -118,7 +123,7 @@ On approval, create top-down. Apply the naming convention exactly.
 Confirm the native phase surface is well-formed (this is what `pk next` will read):
 
 1. Every delivery initiative is named `i{N}.` with a unique, ordered `{N}`.
-2. Every project is named `P{N}.` with a unique `{N}` within its initiative.
+2. Every project is named `I{N}.P{N}.` — its initiative number, then a unique `P{N}` within that initiative (e.g. `I1.P1.`, `I1.P2.`).
 3. Every requirement has an issue, placed in the right `P{N}.` project.
 4. The earliest non-`Completed` initiative is `Active`; its earliest live project is `started`.
 5. Run `pk status` — the **Roadmap** section should list your `i{N}.` initiatives in order with the

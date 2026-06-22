@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin no longer required — the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement; the VBW↔Linear mapping below stays accurate for projects that still run it. Carries v4.1.0's Linear-native phase surface — Initiative `i{N}.` = phase, Project `P{N}.` = sub-phase, ordered by name prefix. The roadmap's phase order now lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. `.vbw-planning/PHASES.md` and `linear-map.json` are retired (bin/pk fallback-only). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.5.0** — Last updated: 2026-06-22  *(phase surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the phase reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.2.0: VBW plugin no longer required — the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement; the VBW↔Linear mapping below stays accurate for projects that still run it. Carries v4.1.0's Linear-native phase surface — Initiative `i{N}.` = phase, ordered by name prefix. The roadmap's phase order now lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. `.vbw-planning/PHASES.md` and `linear-map.json` are retired (bin/pk fallback-only). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -40,7 +40,7 @@ Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create
 
 ```
 Initiative "i{N}. label" = ordered roadmap PHASE       <- "Which phase ships this?"
-  +-- Project "P{N}. label" = ordered SUB-PHASE        <- "Which sub-phase within the phase?"
+  +-- Project "I{N}.P{N}. label" = ordered SUB-PHASE   <- "Which sub-phase within the phase?"
        +-- Issue = work item                           <- "What work needs to happen?"
             +-- Milestone = Work Package (optional)     <- "What intra-project batch?"
 
@@ -57,7 +57,7 @@ Labels = Cross-cutting metadata        <- Filterable on everything
 Phase and sub-phase order is read from the **integer in the name prefix**, parsed numerically (so `P2` sorts before `P10`). Linear's internal `sortOrder` field is an unreliable drag-rank and is **never** used to order phases.
 
 - **Initiative `i{N}. label`** = an ordered roadmap **phase**. The `i{N}.` prefix is the roadmap opt-in: only prefixed initiatives are delivery phases. **Unprefixed initiatives are strategic themes** and are ignored by `pk next`.
-- **Project `P{N}. label`** = an ordered **sub-phase** within a phase. Issues live in projects.
+- **Project `I{N}.P{N}. label`** = an ordered **sub-phase** within a phase. Issues live in projects. The project carries its initiative number (v4.5.0+: `I1.P2. label`) so the phase reads at the project level — the navigable unit in Linear. `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets order either way.
 - **Issue** = a work item.
 
 **Current phase** = the lowest `i{N}` initiative whose status is not `Completed`. **Current sub-phase** = the lowest `P{N}` project whose state is not `completed` or `canceled`.
@@ -67,7 +67,7 @@ Phase and sub-phase order is read from the **integer in the name prefix**, parse
 | Layer | Audience | Question | Lifespan |
 |---|---|---|---|
 | **Initiative** (`i{N}.`) | Partner | "Which roadmap phase?" | Permanent (one per phase) |
-| **Project** (`P{N}.`) | Partner + You | "Which sub-phase?" | Permanent within phase |
+| **Project** (`I{N}.P{N}.`) | Partner + You | "Which sub-phase?" | Permanent within phase |
 | **Milestone** (optional) | You | "What intra-project batch?" | Per-project |
 | **Issue** | You | "What work item?" | Permanent (work item) |
 | **Labels** | Everyone | Domain? Tier? Type? | Permanent (taxonomy) |
@@ -83,7 +83,7 @@ The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` 
 | Concept | Linear | Notes |
 |---|---|---|
 | Roadmap phase | Initiative `i{N}. label` | Ordered by the `i{N}` name prefix. The source of truth for phase order. |
-| Sub-phase | Project `P{N}. label` | Ordered by the `P{N}` name prefix, within a phase. Issues live here. |
+| Sub-phase | Project `I{N}.P{N}. label` | Ordered by the `P{N}` name prefix, within a phase. Issues live here. (Legacy bare `P{N}.` still parses.) |
 | Work Package (optional) | Milestone | Optional intra-project batch within a project. |
 | Plan (phase) | -- | VBW planning-layer internal. `.vbw-planning/phases/*/PLAN.md` |
 | Task | -- | VBW planning-layer internal. `.vbw-planning/` |
@@ -200,7 +200,7 @@ When the current phase ships, promote On Deck → Needs Spec and refill On Deck 
 ## Conventions
 
 - **No sub-issues in Linear.** Task decomposition lives in `.vbw-planning/` only. Linear stays clean — one Issue per feature.
-- **Projects (`P{N}.`) don't overlap.** Each issue lives in exactly one sub-phase project at a time.
+- **Projects (`I{N}.P{N}.`) don't overlap.** Each issue lives in exactly one sub-phase project at a time.
 - **Milestones = Work Packages (optional).** When used, a milestone is an intra-project batch; an issue belongs to at most one. Orthogonal to the phase surface — skip it entirely when not useful.
 - **Tier labels are redundant with phase initiatives** — intentional. Labels persist after phases complete.
 - **Urgent priority is reserved** for hotfixes and production emergencies only.

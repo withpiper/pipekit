@@ -20,8 +20,8 @@ You are a roadmap health auditor. Your job is to run a comprehensive health chec
 
 Validate that:
 1. **Stage 0 outputs exist** — concept, definition, strategy docs, roadmap, Linear phase hierarchy
-2. The **Linear-native phase surface is well-formed** — `i{N}.` initiatives and `P{N}.` projects are correctly named, ordered, and placed (see § Phase Surface in `method.config.md`)
-3. Every requirement is placed in a `P{N}.` project — no orphan issues that should live in a phase
+2. The **Linear-native phase surface is well-formed** — `i{N}.` initiatives and `I{N}.P{N}.` projects are correctly named, ordered, and placed (see § Phase Surface in `method.config.md`; projects carry their initiative number — bare `P{N}.` is legacy-valid but a rename candidate)
+3. Every requirement is placed in an `I{N}.P{N}.` project — no orphan issues that should live in a phase
 4. Dependencies and blockers are set correctly
 5. Workflow states are consistent with dependency ordering
 6. Spec coverage is adequate for the next planned phase
@@ -42,10 +42,10 @@ Validate that pre-pipeline outputs exist. If any are missing, report which skill
 | Strategy docs | `Strategy/` matching `method.config.md` manifest | Run `/strategy-create` |
 | Roadmap source | `.vbw-planning/ROADMAP.md` with content (optional legacy — strategy docs are the live source) | Run `/roadmap-create` |
 | Phase initiatives | At least one Linear delivery initiative named `i{N}.` exists | Run `/roadmap-create` |
-| Phase projects | The current initiative has at least one `P{N}.` project | Run `/roadmap-create` |
-| Linear board | Issues exist, placed in `P{N}.` projects | Run `/roadmap-create` |
+| Phase projects | The current initiative has at least one `I{N}.P{N}.` project (legacy bare `P{N}.` also counts) | Run `/roadmap-create` |
+| Linear board | Issues exist, placed in `I{N}.P{N}.` projects | Run `/roadmap-create` |
 
-The phase surface lives in **Linear**, not in a file: an initiative named `i{N}. label` is an ordered PHASE; a project named `P{N}. label` is an ordered SUB-PHASE; issues live in projects. `.vbw-planning/PHASES.md` and `linear-map.json` are **retired** — do not assert they exist or are consistent (a stale copy may linger as a `bin/pk` fallback, but no skill writes them).
+The phase surface lives in **Linear**, not in a file: an initiative named `i{N}. label` is an ordered PHASE; a project named `I{N}.P{N}. label` is an ordered SUB-PHASE (it carries its initiative number; legacy bare `P{N}.` still parses); issues live in projects. `.vbw-planning/PHASES.md` and `linear-map.json` are **retired** — do not assert they exist or are consistent (a stale copy may linger as a `bin/pk` fallback, but no skill writes them).
 
 If any Stage 0 check fails, report it prominently at the top of the health report:
 
@@ -101,7 +101,7 @@ This is the core Linear-native validation. The phase surface (per `method.config
 
 **Project naming & order:**
 
-3. Every project under a delivery initiative is named `P{N}.` where `{N}` is an integer.
+3. Every project under a delivery initiative is named `I{N}.P{N}.` (its initiative number + an integer `P{N}`); a bare `P{N}.` is legacy-valid but a rename candidate.
 4. The `{N}` values are **unique within their initiative** (no two `P3.` projects in the same `i{N}.`). Duplicates are an error; gaps are a warning.
 
 **Issue placement:**
@@ -184,7 +184,7 @@ Present a summary dashboard:
 |-------|--------|
 | Delivery initiatives named `i{N}.` | X/Y |
 | Initiative `{N}` unique & ordered | OK / gaps / DUPLICATE |
-| Projects named `P{N}.` | X/Y |
+| Projects named `I{N}.P{N}.` (bare `P{N}.` = rename candidate) | X/Y |
 | Project `{N}` unique within initiative | OK / DUPLICATE |
 | Orphan issues (not in a `P{N}.` project) | X |
 | Current initiative `i{N}.` is `Active` | OK / FLAG |
