@@ -34,6 +34,7 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `sop/Code_Quality.md` | SOP — coding conventions |
 | `sop/Database_SOP.md` | SOP — schema-change artifact rule, Migration Plan contract |
 | `sop/Production_Readiness_SOP.md` | SOP — production-readiness gate (`/prod-ready`), the six operational checks |
+| `sop/Security_Gate_SOP.md` | SOP — feature-scoped security gate (`/security-gate`), the six sensitive categories |
 | `sop/Git_and_Deployment.md` | SOP — branches, merges, release flow |
 | `sop/Hooks_SOP.md` | SOP — Claude Code hooks |
 | `sop/Linear_SOP.md` | SOP — Linear model, states, labels |
@@ -43,6 +44,20 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
 
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
+
+---
+
+## v4.4.0 — 2026-06-22
+
+> **New: `/security-gate` — the feature-scoped security gate (gap #3).** Pipekit has had `/security-review` (whole-repo audit) and `/pr-security-review` (PR-scoped, antagonistic) for a while, but both are **opt-in** — a human decides to run them. The gap that left: a security-sensitive feature can sail Building → UAT → production without anyone *deciding* it needed a look. `/security-gate` closes that — it runs automatically at the Building → UAT seam (in the v2 loop, the `pk ship` transition), beside `/verify`. This is the third of the five production-readiness gaps (gap #1 migrations in v4.0.0-rc5, gap #2 `/prod-ready` in v4.3.0).
+
+**Classify first, review only on a match.** The gate's first stage is a read-only classifier sub-agent that maps the **feature diff** to six sensitive categories — **auth, payments, user-input, external-APIs, file-storage, PII** — using the project's category signals. If none match, the gate is an **instant PASS**: most features touch nothing sensitive, and that path is meant to be cheap. If a category matches, a per-category checklist runs against the diff (parallel read-only sub-agents), every finding is **adversarially refutation-tested** (mirroring `/security-review`'s verification pass), and the gate emits a PASS/FAIL report. Classify from opened files, never a filename alone; when genuinely ambiguous, match (a false match costs one checklist run, a false miss ships an unreviewed sensitive change).
+
+**Where it sits.** After `/verify` (code is correct), before `pk ship` (transitions to UAT). Two per-feature gates now bracket the lifecycle: `/security-gate` at the *entry* to UAT (is this safe to expose to testers?) and `/prod-ready` at the *exit* to production (can the env absorb it?). Distinct from `/verify` (per-task, fast, category-blind) — don't fold them.
+
+**Portable framework, project-owned signals** — mirrors `/prod-ready` and `/financial-review`. The discipline + classifier + report shape live in `skills/security-gate/skill.md`; the substance (which paths/keywords mean each category in *this* repo, the project's auth primitive, which tables hold PII) lives in `resources/security-categories.md`, scaffolded from `templates/security-categories.template.md`. New SOP `sop/Security_Gate_SOP.md` carries the six per-category checklists + project-type variants (Next.js/Supabase, PHP, Python) + the rate-limiting overlap with `/prod-ready`. Two new `method.config.md` keys: `Security categories`, `Security gate report path`. No-op on a project without a categories file (scaffolds the template and stops).
+
+**Advisory in this release.** `/security-gate` produces a PASS/FAIL report (`Reports/Security_Gate_<ID>_<date>.md`) and posts a best-effort Linear comment; it does **not** transition state or block `pk ship`. A hard sentinel gate on `pk ship` (refusing a category-matched feature without a fresh PASS sentinel, mirroring `/verify`'s `verify-complete.md`) is a documented fast-follow, deferred to keep this first cut out of the CI-gated `bin/pk` logic. No `bin/pk` behavior changed.
 
 ---
 

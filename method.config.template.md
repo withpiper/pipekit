@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.3.0** — Last updated: 2026-06-22  *(added `Prod-ready checks` + `Prod-ready report path` keys for the `/prod-ready` production-readiness gate. Carries v4.1.0: Linear-native phase surface — § Phase Surface `i{N}.`/`P{N}.` naming convention replaces `PHASES.md`/`linear-map.json`; legacy files fall back automatically)*
+**v4.4.0** — Last updated: 2026-06-22  *(added `Security categories` + `Security gate report path` keys for the `/security-gate` feature-scoped security gate (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for the `/prod-ready` production-readiness gate. Carries v4.1.0: Linear-native phase surface — § Phase Surface `i{N}.`/`P{N}.` naming convention replaces `PHASES.md`/`linear-map.json`; legacy files fall back automatically)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -190,6 +190,8 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Financial review checks** | path | `resources/financial-review-checks.md` | `/financial-review` — project checks file (test cmd, calc files, DB-integrity SQL, parity formulas). Scaffold from `pipekit/templates/financial-review-checks.template.md`. |
 | **Prod-ready checks** | path | `resources/prod-readiness-checks.md` | `/prod-ready` — project checks file (build command, secret prefixes, monitoring, rate-limit middleware, backups, flags, dashboards). Scaffold from `pipekit/templates/prod-readiness-checks.template.md`. The skill guards the **last** entry in `Ship environments` (the production env). |
 | **Prod-ready report path** | path | `Reports/` | `/prod-ready` — where the readiness report is written (`Production_Readiness_<ID>_<date>.md`). |
+| **Security categories** | path | `resources/security-categories.md` | `/security-gate` — project category-definitions file (per-category path globs, keywords, correct patterns for auth/payments/user-input/external-APIs/file-storage/PII). Scaffold from `pipekit/templates/security-categories.template.md`. The gate runs at the Building → UAT seam (before `pk ship`). |
+| **Security gate report path** | path | `Reports/` | `/security-gate` — where the gate report is written (`Security_Gate_<ID>_<date>.md`). |
 
 ### Example (rs-vault)
 
