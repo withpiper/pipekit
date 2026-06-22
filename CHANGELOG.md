@@ -46,6 +46,16 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.3.1 — 2026-06-22
+
+> **`fix(hooks)`: the commit-format hook is now heredoc-aware.** The v4.3.0 fix closed the "`git commit` as a search pattern / echo / JSON literal" false-positive class, but one path remained open — and it bit immediately: **`git commit` inside a heredoc *body*.** When you document commit conventions inside a heredoc that feeds another command (the classic being `gh pr comment --body "$(cat <<EOF … git commit -m "feat: x" … EOF)"`), the awk read the line-initial `git commit` as a real invocation and fired a spurious nudge. The PR #441 review surfaced it the hard way: *posting the review comment tripped the hook.*
+
+**Two paths, one fix.** (1) The awk now runs **line-by-line tracking heredoc open/close**, so a `git commit` occurrence inside a heredoc body is data, never an invocation. (2) The fragile `cat <<` *fallback* (which grabbed the first heredoc line as a "subject" whenever no `-m` was found — and so *also* misfired on prose heredocs) is **deleted**; the one legitimate case it served, a heredoc-authored commit (`git commit -F- <<EOF`), is now handled inside the same state machine — the first non-blank body line of a *bare* `git commit … <<DELIM` is its subject. Here-strings (`<<<`) and `<<-` tab-stripped closers are handled.
+
+Hook-only change — `validate-commit.sh` + its dogfood copy, no `bin/pk` or methodology change. 4 new smoke tests cover both misfire paths and the legit `-F-` extraction (good + bad subject); suite **50 → 54**.
+
+---
+
 ## v4.3.0 — 2026-06-22
 
 > **New: `/prod-ready` — the production-readiness gate (gap #2).** Pipekit's pre-deploy gate (`/verify`) proves the code is correct in isolation; it never proved the *system* could absorb the code safely in production. `/prod-ready` is the second gate: it runs **once per feature**, at the production boundary, and verifies the operational preconditions `/verify` deliberately skips. This is the second of the five production-readiness gaps to close (gap #1, the migration artifact rule, shipped in v4.0.0-rc5).
