@@ -499,9 +499,40 @@ fi
 
 Adversarial findings are advisory — they do not auto-downgrade the QA verdict — but they always warrant a human eye before ship. The RECONCILE step (per `pipekit-discipline.md` § Completion Claims) is the user's: AC misread → Valid actionable → Valid trade-off → Noise.
 
+### Flag check F — Security-sensitive change (auto-gated; v4.4.0)
+
+This is where the feature-scoped security gate (gap #3) actually fires. `/verify` is the only point in the `/work → /verify → pk ship` auto-rollover with a human-decision seam, so the gate runs here as a flag rather than as a standalone step the auto-chain would skip.
+
+```bash
+SECCATS=$(pk config "Security categories" "")
+[ -n "$SECCATS" ] && [ ! -f "$SECCATS" ] && SECCATS=""   # configured but absent → treat as not-configured
+```
+
+If `SECCATS` is empty (no categories file), **skip this check silently** — the gate is opt-in per project, exactly like `/prod-ready` and `/financial-review`. If it points at a real file, run the gate:
+
+1. **Determine the changed surface** (committed work on this branch, never the working tree):
+   ```bash
+   git fetch -q origin "$INTEGRATION" 2>/dev/null || true   # best-effort; worktrees share the object store
+   CHANGED=$(git diff --name-only "origin/$INTEGRATION...HEAD" 2>/dev/null)
+   [ -z "$CHANGED" ] && CHANGED=$(git diff --name-only "$INTEGRATION...HEAD" 2>/dev/null)
+   CHANGED=$(printf '%s\n' "$CHANGED" | grep -v '^Reports/' )   # don't classify the gate's own past reports
+   ```
+   If `CHANGED` is **still empty** after both committed-diff attempts, do **not** emit a clean pass — the surface is *indeterminate* (stale/missing `origin/$INTEGRATION`, detached HEAD). Surface `FLAG: security gate — could not determine changed surface; classify manually` and treat it as a flag (fail-safe, mirroring `/prod-ready`'s blank-build handling — a miss here would ship an unreviewed sensitive change).
+
+2. **Classify + review** by following the `/security-gate` skill (`skills/security-gate/skill.md`, or `.claude/skills/` in consuming projects) against `CHANGED`, using the project's `$SECCATS` definitions and the `sop/Security_Gate_SOP.md` per-category checklists. Spawn it as the gate's own read-only sub-agents (`general-purpose`, `model: sonnet`, `allowed-tools: Read, Bash, Grep, Glob`). The verdict is `PASS` (no category matched, or all matched checklists clean) / `FAIL` (any confirmed Critical or High) / `WARNINGS` (Medium/Low only).
+
+Surface the flag carrying the verdict — never a bare pointer (same discipline as the migration flag):
+
+```bash
+echo "FLAG: security gate — ${SECGATE_VERDICT} — categories: ${SECGATE_MATCHED:-none} — see Security_Gate_*.md"
+[ "$TIER" != "quick" ] && printf 'FLAG: security gate: %s — categories: %s\n' "$SECGATE_VERDICT" "${SECGATE_MATCHED:-none}" >> "$VERIFY_DIR/evidence.txt"
+```
+
+A `PASS` with **no category matched** is the common, cheap case — emit no flag (the gate ran and found nothing sensitive). Only a category match (whether the verdict is FAIL, WARNINGS, or even a clean PASS the user should see) surfaces a flag. Like every other flag, a security-gate FAIL **pauses auto-ship** (Step 9) for the user to RECONCILE; it does **not** auto-downgrade the `/verify` status. Advisory this release — see `sop/Security_Gate_SOP.md` § Enforcement roadmap for the planned hard gate.
+
 ### Tally
 
-After all five checks, count flags:
+After all six checks, count flags:
 
 ```bash
 FLAG_COUNT=<sum of flags surfaced above>
@@ -648,7 +679,7 @@ Verify complete: <VERIFY_DIR>/verify-complete.md  (present only on PASS)
 Auto-ship fires when **all three** conditions hold:
 
 1. The verdict is **Pass** (gate green; QA Pass if QA ran).
-2. The flag tally from Step 6 is **zero** (no migration files, no QA Pass-with-non-empty sub-sections, no `--qa` force, no `/work` advisory marker, no antagonistic findings).
+2. The flag tally from Step 6 is **zero** (no migration files, no QA Pass-with-non-empty sub-sections, no `--qa` force, no `/work` advisory marker, no antagonistic findings, no matched security category).
 3. This skill was invoked with the `--auto-ship` argument (passed via the Skill tool's `args` parameter by `/work`'s Step 7 rollover).
 
 Behavior:
