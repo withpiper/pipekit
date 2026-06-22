@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.1.0** — Last updated: 2026-06-21  *(Linear-native phase surface — added § Phase Surface: `i{N}.`/`P{N}.` naming convention replaces `PHASES.md`/`linear-map.json`; legacy files fall back automatically)*
+**v4.3.0** — Last updated: 2026-06-22  *(added `Prod-ready checks` + `Prod-ready report path` keys for the `/prod-ready` production-readiness gate. Carries v4.1.0: Linear-native phase surface — § Phase Surface `i{N}.`/`P{N}.` naming convention replaces `PHASES.md`/`linear-map.json`; legacy files fall back automatically)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -188,6 +188,8 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Source root** | path | `src/` | `scripts/check-no-self-references.sh` (where to grep) |
 | **Financial review WIT** | Linear issue id, or blank | (blank) | `/financial-review` — recurring WIT moved In Progress → In Review → Done each cycle; **blank disables the Linear lifecycle** (run + report only). Finance/calculation-heavy projects only. |
 | **Financial review checks** | path | `resources/financial-review-checks.md` | `/financial-review` — project checks file (test cmd, calc files, DB-integrity SQL, parity formulas). Scaffold from `pipekit/templates/financial-review-checks.template.md`. |
+| **Prod-ready checks** | path | `resources/prod-readiness-checks.md` | `/prod-ready` — project checks file (build command, secret prefixes, monitoring, rate-limit middleware, backups, flags, dashboards). Scaffold from `pipekit/templates/prod-readiness-checks.template.md`. The skill guards the **last** entry in `Ship environments` (the production env). |
+| **Prod-ready report path** | path | `Reports/` | `/prod-ready` — where the readiness report is written (`Production_Readiness_<ID>_<date>.md`). |
 
 ### Example (rs-vault)
 

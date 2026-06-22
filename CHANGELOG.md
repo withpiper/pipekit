@@ -33,6 +33,7 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `method.config.template.md` | Project-config template |
 | `sop/Code_Quality.md` | SOP — coding conventions |
 | `sop/Database_SOP.md` | SOP — schema-change artifact rule, Migration Plan contract |
+| `sop/Production_Readiness_SOP.md` | SOP — production-readiness gate (`/prod-ready`), the six operational checks |
 | `sop/Git_and_Deployment.md` | SOP — branches, merges, release flow |
 | `sop/Hooks_SOP.md` | SOP — Claude Code hooks |
 | `sop/Linear_SOP.md` | SOP — Linear model, states, labels |
@@ -42,6 +43,20 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
 
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
+
+---
+
+## v4.3.0 — 2026-06-22
+
+> **New: `/prod-ready` — the production-readiness gate (gap #2).** Pipekit's pre-deploy gate (`/verify`) proves the code is correct in isolation; it never proved the *system* could absorb the code safely in production. `/prod-ready` is the second gate: it runs **once per feature**, at the production boundary, and verifies the operational preconditions `/verify` deliberately skips. This is the second of the five production-readiness gaps to close (gap #1, the migration artifact rule, shipped in v4.0.0-rc5).
+
+**The split.** `/verify` runs every task at Building → ship (fast: types/lint/tests/AC). `/prod-ready` runs once at the production boundary — before `pk promote <last-env>` on multi-env projects, or before the merge to `main` on 1-tier. Two gates, never merged: different cadence, different failure modes (a `/verify` fail is a lint error fixable in minutes; a `/prod-ready` fail is infra work).
+
+**The six checks**, each tagged automatable / agent-verifiable / manual-confirm: (1) error monitoring wired for the feature path, (2) no secrets in the **built** client bundle (greps the build output, not source — Critical on any match), (3) rate limiting on new public endpoints, (4) backups active on the target env, (5) feature flag / kill switch on risky paths, (6) a monitoring dashboard chart. Severity rubric Critical→Low; any Critical or unaddressed High → FAIL (hold the promote).
+
+**Portable framework, project-owned checks** — mirrors `/financial-review`. The discipline + report shape live in `skills/prod-ready/skill.md`; the concrete substance (build command, secret prefixes, monitoring tool, rate-limit middleware, backup provider, flag system, dashboard URL) lives in a project checks file (`resources/prod-readiness-checks.md`, scaffolded from `templates/prod-readiness-checks.template.md`). New SOP `sop/Production_Readiness_SOP.md` carries the full methodology + project-type variants (Next.js/Vercel/Supabase, Python/Railway, generic). Two new `method.config.md` keys: `Prod-ready checks`, `Prod-ready report path`.
+
+**Advisory in this release.** `/prod-ready` produces a PASS/FAIL report (`Reports/Production_Readiness_<ID>_<date>.md`) and posts a best-effort Linear comment; it does **not** transition state or block `pk promote`. A hard sentinel gate on `pk promote <prod-env>` (mirroring `/verify`'s `verify-complete.md`) is a documented fast-follow, deferred to keep this first cut out of the CI-gated `bin/pk` logic. No `bin/pk` behavior changed; smoke suite stays 46/46.
 
 ---
 

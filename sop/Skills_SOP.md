@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.2.0** — Last updated: 2026-06-21  *(VBW plugin no longer required — execution framing points at the native-on-Workflow executor, not VBW agents; the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement. Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
+**v4.3.0** — Last updated: 2026-06-22  *(added `/prod-ready` (Stage 4 production-readiness gate) to the portable-skills table — advisory framework, project checks in `resources/prod-readiness-checks.md`. Carries v4.2.0: VBW plugin no longer required — execution framing points at the native-on-Workflow executor, not VBW agents; the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement. Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
 
 ---
 
@@ -54,6 +54,7 @@ These skills work across any project that follows the method. They read `method.
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
 | `/pk-express` | Idea→Draft-PR autopilot for **simple** WITs: chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify+ship), advancing on success and stopping only at attention gates (not-Now, tier:heavy, spec stalemate, verify flags, Draft PR). Quick/Standard tier only. | Anytime (express lane) |
 | `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status. `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
+| `/prod-ready [<ID>]` | Production-readiness gate (v4.3.0). Run **once** before the final `pk promote` (the last `Ship environments` entry; the merge to `main` on 1-tier). Verifies operational preconditions `/verify` doesn't — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. PASS/FAIL report + Linear comment. **Advisory** — doesn't block `pk promote`. Portable **framework**; concrete checks live in a per-project checks file (`resources/prod-readiness-checks.md`, scaffolded from `templates/prod-readiness-checks.template.md`). No-op on projects without a checks file. | Stage 4: Release |
 | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR along `Ship environments`. WITs stay in source state. 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
 | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). | Stage 4: Release |
 | `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |
