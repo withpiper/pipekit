@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.5.0** — Last updated: 2026-06-22  *(§ Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
+**v4.6.0** — Last updated: 2026-06-23  *(`Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the new `pk deploy [<env>]` verb (v4.6.0). Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -176,7 +176,8 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 |-----|-------|---------|---------|
 | **Integration branch** | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
 | **Promote to main** | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
-| **Deploy command** | shell command | (none) | `pk done` — for **script-deploy** projects (deploy is a script, not branch promotion). Surfaced as a reminder after merge so "Done" can't be reached without a deploy ("merged ≠ deployed"). Advisory; never auto-run. Leave blank for branch-per-env projects that use `pk promote`. |
+| **Deploy command** | shell command | (none) | `pk deploy` / `pk done` — for **script-deploy** projects (deploy is a script, not branch promotion). `pk deploy` (or `pk deploy prod`) runs this command; `pk done` also surfaces it after merge as a "merged ≠ deployed" reminder. Advisory; never auto-run. Leave blank for branch-per-env projects that use `pk promote`. |
+| **Deploy command `<env>`** | shell command | (none) | `pk deploy <env>` — per-environment override (key is **space-suffixed**, e.g. `Deploy command dev`, because `pk_config` splits on the first colon). `pk deploy dev` runs `Deploy command dev`; `pk deploy` / `pk deploy prod` fall back to the bare `Deploy command`. Add one row per env you deploy to (`dev`, `staging`, …). |
 | **Require QA review** | `true` \| `false` | `false` | `/verify` (auto-spawns QA subagent if `true`) |
 | **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
@@ -212,4 +213,16 @@ Promote to main: true
 Require QA review: true
 Default deep flag: false
 Ship environments: dev,beta,main
+```
+
+### Example (script-deploy — e.g. an FTP-from-`main` project)
+
+Single trunk, no branch promotion: each env is a deploy *script*, run with `pk deploy <env>`.
+
+```
+Integration branch: main
+Promote to main: false
+Ship environments: dev,main
+Deploy command: ./scripts/deploy/deploy-prod.sh
+Deploy command dev: ./scripts/deploy/deploy-dev.sh
 ```

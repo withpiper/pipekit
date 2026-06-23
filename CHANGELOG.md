@@ -47,6 +47,16 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.6.0 — 2026-06-23
+
+> **New: `pk deploy [<env>]` — a first-class front door for script-deploy projects.** Projects that ship by running a deploy script (FTP, rsync, a custom uploader) rather than by branch promotion had no `pk` verb for the deploy itself — `pk done` only *reminded* you to run the configured `Deploy command` ("merged ≠ deployed"), leaving the last, outward-facing step as out-of-band copy-paste. `pk deploy` closes that gap: it resolves `<env>` to the project's configured deploy command in `method.config.md` and runs it.
+
+**Positional env, thin delegation.** `pk deploy` (or `pk deploy prod`) runs the bare `Deploy command`; `pk deploy dev` runs the per-env `Deploy command dev` (the per-env key is **space-suffixed** — `pk_config` splits each config line on its first colon, so a colon in the key would be unparseable); `pk deploy prod` falls back to the bare key when no `Deploy command prod` is set. Anything after `--` passes through to the script verbatim (`pk deploy prod -- budget-edit.html`, `pk deploy -- --all`). The command `exec`s the deploy script so it owns the tty — its own confirmation prompts, secrets-manager wrapping (`op run`), and progress output are untouched. **pk reimplements none of the deploy safety** (file resolution, cache-busting, main-only extraction, the confirm gate); those stay in the project's script, the single source of truth.
+
+**Backward-compatible + promote-aware.** The long-standing single `Deploy command` key keeps working unchanged (it's what `pk deploy` / `pk deploy prod` read), so existing configs need no edits. Branch-promotion projects (no `Deploy command`, `Promote to main: true`) are pointed at `pk promote` instead of erroring. `pk done`'s post-merge reminder now points at `pk deploy` (still showing the underlying command). Two optional config keys documented (`Deploy command`, per-env `Deploy command <env>`) plus a new script-deploy template example. 7 new smoke tests (delegation + passthrough, prod→bare fallback, per-env key, unknown-env / unknown-flag / extra-positional errors, promote redirect); suite **56 → 63**. No change to any existing command's behavior.
+
+---
+
 ## v4.5.0 — 2026-06-22
 
 > **Phase surface: projects carry their initiative number.** A Linear project under initiative `i1.` is now named **`I1.P2. label`** (initiative number + project number), not bare `P2.`. Initiatives sit *above* projects in Linear and get buried in the UI; projects are the unit you actually navigate — so putting the initiative number in the project name makes the phase legible at the level you work at.
