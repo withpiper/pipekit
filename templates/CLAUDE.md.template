@@ -57,11 +57,16 @@ Stage 0 (one-time): /concept → /define → /strategy-create → /startup
                     → /roadmap-create → /phase-plan
 
 Daily loop (per issue):
-  /light-spec → agent review → human review     (Stage 1: Spec)
-  pk next → pk branch <ID> → /work <ID>          (Stage 2: Plan + Build)
-  /verify → pk ship [--review] → UAT             (Stage 3: Verify + Ship)
-  pk done <ID> → pk promote                      (Stage 4: Release)
-  /strategy-sync                                  (Stage 5: Doc Loop)
+  /light-spec → agent review → human review              (Stage 1: Spec)
+  pk next → pk branch <ID> → /work <ID>                   (Stage 2: Plan + Build)
+  /verify → /security-gate → pk ship [--review] → pk ready → UAT
+                                                          (Stage 3: Verify + Ship)
+  pk done <ID> → /prod-ready → pk promote                 (Stage 4: Release)
+  /strategy-sync                                          (Stage 5: Doc Loop)
+
+  /security-gate (advisory) classifies the diff into sensitive categories before ship.
+  /prod-ready (advisory) runs once per feature before the final pk promote.
+  Script-deploy projects use pk deploy <env> in place of pk promote (v4.6.0).
 
 Per session: /pk-exit (writes Logs/Sessions/<date>_<HHMM>.md before /exit)
 ```
@@ -72,7 +77,7 @@ Interactive skills live in `.claude/skills/`. `pk *` commands live in `bin/pk`. 
 
 Before writing or modifying any code, gather full context first:
 
-1. **Read the Linear issue and its comments.** Acceptance criteria, design decisions, and discussion history live there. Use `mcp__linear-server__get_issue` with `includeRelations: true`.
+1. **Read the Linear issue and its comments.** Acceptance criteria, design decisions, and discussion history live there. Use `mcp__linear-server__linear_getIssueById` with `includeRelations: true`.
 2. **Read the existing codebase.** The file you'll modify and its neighbors. Look for existing patterns before creating new ones.
 3. **{Project-specific reference reading}** — e.g., "Read the POC reference in `src_poc/` before porting a feature."
 
@@ -93,6 +98,8 @@ Feedback-derived rules this project has learned to follow. Add new rules when pa
 | AI coding discipline (Red Flags, Plan Gate, scope) | Yes | `.claude/rules/pipekit-discipline.md` |
 | Tooling, library-API verification, pre-deploy gate | Yes | `.claude/rules/pipekit-tooling.md` |
 | Security, auth, secrets, OWASP baseline | Yes | `.claude/rules/pipekit-security.md` |
+| Migration discipline (frozen-file invariant, hardening) | Yes | `.claude/rules/pipekit-migrations.md` |
+| cmux pane/surface discipline | Yes | `.claude/rules/pipekit-cmux.md` |
 | {Project-specific rules go here — e.g., `security.md` for app-specific auth} | Yes | `.claude/rules/{name}.md` |
 | Git & deployment SOP | On demand | `method/sop/Git_and_Deployment.md` |
 | Linear workflow | On demand | `method/sop/Linear_SOP.md` |
