@@ -290,6 +290,83 @@ rm -rf "$REMOTE"
 cleanup
 FIXTURE=""
 
+# ── CLI tests: pk deploy (script-deploy delegation) ──────────────────────────
+# cmd_deploy resolves <env> → method.config.md "Deploy command[ <env>]" and exec's
+# it, passing args after `--` through verbatim. Thin delegate: it must reach the
+# configured script, never call gh, and point branch-promotion projects at pk promote.
+
+echo "== pk deploy (script-deploy delegation) =="
+
+make_fixture
+# Stand-in deploy scripts that prove they ran and echo any passthrough args.
+cat > "$FIXTURE/deploy-prod.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "DEPLOYED-PROD args=[$*]"
+EOF
+cat > "$FIXTURE/deploy-dev.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "DEPLOYED-DEV args=[$*]"
+EOF
+chmod +x "$FIXTURE/deploy-prod.sh" "$FIXTURE/deploy-dev.sh"
+
+write_config '```
+Promote to main: false
+Deploy command: ./deploy-prod.sh
+Deploy command dev: ./deploy-dev.sh
+```'
+
+# (1) Core: bare deploy reaches the configured script, passes args after --, no gh.
+: > "$GH_LOG"
+run_pk deploy -- a.html --all
+g=0; case "$RUN_OUT" in *"DEPLOYED-PROD args=[a.html --all]"*) g=1 ;; esac
+if [ $RUN_CODE -eq 0 ] && [ $g -eq 1 ] && [ ! -s "$GH_LOG" ]; then
+  ok "deploy: delegates to script + passes args after --, no gh"
+else
+  fail "deploy: delegates to script + passes args after --, no gh" "rc=$RUN_CODE matched=$g gh='$(cat "$GH_LOG")' out: $(echo "$RUN_OUT" | tail -1)"
+fi
+
+# (2) prod with no env-specific key falls back to bare "Deploy command".
+run_pk deploy prod
+case "$RUN_OUT" in *DEPLOYED-PROD*) ok "deploy: prod falls back to bare Deploy command" ;; *) fail "deploy: prod falls back to bare Deploy command" "out: $RUN_OUT" ;; esac
+
+# (3) env-specific "Deploy command dev" key (space-suffixed) resolves to the dev script.
+run_pk deploy dev
+case "$RUN_OUT" in *DEPLOYED-DEV*) ok "deploy: env-specific 'Deploy command dev' key resolves" ;; *) fail "deploy: env-specific 'Deploy command dev' key resolves" "out: $RUN_OUT" ;; esac
+
+# (4) Unknown env with no key → error, exit 1, never calls gh.
+: > "$GH_LOG"
+run_pk deploy staging
+if [ $RUN_CODE -eq 1 ] && [ ! -s "$GH_LOG" ]; then
+  case "$RUN_OUT" in *"no 'Deploy command staging'"*) ok "deploy: unknown env errors (exit 1), no gh" ;; *) fail "deploy: unknown env errors (exit 1), no gh" "out: $RUN_OUT" ;; esac
+else
+  fail "deploy: unknown env errors (exit 1), no gh" "rc=$RUN_CODE gh='$(cat "$GH_LOG")'"
+fi
+
+# (5) Unknown flag → exit 2 (deploy-script args belong after --).
+run_pk deploy --bogus
+[ $RUN_CODE -eq 2 ] && ok "deploy: unknown flag rejected (exit 2)" || fail "deploy: unknown flag rejected (exit 2)" "exit $RUN_CODE"
+
+# (6) Extra positional after the env → exit 2.
+run_pk deploy prod extra
+[ $RUN_CODE -eq 2 ] && ok "deploy: extra positional rejected (exit 2)" || fail "deploy: extra positional rejected (exit 2)" "exit $RUN_CODE"
+
+# (7) Branch-promotion project (no Deploy command, Promote to main: true) →
+#     points at pk promote, exit 0, never calls gh.
+write_config '```
+Promote to main: true
+Ship environments: dev,main
+```'
+: > "$GH_LOG"
+run_pk deploy
+if [ $RUN_CODE -eq 0 ] && [ ! -s "$GH_LOG" ]; then
+  case "$RUN_OUT" in *"pk promote"*) ok "deploy: branch-promotion project points at pk promote" ;; *) fail "deploy: branch-promotion project points at pk promote" "out: $RUN_OUT" ;; esac
+else
+  fail "deploy: branch-promotion project points at pk promote" "rc=$RUN_CODE gh='$(cat "$GH_LOG")'"
+fi
+
+cleanup
+FIXTURE=""
+
 # ── CLI tests: doctor upstream-staleness check ───────────────────────────────
 
 echo "== doctor staleness check =="

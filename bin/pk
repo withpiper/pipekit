@@ -30,7 +30,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.5.0"
+PK_VERSION="4.6.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1751,7 +1751,7 @@ $commits"
   if [ -n "$deploy_cmd" ]; then
     echo ""
     echo "🚀 Deploy step — this project deploys by script, not branch promotion."
-    echo "   Merged ≠ deployed. Run when ready:  $deploy_cmd"
+    echo "   Merged ≠ deployed. Run when ready:  pk deploy   (→ $deploy_cmd)"
   fi
 
   # Advisory: a local Supabase stack / dev server started inside the worktree
@@ -1764,6 +1764,84 @@ $commits"
   fi
 
   echo "Done."
+}
+
+# pk deploy [<env>] [-- <script args>]
+# Front door for script-deploy projects: resolve <env> to the project's
+# configured deploy command in method.config.md and exec it. Thin by design —
+# pk never reimplements file-resolution, cache-busting, main-only extraction, or
+# confirm prompts; those live in the project's deploy script, which owns the tty.
+#   pk deploy            → "Deploy command"               (the primary/prod deploy)
+#   pk deploy prod       → "Deploy command prod", else "Deploy command"
+#   pk deploy dev        → "Deploy command dev"
+#   pk deploy <env> -- a b   passes  a b  through to the script (e.g. file list / --all)
+# Per-env keys are space-suffixed ("Deploy command dev"), not colon-suffixed:
+# pk_config splits each config line on its first colon, so a colon in the key
+# itself ("Deploy command: dev") would be unparseable.
+# Branch-promotion projects (no Deploy command) are pointed at pk promote.
+cmd_deploy() {
+  local env=""
+  local passthrough=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --)   shift; passthrough=("$@"); break ;;
+      --*)  echo "pk deploy: unknown flag '$1' — pass deploy-script args after '--'." >&2; return 2 ;;
+      *)
+        if [ -n "$env" ]; then
+          echo "pk deploy: unexpected arg '$1'. Usage: pk deploy [<env>] [-- <script args>]" >&2
+          return 2
+        fi
+        env="$1"; shift ;;
+    esac
+  done
+
+  # Resolve the deploy command. An explicit "Deploy command: <env>" wins; bare
+  # "Deploy command" is the default (and the prod fallback) — so the long-standing
+  # single-key config keeps working and `pk deploy`/`pk deploy prod` both find it.
+  local deploy_cmd=""
+  if [ -z "$env" ]; then
+    deploy_cmd=$(pk_config "Deploy command" "")
+  else
+    deploy_cmd=$(pk_config "Deploy command $env" "")
+    if [ -z "$deploy_cmd" ] && [ "$env" = "prod" ]; then
+      deploy_cmd=$(pk_config "Deploy command" "")
+    fi
+  fi
+
+  if [ -z "$deploy_cmd" ]; then
+    # No deploy command for this env. Branch-promotion projects deploy via
+    # pk promote, not a script — point there instead of erroring.
+    if [ -z "$env" ] || [ "$env" = "prod" ]; then
+      local promote
+      promote=$(pk_config "Promote to main" "true")
+      if [ "$promote" = "true" ]; then
+        echo "No 'Deploy command' in method.config.md — this project promotes via branches."
+        echo "  Use:  pk promote        (walks the Ship environments chain)"
+        return 0
+      fi
+    fi
+    local key="Deploy command"; [ -n "$env" ] && key="Deploy command $env"
+    echo "ERROR: no '$key' configured in method.config.md." >&2
+    echo "  Add a fenced code-block line, e.g.:  $key: ./scripts/deploy.sh" >&2
+    return 1
+  fi
+
+  local root
+  root=$(pk_repo_root) || { echo "ERROR: pk deploy must run inside a git repo." >&2; return 1; }
+  cd "$root" || return 1
+
+  local shown="$deploy_cmd"
+  [ ${#passthrough[@]} -gt 0 ] && shown="$deploy_cmd ${passthrough[*]}"
+  echo "🚀 pk deploy${env:+ $env}: $shown"
+  echo "   (delegating to the project deploy command — its own prompts and safety apply)"
+  echo ""
+  # exec so the deploy script owns the tty (confirm prompts, op run, FTP output)
+  # and its exit code becomes pk's. Args after '--' pass through verbatim via $@.
+  if [ ${#passthrough[@]} -gt 0 ]; then
+    exec bash -c "$deploy_cmd \"\$@\"" pk-deploy "${passthrough[@]}"
+  else
+    exec bash -c "$deploy_cmd"
+  fi
 }
 
 cmd_verify() {
@@ -2573,6 +2651,7 @@ Subcommands:
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
   pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
+  pk deploy [<env>] [-- <args>]   Run the project's configured Deploy command (method.config.md) for <env>. Bare / 'prod' → "Deploy command"; 'pk deploy dev' → "Deploy command dev". Args after -- pass through to the script (e.g. a file list, or --all). Script-deploy projects only — branch-promotion projects deploy via pk promote. Delegates fully: the deploy script owns confirmation + safety.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)
@@ -2854,6 +2933,7 @@ main() {
     ship)     cmd_ship "$@" ;;
     ready)    cmd_ready "$@" ;;
     done)     cmd_done "$@" ;;
+    deploy)   cmd_deploy "$@" ;;
     verify)   cmd_verify "$@" ;;
     config|cfg) cmd_config "$@" ;;
     promote)  cmd_promote "$@" ;;
