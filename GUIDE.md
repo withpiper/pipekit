@@ -159,7 +159,7 @@ Pick the mode that matches your situation. Full description in [method.md § Ent
 
 `/startup` auto-detects the mode and confirms with you before proceeding (same pattern as tier resolution in `/work`). `/strategy-from-code` (auto-audit for brownfield) is deferred — originally promised for v1.4.0 but never built; brownfield currently routes through `/strategy-create` with a manual-edit note.
 
-The rest of this section describes the **greenfield flow** in detail. Brownfield skips Steps 0.1 and 0.2 — adapt accordingly. Inherited mode runs no Stage 0 steps; jump straight to [Stage 1](#stage-1-definition) once the foundation check passes.
+The rest of this section describes the **greenfield flow** in detail. Brownfield skips Steps 0.1 and 0.2 — adapt accordingly. Inherited mode runs no Stage 0 steps; jump straight to [Stage 1](#stage-1-spec) once the foundation check passes.
 
 The `/startup` skill orchestrates the greenfield flow — you can run each step individually or let `/startup` chain them.
 
@@ -536,7 +536,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 ### Plan Review
 
 **Skill:** `/review-plan` (spawns `plan-reviewer` agent at `model: opus`)
-**Input:** the inline plan — `/work` (native) emits a task DAG at `.pk-work/<ID>-PLAN.md`. (In direct VBW use the plan lives at `.vbw-planning/.../PLAN.md`; `/review-plan` currently targets that path, so wiring it to the native artifact is a follow-up.)
+**Input:** the inline plan — `/work` (native) emits a task DAG at `.pk-work/<ID>-PLAN.md`, which `/review-plan` targets directly. (Legacy VBW-planned phases keep `PLAN.md` under `.vbw-planning/phases/{phase-slug}/`; `/review-plan` still reviews those as a fallback.)
 **Output:** Validated plan or revision requests
 
 Run between `/work`'s inline planning and execution as an optional plan-quality gate. (In direct VBW use — outside Pipekit — the plan comes from VBW's own planner instead.) Native execution has per-task verify-before-integrate as its own plan-safety net, so `/review-plan` is most useful when a plan is large or high-risk and you want a whole-plan stress-test before any task runs. The plan reviewer stress-tests:
@@ -1006,7 +1006,7 @@ Each consuming project maintains `method.config.md` with project-specific values
 |---------|-------------------|
 | Project | Name, display name, worktree prefix, paths |
 | Linear | Workspace slug, team name/ID, issue prefix |
-| Workflow State IDs | UUID for each of the 13 states — skills use these for transitions |
+| Workflow State IDs | UUID for each of the 14 states — skills use these for transitions |
 | Strategy Docs | Which docs exist, their files, purposes, audiences |
 | Slack (optional) | Channel IDs for notifications |
 | Environments | URLs and branches for each environment |
@@ -1239,7 +1239,7 @@ Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-crea
 
 The method includes rule templates in `templates/rules/` that consuming projects sync into their `.claude/rules/` directory. These are auto-loaded every session by Claude Code under the **hub-and-spoke model** (CLAUDE.md hub → rules/ auto-loaded → pipekit/sop/ demand-loaded).
 
-Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames. Three canonical topic files ship from Pipekit:
+Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames. Five canonical topic files ship from Pipekit:
 
 ### `pipekit-discipline.md`
 
@@ -1269,6 +1269,25 @@ Non-negotiable security baseline:
 - **SQL/injection** — always parameterized; never `eval` on untrusted input
 - **OWASP Top 10** awareness — 10-item quick-reference checklist
 - **Feature flags / kill switches** for fail-unsafe features (financial, bulk destructive, data leak potential)
+
+### `pipekit-migrations.md`
+
+Discipline for projects with a versioned migration system (Supabase, Prisma, Knex, Alembic, Rails). Informational if the project has none:
+
+- **Frozen-file invariant** — once a migration is applied to any env, the file is immutable; fix/harden/revert with a *new* migration
+- **Hardening during review** — close `/db-review` findings with a later-timestamped migration, never an edit
+- **Parallel-branch coordination** — re-check timestamps against the base branch immediately before merge
+- **MCP-applied-migration drift** — never `apply_migration` SQL that also lives on disk (auto-stamp mismatch)
+- **Silent-failure patterns** — nullable version FKs, auto-create triggers vs manual inserts, stale DEFAULTs vs new CHECK constraints
+
+### `pipekit-cmux.md`
+
+cmux pane/surface discipline (informational if not running in cmux):
+
+- **Discover before acting** — re-fetch topology; surface refs from a previous turn go stale
+- **Use the CLI, not RPC** — `cmux send --surface`, never `cmux rpc surface.send_text` (routing bug)
+- **Pair every send with a read-screen** — verify the command landed where intended
+- **Track long-running work by PID**, not by scrollback; detect turn-END, not narration keywords
 
 ### Adding project-specific rules
 

@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.2.0** — Last updated: 2026-06-21  *(Pipekit 4.2: **VBW plugin decoupled.** The VBW plugin is no longer required — its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`, synced + registered by `sync-method.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement. Carries 4.1: **Linear-native phase surface** — Initiatives named `i{N}.` (phases) → Projects named `P{N}.` (sub-phases) → Issues, ordered by the name-prefix number; `pk next`/`pk status` derive the current phase live; `/roadmap-create` authors the hierarchy and `/phase-plan` advances it; `PHASES.md`/`linear-map.json` are retired (read-only fallback). Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed; a stale `Backend: vbw` refuses with a migration message). Plus 3.x's ownership split + distribution-layer hardening and the v2.8.x substrate)*
+**v4.6.0** — Last updated: 2026-06-23  *(Pipekit 4.6: **`pk deploy [<env>]`** — a first-class deploy verb for script-deploy projects (FTP/rsync/custom uploader): resolves `<env>` to the configured `Deploy command` in `method.config.md` and runs it (bare/`prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through), a thin delegate that leaves confirmation + safety to the script. Carries 4.5: **projects carry their initiative number in the phase surface** — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`; `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`, and `/roadmap-create` + `/phase-plan` author the new form. Carries 4.4: **`/security-gate`** — a feature-scoped security gate at the Building → UAT seam (after `/verify`, before `pk ship`) that classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the matching checklist; none matched → instant PASS. Advisory. Carries 4.3: **`/prod-ready`** — a production-readiness gate beside `/verify`, run once per feature before the final `pk promote` (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard). Advisory. Carries 4.2: **VBW plugin decoupled** — no longer required; its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`, synced + registered by `sync-method.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement. Carries 4.1: **Linear-native phase surface** — Initiatives named `i{N}.` (phases) → Projects named `I{N}.P{N}.` (sub-phases) → Issues, ordered by the name-prefix number; `PHASES.md`/`linear-map.json` are retired (read-only fallback). Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed; a stale `Backend: vbw` refuses with a migration message). Plus 3.x's ownership split + distribution-layer hardening and the v2.8.x substrate)*
 
 A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); the pluggable VBW execution backend was removed in v4.0.0, and as of v4.2.0 the [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) plugin is no longer required at all. A legacy VBW planning layer remains for projects that used direct VBW, slated for a separate retirement.
 
@@ -8,7 +8,7 @@ A structured AI-assisted software delivery system — from idea to production wi
 
 Pipekit is the **structure around an executor** — spec creation, independent review, human sign-off, quality gates, Linear visibility, and promotion. It is **not** itself a planner or code executor: it runs the build step on the native-on-Workflow executor and owns everything around it.
 
-As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). As of **4.1**, [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer part of Stage 0 either — `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `P{N}.` Projects → Issues). As of **4.2**, the VBW plugin is no longer required at all — its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement.
+As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). As of **4.1**, [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer part of Stage 0 either — `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `I{N}.P{N}.` Projects → Issues). As of **4.2**, the VBW plugin is no longer required at all — its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement.
 
 | Stage | What Pipekit handles |
 |-------|----------------------|
@@ -25,8 +25,8 @@ The deep-analysis safety net is the **gate layer** — `/financial-review`, `/pr
 To avoid drift between the two systems, the boundaries are explicit:
 
 - **The legacy `.vbw-planning/` directory** holds `ROADMAP.md` plus the `PLAN.md` files produced in direct VBW planning use. No Pipekit skill depends on it; it survives only for projects that used direct VBW and is slated for separate retirement. `/work` (native) writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead.
-- **Pipekit owns the visibility layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `P{N}.` → Issues), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
-- **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`P{N}.` hierarchy *is* the roadmap. There is no merge into a VBW phase skeleton.
+- **Pipekit owns the visibility layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `I{N}.P{N}.` → Issues), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
+- **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`I{N}.P{N}.` hierarchy *is* the roadmap. There is no merge into a VBW phase skeleton.
 - **Don't invoke VBW agents directly.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state machine in sync. Direct VBW invocation bypasses the visibility layer.
 
 Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pipekit-ownership-model).
@@ -55,7 +55,7 @@ A bigger context window changes how much an agent can hold. It does not change w
 | Define | `/define` | `project-definition.md` |
 | Strategy | `/strategy-create` | `Strategy/` docs (incl. Design Direction) |
 | Setup | `/startup` | Repo, DB, deploy, Linear workspace |
-| Roadmap | `/roadmap-create` | Linear `i{N}.`/`P{N}.` hierarchy (Initiatives → Projects → Issues) |
+| Roadmap | `/roadmap-create` | Linear `i{N}.`/`I{N}.P{N}.` hierarchy (Initiatives → Projects → Issues) |
 | Phase Plan | `/phase-plan` | First sub-phase's issues in "Needs Spec" |
 
 **Development Pipeline — the v2 daily loop** (repeats per issue)
@@ -65,16 +65,19 @@ A bigger context window changes how much an agent can hold. It does not change w
 | 1 | Light Spec | `/light-spec` | Spec the feature (codebase-aware, AI→AI contract) |
 | 2 | Agent Review | `/light-spec-revise` | Linear's agent reviews; surgical revisions applied |
 | 3 | Human Review | (Linear UI) | You sign off in Linear |
-| 4 | Find next | `pk next` | Phase-aware: groups by status from Linear + `PHASES.md` |
+| 4 | Find next | `pk next` | Phase-aware: derives the current phase from the Linear-native surface (`i{N}.` → `I{N}.P{N}.`), groups issues by status |
 | 5 | Branch | `pk branch <ID>` | Worktree + branch + Linear → In Progress |
 | 6 | **Work** | **`/work <ID>`** | **Plan inline + execute on native-on-Workflow (task DAG + atomic commits, verify-before-integrate). Sole executor as of v4.0.0.** |
 | 7 | **Verify** | **`/verify`** | **Pre-deploy gate (types + lint + test).** |
+| 7a | Security gate | `/security-gate [<ID>]` | (v4.4.0) Classify the feature diff into sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); a match runs that category's checklist, none matched → instant PASS. **Advisory** — doesn't block `pk ship`. |
 | 8 | Ship | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` triggers antagonistic review. |
 | 8a | Flip to Ready | `pk ready [<ID>]` | (v2.6.0+) Flip Draft → Ready; fires outside reviewers (Semgrep + claude-review per `templates/ci/`). |
 | 9 | UAT | (Linear UI / browser) | You test the built feature — on the PR preview pre-merge, on the first deploy env post-merge. |
 | 10 | Done | `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. |
+| 10a | Prod-ready | `/prod-ready [<ID>]` | (v4.3.0) Once per feature, before the final `pk promote` (or the merge to `main` on 1-tier): six operational checks — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. **Advisory** — doesn't block `pk promote`. |
 | 11a | Promote — open | `pk promote <env>` | **Phase 1** (v2.6.0+): opens promote PR. WITs stay in source state. 2-tier: no arg picks the only hop. `--confirmed` bypasses the UAT gate after env-UAT signoff. |
 | 11b | Promote — finish | `pk promote <env> --finish` | **Phase 2** (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate) or → `Done` (final). |
+| 11′ | Deploy (script projects) | `pk deploy [<env>]` | (v4.6.0) The script-deploy analog of `pk promote`, for projects that ship by script not branch promotion. Runs the configured `Deploy command` for `<env>` (bare/`prod` → `Deploy command`; `pk deploy dev` → `Deploy command dev`; args after `--` pass through). Thin delegate — the script owns confirmation + safety. |
 | 12 | Session log | `/pk-exit` | Narrative log to `Logs/Sessions/<date>_<HHMM>.md`. **Per-session, not per-issue** — run manually as the last command of every Claude Code session regardless of where the current issue stands. Never auto-chained from another skill. |
 | 13 | Strategy Sync | `/strategy-sync` | Update docs to match what was built (post-ship) |
 
@@ -155,13 +158,15 @@ Open Claude Code **in your project directory** and install the dependencies:
 
 To update later: `/vbw:update`. See the [VBW repo](https://github.com/yidakee/vibe-better-with-claude-code-vbw) for details.
 
-**Linear** — the issue tracker Pipekit uses for visibility **and the phase surface** (Initiatives `i{N}.` → Projects `P{N}.`). Close Claude Code, then run in your terminal:
+**Linear** — the issue tracker Pipekit uses for visibility **and the phase surface** (Initiatives `i{N}.` → Projects `I{N}.P{N}.`).
+
+> **Which Linear MCP server to use.** Pipekit's interactive skills target **`@tacticlaunch/mcp-linear`** (registered as `linear-server`, camelCase `linear_*` tools) — it exposes the initiative + relation tools the native phase surface and `/roadmap-create` rely on, which the first-party `mcp.linear.app` remote lacks. Register your chosen server as `linear-server` in the project's committed `.mcp.json` (so it's visible inside `pk branch` worktrees). The first-party OAuth remote below is the quickest to connect for basic issue work, but if `pk status` shows no Roadmap section on a project that has `i{N}.` initiatives, you're on the leaner remote — switch `linear-server` to `@tacticlaunch/mcp-linear`. Full tool-name mapping and the snake_case-remote caveat are in [`sop/Linear_SOP.md`](sop/Linear_SOP.md#linear-mcp-server). (`bin/pk`'s daily loop hits the Linear REST API directly via `LINEAR_API_KEY` and is unaffected by which MCP you pick.)
+
+To connect the first-party OAuth remote, close Claude Code, then run in your terminal:
 
 ```bash
 claude mcp add --transport http --scope user linear-server https://mcp.linear.app/mcp
 ```
-
-> **Initiative support required (v4.1.0).** The native phase surface reads Linear **Initiatives**. Pipekit's interactive skills target `@tacticlaunch/mcp-linear` (registered as `linear-server`, camelCase `linear_*` tools), which exposes initiative + relation tools the first-party `mcp.linear.app` remote lacks. If `pk status` shows no Roadmap section on a project that has `i{N}.` initiatives, you're likely on the first-party remote — switch `linear-server` to `@tacticlaunch/mcp-linear`. (`bin/pk` itself uses the Linear GraphQL API directly via `LINEAR_API_KEY` and is unaffected.)
 
 Reopen Claude Code and run `/mcp` to complete the OAuth authorization flow. If you don't have a Linear workspace yet, create a free one at [linear.app](https://linear.app/) first.
 
@@ -222,18 +227,27 @@ pipekit/
   RUNBOOK.md                       # Per-issue step-by-step (the practical loop)
   sop/                             # Standard operating procedures
     Code_Quality.md                #   Quality standards and pre-deploy gates
+    Database_SOP.md                #   Migration discipline, frozen-file invariant
     Git_and_Deployment.md          #   Branch strategy, release flow, worktrees
     Linear_SOP.md                  #   Linear workspace model and workflow states
     Skills_SOP.md                  #   Skill inventory and enforcement model
     Hooks_SOP.md                   #   Claude Code hooks — per-machine install, not synced
+    Production_Readiness_SOP.md    #   /prod-ready gate — operational preconditions
+    Security_Gate_SOP.md           #   /security-gate — feature-scoped security gate
     Anthropic - Prompting best practices.md  #   Prompt engineering reference
     Session_Management_SOP.md     #   How to manage sessions, context, compaction
   templates/                       # Templates used by skills
+    CLAUDE.md.template             #   Project CLAUDE.md scaffold (synced to consumers)
     concept-brief.md               #   Project concept brief
     project-definition.md          #   Full project definition
     light_spec_template.md         #   Light spec structure
     linear_guidance.md             #   Linear agent configuration
     spec_review_skill.md           #   Spec review rubric
+    overrides-manifest.template.md #   Sync-safe override manifest scaffold
+    financial-review-checks.template.md  #   /financial-review project checks scaffold
+    prod-readiness-checks.template.md    #   /prod-ready project checks scaffold
+    security-categories.template.md      #   /security-gate category signals scaffold
+    tier-quick.md / tier-standard.md / tier-heavy.md  #   Per-tier gate templates
     strategy/                      #   Strategy doc templates
       conceptual-overview.md
       technical-architecture.md
@@ -247,6 +261,11 @@ pipekit/
       pipekit-discipline.md        #     Red Flags, Ad-hoc Plan Gate, scope hygiene
       pipekit-tooling.md           #     Verify Library API, package manager, pre-deploy gate
       pipekit-security.md          #     Secrets, boundary validation, OWASP, explicit auth
+      pipekit-migrations.md        #     Frozen-file invariant, hardening discipline
+      pipekit-cmux.md              #     cmux pane/surface discipline
+    hooks/                         #   Pipekit-owned hooks (synced + registered)
+      validate-commit.sh           #     Advisory commit-format hook (re-homed from VBW)
+    ci/                            #   CI workflow templates (Semgrep, claude-review, Linear)
   skills/                          # Portable Claude Code skills
   scripts/
     sync-method.sh                 # Pull method into a consuming project
@@ -284,7 +303,7 @@ pipekit/
 Tag releases when stable. Projects can pin to a specific version:
 
 ```bash
-./scripts/sync-method.sh v3.0.0-rc2   # or any tag listed in CHANGELOG.md
+./scripts/sync-method.sh v4.6.0   # or any tag listed in CHANGELOG.md
 ```
 
 Versioning is semver-ish — minor bumps for new capability, patch for fixes/docs only. Tags are created automatically on merge to `main` via `.github/workflows/auto-tag-release.yml` when the PR title contains a `vX.Y.Z` token.
