@@ -1751,7 +1751,7 @@ $commits"
   if [ -n "$deploy_cmd" ]; then
     echo ""
     echo "🚀 Deploy step — this project deploys by script, not branch promotion."
-    echo "   Merged ≠ deployed. Run when ready:  pk deploy   (→ $deploy_cmd)"
+    echo "   Merged ≠ deployed. Run when ready:  pk deploy [-- <args>]   (→ $deploy_cmd)"
   fi
 
   # Advisory: a local Supabase stack / dev server started inside the worktree
@@ -1838,9 +1838,9 @@ cmd_deploy() {
   # exec so the deploy script owns the tty (confirm prompts, op run, FTP output)
   # and its exit code becomes pk's. Args after '--' pass through verbatim via $@.
   if [ ${#passthrough[@]} -gt 0 ]; then
-    exec bash -c "$deploy_cmd \"\$@\"" pk-deploy "${passthrough[@]}"
+    exec bash -euo pipefail -c "$deploy_cmd \"\$@\"" pk-deploy "${passthrough[@]}"
   else
-    exec bash -c "$deploy_cmd"
+    exec bash -euo pipefail -c "$deploy_cmd"
   fi
 }
 
