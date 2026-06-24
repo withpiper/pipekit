@@ -7,7 +7,7 @@
 
 **Status:** Draft | Agent-Reviewed | Planning-Ready
 **Complexity:** Low (~2-4h) | Medium (~6-10h) | High (~12-20h+)
-**VBW Phase:** [phase name or TBD]
+**Phase:** [initiative `i{N}.` name or TBD]
 **Linear Project:** [project name or TBD]
 
 ### Problem
@@ -51,7 +51,7 @@
 - Any criterion without a concrete expected behavior
 
 ### Technical Context
-[What exists today that's relevant? Keep it brief — VBW agents will do deep exploration during planning.]
+[What exists today that's relevant? Keep it brief — `/work`'s planner will do deep exploration during planning.]
 
 - **Existing code:** [relevant paths or "greenfield"]
 - **Database:** [relevant tables or "new tables needed"]

@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.4.0** — Last updated: 2026-06-22  *(added `/security-gate` (Stage 3 feature-scoped security gate, gap #3) to the portable-skills table — advisory framework, project category signals in `resources/security-categories.md`. Carries v4.3.0: added `/prod-ready` (Stage 4 production-readiness gate) to the portable-skills table — advisory framework, project checks in `resources/prod-readiness-checks.md`. Carries v4.2.0: VBW plugin no longer required — execution framing points at the native-on-Workflow executor, not VBW agents; the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement. Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
+**v4.4.0** — Last updated: 2026-06-22  *(added `/security-gate` (Stage 3 feature-scoped security gate, gap #3) to the portable-skills table — advisory framework, project category signals in `resources/security-categories.md`. Carries v4.3.0: added `/prod-ready` (Stage 4 production-readiness gate) to the portable-skills table — advisory framework, project checks in `resources/prod-readiness-checks.md`. Carries v4.0.0: native-on-Workflow is the sole executor — execution framing points at the native executor; the legacy `.vbw-planning/` planning layer is retired (`bin/pk` read-only fallback for un-migrated projects). Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
 
 ---
 
@@ -54,7 +54,7 @@ These skills work across any project that follows the method. They read `method.
 | `/security-gate [<ID>]` | Feature-scoped security gate (v4.4.0, gap #3). Runs at the Building → UAT seam — after `/verify`, before `pk ship`. Classifies the feature diff into six sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); none matched → instant PASS, a match → category checklist vs the diff → PASS/FAIL report + Linear comment. **Advisory** — doesn't block `pk ship`. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Portable **framework**; project category signals in `resources/security-categories.md` (scaffolded from `templates/security-categories.template.md`). No-op without a categories file. | Stage 3: Verify + Ship |
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
 | `/pk-express` | Idea→Draft-PR autopilot for **simple** WITs: chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify+ship), advancing on success and stopping only at attention gates (not-Now, tier:heavy, spec stalemate, verify flags, Draft PR). Quick/Standard tier only. | Anytime (express lane) |
-| `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status. `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
+| `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration. `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
 | `/prod-ready [<ID>]` | Production-readiness gate (v4.3.0). Run **once** before the final `pk promote` (the last `Ship environments` entry; the merge to `main` on 1-tier). Verifies operational preconditions `/verify` doesn't — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. PASS/FAIL report + Linear comment. **Advisory** — doesn't block `pk promote`. Portable **framework**; concrete checks live in a per-project checks file (`resources/prod-readiness-checks.md`, scaffolded from `templates/prod-readiness-checks.template.md`). No-op on projects without a checks file. | Stage 4: Release |
 | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR along `Ship environments`. WITs stay in source state. 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
 | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). | Stage 4: Release |
@@ -64,7 +64,7 @@ These skills work across any project that follows the method. They read `method.
 | `pk doctor` | Diagnostic: config validity, Linear API access, worktree dir, stale artifacts | Anytime |
 | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config | One-time setup |
 | `/linear` | Linear issue workflow helper | Anytime |
-| `/sync-linear` | Bidirectional VBW ↔ Linear sync | Anytime |
+| `/sync-linear` | Reconcile legacy `.vbw-planning/` state with Linear (un-migrated projects only) | Anytime |
 | `/pipekit-help` | Read project state, recommend next pipeline step | Anytime |
 | `/spec-validator` | Validate spec completeness | Stage 1: Spec |
 | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) | Anytime |
@@ -128,7 +128,7 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 1. **Read `method.config.md`** for project-specific values (Linear team, issue prefix, state IDs)
 2. **Read `CLAUDE.md`** for project coding conventions
 3. **Use Linear MCP tools** for issue management (`mcp__linear-server__*`)
-4. **Dispatch heavy planning + execution through `/work`** (which executes on the native-on-Workflow backend, the sole executor as of v4.0.0). Don't invoke `vbw:vbw-lead`, `vbw:vbw-dev`, or `vbw:vbw-qa` directly from skills — that bypasses Pipekit's execution and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
+4. **Dispatch heavy planning + execution through `/work`** (which plans inline and executes on the native-on-Workflow executor, the sole executor as of v4.0.0). Don't spawn ad-hoc execution agents directly from skills — that bypasses Pipekit's execution and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
 
 ### "What's next?" in v2 — `pk next` reads Linear
 
@@ -155,7 +155,7 @@ ${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/
     └── <issue-id>.json            # per-skill transition state
 ```
 
-**Why out-of-repo:** earlier Pipekit placed these files at `<repo>/.pipekit/`, which sits inside the repo and got blocked by the legacy VBW file-guard hook during active-plan scope. Moving the directory outside the repo lets that file-guard ignore it entirely, so writes succeed unconditionally — and the out-of-repo location no longer depends on the VBW plugin being installed at all.
+**Why out-of-repo:** earlier Pipekit placed these files at `<repo>/.pipekit/`, which sits inside the repo and got blocked by a file-guard hook during active-plan scope. Moving the directory outside the repo lets that file-guard ignore it entirely, so writes succeed unconditionally — and the out-of-repo location keeps the state independent of any in-repo planning artifacts.
 
 **Resolving the path:** every skill that reads/writes Pipekit state uses the helper:
 
@@ -181,7 +181,7 @@ Each pipeline skill that completes a meaningful state transition writes a small 
 ```
 
 Fields:
-- `issue_id` — Linear ID (or phase slug for VBW-only flows)
+- `issue_id` — Linear ID (or phase slug for phase-scoped flows)
 - `stage` — skill / `pk` subcommand name (`work`, `verify`, `ship`, `done`, `review-plan`, etc.)
 - `timestamp` — ISO-8601 with offset
 - `verdict` — for skills that produce one (`Pass` / `Revise` / `Block` / `Fail`); `null` for transitions without a verdict
@@ -214,9 +214,9 @@ Defaults we've found to work well:
 
 | Agent role | Default model |
 |------------|---------------|
-| Planning (`vbw:vbw-lead`, `plan-reviewer`, spec reviewers) | `opus` |
+| Planning (`plan-reviewer`, spec reviewers) | `opus` |
 | Execution (native Workflow task agents, batch runners) | `sonnet` |
-| Verification (`vbw:vbw-qa`) | `sonnet` |
+| Verification (QA review subagent) | `sonnet` |
 
 Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents).
 

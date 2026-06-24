@@ -47,6 +47,22 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.7.0 — 2026-06-24
+
+> **VBW fully retired.** This release completes the retirement begun in v4.0.0 (executor removed), v4.1.0 (Linear-native phase surface), and v4.2.0 (plugin decoupled). VBW is no longer part of any Pipekit workflow, doc, or dependency.
+
+**Debrand across the active surface (~250 mentions, 32 files).** Docs (`method.md`, `GUIDE.md`, `README.md`, `RUNBOOK.md`, `STARTUP.md`, `CLAUDE.md`, `method.config.template.md`), skills (`/work`, `/review-plan`, `/spec-preflight`, `/roadmap-create`, `/sync-linear`, `/startup`, `/pipekit-help`, `01-light-spec`, `00-roadmap-review`, `10-strategy-sync`, and more), SOPs (`Linear_SOP`, `Skills_SOP`, `Session_Management_SOP`, `Hooks_SOP`), `agents/plan-reviewer.md`, and templates were debranded: no `/vbw:*` commands, no `vbw` backend / `--backend=` selection, no "Pipekit wraps VBW" / VBW-ownership-boundary framing. Pipekit owns the whole Linear-native phase surface; `/work` is the only executor entry point. The `## VBW / Pipekit Ownership` section is now `## Phase Surface Ownership`.
+
+**`bin/pk`.** `pk_vbw_*` helpers renamed `pk_legacy_*`; comments/strings debranded. The legacy `.vbw-planning/PHASES.md`/`linear-map.json` + `PLAN.md` finalize remain as a **read-only fallback for un-migrated projects** — never the normal path. Smoke **63/63**.
+
+**Removed.** The dead `scripts/pipekit-post-archive.sh` hook (fired on `/vbw:vibe --archive`, which no longer exists) and its sync registration; the `/vbw:vibe` matcher in `pipekit-next-step-nudge.sh`.
+
+**Machine.** The VBW plugin is uninstalled from `~/.claude` (cache + marketplace clone removed, `settings.json` enable-flag + vbw statusline removed, plugin registry + telemetry cleaned). History is preserved as written — `archive/`, `experiments/`, `Logs/`, `CHANGELOG.md`, and `resources/vbw-retirement-plan.md` are untouched.
+
+**Deferred (Scope B).** `bin/pk-init/detect_vbw.sh` and the greenfield-bootstrap VBW detection stay — they belong to the deferred new-project bootstrap redesign, not this debrand.
+
+---
+
 ## v4.6.0 — 2026-06-23
 
 > **New: `pk deploy [<env>]` — a first-class front door for script-deploy projects.** Projects that ship by running a deploy script (FTP, rsync, a custom uploader) rather than by branch promotion had no `pk` verb for the deploy itself — `pk done` only *reminded* you to run the configured `Deploy command` ("merged ≠ deployed"), leaving the last, outward-facing step as out-of-band copy-paste. `pk deploy` closes that gap: it resolves `<env>` to the project's configured deploy command in `method.config.md` and runs it.

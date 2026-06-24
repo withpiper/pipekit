@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.6.0** — Last updated: 2026-06-23 13:30  *(v4.6.0: `pk deploy [<env>]` — a first-class deploy verb for script-deploy projects (Stage 4). Resolves `<env>` to the configured `Deploy command` in method.config.md and runs it (bare / `prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through; thin delegate — the script owns confirmation + safety). `pk done`'s post-merge reminder now points at `pk deploy`. Smoke 56→63. Carries v4.5.0: projects carry their initiative number in the phase surface — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`, so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`; `/roadmap-create` + `/phase-plan` author the new form. Carries v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3). Runs at the Building → UAT seam (after `/verify`, before `pk ship`): classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the category checklist against the diff on a match — none matched → instant PASS. Portable framework with project signals in `resources/security-categories.md`; new `sop/Security_Gate_SOP.md`; advisory this release. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples, e.g. a `gh pr comment --body`) no longer trips the advisory format nudge; the `cat <<` fallback is replaced by an in-`awk` `-F-` heredoc message extractor (smoke 50→54). Hook-only, no methodology change. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). A second gate beside `/verify`: `/verify` proves the code is correct (every task, at ship), `/prod-ready` proves production can absorb it safely (once per feature, at the production boundary — before the final `pk promote`, or the merge to `main` on 1-tier). Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); portable framework with project checks in `resources/prod-readiness-checks.md`; new `sop/Production_Readiness_SOP.md`. Advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
+**v4.7.0** — Last updated: 2026-06-24  *(v4.7.0 — VBW fully retired: docs/skills/SOPs/templates/`bin/pk` debranded (`pk_vbw_*` → `pk_legacy_*`), VBW plugin uninstalled, dead `/vbw:vibe --archive` hook removed; only a read-only `bin/pk` legacy `.vbw-planning/` fallback remains for un-migrated projects. Smoke 63/63. Carries v4.6.0: `pk deploy [<env>]` — a first-class deploy verb for script-deploy projects (Stage 4). Resolves `<env>` to the configured `Deploy command` in method.config.md and runs it (bare / `prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through; thin delegate — the script owns confirmation + safety). `pk done`'s post-merge reminder now points at `pk deploy`. Smoke 56→63. Carries v4.5.0: projects carry their initiative number in the phase surface — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`, so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`; `/roadmap-create` + `/phase-plan` author the new form. Carries v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3). Runs at the Building → UAT seam (after `/verify`, before `pk ship`): classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the category checklist against the diff on a match — none matched → instant PASS. Portable framework with project signals in `resources/security-categories.md`; new `sop/Security_Gate_SOP.md`; advisory this release. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples, e.g. a `gh pr comment --body`) no longer trips the advisory format nudge; the `cat <<` fallback is replaced by an in-`awk` `-F-` heredoc message extractor (smoke 50→54). Hook-only, no methodology change. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). A second gate beside `/verify`: `/verify` proves the code is correct (every task, at ship), `/prod-ready` proves production can absorb it safely (once per feature, at the production boundary — before the final `pk promote`, or the merge to `main` on 1-tier). Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); portable framework with project checks in `resources/prod-readiness-checks.md`; new `sop/Production_Readiness_SOP.md`. Advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
 
 ---
 
@@ -38,7 +38,7 @@ A complete guide to using Pipekit from project inception through production deli
 12. [The Phase Model](#the-phase-model)
 13. [The Strategy Doc Framework](#the-strategy-doc-framework)
 14. [The Linear Model](#the-linear-model)
-15. [VBW Integration](#vbw-integration)
+15. [Execution Model](#execution-model)
 16. [Three-Layer Enforcement](#three-layer-enforcement)
 17. [Project Configuration](#project-configuration)
 18. [Syncing the Method](#syncing-the-method)
@@ -527,7 +527,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 
 **Execution** is native-on-Workflow — the sole executor as of v4.0.0:
 
-`/work` plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). The pluggable `vbw` backend and `--backend=` flag were removed in v4.0.0; a stale `Backend: vbw`/`--backend=vbw` makes `/work` refuse with a migration message.
+`/work` plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). There is no backend selection — native-on-Workflow is the only executor (a stale `Backend:` row in `method.config.md` is ignored).
 
 `--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
 
@@ -536,10 +536,10 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 ### Plan Review
 
 **Skill:** `/review-plan` (spawns `plan-reviewer` agent at `model: opus`)
-**Input:** the inline plan — `/work` (native) emits a task DAG at `.pk-work/<ID>-PLAN.md`, which `/review-plan` targets directly. (Legacy VBW-planned phases keep `PLAN.md` under `.vbw-planning/phases/{phase-slug}/`; `/review-plan` still reviews those as a fallback.)
+**Input:** the inline plan — `/work` emits a task DAG at `.pk-work/<ID>-PLAN.md`, which `/review-plan` targets directly. (For un-migrated projects with a legacy `PLAN.md` under `.vbw-planning/phases/{phase-slug}/`, `/review-plan` still reviews those as a fallback.)
 **Output:** Validated plan or revision requests
 
-Run between `/work`'s inline planning and execution as an optional plan-quality gate. (In direct VBW use — outside Pipekit — the plan comes from VBW's own planner instead.) Native execution has per-task verify-before-integrate as its own plan-safety net, so `/review-plan` is most useful when a plan is large or high-risk and you want a whole-plan stress-test before any task runs. The plan reviewer stress-tests:
+Run between `/work`'s inline planning and execution as an optional plan-quality gate. Native execution has per-task verify-before-integrate as its own plan-safety net, so `/review-plan` is most useful when a plan is large or high-risk and you want a whole-plan stress-test before any task runs. The plan reviewer stress-tests:
 
 - Scope alignment with the spec
 - Task atomicity (each task produces one logical commit)
@@ -631,7 +631,7 @@ Skip PR review for pure copy/UI tweaks and internal-only refactors with no exter
 
 Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`, or → `Done` for 1-tier projects), auto-pulls the integration branch (v2.6.0+), and writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (v2.6.0+; skipped silently when no VBW). Or pass `--merge` and let `pk done` run `gh pr merge` for you. v2.7.0+ also resets the parent branch after worktree teardown, prints a stack advisory (a local dev server / Supabase keeps running), and — for script-deploy projects with a `Deploy command` set in `method.config.md` — reminds you to deploy (the merge doesn't auto-ship the app).
+**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`, or → `Done` for 1-tier projects), auto-pulls the integration branch (v2.6.0+), and — for un-migrated projects that still carry a legacy `.vbw-planning/` layer — writes its `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (v2.6.0+; skipped silently otherwise). Or pass `--merge` and let `pk done` run `gh pr merge` for you. v2.7.0+ also resets the parent branch after worktree teardown, prints a stack advisory (a local dev server / Supabase keeps running), and — for script-deploy projects with a `Deploy command` set in `method.config.md` — reminds you to deploy (the merge doesn't auto-ship the app).
 
 **Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
 
@@ -922,46 +922,33 @@ Terminal:
 | Content | Home | Never In |
 |---------|------|----------|
 | Feature specs, AC, scope | Linear issue description | plan files |
-| Task decomposition | `.pk-work/` PLAN files (native; legacy direct-VBW: `.vbw-planning/`) | Linear |
+| Task decomposition | `.pk-work/` PLAN files (legacy `.vbw-planning/` for un-migrated projects) | Linear |
 | Execution status | Both (synced via `/sync-linear`) | — |
 | Code | Git | Linear or plan files |
 | Phase composition | Linear `i{N}.` Initiatives + `P{N}.` Projects (derived live) | a committed file |
 
-**Never create Linear issues for plan tasks** (native task DAGs in `.pk-work/`, or legacy `.vbw-planning/` PLAN files for direct-VBW projects). Features are the bridge between Linear and the executor's plan.
+**Never create Linear issues for plan tasks** (they live in the `.pk-work/` task DAG). Features are the bridge between Linear and the executor's plan.
 
 ---
 
-## VBW Integration
+## Execution Model
 
-**The VBW plugin is no longer required (v4.2.0).** Its one functional dependency — the advisory commit-format hook — is now a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`), so no Pipekit skill or gate depends on VBW being installed. A *legacy VBW planning layer* (`.vbw-planning/` ROADMAP/PLAN/SUMMARY/state artifacts) still exists for direct-VBW projects; no Pipekit skill depends on it, and it is slated for a separate, later retirement. Everything below is reference for that legacy layer and the direct-`/vbw:*` agent roster — not a Pipekit requirement.
+**Native-on-Workflow is the sole executor.** `/work` plans the issue inline (parallel `Agent` calls for grounding) and executes on Claude Code's Workflow primitive — atomic commit per task, verify-before-integrate. There is no backend selection and no separate planning service: planning and execution both run in your Claude session, against the spec read live from Linear.
 
-Native-on-Workflow is the sole executor — `/work` plans the issue inline and executes on Claude Code's Workflow primitive. **VBW is no longer an execution backend**: the pluggable `vbw` executor and `--backend=` flag were removed in v4.0.0 (the `auto` router in v3.2.0), and a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message. The removal is evidence-driven: 0/30 recent production PRs used vbw, and native matched-or-beat VBW-the-full-system on first-pass correctness in the POC-48 head-to-head. The roadmap's phase order now lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), not a scaffolded file — `/vbw:init` is dropped from Stage 0 and `/roadmap-create` authors the Linear hierarchy directly. The **planning-layer scaffold** that holds per-issue PLAN/SUMMARY/state artifacts under `.vbw-planning/` is legacy — present only for direct-VBW projects, not used by Pipekit; everything below describes that legacy scaffold, not an executor and not the phase surface.
+The roadmap's phase order lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), authored directly by `/roadmap-create` — there is no scaffolded phase file to initialize. `pk next`/`pk status` derive the current phase live from that hierarchy.
 
 | Pipeline Stage | Tool | Used when | Purpose |
 |---------------|------|-----------|---------|
 | Stage 0.5 | `/roadmap-create` authors the Linear `i{N}.`/`P{N}.` hierarchy | Always | Populate roadmap in Linear |
-| Stage 0.6 (optional) | `/vbw:discuss` | Optional | Discuss first phase before speccing |
-| Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — **native planning runs here; `/work` has no separate "VBW Lead" step** |
-| Stage 3 (execute) | native-on-Workflow | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify-before-integrate (the `vbw-dev` executor was removed in v4.0.0) |
-| Anytime | `/vbw:status` | If VBW installed | Project progress dashboard |
+| Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — planning runs in-session, no separate planning service |
+| Stage 3 (execute) | native-on-Workflow | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify-before-integrate |
+| Anytime | `pk status` | Always | Project progress dashboard, derived live from Linear |
 
-### VBW Agent Roster
+The plan-safety net is per-task verify-before-integrate (`/work`) plus the `/verify` gate and the antagonistic review gates (`/review-plan`, `/pr-security-review`), not a separate QA agent.
 
-| Agent | Role |
-|-------|------|
-| Architect | Requirements → roadmap, stage decomposition |
-| Lead | Research, task decomposition, plan generation |
-| Dev | Plan execution with atomic commits |
-| QA | Goal-backward verification |
-| Debugger | Scientific method bug diagnosis |
-| Docs | Documentation generation |
-| Scout | Research and codebase scanning |
+### Legacy `.vbw-planning/` fallback
 
-> **In Pipekit, `/work` no longer dispatches any VBW agent** (the `vbw-dev` executor was removed in v4.0.0). The agents above — Lead, Dev, QA, Architect, and the rest — run only under direct `/vbw:*` invocation, which Pipekit advises against (it bypasses the visibility layer). Planning is `/work`'s inline step, execution is native-on-Workflow, and verification is the `/verify` gate plus the antagonistic review gates — not a VBW QA pass.
-
-### Keeping the legacy VBW state in sync (direct-VBW projects only)
-
-`/work` runs native: it plans + executes in-context and its task DAG and run trail land in gitignored `.pk-work/`, not `.vbw-planning/`. No Pipekit skill depends on the legacy `.vbw-planning/` layer. On a *direct-VBW project* that still carries one, keep `.vbw-planning/STATE.md` updated to reflect progress so its planning surface doesn't drift — Pipekit itself needs nothing here.
+Pipekit fully retired VBW: no Pipekit skill, gate, or executor depends on it, and the VBW plugin is not installed. The one remaining vestige is read-only — `bin/pk` keeps a legacy fallback that reads `.vbw-planning/PHASES.md` / `linear-map.json` **only** for projects that haven't yet migrated to the Linear-native phase surface. Migrated projects (the normal path) never touch it. `/work` writes its task DAG and run trail to gitignored `.pk-work/`, never `.vbw-planning/`.
 
 ---
 
@@ -1039,7 +1026,7 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 | `.claude/rules/` | Project coding conventions |
 | `.claude/skills/{project-specific}/` | Stack-specific skills |
 | `.claude/overrides/` | Sync-safe customization (applied on top of sync; see `method.md` § Sync-Safe Overrides) |
-| `.vbw-planning/` | Project state |
+| `.vbw-planning/` | Project state (legacy fallback for un-migrated projects) |
 | `CLAUDE.md` | Project-specific |
 
 ### Commands
@@ -1204,7 +1191,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Status | `pk status` | Full unscoped Linear board view |
 | Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence), **upstream-staleness check** (v3.1.0 — warns when the synced Pipekit lags the method repo's latest release; offline-soft) |
 | Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
-| Sync Linear | `/sync-linear` | Bidirectional VBW ↔ Linear sync |
+| Sync Linear | `/sync-linear` | Reconcile strategy-doc / requirement drift against the Linear phase hierarchy |
 | Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
 | Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
@@ -1246,7 +1233,7 @@ Canonical files use a `pipekit-` prefix so they never collide with project-speci
 Cross-cutting AI coding discipline:
 
 - **Red Flags** — thoughts that mean "go slower, not faster" (e.g., "this is simple, I don't need a plan" → you do)
-- **Ad-hoc Plan Gate** — 3-5 bullet plan template for non-VBW interactive changes, with When-This-Applies / Does-Not-Apply scope
+- **Ad-hoc Plan Gate** — 3-5 bullet plan template for ad-hoc interactive changes outside a `/work` plan, with When-This-Applies / Does-Not-Apply scope
 - **Scope hygiene** — no features/abstractions beyond the task, no speculative error handling, no backwards-compat shims
 - **Comment & commit discipline** — default to no comments, one atomic change per commit, never amend published
 

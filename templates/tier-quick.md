@@ -26,14 +26,14 @@
 | Human approval | ✅ required |
 | Dependency check | ✅ required |
 | Milestone-readiness (siblings specced) | ⏭ skipped |
-| VBW plan + plan review | ⏭ skipped |
+| PLAN.md + plan review | ⏭ skipped |
 | Execution | ✅ via batch runner / `/linear-todo-runner` |
 | QA agent | ⏭ skipped (CI + UAT only) |
 | Strategy sync | ⏭ skipped |
 
 ## Routing
 
-`/work` routes Quick tier directly to in-context execution (or `/linear-todo-runner` for batch parallel execution of multiple Quick issues). No PLAN.md generated regardless of `Backend:` config — the AC section is the executable plan.
+`/work` routes Quick tier directly to in-context execution (or `/linear-todo-runner` for batch parallel execution of multiple Quick issues). No PLAN.md generated — the AC section is the executable plan.
 
 ## Required artifacts
 

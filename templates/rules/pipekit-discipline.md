@@ -33,7 +33,7 @@ These are the questions the Plan Gate (below) must answer for the changed scope.
 
 ## Plan Gate
 
-For any non-trivial change outside a full VBW planning flow, declare your plan before writing code. Two formats by scope:
+For any non-trivial change outside a `/work` planning flow, declare your plan before writing code. Two formats by scope:
 
 ### Inline Planning (default — small / single-module changes)
 
@@ -66,7 +66,7 @@ Proceed? (y/n)
 
 **Does NOT apply to:** reading files, exploring code, running tests, git operations, or obviously trivial edits where intent is unambiguous (typo fixes, single-variable renames, tooltip text). Trust user intent on small, low-impact changes — don't over-process them.
 
-VBW handles planned work well — tasks have verify/done criteria and atomic commits. But interactive sessions have no gate. This two-tier plan prevents scope creep ("while I'm here, let me also..."), wrong-direction work (building before confirming approach), and silent assumption errors (you assumed X, user meant Y).
+`/work` handles planned work well — tasks have verify/done criteria and atomic commits. But interactive sessions have no gate. This two-tier plan prevents scope creep ("while I'm here, let me also..."), wrong-direction work (building before confirming approach), and silent assumption errors (you assumed X, user meant Y).
 
 ## Scope Hygiene
 

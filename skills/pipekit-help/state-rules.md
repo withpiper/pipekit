@@ -24,7 +24,7 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 ### 1c. Foundation present, no recent activity — inherited or returning
 
-**Match:** All foundation-contract artifacts present AND no commits in the last 14 days on the current branch AND no `PLAN.md` / `REVIEW.md` / `VERIFICATION.md` markers in the latest phase.
+**Match:** All foundation-contract artifacts present AND no commits in the last 14 days on the current branch AND no in-flight plan (`.pk-work/<ID>-PLAN.md`, or a legacy `.vbw-planning/phases/<latest>/PLAN.md` in an un-migrated project).
 
 **Recommend:** `pk next`
 **Why:** Foundation is intact and nothing is mid-flight — `pk next` is the phase-aware entry point that groups Linear by status with per-group hints. (Run `/startup --mode=inherited` if you want an explicit foundation audit first.)
@@ -45,68 +45,54 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 
 ## 3. Verification done, ready to close
 
-**Match:** Latest phase has `VERIFICATION.md` AND no PR has been opened for the matching issue (heuristic: branch name contains a `PROJ-XXX` token AND most recent commit on this branch is post-VERIFICATION.md timestamp AND `gh pr list --head <branch>` returns empty).
+**Match:** `/verify` has passed for the in-flight issue (verdict Pass) AND no PR has been opened for the matching issue (heuristic: branch name contains a `PROJ-XXX` token AND `gh pr list --head <branch>` returns empty).
 
 **Recommend:** `pk ship`
-**Why:** QA passed; the only remaining step is push + open PR + Linear → UAT (`pk ship` does all three idempotently).
+**Why:** The pre-deploy gate passed; the only remaining step is push + open PR + Linear → UAT (`pk ship` does all three idempotently).
 
-## 4. Plan reviewed but not executed
+## 4. Issue Building, no plan yet
 
-**Match:** Latest phase has `PLAN.md` AND `REVIEW.md` AND `REVIEW.md` indicates "Pass" or equivalent AND no execution-state evidence (no commits since the review on the current branch).
-
-**Recommend:** `/vbw:vibe --execute`
-**Why:** Plan is reviewed and approved; ready for atomic execution.
-
-## 5. Plan exists but not reviewed
-
-**Match:** Latest phase has `PLAN.md` AND no `REVIEW.md` (or REVIEW.md older than PLAN.md).
-
-**Recommend:** `/review-plan`
-**Why:** Plan must pass independent review before execution (Pipekit's value-add over raw VBW).
-
-## 6. Issue Building, no plan yet
-
-**Match:** Branch is project-prefixed (`PROJ-XXX`) AND no `PLAN.md` exists for any phase referencing this issue AND Linear issue status (if checked) is "In Progress" AND inferred tier is Standard or Heavy.
+**Match:** Branch is project-prefixed (`PROJ-XXX`) AND no `.pk-work/<ID>-PLAN.md` exists for this issue AND Linear issue status (if checked) is "In Progress" AND inferred tier is Standard or Heavy.
 
 **Recommend:** `/work <issue>`
-**Why:** Issue is in worktree-and-branch state but no plan has been generated yet. `/work` does the verdict-gate planning then dispatches execution per `Backend:` config. Start a fresh chat first (see method.md § Fresh-Chat Discipline).
+**Why:** Issue is in worktree-and-branch state but no plan has been generated yet. `/work` plans inline (parallel grounding) then executes on the native-on-Workflow backend. Start a fresh chat first (see method.md § Fresh-Chat Discipline).
 
-## 6b. Quick tier — direct to batch runner
+## 5. Quick tier — direct to batch runner
 
 **Match:** Issue label includes `tier:quick` AND Linear status is "Building" AND no batch run has fired (no batch-runner output for this issue in recent transcripts).
 
 **Recommend:** `/linear-todo-runner`
 **Why:** Quick tier skips planning; AC is the plan.
 
-## 7. Spec exists but not approved
+## 6. Spec exists but not approved
 
 **Match:** Linear issue status is "Specced" (not yet Approved) AND latest spec-review-agent comment exists.
 
 **Recommend:** Read the spec-review comment in Linear. If revision needed → `/light-spec-revise PROJ-XXX`. If clean → human approval in Linear.
 **Why:** Spec passed agent review but human approval is required before launch.
 
-## 8. Spec drafted but not reviewed
+## 7. Spec drafted but not reviewed
 
 **Match:** Linear issue has a `## Light Spec` section AND no spec-review-agent comment exists (or comment predates last spec edit).
 
 **Recommend:** Trigger Linear's Spec Review Agent on the issue.
 **Why:** Spec must be agent-reviewed before human approval and launch.
 
-## 9. Approved issue waiting to launch
+## 8. Approved issue waiting to launch
 
 **Match:** Linear issue status is "Approved" AND no current branch matches the issue prefix.
 
 **Recommend:** `pk branch PROJ-XXX`
 **Why:** Issue is human-approved and ready to enter In Progress (`pk branch` creates the worktree + branch and transitions Linear). Then `cd` into the worktree and run `/work PROJ-XXX`.
 
-## 10. Phase in flight, multiple candidates
+## 9. Phase in flight, multiple candidates
 
 **Match:** Multiple Linear issues are in "Building" or "In Progress" simultaneously.
 
 **Recommend:** `pk status`
 **Why:** Multiple in-flight issues — `pk status` shows the full unscoped board so you can pick the one to work on.
 
-## 11. Fallback
+## 10. Fallback
 
 **Match:** No prior rule matched.
 
