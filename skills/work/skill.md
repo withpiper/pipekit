@@ -72,9 +72,9 @@ BACKEND=$(pk config "Backend" "native")   # v4.0.0: native is the sole executor;
 
 Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
 
-**Native-on-Workflow is the sole executor (v4.0.0).** The pluggable `vbw` and `auto` backends were removed, so there is nothing to resolve — but reject any explicit request for a removed backend loudly, so a stale config or muscle-memory flag fails fast instead of silently running something else:
+**Native-on-Workflow is the sole executor (v4.0.0).** There is no pluggable backend to resolve — but reject any explicit request for a removed backend loudly, so a stale config or muscle-memory flag fails fast instead of silently running something else:
 
-- If `--backend=` is passed with any value other than `native` (i.e. `vbw`, `auto`, or anything else), refuse: `Backend selection was removed in v4.0.0 — native-on-Workflow is the sole executor. Drop the --backend flag.`
+- If `--backend=` is passed with any value other than `native`, refuse: `Backend selection was removed in v4.0.0 — native-on-Workflow is the sole executor. Drop the --backend flag.`
 - If `BACKEND` (from `method.config.md`) is anything other than `native`, refuse: `method.config.md sets 'Backend: <value>', removed in v4.0.0. Set 'Backend: native' or delete the row, then re-run.`
 
 Print one line:
@@ -308,7 +308,7 @@ If the AC doesn't name a test command, fall back to the project's § Pre-Deploy 
 
 ### Execute (native-on-Workflow)
 
-Native execution is **Workflow-primitive-driven** for multi-task plans and **inline** for trivial ones. Both paths produce the same executor contract: a PLAN artifact, atomic commits with verify-before-integrate, and a SUMMARY trail. The scope is *only* that contract — PLAN → atomic tasks → verify-before-integrate → SUMMARY. Do **not** add UAT, known-issue registries, or sprint/retro state; that is VBW's surface, not the executor's. The full Pre-Deploy Gate still runs once at the end via the Step 7 `/verify` rollover.
+Native execution is **Workflow-primitive-driven** for multi-task plans and **inline** for trivial ones. Both paths produce the same executor contract: a PLAN artifact, atomic commits with verify-before-integrate, and a SUMMARY trail. The scope is *only* that contract — PLAN → atomic tasks → verify-before-integrate → SUMMARY. Do **not** add UAT, known-issue registries, or sprint/retro state; the executor's job is to land verified atomic commits, nothing more. The full Pre-Deploy Gate still runs once at the end via the Step 7 `/verify` rollover.
 
 #### Step 5n.0 — Materialize the PLAN artifact (the executor contract)
 
@@ -354,7 +354,7 @@ Record the chosen mode in the PLAN's `Mode:` header line.
 Drive execution with the **Workflow tool**. The workflow:
 
 1. Reads the task DAG from `.pk-work/<ISSUE-ID>-PLAN.md`.
-2. Executes tasks in dependency order, **sequentially by default** — one task fully done (verified + committed) before the next. Parallelism is opt-in, not the default: fan out tasks at the same dependency level with **disjoint `files` sets** *only when there is rate-limit headroom*. On a rate-capped plan (e.g. Claude Max), aggressive fan-out self-saturates the API limit and serializes into long waits anyway — and uncontrolled nested fan-out is precisely what makes the heavier alternative backend expensive. So sequential-with-verify-gates is the default; parallel is a deliberate optimization, not a reflex. Tasks whose `files` sets intersect MUST be serialized regardless — a shared worktree can't take concurrent writers. When in doubt, serialize.
+2. Executes tasks in dependency order, **sequentially by default** — one task fully done (verified + committed) before the next. Parallelism is opt-in, not the default: fan out tasks at the same dependency level with **disjoint `files` sets** *only when there is rate-limit headroom*. On a rate-capped plan (e.g. Claude Max), aggressive fan-out self-saturates the API limit and serializes into long waits anyway — and uncontrolled nested fan-out is precisely what makes multi-agent execution expensive. So sequential-with-verify-gates is the default; parallel is a deliberate optimization, not a reflex. Tasks whose `files` sets intersect MUST be serialized regardless — a shared worktree can't take concurrent writers. When in doubt, serialize.
 3. **Verify-before-integrate:** each task agent makes its change (**including authoring the tests the task calls for**, per the DAG rules above), runs the task's `verify` (which executes those new tests), and commits (atomic, conventional `feat/fix/refactor/docs` format) **only if verify passes**. A failing verify does not loop and does not get papered over — the task returns its failure to the orchestrator.
 4. Appends each task's result (commit SHA, verify verdict, elapsed) to `.pk-work/<ISSUE-ID>-SUMMARY.md`.
 5. If any task fails verify or hits a blocker (permission denial, unfixable hook failure, plan-contradicting type error), **stop and surface** — do not auto-revise the plan unilaterally.

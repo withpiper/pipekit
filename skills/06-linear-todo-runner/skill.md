@@ -356,7 +356,7 @@ Set `blocked_by` relations in Linear to enforce the correct execution order.
 - **`/task-processor`** — Single-issue interactive pickup. Use for hands-on work. The runner is for batch automation.
 - **`/linear PROJ-XXX`** — Full end-to-end lifecycle for one issue. Use for failed issues that need manual attention.
 - **`pk status`** / **`pk next`** — Quick board view. Run before the runner to see what's queued.
-- **`/sync-linear`** — Sync VBW ↔ Linear. Run after the runner to update VBW state.
+- **`/sync-linear`** — Reconcile strategy-doc / requirement drift against the Linear `i{N}.`/`I{N}.P{N}.` phase hierarchy. Run after the runner to re-home or re-place issues that drifted.
 - **`pk branch`** — The runner creates its own sibling worktrees at `../<repo>-<id>` via explicit `git worktree add` (one per worker), distinct from `pk branch`'s in-repo `.worktrees/<ID>-<slug>/` pattern for interactive single-issue work. The two coexist: use `pk branch` hands-on, use the runner for parallel batches. (Prior versions of this skill claimed to use the Agent tool's `isolation: "worktree"` parameter; that parameter is a no-op on current harnesses, which is why we now create worktrees explicitly.)
 
 ---

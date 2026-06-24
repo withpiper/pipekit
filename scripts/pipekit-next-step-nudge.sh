@@ -23,8 +23,7 @@
 #
 # Pipeline skills the nudge cares about (others are intentionally ignored):
 #   /work, /verify, /pr-fix, /pr-security-review, /pk-exit,
-#   /light-spec, /light-spec-revise, /review-plan, /strategy-sync,
-#   /vbw:vibe (any subcommand)
+#   /light-spec, /light-spec-revise, /review-plan, /strategy-sync
 #
 # pk subcommands (pk ship, pk done, pk promote) are not currently matched —
 # they fire via the Bash tool and the transcript shape differs. Add a Bash-
@@ -55,7 +54,7 @@ fi
 # skill-tool invocation name. Conservative — false negatives are fine,
 # false positives are not.
 if printf '%s' "$RECENT" | grep -E -q -i \
-  '(/work|/verify|/pr-fix|/pr-security-review|/pk-exit|/light-spec|/light-spec-revise|/review-plan|/strategy-sync|/vbw:vibe|"skill"[[:space:]]*:[[:space:]]*"(work|verify|pr-fix|pr-security-review|pk-exit|01-light-spec|02-light-spec-revise|review-plan|10-strategy-sync)")' ; then
+  '(/work|/verify|/pr-fix|/pr-security-review|/pk-exit|/light-spec|/light-spec-revise|/review-plan|/strategy-sync|"skill"[[:space:]]*:[[:space:]]*"(work|verify|pr-fix|pr-security-review|pk-exit|01-light-spec|02-light-spec-revise|review-plan|10-strategy-sync)")' ; then
   echo "Pipeline skill just finished. Run /pipekit-help in a fresh chat to see what's next." >&2
 fi
 

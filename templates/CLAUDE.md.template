@@ -123,7 +123,7 @@ If CLAUDE.md and a rules file conflict on implementation detail, the rules file 
 - Plans reference CLAUDE.md conventions. The executor follows them during execution.
 - Skills are for interactive sessions, not agent execution paths.
 - Agents must validate against the pre-deploy gate before marking work complete.
-- Do not invoke VBW agents directly in Pipekit projects. Use `/work`, not `/vbw:lead` / `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state machine in sync.
-- The VBW plugin is no longer required (v4.2.0). A legacy `.vbw-planning/` planning layer may persist for direct-VBW projects (task decomposition, execution state) and is slated for separate, later retirement; no Pipekit skill depends on it.
+- `/work` is the only executor entry point. It plans inline and executes on the native-on-Workflow backend (the sole executor as of v4.0.0), keeping Linear and the `pk *` state machine in sync. There is no backend selection.
+- VBW is fully retired (executor v4.0.0, plugin v4.2.0, Linear-native phase surface v4.1.0). The only vestige is a read-only `bin/pk` fallback to a legacy `.vbw-planning/` layer for un-migrated projects — never the normal path.
 
-See `method/method.md` § "VBW / Pipekit Ownership Model" for details.
+See `method/method.md` § "Phase Surface Ownership" for details.

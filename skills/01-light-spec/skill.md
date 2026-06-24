@@ -14,7 +14,7 @@ Draft a structured, plan-ready specification for a Linear issue. Bridges the gap
 
 ## Purpose
 
-Create a **light spec** — enough structure for VBW to generate a plan, but fast enough to draft in one pass. Optionally delegate to Linear's agent for refinement before pulling into planning mode.
+Create a **light spec** — enough structure for `/work` to generate a plan, but fast enough to draft in one pass. Optionally delegate to Linear's agent for refinement before pulling into planning.
 
 ## Core Principle
 
@@ -65,7 +65,7 @@ Write the spec using the **Light Spec Template** below. Fill in every section.
 
 **Decision discipline:** All behavior-affecting decisions should be either defined or marked `[TBD]`. A decision left implicit (not mentioned at all) means the planner will guess, and guesses compound. `[TBD]` is only valid if it does **not** block task decomposition. If a `[TBD]` would force the planner to guess at task boundaries, resolve the decision before the spec is ready.
 
-**Scope discipline:** Specs define WHAT, not HOW. Litmus test: if a statement can be rewritten as "change X line" or "use Y syntax," it is implementation detail — remove it. If a statement can be rewritten as "the system should [observable behavior]," it belongs in the spec. Do not include file paths to create, function signatures, or implementation patterns — VBW planning agents own the HOW.
+**Scope discipline:** Specs define WHAT, not HOW. Litmus test: if a statement can be rewritten as "change X line" or "use Y syntax," it is implementation detail — remove it. If a statement can be rewritten as "the system should [observable behavior]," it belongs in the spec. Do not include file paths to create, function signatures, or implementation patterns — `/work`'s planning step owns the HOW.
 
 **Acceptance Criteria discipline (behavioral, not presence-only):** Every AC must verify *observable behavior*, not *element presence*. A spec that ships ACs like "component X exists" / "function Y is called" lets implementations pass tests without actually working — surfaced 2026-05-02 by RS-63/64 in rs-vault, where tests + 7-check gate + antagonistic review all passed but the running app was 60% broken (search bar non-functional, panel didn't animate, Notes save unwired, History tab placeholder, integration step skipped).
 
@@ -91,7 +91,7 @@ Don't leave handoff promises buried in prose. Today's miss (RS-64) shipped becau
 
 Before presenting to the user, audit every section:
 
-1. **Identify every point where VBW would need to guess** — scan for implicit assumptions, undefined behaviors, and missing decision points
+1. **Identify every point where the planner would need to guess** — scan for implicit assumptions, undefined behaviors, and missing decision points
 2. **For each guessing point**, do one of:
    - Convert it into a **Decision** (defined or `[TBD]`)
    - Clarify the **Scope** to eliminate the ambiguity
@@ -248,12 +248,12 @@ loop:
 
 **State preconditions:** `pk spec-cycle` refuses to run if the issue is not in the configured "Spec ready state" (default: `Specced`). Phase 5 of this skill sets that state, so the precondition holds on entry.
 
-### Phase 7 — VBW Ingestion Pointer
+### Phase 7 — Planning Pointer
 
 Tell the user how to proceed:
 
 > **Next steps:**
-> - To flesh this out into a full VBW plan: enter planning mode and reference this issue
+> - To turn this spec into a plan and execute it: `pk branch PROJ-XXX`, then `/work PROJ-XXX` from inside the worktree
 > - To batch-process with other specced issues: `/linear-todo-runner` (requires Acceptance Criteria section)
 > - To refine further: `/light-spec PROJ-XXX` to iterate
 
@@ -265,26 +265,23 @@ Read the canonical template from `templates/light_spec_template.md` in the metho
 
 ---
 
-## How This Connects to VBW
+## How This Connects to Planning
 
-The light spec is designed so VBW's planning agents can consume it directly:
+The light spec is designed so `/work`'s planning step can consume it directly. `/work` materializes a task DAG to `.pk-work/PROJ-XXX-PLAN.md` (one atomic task per entry, each with `files` / `change` / `verify` / `done`). The spec maps onto that plan like so:
 
-| Light Spec Section | VBW Plan Section |
+| Light Spec Section | Native Plan Use |
 |--------------------|-----------------|
-| Problem + Goal | `<objective>` |
-| Proposed Solution | `<objective>` approach description |
-| Scope | Plan scope boundaries + `forbidden_commands` |
-| Decisions | `must_haves.truths` (defined) or research tasks (TBD) |
-| Requirements | `must_haves.truths` |
-| Acceptance Criteria | `<verify>` + `<done>` per task, `<success_criteria>` |
-| Technical Context + Authority | `<context>` + `files_modified` |
-| Risks & Open Questions | Research tasks (`type: research`) in the plan |
-| Complexity | `effort_override` (Low→expedited, Med→standard, High→thorough) |
+| Problem + Goal | Plan goal / approach |
+| Proposed Solution | Plan approach description |
+| Scope | Task boundaries (which files each task may touch) |
+| Decisions | Task `change` lines (defined) or a research task (TBD) |
+| Requirements | Task set + each task's `done` condition |
+| Acceptance Criteria | Per-task `verify` + `done`; the tests `/work` authors |
+| Technical Context + Authority | Task `files` sets + which layer is authoritative |
+| Risks & Open Questions | Research task up front, before dependent tasks |
+| Complexity | Tier label (Phase 3.6) → which `/work` gates run |
 
-When entering planning mode, reference the issue:
-> "Plan PROJ-XXX using the light spec in its description. Resolve open questions, break into tasks, and generate a PLAN.md."
-
-The VBW lead agent will read the Linear issue, extract the spec, and use it as the foundation for task decomposition.
+`/work` reads the Linear issue, extracts the spec, and uses it as the foundation for task decomposition.
 
 ---
 
@@ -295,9 +292,9 @@ Same as `/brainstorm`, but with planning implications. Phase 3.6 maps these to `
 | Complexity | Planning implication | Auto-derived tier (v2.7.0-rc1+) |
 |---|---|---|
 | **Trivial** | Single-step change, no decomposition. Often a typo/copy/rename. | `tier:quick` |
-| **Low (~2-4h)** | Can skip full VBW planning — spec is sufficient for `/linear-todo-runner` to pick up directly if AC section is complete. | `tier:quick` |
-| **Medium (~6-10h)** | Benefits from a single VBW plan (1 PLAN.md). The light spec provides enough for the lead agent to generate tasks. | `tier:standard` |
-| **High (~12-20h+)** | Likely needs multiple VBW plans across a phase. The light spec seeds the architect agent's phase decomposition. | `tier:heavy` |
+| **Low (~2-4h)** | `/work` plans inline — spec is sufficient for `/linear-todo-runner` to pick up directly if AC section is complete. | `tier:quick` |
+| **Medium (~6-10h)** | Benefits from a single planning pass. The light spec provides enough for `/work` to generate a task DAG. | `tier:standard` |
+| **High (~12-20h+)** | Likely a larger task DAG across a phase. The light spec seeds `/work`'s `--deep` parallel-grounding decomposition. | `tier:heavy` |
 | **Very High / Critical** | Cross-phase, cross-team, or migrates load-bearing infrastructure. Always heavy. | `tier:heavy` |
 
 The auto-derived tier feeds into:
@@ -343,6 +340,6 @@ After the spec is drafted and posted to Linear, emit an inline `➜ Next:` line 
 ## Related Skills
 
 - `/brainstorm` — lighter: feasibility-only, no structured spec
-- `/sync-linear` — syncs VBW ↔ Linear after plans exist
+- `/sync-linear` — legacy: reconciles `.vbw-planning/` files ↔ Linear (un-migrated projects only; phase surface is Linear-native as of v4.1.0)
 - `/linear-todo-runner` — executes specced issues in parallel (requires AC section)
 - `/spec-validator` — validates full Strategy docs (heavier than light specs)

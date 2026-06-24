@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.5.0** — Last updated: 2026-06-22  *(phase surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the phase reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.2.0: VBW plugin no longer required — the legacy `.vbw-planning/` planning layer is optional and slated for separate retirement; the VBW↔Linear mapping below stays accurate for projects that still run it. Carries v4.1.0's Linear-native phase surface — Initiative `i{N}.` = phase, ordered by name prefix. The roadmap's phase order now lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. `.vbw-planning/PHASES.md` and `linear-map.json` are retired (bin/pk fallback-only). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.5.0** — Last updated: 2026-06-22  *(phase surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the phase reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.1.0's Linear-native phase surface — Initiative `i{N}.` = phase, ordered by name prefix. The roadmap's phase order lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. The legacy `.vbw-planning/PHASES.md` and `linear-map.json` are retired (`bin/pk` reads them only as a read-only fallback for un-migrated projects). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -76,31 +76,29 @@ The **Milestone = Work Package** layer is an optional intra-project grouping, or
 
 ---
 
-## VBW <> Linear Mapping
+## Phase Surface Mapping
 
-The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. The phase-source files `.vbw-planning/PHASES.md` and `.vbw-planning/linear-map.json` are **retired** — no skill writes them; `bin/pk` reads them only as a fallback when the Linear hierarchy is unreachable.
+The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. The legacy phase-source files `.vbw-planning/PHASES.md` and `.vbw-planning/linear-map.json` are **retired** — no skill writes them; `bin/pk` reads them only as a read-only fallback for un-migrated projects.
 
 | Concept | Linear | Notes |
 |---|---|---|
 | Roadmap phase | Initiative `i{N}. label` | Ordered by the `i{N}` name prefix. The source of truth for phase order. |
 | Sub-phase | Project `I{N}.P{N}. label` | Ordered by the `P{N}` name prefix, within a phase. Issues live here. (Legacy bare `P{N}.` still parses.) |
 | Work Package (optional) | Milestone | Optional intra-project batch within a project. |
-| Plan (phase) | -- | VBW planning-layer internal. `.vbw-planning/phases/*/PLAN.md` |
-| Task | -- | VBW planning-layer internal. `.vbw-planning/` |
-| Issue | Issue | Issue IDs shared across both systems |
+| Issue | Issue | The work item. |
 
-**The Linear hierarchy is the source of truth for phase order.** The VBW plugin is no longer required (v4.2.0). For projects that still run the legacy planning layer, it owns task decomposition (`PLAN.md`) and execution state under `.vbw-planning/`; `.vbw-planning/ROADMAP.md` is retained as optional legacy. The `/sync-linear` skill keeps that planning state and Linear coherent. The layer is slated for separate, later retirement.
+**The Linear hierarchy is the source of truth for phase order.** Task decomposition lives in the execution plan (`.pk-work/<ID>-PLAN.md`), authored and run by `/work` on the native-on-Workflow executor; Linear stays clean — one issue per feature.
 
 ### What Lives Where
 
 | Content | Home | Never In |
 |---------|------|----------|
-| Feature specs, AC, scope | Linear issue description | VBW plans |
-| Task decomposition | `.vbw-planning/` PLAN files | Linear |
-| Execution status | Both (synced via `/sync-linear`) | -- |
-| Code | Git | Linear or VBW |
+| Feature specs, AC, scope | Linear issue description | The execution plan |
+| Task decomposition | `.pk-work/<ID>-PLAN.md` | Linear |
+| Execution status | Linear (the source of truth) | -- |
+| Code | Git | Linear |
 
-**Never create Linear projects for VBW plans. Never create Linear issues for VBW tasks.** Features are the bridge between Linear and VBW.
+**Never create Linear projects or issues for individual plan tasks.** Features are the unit Linear tracks; task decomposition stays in the execution plan.
 
 ---
 
@@ -199,7 +197,7 @@ When the current phase ships, promote On Deck → Needs Spec and refill On Deck 
 
 ## Conventions
 
-- **No sub-issues in Linear.** Task decomposition lives in `.vbw-planning/` only. Linear stays clean — one Issue per feature.
+- **No sub-issues in Linear.** Task decomposition lives in the execution plan (`.pk-work/<ID>-PLAN.md`) only. Linear stays clean — one Issue per feature.
 - **Projects (`I{N}.P{N}.`) don't overlap.** Each issue lives in exactly one sub-phase project at a time.
 - **Milestones = Work Packages (optional).** When used, a milestone is an intra-project batch; an issue belongs to at most one. Orthogonal to the phase surface — skip it entirely when not useful.
 - **Tier labels are redundant with phase initiatives** — intentional. Labels persist after phases complete.
@@ -325,6 +323,6 @@ The **Linear hierarchy itself is the source of truth** for the roadmap's phase o
 Linear IDs that skills consume directly:
 1. `method.config.md` — team ID and state IDs for skill consumption (see the § Phase Surface contract).
 
-`.vbw-planning/linear-map.json` is **retired**: no skill writes it, and it is no longer the ID map. `bin/pk` reads it only as a fallback when the Linear hierarchy is unreachable.
+The legacy `.vbw-planning/linear-map.json` is **retired**: no skill writes it, and it is no longer the ID map. `bin/pk` reads it only as a read-only fallback for un-migrated projects.
 
 See `method.config.template.md` for the template.

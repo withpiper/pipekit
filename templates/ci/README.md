@@ -137,7 +137,7 @@ Closes the **state-lag gap**: every Linear transition after `pk ship` is command
 
 This workflow drives the transition off the **merge event** instead of a human remembering a command. On a merged PR into the integration branch, it extracts every `<PREFIX>-NNN` from the branch name + PR title + body and advances each issue to `TARGET_STATE`.
 
-It does **not** replace `pk done` / `pk promote --finish` — those also clean up the worktree, post commits to Linear, and write the VBW SUMMARY. It's the **safety net** for when they're skipped. Both paths end at the same Linear state, and the transition is idempotent (it skips a WIT already at the target), so running both is harmless.
+It does **not** replace `pk done` / `pk promote --finish` — those also clean up the worktree and post commits to Linear. It's the **safety net** for when they're skipped. Both paths end at the same Linear state, and the transition is idempotent (it skips a WIT already at the target), so running both is harmless.
 
 ### Install
 

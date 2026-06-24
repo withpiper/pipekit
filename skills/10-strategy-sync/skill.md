@@ -51,11 +51,10 @@ If a Changelog doc exists in the manifest, it is excluded from sync content — 
 
 1. Read `method.config.md` to get the strategy doc manifest
 2. Read the first strategy doc's version header to get the last update date
-3. Read `.vbw-planning/STATE.md` for recently completed phases
-4. Query Linear for issues in Done state since the last Strategy doc update date:
+3. Query Linear for issues in Done state since the last Strategy doc update date:
    - Use `mcp__linear-server__linear_searchIssues` filtered by state = Done
    - Filter to issues completed after the last doc update
-4b. **Merged-PR cross-check (mandatory — do not skip).** Linear `Done` routinely *lags* git reality: a WIT's PR merges to the integration branch but the issue stays in UAT / In <Env> because the post-merge transition (`pk done`) was skipped, run via the GitHub UI, or failed. Trusting Linear `Done` alone therefore **under-reports shipped work**, and this sync silently skips real features. Cross-check against merged PRs:
+4. **Merged-PR cross-check (mandatory — do not skip).** Linear `Done` routinely *lags* git reality: a WIT's PR merges to the integration branch but the issue stays in UAT / In <Env> because the post-merge transition (`pk done`) was skipped, run via the GitHub UI, or failed. Trusting Linear `Done` alone therefore **under-reports shipped work**, and this sync silently skips real features. Cross-check against merged PRs:
    - Get the integration branch (`method.config.md` → `integration_branch` / `## Ship environments`) and the project's issue-ID prefix (from the Linear team in `method.config.md` — e.g. `WIT-`, `RS-`, `PROJ-`).
    - List PRs merged since the last doc-update date (from step 2):
      ```bash
@@ -64,9 +63,9 @@ If a Changelog doc exists in the manifest, it is excluded from sync content — 
        --jq '.[] | select(.mergedAt >= "<last-doc-update-date>")'
      ```
    - Extract issue IDs from each PR's `headRefName` (e.g. `feature/WIT-434-…`) **and** its title/body (bundled `<PREFIX>-\d+`).
-   - **Diff against the Done set from step 4.** Any merged-but-not-Done issue is shipped work — fold it into this sync, and tell the user its Linear state lags so they can reconcile.
+   - **Diff against the Done set from step 3.** Any merged-but-not-Done issue is shipped work — fold it into this sync, and tell the user its Linear state lags so they can reconcile.
    - Non-skippable: this guard is the only thing between a lagging Linear board and a doc-sync that misses real features. (Root cause: post-ship Linear transitions in Pipekit are command-driven, not merge-driven — an upstream `bin/pk` limitation, not a project bug.)
-5. For each shipped issue (Done **or** merged-but-not-Done from 4b): check if it has a light spec (look for `## Light Spec` in description)
+5. For each shipped issue (Done **or** merged-but-not-Done from step 4): check if it has a light spec (look for `## Light Spec` in description)
 6. Group shipped features by complexity:
    - **Has light spec:** Full spec available — primary source for doc updates
    - **No spec (bug/fix):** Check if it changed user-visible behavior
@@ -154,7 +153,7 @@ After updating primary docs, check consistency across all docs in the manifest:
 
 ### Phase 7b — Clear Post-Archive Marker
 
-If `$STATE_DIR/pending-strategy-sync` exists (resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`), it was written by `scripts/pipekit-post-archive.sh` to signal that a milestone archive left strategy docs potentially stale. (v1.7.0+: location moved out-of-repo to evade VBW's file-guard.) After Phase 6 applies approved updates, remove the marker:
+If `$STATE_DIR/pending-strategy-sync` exists (resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`), it was written by `scripts/pipekit-post-archive.sh` to signal that a milestone archive left strategy docs potentially stale. (v1.7.0+: location moved out-of-repo, where no repo-side file-guard can block the write.) After Phase 6 applies approved updates, remove the marker:
 
 ```bash
 STATE_DIR=$(bash scripts/pipekit-state-dir.sh)

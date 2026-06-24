@@ -30,7 +30,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.6.0"
+PK_VERSION="4.7.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -860,10 +860,11 @@ pk_gh_pr_create() {
   return 1
 }
 
-# Find the VBW PLAN.md for an issue ID across all phase dirs. Flexible
-# match — VBW-native flat layout is .vbw-planning/phases/<phase>/<phase-num>-<id-num>-PLAN.md,
+# Find the legacy .vbw-planning/ PLAN.md for an issue ID across all phase dirs.
+# Read-only fallback for un-migrated projects; native /work plans live in
+# .pk-work/<ID>-PLAN.md. Flat layout is .vbw-planning/phases/<phase>/<phase-num>-<id-num>-PLAN.md,
 # but consumers may use alt nested layouts. Returns first match or empty.
-pk_vbw_find_plan() {
+pk_legacy_find_plan() {
   local root="$1"
   local issue="$2"
   [ -d "$root/.vbw-planning/phases" ] || return 1
@@ -890,12 +891,13 @@ pk_vbw_find_plan() {
 
 # v2.6.0 #2: After a confirmed pk done merge, flip the PLAN.md frontmatter
 # status from "ready" to "complete" and write a SUMMARY.md alongside.
-# Unblocks fresh-worktree edits for batch flows by removing the stale
-# "active plan" marker that VBW's file-guard treats as in-progress.
+# Legacy read-only fallback for un-migrated projects that still carry a
+# .vbw-planning/ layer. Unblocks fresh-worktree edits for batch flows by
+# removing the stale "active plan" marker the legacy file-guard treats as in-progress.
 # Idempotent — re-runs are safe (existing SUMMARY.md is kept; status flip
 # is no-op if already complete). Skips silently when no .vbw-planning/ or
 # no matching PLAN.md exists.
-pk_vbw_finalize_plan() {
+pk_legacy_finalize_plan() {
   local root="$1"
   local issue="$2"
   local pr_url="$3"
@@ -904,7 +906,7 @@ pk_vbw_finalize_plan() {
   local diffstat="$6"
 
   local plan_file
-  plan_file=$(pk_vbw_find_plan "$root" "$issue") || return 1
+  plan_file=$(pk_legacy_find_plan "$root" "$issue") || return 1
 
   # Flip PLAN status: ready → complete (frontmatter-scoped). Awk because
   # sed -i is non-portable across BSD/GNU; awk gives us safe replacement
@@ -1723,9 +1725,10 @@ $commits"
     fi
   fi
 
-  # Write VBW SUMMARY + flip PLAN status (v2.6.0 #2). Best-effort: skips
-  # silently when there's no .vbw-planning/ or no matching PLAN.md.
-  # Unblocks fresh-worktree edits for batch flows — VBW's file-guard
+  # Legacy fallback: write SUMMARY + flip PLAN status for un-migrated
+  # projects (v2.6.0 #2). Best-effort: skips silently when there's no
+  # .vbw-planning/ or no matching PLAN.md (always, for native /work projects).
+  # Unblocks fresh-worktree edits for batch flows — the legacy file-guard
   # otherwise treats `status: ready` PLAN.md files as still-active and
   # blocks edits outside their files_modified list.
   local merge_sha commits_count
@@ -1733,10 +1736,10 @@ $commits"
   commits_count="0"
   [ -n "${commits:-}" ] && commits_count=$(echo "$commits" | wc -l | tr -d ' ')
   local plan_touched
-  plan_touched=$(pk_vbw_finalize_plan "$root" "$issue" "${pr_url_done:-}" "$merge_sha" "$commits_count" "${diffstat:-}" 2>/dev/null || true)
+  plan_touched=$(pk_legacy_finalize_plan "$root" "$issue" "${pr_url_done:-}" "$merge_sha" "$commits_count" "${diffstat:-}" 2>/dev/null || true)
   if [ -n "$plan_touched" ]; then
     echo ""
-    echo "VBW: marked plan complete + wrote summary"
+    echo "Legacy plan: marked complete + wrote summary"
     echo "$plan_touched" | sed 's/^/  → /'
     echo "  Commit when ready: git add .vbw-planning/ && git commit"
   fi
@@ -2449,7 +2452,7 @@ pk_spec_cycle_trigger_body() {
   cat <<'EOF'
 @linear review this spec using Spec Review Agent (v5).
 
-Assess whether it is safe and ready for VBW planning. Focus on planning readiness, scope clarity, authority/source of truth, edge cases, financial correctness if relevant, and decomposition readiness.
+Assess whether it is safe and ready for planning. Focus on planning readiness, scope clarity, authority/source of truth, edge cases, financial correctness if relevant, and decomposition readiness.
 
 **REQUIRED: Your response must begin with exactly one of these two lines — nothing before it, no extra words:**
 Verdict: Pass

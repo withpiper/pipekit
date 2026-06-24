@@ -39,7 +39,7 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 | Linear issue body | `mcp__linear-server__linear_getIssueById` with `includeRelations: true` | Spec body + status + blocked_by |
 | File paths from spec | `Read` or `Glob` | Confirm cited files exist |
 | Line ranges from spec | `Read` with `offset`/`limit` | Confirm line citations resolve to real content |
-| `phase-detect.sh` output | Bash via the v1.4.1 lookup chain (see Step 3) | Confirm stated VBW baseline is current |
+| `phase-detect.sh` output | Bash via the legacy lookup chain (see Step 3) | Confirm stated phase baseline is current (legacy projects only) |
 | Linear status (re-fetched) | `mcp__linear-server__linear_getIssueById` | Compare current status against spec body's claim |
 | Each `blocked_by` issue | `mcp__linear-server__linear_getIssueById` | Confirm dependency claims of "Done" |
 | `Strategy docs path` (from `method.config.md`) | `Glob` + `Read` | Probe 3.6a — canonical-doc cross-check (#21) |
@@ -105,9 +105,9 @@ For each `<file>:N` or `<file>:N-M`, call `Read` with `offset: N` and `limit: M-
 
 A line range past EOF is a divergence — record `resolves: false`.
 
-#### 3c — phase-detect baseline
+#### 3c — phase-detect baseline (legacy fallback)
 
-Resolve `phase-detect.sh` using the same lookup chain as `/work` (which inherited it from the v1 `/launch` Step 1.6 logic):
+The phase surface is Linear-native (v4.1.0) — `phase_count` / `next_phase_state` claims only appear in specs from un-migrated projects that still carry a `phase-detect.sh`. This probe is therefore a legacy fallback: it runs only when the script is present, and degrades silently otherwise. Resolve it via the same lookup chain `/work` uses:
 
 ```bash
 PHASE_DETECT=""
@@ -119,19 +119,19 @@ else
   for c in "$HOME"/.claude/plugins/cache/vbw-marketplace/vbw/*/scripts/phase-detect.sh; do
     [ -x "$c" ] && PHASE_DETECT="$c"
     # Don't break — alphabetic glob expansion means later iterations
-    # overwrite with higher-versioned VBW installs.
+    # overwrite with higher-versioned installs.
   done
 fi
 
 if [ -n "$PHASE_DETECT" ]; then
-  "$PHASE_DETECT" > /tmp/pipekit-spec-preflight-vbw.txt 2>/dev/null
+  "$PHASE_DETECT" > /tmp/pipekit-spec-preflight-phase.txt 2>/dev/null
   PHASE_DETECT_RC=$?
 else
   PHASE_DETECT_RC=127
 fi
 ```
 
-If `PHASE_DETECT_RC != 0` or the script is unavailable: record the phase-detect category as `VBW state unverified — phase-detect.sh unavailable`. This is graceful degradation, not failure. Do not fail the verdict on this category alone.
+If `PHASE_DETECT_RC != 0` or the script is unavailable: record the phase-detect category as `phase baseline unverified — phase-detect.sh unavailable (Linear-native project, expected)`. This is graceful degradation, not failure. Do not fail the verdict on this category alone.
 
 If the script ran, parse its output line-by-line (it emits `key=value` pairs). For each phase-detect baseline claim from Step 2, compare stated value against actual value. Record `match` / `mismatch (spec says X, actual Y)`.
 
@@ -319,8 +319,8 @@ These rules are explicit so the skill stays useful when infrastructure is partia
 
 | Condition | Behavior |
 |-----------|----------|
-| `phase-detect.sh` not found anywhere | Phase-detect category records `⚠ VBW state unverified`. Verdict is still PASS-eligible if all other categories pass. |
-| `phase-detect.sh` exits non-zero | Same as above — record `⚠ VBW state unverified` with the exit code in `--explain` mode. |
+| `phase-detect.sh` not found anywhere | Phase-detect category records `⚠ phase baseline unverified` (expected on Linear-native projects). Verdict is still PASS-eligible if all other categories pass. |
+| `phase-detect.sh` exits non-zero | Same as above — record `⚠ phase baseline unverified` with the exit code in `--explain` mode. |
 | Linear MCP timeout fetching the main issue | Stop. The skill needs the spec body to do anything else. Report `"Linear API unavailable — re-run later."`. |
 | Linear MCP timeout fetching a blocker | Record that dependency as `⚠ unverified`. Verdict is PASS-eligible if all other categories pass. |
 | File doesn't exist | Real divergence. Record `✗`. Triggers REVISE. Not graceful — file-presence is verifiable without infrastructure. |
@@ -448,4 +448,4 @@ Verdict: PASS (with --accept warnings) — proceed knowing the listed gaps are a
 | `/light-spec` | Produces the spec this skill verifies. |
 | Spec Review Agent | Reviews narrative coherence. `/spec-preflight` reviews empirical claims — complementary, not redundant. |
 | `/light-spec-revise` | Where the user goes on REVISE if the spec body is the problem (most cases). |
-| `pk branch` + `/work` | The v2 daily loop consumes specs that have passed `/spec-preflight`. `/work` also reads `phase-detect.sh` (inherited from v1's `/launch` Step 1.6 logic), but as a runtime informational gate, not as a spec-vs-reality check. |
+| `pk branch` + `/work` | The daily loop consumes specs that have passed `/spec-preflight`. On legacy projects `/work` also reads `phase-detect.sh` (inherited from v1's `/launch` Step 1.6 logic) as a runtime informational gate, not as a spec-vs-reality check. |

@@ -13,18 +13,18 @@ This skill is Pipekit's plan-review gate — an independent stress-test between 
 
 ## Triggers
 
-- `/review-plan` — auto-detect most recent phase
-- `/review-plan {phase-slug}` — review the named phase explicitly
-- `/review-plan PROJ-XXX` — auto-resolve phase from Linear issue's branch mapping
+- `/review-plan PROJ-XXX` — review the plan `/work` filed at `.pk-work/PROJ-XXX-PLAN.md`
+- `/review-plan` — auto-detect the most recent plan
+- `/review-plan {phase-slug}` — legacy fallback: review a named phase under `.vbw-planning/phases/` (un-migrated projects)
 - "review the plan", "run plan-reviewer"
 
 ## Purpose
 
-The planner's own self-review covers structural correctness (requirements coverage, circular deps, same-wave file conflicts, task counts, skill refs). It cannot see:
+`/work`'s inline planning covers structural correctness (requirements coverage, circular deps, same-wave file conflicts, task counts, skill refs). It cannot see:
 
 - **Scope drift** vs the approved spec
 - **Framing errors** (solving the wrong problem)
-- **Confirmation bias** in Lead's own judgment calls
+- **Confirmation bias** in the planner's own judgment calls
 - **Atomicity failures** between same-wave tasks
 - **Test meaningfulness** — verify steps that say "tests pass" without naming what
 - **Domain risk coverage** — RLS bypass traps, migration ordering, JWT scoping
@@ -40,21 +40,27 @@ The `plan-reviewer` agent fills that gap. This skill orchestrates the call.
 
 ## Execution Steps
 
-### Step 1 — Resolve the phase dir
+### Step 1 — Resolve the plan path
 
-Determine which `PLAN.md`(s) to review:
+Determine which plan(s) to review:
 
-1. **Explicit phase slug** (`/review-plan phase-1-data-foundation`) — use directly
-2. **Linear issue ID** (`/review-plan PROJ-123`) — resolve by reading the current git branch (`feature/proj-123-*` → look up the phase directory containing this plan)
-3. **No argument** — auto-detect: read `.vbw-planning/STATE.md` for the active phase; if ambiguous, list phases with un-reviewed PLAN.md and ask the user to pick
+1. **Linear issue ID** (`/review-plan PROJ-123`) — native `/work` files the plan at `.pk-work/<ID>-PLAN.md`; point this skill there. Resolve the ID from the current git branch (`feature/proj-123-*`) when not passed explicitly.
+2. **Explicit phase slug** (`/review-plan phase-1-data-foundation`) — legacy fallback for un-migrated projects whose plans still live under `.vbw-planning/phases/{phase-slug}/`; use directly.
+3. **No argument** — auto-detect: look for a recent `.pk-work/<ID>-PLAN.md`; if none and a legacy `.vbw-planning/STATE.md` exists, read it for the active phase. If ambiguous, list plans with no review and ask the user to pick.
 
-Find every `*-PLAN.md` in the phase dir:
+For the native path, the plan is a single file:
+
+```bash
+ls .pk-work/<ISSUE-ID>-PLAN.md
+```
+
+For the legacy-fallback path, find every `*-PLAN.md` in the phase dir:
 
 ```bash
 ls .vbw-planning/phases/{phase-slug}/*-PLAN.md
 ```
 
-If the phase dir uses non-VBW-native layout (e.g., nested `rs-N-slug/PLAN.md` rather than flat `01-N-PLAN.md`), still find every `PLAN.md` in the dir tree and pass the list to the agent — the agent reviews plan content, not filename structure.
+If a legacy phase dir uses a non-flat layout (e.g., nested `rs-N-slug/PLAN.md`), still find every `PLAN.md` in the dir tree and pass the list to the agent — the agent reviews plan content, not filename structure.
 
 ### Step 2 — Resolve the approved spec
 
@@ -106,8 +112,8 @@ Agent(
   Project context:
   - CLAUDE.md at repo root
   - method.config.md at repo root
-  - .vbw-planning/PHASES.md (if present)
-  - .vbw-planning/codebase/CONCERNS.md (if present)
+  - .vbw-planning/PHASES.md (legacy fallback, if present)
+  - .vbw-planning/codebase/CONCERNS.md (legacy fallback, if present)
 
   Follow the Review Protocol in your agent definition. Return the
   structured markdown output (Verdict / Readiness Score / Blocking Issues
@@ -167,9 +173,9 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 | Flag | What it actually means |
 |------|------------------------|
 | "The plan is small, skip the review" | Small plans hide framing errors most easily — there's less surface for Lead's self-review to catch issues. Run review regardless. |
-| "Lead self-reviewed, that's enough" | Lead's Stage 3 covers structural correctness only. The class of errors plan-reviewer catches (scope drift, atomicity, test meaningfulness) is structurally invisible to Lead. Don't conflate. |
-| "I'll just eyeball it myself" | Probably you'll catch the same things Lead missed — confirmation bias works on humans too. The agent is a fresh pair of eyes. |
-| "The spec was clear so the plan must be right" | Spec clarity doesn't guarantee plan fidelity. Lead can correctly understand a spec and still produce a plan that quietly expands scope. |
+| "The plan was already self-reviewed, that's enough" | `/work`'s planning covers structural correctness only. The class of errors plan-reviewer catches (scope drift, atomicity, test meaningfulness) is structurally invisible to the planner. Don't conflate. |
+| "I'll just eyeball it myself" | Probably you'll catch the same things the planner missed — confirmation bias works on humans too. The agent is a fresh pair of eyes. |
+| "The spec was clear so the plan must be right" | Spec clarity doesn't guarantee plan fidelity. The planner can correctly understand a spec and still produce a plan that quietly expands scope. |
 | "Block verdict but the issue seems minor" | Blocking issues are blocking by definition. If you disagree, push back on the plan-reviewer agent's framing — don't override the verdict. |
 
 ---
@@ -196,11 +202,10 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 ## Example Session
 
 ```
-User: /review-plan rs-14-login-routes
+User: /review-plan RS-14
 
-## Resolving phase…
-- Phase dir: .vbw-planning/phases/phase-1-data-foundation/rs-14-login-routes
-- Plans: PLAN.md (single)
+## Resolving plan…
+- Plan: .pk-work/RS-14-PLAN.md (native, single file)
 - Linear issue: RS-14 (resolved from current branch feature/rs-14-login-routes)
 - Spec: 187 lines including Light Spec + Acceptance Criteria
 
@@ -247,7 +252,7 @@ proceed to execution with these two improvements applied.
 
 ---
 
-➜ Next: proceed to execution (rs-14-login-routes)
+➜ Next: proceed to execution (RS-14)
    (apply the two non-blocking improvements during execution; verify-step
    sharpening can land in the same task commit)
 ```

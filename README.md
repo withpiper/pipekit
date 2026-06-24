@@ -1,14 +1,14 @@
 # Pipekit
 
-**v4.6.0** — Last updated: 2026-06-23  *(Pipekit 4.6: **`pk deploy [<env>]`** — a first-class deploy verb for script-deploy projects (FTP/rsync/custom uploader): resolves `<env>` to the configured `Deploy command` in `method.config.md` and runs it (bare/`prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through), a thin delegate that leaves confirmation + safety to the script. Carries 4.5: **projects carry their initiative number in the phase surface** — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`; `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`, and `/roadmap-create` + `/phase-plan` author the new form. Carries 4.4: **`/security-gate`** — a feature-scoped security gate at the Building → UAT seam (after `/verify`, before `pk ship`) that classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the matching checklist; none matched → instant PASS. Advisory. Carries 4.3: **`/prod-ready`** — a production-readiness gate beside `/verify`, run once per feature before the final `pk promote` (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard). Advisory. Carries 4.2: **VBW plugin decoupled** — no longer required; its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`, synced + registered by `sync-method.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement. Carries 4.1: **Linear-native phase surface** — Initiatives named `i{N}.` (phases) → Projects named `I{N}.P{N}.` (sub-phases) → Issues, ordered by the name-prefix number; `PHASES.md`/`linear-map.json` are retired (read-only fallback). Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed; a stale `Backend: vbw` refuses with a migration message). Plus 3.x's ownership split + distribution-layer hardening and the v2.8.x substrate)*
+**v4.7.0** — Last updated: 2026-06-24  *(Pipekit 4.7: **VBW fully retired** — docs/skills/SOPs/templates/`bin/pk` debranded (`pk_vbw_*` → `pk_legacy_*`), the VBW plugin uninstalled, and the dead `/vbw:vibe --archive` hook removed; the only remaining VBW reference is a read-only `bin/pk` fallback to a legacy `.vbw-planning/` layer for un-migrated projects. Carries 4.6: **`pk deploy [<env>]`** — a first-class deploy verb for script-deploy projects (FTP/rsync/custom uploader): resolves `<env>` to the configured `Deploy command` in `method.config.md` and runs it (bare/`prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through), a thin delegate that leaves confirmation + safety to the script. Carries 4.5: **projects carry their initiative number in the phase surface** — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`; `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`, and `/roadmap-create` + `/phase-plan` author the new form. Carries 4.4: **`/security-gate`** — a feature-scoped security gate at the Building → UAT seam (after `/verify`, before `pk ship`) that classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the matching checklist; none matched → instant PASS. Advisory. Carries 4.3: **`/prod-ready`** — a production-readiness gate beside `/verify`, run once per feature before the final `pk promote` (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard). Advisory. Carries 4.2: **VBW plugin decoupled** — no longer required; its one functional dependency, the advisory commit-format hook, is now a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`, synced + registered by `sync-method.sh`). Carries 4.1: **Linear-native phase surface** — Initiatives named `i{N}.` (phases) → Projects named `I{N}.P{N}.` (sub-phases) → Issues, ordered by the name-prefix number; `bin/pk` keeps a legacy read-only fallback reading `.vbw-planning/PHASES.md`/`linear-map.json` only for un-migrated projects. Carries 4.0: native-on-Workflow is the **sole** executor (the `vbw` backend and `--backend=` flag are removed). Plus 3.x's ownership model + distribution-layer hardening and the v2.8.x substrate)*
 
-A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive); the pluggable VBW execution backend was removed in v4.0.0, and as of v4.2.0 the [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) plugin is no longer required at all. A legacy VBW planning layer remains for projects that used direct VBW, slated for a separate retirement.
+A structured AI-assisted software delivery system — from idea to production with quality gates at every stage. The executor is **native-on-Workflow** (Claude Code's first-party orchestration primitive). VBW is fully retired — not part of any Pipekit workflow, doc, or dependency.
 
 ## What This Is (and Isn't)
 
 Pipekit is the **structure around an executor** — spec creation, independent review, human sign-off, quality gates, Linear visibility, and promotion. It is **not** itself a planner or code executor: it runs the build step on the native-on-Workflow executor and owns everything around it.
 
-As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. As of **4.0**, it is the **sole** executor: the pluggable `vbw` backend was removed (deprecated in v3.2.0 after carrying 0/30 of recent production work). As of **4.1**, [VBW](https://github.com/yidakee/vibe-better-with-claude-code-vbw) is no longer part of Stage 0 either — `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `I{N}.P{N}.` Projects → Issues). As of **4.2**, the VBW plugin is no longer required at all — its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`). A legacy VBW planning layer (`.vbw-planning/` ROADMAP/PLAN/execution state) still exists for projects that used direct VBW; no Pipekit skill depends on it, and it is slated for a separate, later retirement.
+The executor is **native-on-Workflow** — `/work` plans the issue inline (parallel codebase grounding), then executes on Claude Code's first-party Workflow primitive: a task DAG, an atomic commit per task, verify-before-integrate. It is the **sole** executor. `/roadmap-create` authors the roadmap directly into Linear as the native phase surface (`i{N}.` Initiatives → `I{N}.P{N}.` Projects → Issues). The commit-format hook is a Pipekit-owned hook (`.claude/hooks/validate-commit.sh`). (`bin/pk` keeps a legacy read-only fallback that reads `.vbw-planning/PHASES.md`/`linear-map.json` only for projects that haven't migrated to the Linear-native surface — see § Ownership.)
 
 | Stage | What Pipekit handles |
 |-------|----------------------|
@@ -16,20 +16,20 @@ As of **3.0**, the executor is **native-on-Workflow** — `/work` plans the issu
 | **Before** (steps 1–4) | Spec creation, agent review, human sign-off, gate checks |
 | **During** (steps 5–8) | `/work` (plan inline + execute) and `/verify` (pre-deploy gate) |
 | **After** (steps 9–13) | UAT tracking, shipping, promotion, doc sync |
-| **Around** | Linear for cross-issue visibility (VBW tracks one phase at a time) |
+| **Around** | Linear for cross-issue visibility and the phase surface |
 
-The deep-analysis safety net is the **gate layer** — `/financial-review`, `/pr-security-review`, antagonistic PR review — which runs independent of the executor. The executor is not where correctness is enforced; the gates are. (Validated head-to-head on hard financial work: native matched VBW-the-full-system on first-pass correctness at a fraction of the wall-clock and tokens — see `CHANGELOG.md` v3.0.0-rc1.)
+The deep-analysis safety net is the **gate layer** — `/financial-review`, `/pr-security-review`, antagonistic PR review — which runs independent of the executor. The executor is not where correctness is enforced; the gates are. (Validated head-to-head on hard financial work — see `CHANGELOG.md` v3.0.0-rc1.)
 
-### Ownership split
+### Ownership
 
-To avoid drift between the two systems, the boundaries are explicit:
+Pipekit owns the entire delivery surface:
 
-- **The legacy `.vbw-planning/` directory** holds `ROADMAP.md` plus the `PLAN.md` files produced in direct VBW planning use. No Pipekit skill depends on it; it survives only for projects that used direct VBW and is slated for separate retirement. `/work` (native) writes its per-issue plan to `.pk-work/<ID>-PLAN.md` instead.
-- **Pipekit owns the visibility layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `I{N}.P{N}.` → Issues), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
-- **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`I{N}.P{N}.` hierarchy *is* the roadmap. There is no merge into a VBW phase skeleton.
-- **Don't invoke VBW agents directly.** Use `/work`, not `/vbw:lead` or `/vbw:dev`. `/work` executes on the native-on-Workflow backend (the sole executor as of v4.0.0) and keeps Linear and the `pk *` state machine in sync. Direct VBW invocation bypasses the visibility layer.
+- **Pipekit owns the visibility and phase layer** — Linear issues, the **phase surface** (Linear Initiatives `i{N}.` → Projects `I{N}.P{N}.` → Issues), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current phase from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 made the phase surface Linear-native.
+- **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`I{N}.P{N}.` hierarchy *is* the roadmap.
+- **`/work` plans + executes on native-on-Workflow** (the sole executor) and writes its per-issue plan to `.pk-work/<ID>-PLAN.md`, keeping Linear and the `pk *` state machine in sync.
+- **Legacy fallback:** `bin/pk` keeps a read-only fallback that reads `.vbw-planning/PHASES.md`/`linear-map.json` only for un-migrated projects. No skill depends on it; rename your delivery initiatives with `i{N}.` prefixes to switch to the native surface, then the files can be deleted.
 
-Full ownership table and drift-risk mitigations in [method.md](method.md#vbw--pipekit-ownership-model).
+Full ownership table in [method.md](method.md#phase-surface-ownership).
 
 ## Core Principle
 
@@ -73,7 +73,7 @@ A bigger context window changes how much an agent can hold. It does not change w
 | 8 | Ship | `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` triggers antagonistic review. |
 | 8a | Flip to Ready | `pk ready [<ID>]` | (v2.6.0+) Flip Draft → Ready; fires outside reviewers (Semgrep + claude-review per `templates/ci/`). |
 | 9 | UAT | (Linear UI / browser) | You test the built feature — on the PR preview pre-merge, on the first deploy env post-merge. |
-| 10 | Done | `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls integration + writes VBW SUMMARY + flips PLAN status. |
+| 10 | Done | `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls integration (legacy fallback: writes `.vbw-planning/` SUMMARY + flips PLAN status only for un-migrated projects). |
 | 10a | Prod-ready | `/prod-ready [<ID>]` | (v4.3.0) Once per feature, before the final `pk promote` (or the merge to `main` on 1-tier): six operational checks — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. **Advisory** — doesn't block `pk promote`. |
 | 11a | Promote — open | `pk promote <env>` | **Phase 1** (v2.6.0+): opens promote PR. WITs stay in source state. 2-tier: no arg picks the only hop. `--confirmed` bypasses the UAT gate after env-UAT signoff. |
 | 11b | Promote — finish | `pk promote <env> --finish` | **Phase 2** (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate) or → `Done` (final). |
@@ -142,21 +142,9 @@ No local clone of Pipekit needed — the sync script pulls directly from GitHub.
 
 The sync script creates a `method.config.md` file in your project — this is where your project-specific settings go (Linear workspace IDs, environments, etc.). You'll fill this in during setup.
 
-### Step 4: Connect Linear (and, optionally, VBW)
+### Step 4: Connect Linear
 
-Open Claude Code **in your project directory** and install the dependencies:
-
-**VBW (optional)** — As of **v4.2.0**, the VBW plugin is **not required** at all. Stage 0 authors the roadmap directly into Linear (`/roadmap-create` — no `/vbw:init` scaffold), the executor is native-on-Workflow (built into Claude Code, nothing to install), and VBW's one functional dependency — the advisory commit-format hook — is now a Pipekit-owned hook installed by `sync-method.sh`. Install the VBW plugin only if you want its optional direct-use planning layer (`/vbw:*` agents, `.vbw-planning/` PLAN/SUMMARY artifacts) — a legacy layer slated for a separate retirement. If you do, run these as two separate commands (don't paste them together):
-
-```
-/plugin marketplace add yidakee/vibe-better-with-claude-code-vbw
-```
-
-```
-/plugin install vbw@vbw-marketplace
-```
-
-To update later: `/vbw:update`. See the [VBW repo](https://github.com/yidakee/vibe-better-with-claude-code-vbw) for details.
+Open Claude Code **in your project directory**. The only external dependency is Linear — the executor is native-on-Workflow (built into Claude Code, nothing to install), Stage 0 authors the roadmap directly into Linear (`/roadmap-create`), and the commit-format hook is a Pipekit-owned hook installed by `sync-method.sh`.
 
 **Linear** — the issue tracker Pipekit uses for visibility **and the phase surface** (Initiatives `i{N}.` → Projects `I{N}.P{N}.`).
 
@@ -264,7 +252,7 @@ pipekit/
       pipekit-migrations.md        #     Frozen-file invariant, hardening discipline
       pipekit-cmux.md              #     cmux pane/surface discipline
     hooks/                         #   Pipekit-owned hooks (synced + registered)
-      validate-commit.sh           #     Advisory commit-format hook (re-homed from VBW)
+      validate-commit.sh           #     Advisory commit-format hook (Pipekit-owned)
     ci/                            #   CI workflow templates (Semgrep, claude-review, Linear)
   skills/                          # Portable Claude Code skills
   scripts/
@@ -288,7 +276,7 @@ pipekit/
 - `.claude/rules/` — project coding conventions
 - `.claude/skills/{project-specific}/` — skills tied to your stack
 - `.claude/overrides/` — sync-safe customization of synced skills, SOPs, and method.md (see [method.md § Sync-Safe Overrides](method.md#sync-safe-overrides))
-- `.vbw-planning/` — legacy VBW planning state (ROADMAP, plans), for projects that used direct VBW; slated for separate retirement
+- `.vbw-planning/` — legacy `PHASES.md`/`linear-map.json`, read by `bin/pk`'s read-only fallback for un-migrated projects only
 
 ## Documentation
 

@@ -194,7 +194,6 @@ Configure in `.mcp.json` with `${VAR}` interpolation for secrets.
 
 | Key | What it controls |
 |-----|------------------|
-| `Backend` | `/work` executor — native-on-Workflow only (the `vbw` option was removed in v4.0.0; omit this row). |
 | `Integration branch` | The base `pk ship` opens PRs against (`dev` or `main`). |
 | `Promote to main` | Whether `pk promote` is enabled (`false` for single-tier projects). |
 | `Ship environments` | The chain `pk promote` walks (`prod`, `dev,main`, `dev,beta,main`, …). |
@@ -222,7 +221,7 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *`
 | Push branch + get Vercel preview | Vercel auto-fires on PR open |
 | Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` (lift from rs-vault) on merge to main |
 | Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
-| Linear status transitions | `pk ship` → `UAT` (PR open as Draft on preview, v2.6.0+); `pk done` → `In <FirstEnv>` (e.g. `In Dev` — merge confirmed; v2.6.0+ also auto-pulls + writes VBW SUMMARY); `pk promote <env> --finish` → `In <Env>` (intermediate) or → Done (final hop). Two-phase since v2.6.0 — Phase 1 (`pk promote <env>`) opens the PR without state change. |
+| Linear status transitions | `pk ship` → `UAT` (PR open as Draft on preview, v2.6.0+); `pk done` → `In <FirstEnv>` (e.g. `In Dev` — merge confirmed; v2.6.0+ also auto-pulls the integration branch); `pk promote <env> --finish` → `In <Env>` (intermediate) or → Done (final hop). Two-phase since v2.6.0 — Phase 1 (`pk promote <env>`) opens the PR without state change. |
 
 ### 4.2 Skills that are still legitimately project-specific
 

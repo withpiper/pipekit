@@ -68,10 +68,10 @@ derive the current phase live from the Linear hierarchy; `/roadmap-create` autho
   by `pk next`/`pk status` — no config list needed.
 - **Milestones** (Work Packages) remain an optional intra-project grouping, orthogonal to phases.
 
-> **Transitional:** projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the
-> legacy `.vbw-planning/PHASES.md` + `linear-map.json` automatically. Rename your delivery
-> initiatives with `i{N}.` prefixes to switch a project to the native surface, then the files can be
-> deleted. New projects are native from `/roadmap-create`.
+> **Legacy fallback:** projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the
+> legacy `.vbw-planning/PHASES.md` + `linear-map.json` automatically — `bin/pk` reads them read-only.
+> Rename your delivery initiatives with `i{N}.` prefixes to switch a project to the native surface,
+> then the files can be deleted. New projects are native from `/roadmap-create`.
 
 ## Slack (optional)
 
@@ -99,7 +99,7 @@ Best for: solo dev, small teams, projects where preview URLs replace a staging e
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote main` opens the `dev` → `main` PR (Phase 1, no state change); `pk promote main --finish` after the merge transitions WITs to `Done` (Phase 2).
-**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed, on dev) + auto-pull + VBW SUMMARY/PLAN-flip; `pk promote main --finish` → `Done` (after the promote PR merges; two-phase, not optimistic). `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed, on dev) + auto-pull (legacy `.vbw-planning/` SUMMARY/PLAN-flip for un-migrated projects only); `pk promote main --finish` → `Done` (after the promote PR merges; two-phase, not optimistic). `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
 
 ### Three-Tier (dev → beta → main)
 
@@ -114,7 +114,7 @@ Best for: teams with QA, projects needing a stable UAT environment, regulated in
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote <env>` walks one hop per invocation (`pk promote beta` then `pk promote main`); each hop is two-phase — Phase 1 opens the PR, Phase 2 (`--finish`) transitions Linear states after merge.
-**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed) + auto-pull + VBW SUMMARY/PLAN-flip; `pk promote beta --finish` → `In Beta` (after promote PR merges); `pk promote main --finish` → `Done`. Each `pk promote` is two-phase — WITs stay in source state until `--finish` after the merge.
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed) + auto-pull (legacy `.vbw-planning/` SUMMARY/PLAN-flip for un-migrated projects only); `pk promote beta --finish` → `In Beta` (after promote PR merges); `pk promote main --finish` → `Done`. Each `pk promote` is two-phase — WITs stay in source state until `--finish` after the merge.
 
 ### Environments
 

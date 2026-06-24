@@ -99,7 +99,7 @@ Each complexity level maps to a `/work` tier. The tier determines whether a spec
 |------------|----------------|--------|----------|-------|
 | **Low** | Quick | ~2-4h | UI-only, simple CRUD, existing infrastructure | No — straight to `pk branch` + `/work` |
 | **Medium** | Standard | ~6-10h | New API endpoint, combines existing systems | Yes — `/light-spec` first |
-| **High** | Heavy | ~12-20+h | New infrastructure, complex logic, multiple integrations | Yes — `/light-spec`, full VBW route |
+| **High** | Heavy | ~12-20+h | New infrastructure, complex logic, multiple integrations | Yes — `/light-spec`, then `/work` with forced `--deep` grounding |
 
 ## Description Template
 

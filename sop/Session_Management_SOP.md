@@ -40,7 +40,7 @@ Pipekit's pipeline maps naturally onto session boundaries. Treat each pipeline s
 | `/strategy-sync` post-ship | Fresh session | Compares codebase to strategy docs, needs clean context |
 | **End of any session** | **`/pk-exit`** | **Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. Run manually as the final command of every Claude Code session regardless of where the current issue stands. Per-session, not per-issue — never auto-chained from `/work` or `/verify`.** |
 
-**Rule of thumb:** when you start a new pipeline step, start a new session. The tracker files (`{folder-name}-startup.md`, `method.config.md`, `.vbw-planning/ROADMAP.md`, `Strategy/`) carry state across sessions — you don't need Claude's memory to carry it.
+**Rule of thumb:** when you start a new pipeline step, start a new session. The tracker files (`{folder-name}-startup.md`, `method.config.md`, the Linear roadmap, `Strategy/`) carry state across sessions — you don't need Claude's memory to carry it.
 
 ---
 

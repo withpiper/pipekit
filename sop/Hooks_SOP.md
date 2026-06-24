@@ -20,7 +20,7 @@ None currently shipped.
 
 ### Previously shipped
 
-- `check-context.sh` + `statusline-wrapper.sh` — removed 2026-04-21. Warned at 60%/80% of the context window on `UserPromptSubmit`. Removed because the VBW statusline already shows a live context gauge in the status bar (covers the same use case) and the hook's context-window detection had to couple to undocumented Claude Code harness payload fields to distinguish 200K vs 1M sessions. That coupling broke twice across two machines in a single install attempt. If you want the warning back, the git history has the scripts — but prefer leaning on the statusline gauge.
+- `check-context.sh` + `statusline-wrapper.sh` — removed 2026-04-21. Warned at 60%/80% of the context window on `UserPromptSubmit`. Removed because the Claude Code statusline already shows a live context gauge in the status bar (covers the same use case) and the hook's context-window detection had to couple to undocumented Claude Code harness payload fields to distinguish 200K vs 1M sessions. That coupling broke twice across two machines in a single install attempt. If you want the warning back, the git history has the scripts — but prefer leaning on the statusline gauge.
 
 ---
 
