@@ -195,6 +195,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Prod-ready report path** | path | `Reports/` | `/prod-ready` — where the readiness report is written (`Production_Readiness_<ID>_<date>.md`). |
 | **Security categories** | path | `resources/security-categories.md` | `/security-gate` — project category-definitions file (per-category path globs, keywords, correct patterns for auth/payments/user-input/external-APIs/file-storage/PII). Scaffold from `pipekit/templates/security-categories.template.md`. The gate runs at the Building → UAT seam (before `pk ship`). |
 | **Security gate report path** | path | `Reports/` | `/security-gate` — where the gate report is written (`Security_Gate_<ID>_<date>.md`). |
+| **Portfolio staleness days** | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
 
 ### Example (rs-vault)
 

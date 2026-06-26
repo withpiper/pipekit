@@ -301,6 +301,83 @@ $out"
 v=$(printf '%s' '[{"identifier":"N","priority":2}]' | unit_annotate | jq -c '.[0].blocked')
 [ "$v" = "false" ] && ok "annotate: absent inverseRelations → ready (fail-safe)" || fail "annotate: absent relations" "got $v"
 
+# ── Unit tests: pk portfolio runway render (sourced) ─────────────────────────
+# pk_runway_render groups issues by their P<N>. project (ordered by P<N>). Within
+# a project, issues sort priority-first; blocked issues are NOT sunk, but a
+# blocker is lifted to rank just above the most urgent issue it blocks. Columns
+# are width-aligned so the action tag lines up across rows.
+
+echo "== pk portfolio runway render (sourced) =="
+
+unit_runway() { ( cd "$REPO_ROOT" && source "$PK" && pk_runway_render "$@" ); }
+
+# Alpha: A-BLK (Normal) blocks A-HI (High). The blocker should lift ABOVE the
+# high blocked issue; Urgent stays on top; Low stays at bottom; blocked NOT sunk.
+# All carry the same updatedAt so per-project idle is deterministic below.
+RW_IN='[
+  {"identifier":"A-URG","title":"urgent ready","priority":1,"updatedAt":"2026-06-15T00:00:00.000Z","state":{"name":"Approved"},"blocked":false,"project":{"name":"I1.P1. Alpha"}},
+  {"identifier":"A-BLK","title":"normal blocker","priority":3,"updatedAt":"2026-06-15T00:00:00.000Z","state":{"name":"Approved"},"blocked":false,"project":{"name":"I1.P1. Alpha"}},
+  {"identifier":"A-HI","title":"high blocked","priority":2,"updatedAt":"2026-06-15T00:00:00.000Z","state":{"name":"Approved"},"blocked":true,"blockerIds":["A-BLK"],"project":{"name":"I1.P1. Alpha"}},
+  {"identifier":"A-LO","title":"low ready","priority":4,"updatedAt":"2026-06-15T00:00:00.000Z","state":{"name":"Needs Spec"},"blocked":false,"project":{"name":"I1.P1. Alpha"}},
+  {"identifier":"B-1","title":"beta work","priority":2,"updatedAt":"2026-06-15T00:00:00.000Z","state":{"name":"Needs Spec"},"blocked":false,"project":{"name":"I1.P2. Beta"}}
+]'
+out=$(printf '%s' "$RW_IN" | unit_runway)
+
+# Project groups ordered by P<N>. (Alpha=P1 before Beta=P2). Header carries the count.
+a_ln=$(printf '%s\n' "$out" | grep -n 'I1.P1. Alpha  (4)' | head -1 | cut -d: -f1)
+b_ln=$(printf '%s\n' "$out" | grep -n 'I1.P2. Beta  (1)'  | head -1 | cut -d: -f1)
+{ [ -n "$a_ln" ] && [ -n "$b_ln" ] && [ "$a_ln" -lt "$b_ln" ]; } \
+  && ok "runway: groups by project (with count), ordered by P<N>." || fail "runway: project grouping/order/count" "got:
+$out"
+
+# Priority-first with blocker-lift: URG → BLK (lifted above HI) → HI (not sunk) → LO, then B-1.
+seq=$(printf '%s\n' "$out" | awk '/^    [A-Z]/ {print $1}' | tr '\n' ',')
+[ "$seq" = "A-URG,A-BLK,A-HI,A-LO,B-1," ] \
+  && ok "runway: priority-first, blocker lifted above its blocked issue, blocked not sunk" \
+  || fail "runway: priority-first + blocker-lift order" "got seq: $seq
+$out"
+
+# Action tags + the blocked issue still carries its ⛔ tag (just not sunk).
+{ printf '%s\n' "$out" | grep -q 'A-URG .*spec ready → pk branch A-URG' \
+  && printf '%s\n' "$out" | grep -q 'A-LO .*needs spec → /light-spec' \
+  && printf '%s\n' "$out" | grep -q 'A-HI .*⛔ blocked by A-BLK'; } \
+  && ok "runway: action tags + blocked ⛔ tag retained" || fail "runway: action tags" "got:
+$out"
+
+# Columns aligned: the "·" separator sits at the same offset on every issue row.
+cols=$(printf '%s\n' "$out" | grep '·' | awk '{print index($0,"·")}' | sort -u | wc -l | tr -d ' ')
+[ "$cols" = "1" ] && ok "runway: action column aligned across rows" || fail "runway: column alignment" "offsets:
+$(printf '%s\n' "$out" | grep '·' | awk '{print index($0,"·")}')"
+
+# Multi-phase: project groups order by initiative THEN sub-phase (I1.P2 before I2.P1).
+MULTI_IN='[
+  {"identifier":"X2","title":"i2 work","priority":1,"state":{"name":"Approved"},"blocked":false,"project":{"name":"I2.P1. Gamma"}},
+  {"identifier":"X1","title":"i1p2 work","priority":1,"state":{"name":"Approved"},"blocked":false,"project":{"name":"I1.P2. Beta"}}
+]'
+mout=$(printf '%s' "$MULTI_IN" | unit_runway)
+m12=$(printf '%s\n' "$mout" | grep -n 'I1.P2. Beta'  | head -1 | cut -d: -f1)
+m21=$(printf '%s\n' "$mout" | grep -n 'I2.P1. Gamma' | head -1 | cut -d: -f1)
+{ [ -n "$m12" ] && [ -n "$m21" ] && [ "$m12" -lt "$m21" ]; } \
+  && ok "runway: groups order by initiative then sub-phase across phases" || fail "runway: cross-phase order" "got:
+$mout"
+
+# Momentum: idle flag absent when activity is recent, present (with N) when stale.
+base='2026-06-15T00:00:00Z'
+now_fresh=$(jq -n --arg d "$base" '($d|fromdateiso8601) + (5*86400)')
+now_stale=$(jq -n --arg d "$base" '($d|fromdateiso8601) + (30*86400)')
+out_fresh=$(printf '%s' "$RW_IN" | unit_runway "$now_fresh" 14)
+printf '%s\n' "$out_fresh" | grep -q 'idle' \
+  && fail "runway: recent activity → no idle flag" "got:
+$out_fresh" \
+  || ok "runway: recent activity → no idle flag"
+out_stale=$(printf '%s' "$RW_IN" | unit_runway "$now_stale" 14)
+printf '%s\n' "$out_stale" | grep -q '30d idle' \
+  && ok "runway: stale project → ⚠ Nd idle flag" || fail "runway: stale project flag" "got:
+$out_stale"
+
+out=$(printf '%s' '[]' | unit_runway)
+[ -z "$out" ] && ok "runway: empty array → no output (no crash)" || fail "runway: empty array" "got: $out"
+
 # ── CLI tests: dispatch + help guard ─────────────────────────────────────────
 
 echo "== dispatch =="
@@ -324,6 +401,14 @@ run_pk help
 
 run_pk frobnicate
 [ $RUN_CODE -ne 0 ] && ok "unknown subcommand exits non-zero" || fail "unknown subcommand exits non-zero" "exit 0"
+
+# portfolio is wired into dispatch (not the unknown-subcommand path). With no
+# Team configured it guards early — either way it must not fall through to help.
+run_pk portfolio
+case "$RUN_OUT" in
+  *"Unknown subcommand"*) fail "portfolio: recognized subcommand" "fell through to unknown: $RUN_OUT" ;;
+  *) ok "portfolio: recognized subcommand (routed to cmd_portfolio)" ;;
+esac
 
 # Regression: `pk ship --help` once parsed --help as a ship arg and ran the
 # ship (SiteLine, 2026-06-04). Any subcommand + -h/--help must print usage,
