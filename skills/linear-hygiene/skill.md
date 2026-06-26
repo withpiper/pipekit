@@ -7,7 +7,7 @@ description: Fast Linear placement janitor — finds orphaned / untriaged / unpr
 
 You are a Linear placement janitor. During the daily loop, `/work`, `/verify`, `pk ship`, `/pk-express`, and `/brainstorm` spin off follow-up issues mid-flow. They reliably land **orphaned** (no project), **stuck in Triage**, and **unprioritized** (priority 0), then accumulate until someone does a big manual reorg. This skill is the fast, frequent, all-states sweep that homes them before they pile up.
 
-It answers **"where does it belong?"** (placement), not **"is it worth doing?"** (disposition — that's `/brainstorm-review`) and not **"does the plan cover the requirements?"** (audit — that's `/roadmap-review`).
+It answers **"where does it belong?"** (placement), not **"is it worth doing?"** (disposition — that's `/brainstorm-review`) and not **"does the plan cover the requirements?"** (audit — that's `/roadmap-review`). Routing a Triage item to `Needs Spec` vs `Backlog` by its priority is still placement — it files an already-open (already worth-doing) issue into the right lane by the importance signal it carries. It never renders a Now/Later/Kill verdict, never Parks, never Cancels; that stays with `/brainstorm-review`.
 
 **Run from the parent project root**, not from inside a `pk branch` worktree.
 
@@ -58,10 +58,10 @@ Pull `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`) *
   | declares it **blocks** another open issue | inherit the blocked issue's priority, min **Normal (3)** |
   | `Bug` (alone) | **Normal (3)** |
   | `Feature` / `Improvement`, no urgency signal | **Low (4)** |
-  | none of the above | **Normal (3)** |
+  | none of the above | **Low (4)** |
 
-  **Never lower an existing non-zero priority** — only fill `0`, or raise per a signal above.
-- **State (for Triage):** → `Backlog` by default; → `Needs Spec` if the issue is `tier:standard` / `tier:heavy` and has no spec (mirrors `/brainstorm-review` Phase 4 tier routing).
+  **Never lower an existing non-zero priority** — only fill `0`, or raise per a signal above. The catch-all floor is **Low**, not Normal: an item with no importance signal is *Low until proven otherwise*, so it doesn't get slated for speccing (and surfaced by `pk next`) just for existing. `Normal+` should mean "a signal said this matters."
+- **State (for Triage), by the priority resolved above — importance, not difficulty:** `Normal (3)` or higher → **`Needs Spec`** (important enough to slate for speccing, so `pk next` surfaces it); `Low (4)` → **`Backlog`** (homed and prioritized, but not on the spec lane yet). `tier:*` no longer routes state — an important item must not wait in Backlog for lack of a size label, and a low one must not jump the queue for having one. **Exception — bundles:** if the body visibly packs several distinct asks (raw feedback often does: "grid lines + header parity + column-hide + logo"), route it to **`Backlog`** regardless of priority and flag `/brainstorm-review` to split + disposition first — `Needs Spec` is for one spec-able thing, not a four-ask pile.
 
 ### Phase 4 — Manifest (single confirm)
 
@@ -72,10 +72,11 @@ Print ONE table, **sorted by inferred priority descending** so important follow-
 
 | Issue | Drift | → Project | → Priority | → State | Title |
 |-------|-------|-----------|-----------|---------|-------|
-| POC-232 | 🏚️🔶 | Export Improvements | Normal | Backlog | Compare removed-block… |
+| POC-232 | 🏚️🔶 | I2.P1. Export Improvements | Normal | Needs Spec | Compare removed-block… |
+| POC-241 | 🔶⚪ | I1.P3. Client Portal | Low | Backlog | Tidy footer spacing… |
 | ...
 
-⚠️ Needs your pick: POC-NNN → [Export Improvements | Client Portal]
+⚠️ Needs your pick: POC-NNN → [I2.P1. Export Improvements | I1.P3. Client Portal]
 Say "go" to apply all, or redirect any line.
 ```
 
@@ -94,7 +95,7 @@ Say "go" to apply all, or redirect any line.
 
 Homed: {N} orphans → projects
 Prioritized: {N} (filled priority 0 / raised per signal)
-Un-triaged: {N} (Triage → Backlog / Needs Spec)
+Un-triaged: {N} (Triage → Needs Spec if Normal+, else Backlog; bundles → Backlog)
 Left for your pick: {N} (ambiguous project)
 ```
 
