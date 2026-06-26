@@ -339,6 +339,14 @@ pk_phase_context() {
 pk_current_phase_name() { pk_phase_context | cut -f1; }
 pk_current_phase_project_id() { pk_phase_context | cut -f2; }
 
+# Sort a JSON array of issues (stdin) most-important-first so pk next/pk status
+# surface the top item and .[0] — the suggested next action — is the highest
+# priority. Linear priority ints: 1 Urgent, 2 High, 3 Normal, 4 Low, 0 None →
+# None sorts last (remapped to 5). Pure (no network) so the smoke suite covers it.
+pk_issues_priority_sort() {
+  jq 'sort_by(if (.priority // 0) == 0 then 5 else .priority end)'
+}
+
 # Get issues in a state for the current team, scoped to a Linear project ID.
 # Same shape as pk_linear_issues_in_state but adds project filter. Empty
 # project_id falls back to the unscoped query.
@@ -354,9 +362,11 @@ pk_linear_issues_in_state_project() {
     pk_linear_issues_in_state "$state"
     return $?
   fi
-  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title state { name } } } }'
+  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } } } }'
+  # Most-important-first (orderBy: updatedAt is the API-side tiebreak; the jq
+  # sort in pk_issues_priority_sort is the importance ranking on top of it).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" --arg project "$project_id" '{team:$team, state:$state, project:$project}')" \
-    | jq -r '.data.issues.nodes // []'
+    | jq -r '.data.issues.nodes // []' | pk_issues_priority_sort
 }
 
 # Get issues in a state for current team. State name like "Approved".
@@ -368,9 +378,10 @@ pk_linear_issues_in_state() {
     echo "ERROR: Team name not set in method.config.md" >&2
     return 1
   fi
-  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title state { name } } } }'
+  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } } } }'
+  # Most-important-first (see pk_linear_issues_in_state_project for the rationale).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" '{team:$team, state:$state}')" \
-    | jq -r '.data.issues.nodes // []'
+    | jq -r '.data.issues.nodes // []' | pk_issues_priority_sort
 }
 
 # Rank a Linear workflow state along the canonical forward ladder.

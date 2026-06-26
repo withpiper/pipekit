@@ -173,6 +173,29 @@ if   ! printf '%s\n' "$RM2" | grep -q 'i1. Build  \[Active\]  → I1.P2. Editor'
 elif ! printf '%s\n' "$RM2" | grep -q 'i2. Next  \[Planned\]  → P1. Vendor'; then fail "native: I-prefix roadmap" "P<N>.-only project not handled alongside I-prefix: $RM2"
 else ok "native: I<N>.P<N>. and bare P<N>. projects coexist (backward-compatible)"; fi
 
+# ── Unit tests: issue priority sort (sourced) ────────────────────────────────
+# pk_issues_priority_sort orders a JSON issue array most-important-first so
+# pk next/pk status surface the top item and .[0] (the suggested next action) is
+# the highest priority. Linear priority ints: 1 Urgent, 2 High, 3 Normal, 4 Low,
+# 0 None → None must sort LAST (not first, as a naive numeric sort would put it).
+
+echo "== issue priority sort (sourced) =="
+
+unit_prio_sort() { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_priority_sort ); }
+
+PRIO_IN='[{"identifier":"A","priority":3},{"identifier":"B","priority":0},{"identifier":"C","priority":1},{"identifier":"D","priority":4},{"identifier":"E","priority":2}]'
+v=$(printf '%s' "$PRIO_IN" | unit_prio_sort | jq -c 'map(.identifier)')
+[ "$v" = '["C","E","A","D","B"]' ] \
+  && ok "prio sort: Urgent>High>Normal>Low>None (None last)" \
+  || fail "prio sort: Urgent>High>Normal>Low>None" "got $v, want [\"C\",\"E\",\"A\",\"D\",\"B\"]"
+
+# Missing/absent priority field is treated as None → sorts last, never crashes.
+v=$(printf '%s' '[{"identifier":"X"},{"identifier":"Y","priority":2}]' | unit_prio_sort | jq -c 'map(.identifier)')
+[ "$v" = '["Y","X"]' ] && ok "prio sort: absent priority → last" || fail "prio sort: absent priority → last" "got $v"
+
+v=$(printf '%s' '[]' | unit_prio_sort)
+[ "$v" = '[]' ] && ok "prio sort: empty array → empty (no crash)" || fail "prio sort: empty array" "got $v"
+
 # ── CLI tests: dispatch + help guard ─────────────────────────────────────────
 
 echo "== dispatch =="
