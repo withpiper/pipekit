@@ -196,6 +196,43 @@ v=$(printf '%s' '[{"identifier":"X"},{"identifier":"Y","priority":2}]' | unit_pr
 v=$(printf '%s' '[]' | unit_prio_sort)
 [ "$v" = '[]' ] && ok "prio sort: empty array → empty (no crash)" || fail "prio sort: empty array" "got $v"
 
+# ── Unit tests: pk status project grouping (sourced) ─────────────────────────
+# pk_issues_group_render groups a JSON issue array by project for pk status:
+# project groups ordered by their highest-priority issue, issues priority-sorted
+# within, orphans ("(no project)") last. Pure render (no network).
+
+echo "== pk status project grouping (sourced) =="
+
+unit_group() { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_group_render ); }
+
+# The orphan here carries Urgent (1) — it must STILL sink last (orphans are an
+# anomaly to home, not normal work), proving orphan-last beats priority order.
+GROUP_IN='[
+  {"identifier":"POC-3","title":"client ask","priority":3,"project":{"name":"Export"}},
+  {"identifier":"POC-1","title":"margin core","priority":2,"project":{"name":"Margin"}},
+  {"identifier":"POC-9","title":"orphan","priority":1,"project":null},
+  {"identifier":"POC-4","title":"label tweak","priority":3,"project":{"name":"Export"}}
+]'
+out=$(printf '%s' "$GROUP_IN" | unit_group)
+# Margin (High=2) group leads; Export (Normal=3) next; orphan last despite Urgent.
+exp='  Margin:
+    POC-1 — margin core
+  Export:
+    POC-3 — client ask
+    POC-4 — label tweak
+  (no project):
+    POC-9 — orphan'
+[ "$out" = "$exp" ] && ok "group: projects by top priority; orphans last even when Urgent" \
+  || fail "group: projects by top priority; orphans last even when Urgent" "got:
+$out"
+
+# Single project, no orphans → one group header.
+out=$(printf '%s' '[{"identifier":"Z-1","title":"t","priority":2,"project":{"name":"Solo"}}]' | unit_group)
+[ "$out" = "$(printf '  Solo:\n    Z-1 — t')" ] && ok "group: single project renders one header" || fail "group: single project" "got: $out"
+
+out=$(printf '%s' '[]' | unit_group)
+[ -z "$out" ] && ok "group: empty array → no output (no crash)" || fail "group: empty array" "got: $out"
+
 # ── CLI tests: dispatch + help guard ─────────────────────────────────────────
 
 echo "== dispatch =="
