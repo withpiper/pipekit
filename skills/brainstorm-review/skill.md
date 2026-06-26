@@ -64,8 +64,8 @@ Brainstormed: 3 days ago
 Complexity: Medium (~6-10h)
 Dependencies: PROJ-3 (Basic search) — currently in Building
 
-Assessment: Aligns with Stage 1. Dependency will be met this phase.
-Recommendation: Now — queue for next phase after PROJ-3 ships.
+Assessment: Aligns with Stage 1. Dependency will be met this initiative.
+Recommendation: Now — queue for next initiative after PROJ-3 ships.
 
 Disposition:
   1. Now → route to pipeline (assign phase, move to Needs Spec)
@@ -89,8 +89,8 @@ Disposition:
 6. Assign to correct project/initiative
 
 **Later:**
-1. Ask for **trigger type** from the grammar (same table as `/brainstorm` Phase 2 HOLD — see that skill for the full list). In short: `{ISSUE-ID} ships` | `Stage {N} UAT passes` | `Phase {N} ships` | `date: YYYY-MM-DD` | `manual`
-2. Ask for target phase/stage
+1. Ask for **trigger type** from the grammar (same table as `/brainstorm` Phase 2 HOLD — see that skill for the full list). In short: `{ISSUE-ID} ships` | `Stage {N} UAT passes` | `Initiative {N} ships` | `date: YYYY-MM-DD` | `manual`
+2. Ask for target initiative/stage
 3. Move to "Ideas" or "Future Phases"
 4. Add `Parked` label (create it if missing via `mcp__linear-server__linear_createTeamLabel`, color `#EAB308`)
 5. Post the Linear comment in the **exact parseable format** — `/roadmap-review` greps for this prefix:
@@ -133,7 +133,7 @@ Reviewed: {N} issues
   Skipped: {N}
 
 Next steps:
-  - /phase-plan --rebalance if "Now" items should enter the current phase
+  - /phase-plan --rebalance if "Now" items should enter the current initiative
   - /light-spec {issue} for any "Now" items in Needs Spec (Standard/Heavy)
   - pk branch {issue} + /work {issue} for any "Now" items in Approved (Quick)
   - /roadmap-review to validate the updated board
@@ -154,7 +154,7 @@ When you encounter these situations, take the safer path:
 
 - **Keeping without a trigger** → "Keep" without a trigger condition is how issues get forgotten. Choose Later (with a concrete trigger) or Kill.
 - **Vague triggers** → "Someday" is not a trigger condition. Define a concrete revisit point (e.g., "after PROJ-56 ships", "after Stage 1 UAT").
-- **Priority without a home** → Setting priority without a phase/stage assignment is incomplete. Every disposition should answer: where does it ship?
+- **Priority without a home** → Setting priority without an initiative/stage assignment is incomplete. Every disposition should answer: where does it ship?
 
 ## Related
 

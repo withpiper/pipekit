@@ -169,7 +169,7 @@ pk done <ID>                                  # After PR merge — cleans up wor
 ### Step 1: Branch from Linear
 
 ```bash
-pk next                # surfaces the next Approved issue (phase-aware)
+pk next                # surfaces the next Approved issue (initiative-aware)
 pk branch <ID>         # worktree + branch + Linear → In Progress
 cd .worktrees/<ID>-<slug>
 claude --dangerously-skip-permissions

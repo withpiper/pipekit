@@ -107,7 +107,7 @@ A line range past EOF is a divergence — record `resolves: false`.
 
 #### 3c — phase-detect baseline (legacy fallback)
 
-The phase surface is Linear-native (v4.1.0) — `phase_count` / `next_phase_state` claims only appear in specs from un-migrated projects that still carry a `phase-detect.sh`. This probe is therefore a legacy fallback: it runs only when the script is present, and degrades silently otherwise. Resolve it via the same lookup chain `/work` uses:
+The initiative surface is Linear-native (v4.1.0) — `phase_count` / `next_phase_state` claims only appear in specs from un-migrated projects that still carry a `phase-detect.sh`. This probe is therefore a legacy fallback: it runs only when the script is present, and degrades silently otherwise. Resolve it via the same lookup chain `/work` uses:
 
 ```bash
 PHASE_DETECT=""

@@ -7,7 +7,7 @@
 
 **Status:** Draft | Agent-Reviewed | Planning-Ready
 **Complexity:** Low (~2-4h) | Medium (~6-10h) | High (~12-20h+)
-**Phase:** [initiative `i{N}.` name or TBD]
+**Initiative:** [initiative `i{N}.` name or TBD]
 **Linear Project:** [project name or TBD]
 
 ### Problem

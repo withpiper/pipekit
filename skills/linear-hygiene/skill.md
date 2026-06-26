@@ -118,5 +118,5 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 ## Related
 
 - `/brainstorm-review` — Now/Later/Kill **disposition** (Triage/Ideas only); this skill is placement across all open states.
-- `/roadmap-review` — full-board plan-vs-requirements audit against the Linear-native phase surface (heavyweight).
+- `/roadmap-review` — full-board plan-vs-requirements audit against the Linear-native initiative surface (heavyweight).
 - `/pk-exit` — calls `/linear-hygiene --check` to surface drift while context is warm at session close.

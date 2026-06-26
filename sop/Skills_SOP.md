@@ -42,7 +42,7 @@ These skills work across any project that follows the method. They read `method.
 | `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops. Usually invoked by `/light-spec` Phase 6, can also run standalone. | Stage 1: Spec |
 | `pk spec-cycle <ID>` | Trigger Spec Review Agent v5, poll Linear for verdict, transition to Approved on Pass. Bash-side helper used by `/light-spec`'s cycle — keeps polling out of Claude's context. | Stage 1: Spec |
 | `/spec-preflight` | Empirical pre-flight checks on a specced Linear issue (file paths, line refs, phase-detect baseline, Linear status). Read-only. | Stage 1 → Stage 2 gate |
-| `pk next` | Phase-aware: groups Linear results by status (In Progress / Approved / Needs Spec) | Stage 2: Plan + Build |
+| `pk next` | Initiative-aware: groups Linear results by status (In Progress / Approved / Needs Spec) | Stage 2: Plan + Build |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) | Stage 2: Plan + Build |
 | `/work <ID>` | Plan + execute on native-on-Workflow (the sole executor as of v4.0.0). | Stage 2: Plan + Build |
 | `/review-plan` | Spawns `plan-reviewer` agent against the inline `PLAN.md` (optional gate). | Stage 2: Plan + Build |
@@ -134,8 +134,8 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 
 v2 retired the v1 `NEXT.md` mirror. The single source of truth for "what should I do next?" is **Linear**, accessed via:
 
-- **`pk next`** — phase-aware: derives the current phase live from the Linear-native surface (lowest non-`Completed` `i{N}.` initiative → its lowest open `P{N}.` project, by numeric name prefix; legacy `PHASES.md`/`linear-map.json` fall back), then groups that phase's Linear issues by status with per-group hints. Falls back to global "next Approved" when no phase context. Best when you know you want to pick up the next issue.
-- **`pk status`** — full unscoped board view across all phases. Best when you want the wider picture.
+- **`pk next`** — initiative-aware: derives the current initiative live from the Linear-native surface (lowest non-`Completed` `i{N}.` initiative → its lowest open `P{N}.` project, by numeric name prefix; legacy `PHASES.md`/`linear-map.json` fall back), then groups that initiative's Linear issues by status with per-group hints. Falls back to global "next Approved" when no initiative context. Best when you know you want to pick up the next issue.
+- **`pk status`** — full unscoped board view across all initiatives. Best when you want the wider picture.
 - **`/pipekit-help`** — context-aware skill recommendation based on full project state (Linear, `PHASES.md`, recent transitions, pipeline-state files). Best when you're not sure *which step* in the pipeline to run next.
 
 Skills should **not** write a `NEXT.md` file. Skills MAY still print `➜ Next:` inline at the end of their output as a courtesy hint to the current user, but the persistence layer is Linear, not a sidecar markdown file.

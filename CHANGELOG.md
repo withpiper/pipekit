@@ -47,6 +47,25 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.11.0 — 2026-06-26
+
+> **The docs speak Linear now.** v4.10.0 aligned what `pk` *prints* (phase → initiative) but deliberately deferred the documentation. This release finishes the job: the methodology docs, skills, and SOPs say **initiative** wherever they mean a Linear Initiative, and the **Phase Surface** concept is now the **Initiative Surface** — so a reader never has to translate between Pipekit's words and Linear's.
+
+**The sweep.** ~280 in-place edits across 27 files — a perfectly balanced diff (every change is a word swap; zero structural change). Roadmap-phase prose → *initiative* (`current/next/future phase`, roadmap "Phase N", `phase-aware` → `initiative-aware`, "The Phase Model" → "The Initiative Model", every state/order/hierarchy line); the architectural concept **Phase Surface → Initiative Surface** everywhere in active docs, including the `§ Phase Surface` cross-references in five skills + `sop/Linear_SOP.md` and the `## Phase Surface` section heading in `method.config.template.md`.
+
+**Deliberately kept** (each verified, not missed):
+- The `/phase-plan` **skill name** and the `phase-detect` / `phase-slug` **identifiers** — renaming a command is a breaking change for every consumer; out of scope.
+- **`Future Phases`** — a literal **Linear workflow state name**, not prose. Renaming it would mean reconfiguring every consumer's board + state-ID map.
+- **`sub-phase`** — the Project level. It maps to a Linear **Project**, *not* a nonexistent "sub-initiative" (an over-eager agent coined that in four spots; reverted).
+- spec-preflight **"Phase 3.6"** probe numbers, **generic skill-process** "phases" (`/linear` "5 phases", `pk-bug` "the phase below"), the `pk promote` **"two-phase model"**, and the legacy `.vbw-planning/phases/` dir.
+- All **dated history** — `CHANGELOG.md`, `Logs/`, `resources/vbw-retirement-plan.md` keep "phase surface" as written.
+
+**No behavior change.** `bin/pk` and `tests/` were untouched; apart from `pk version`, command output is identical to v4.10.0. Smoke **89/89**.
+
+**How it was built.** A fan-out of 11 low-cost (haiku) subagents over disjoint file-sets applied a single locked decision map, **deferring** every ambiguous occurrence back for human reconciliation rather than guessing — followed by two grep audits (KEEP-list integrity + grammar) and the smoke gate. A partition miss (`STARTUP.md`) and a half-completed concept rename were caught and finished in reconciliation.
+
+**Consumer note.** Existing projects carry `## Phase Surface` in their project-owned `method.config.md`; after they sync these skills (which now reference `§ Initiative Surface`), that pointer is a cosmetic mismatch until they rename the heading — self-heals on a one-line edit. SiteLine's is updated in the same sync as this release.
+
 ## v4.10.0 — 2026-06-26
 
 > **`pk portfolio` — a new top-altitude view for project-managing yourself.** `pk next` answers "what's the next keystroke," `pk status` shows the current board — but neither tells you *where you are in the whole plan* or *what's gone cold while you were heads-down*. `pk portfolio` is the zoom-out above both.

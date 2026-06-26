@@ -44,8 +44,8 @@ Immediately after creating the issue, force a disposition decision:
 
 > **What should happen with this idea?**
 >
-> 1. **Now** → Route to pipeline. Assign to a phase/stage, move to Needs Spec.
-> 2. **Later** → Park with a trigger condition and target phase.
+> 1. **Now** → Route to pipeline. Assign to an initiative/stage, move to Needs Spec.
+> 2. **Later** → Park with a trigger condition and target initiative.
 > 3. **Kill** → Archive with rationale.
 
 **If Now:**
@@ -57,7 +57,7 @@ Immediately after creating the issue, force a disposition decision:
 
 **If Later:**
 - Ask for a **trigger type** from the grammar below (parsable triggers are what let `/roadmap-review` auto-surface this later — prose triggers get flagged as manual-review)
-- Ask for a **target phase/stage**
+- Ask for a **target initiative/stage**
 - Move issue to "Ideas" or "Future Phases" based on target
 - Add the `Parked` label. If the label doesn't exist in the Linear workspace, create it first via `mcp__linear-server__linear_createTeamLabel` with name `Parked`, color `#EAB308` (amber).
 - Post a Linear comment using the **exact parseable format** below (do not paraphrase — `/roadmap-review` greps for it):
@@ -71,8 +71,8 @@ Immediately after creating the issue, force a disposition decision:
 |--------------|---------|---------|
 | `{ISSUE-ID} ships` | Fires when the referenced issue is in `Done` state | `Parked: Revisit when PROJ-56 ships. Target: Phase 4.` |
 | `Stage {N} UAT passes` | Fires when all Stage N issues are past UAT | `Parked: Revisit when Stage 1 UAT passes. Target: Stage 2.` |
-| `Phase {N} ships` | Fires when all Phase N issues are Done | `Parked: Revisit when Phase 3 ships. Target: Phase 4.` |
-| `date: YYYY-MM-DD` | Fires on a calendar date | `Parked: Revisit when date: 2026-06-01. Target: Phase 5.` |
+| `Initiative {N} ships` | Fires when all Initiative N issues are Done | `Parked: Revisit when Initiative 3 ships. Target: Initiative 4.` |
+| `date: YYYY-MM-DD` | Fires on a calendar date | `Parked: Revisit when date: 2026-06-01. Target: Initiative 5.` |
 | `manual` | No auto-trigger; surfaced only on explicit `/brainstorm-review` | `Parked: Revisit manual. Target: icebox.` |
 
 If the user describes a trigger that doesn't match the grammar, coach them toward the nearest match (e.g., "revisit when auth is solid" → propose "Revisit when {auth-epic-issue} ships") rather than saving a prose trigger that won't parse.

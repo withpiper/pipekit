@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.10.0** — Last updated: 2026-06-26  *(`Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
+**v4.11.0** — Last updated: 2026-06-26  *(**v4.11.0** — the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -45,24 +45,24 @@ Skills use these IDs to transition issues. Get them from Linear API or the Linea
 | Canceled | `` |
 | Duplicate | `` |
 
-## Phase Surface (Linear-native)
+## Initiative Surface (Linear-native)
 
-The roadmap's phase order lives in **Linear**, not a committed file. `pk next` and `pk status`
-derive the current phase live from the Linear hierarchy; `/roadmap-create` authors it and
+The roadmap's initiative order lives in **Linear**, not a committed file. `pk next` and `pk status`
+derive the current initiative live from the Linear hierarchy; `/roadmap-create` authors it and
 `/phase-plan` advances it. There is no `PHASES.md` or `linear-map.json` to keep in sync.
 
 **The naming convention is the contract** (ordering comes from the name prefix, never Linear's
-`sortOrder` — that field is an internal drag-rank and does not track phase sequence):
+`sortOrder` — that field is an internal drag-rank and does not track initiative sequence):
 
 | Level | Linear construct | Naming | Meaning |
 |-------|-----------------|--------|---------|
-| Phase | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | An ordered roadmap phase. `pk next` walks these by `{N}`. |
-| Sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Budget Editor`) | An ordered batch within a phase. Issues live here. |
+| Initiative | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | An ordered roadmap initiative. `pk next` walks these by `{N}`. |
+| Sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Budget Editor`) | An ordered batch within an initiative. Issues live here. |
 | Work item | **Issue** | (Linear identifier) | The unit `/work` builds. |
 
-- **Project names carry their initiative number** (v4.5.0+): a project under `i1.` is `I1.P2. label`, not bare `P2.` — initiatives sit above projects in Linear and get buried, so the phase reads at the project level (the unit you navigate). `bin/pk` accepts **both** `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets sub-phase order either way. Author the `I{N}.P{N}.` form.
+- **Project names carry their initiative number** (v4.5.0+): a project under `i1.` is `I1.P2. label`, not bare `P2.` — initiatives sit above projects in Linear and get buried, so the initiative reads at the project level (the unit you navigate). `bin/pk` accepts **both** `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets sub-phase order either way. Author the `I{N}.P{N}.` form.
 - **Order** = the integer in the prefix, parsed numerically (`P2` before `P10`).
-- **Current phase** = lowest `i{N}` initiative whose status ≠ `Completed`.
+- **Current initiative** = lowest `i{N}` initiative whose status ≠ `Completed`.
 - **Current sub-phase** = lowest `P{N}` project in it whose state ∉ {`completed`, `canceled`}.
 - **Roadmap opt-in** = the `i{N}.` prefix. Unprefixed initiatives (strategic themes) are ignored
   by `pk next`/`pk status` — no config list needed.
