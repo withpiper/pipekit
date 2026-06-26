@@ -512,6 +512,65 @@ esac
 cleanup
 FIXTURE=""
 
+# ── CLI tests: pk done worktree guard (regression: SiteLine dead-session) ─────
+# pk done removes the feature worktree, so it must refuse when invoked from
+# inside one. The bug: the guard gated on `root != wt_path`, but pk_repo_root()
+# is `git rev-parse --show-toplevel`, which from inside a linked worktree returns
+# the worktree itself → root == wt_path → guard skipped → the worktree (and the
+# calling session) torn down. With --merge, the PR was even merged first. These
+# tests pin: refuse from inside, before any gh pr merge; don't misfire from the
+# parent.
+
+echo "== done worktree guard (regression: SiteLine dead-session) =="
+
+make_fixture
+write_config '```
+Backend: native
+Integration branch: main
+Ship environments: dev,beta,main
+```'
+
+# Feature branch + linked worktree, mirroring what `pk branch` creates.
+git -C "$FIXTURE" branch feature/WT-7-demo
+WT_DIR="$FIXTURE/.wt/WT-7"
+git -C "$FIXTURE" worktree add -q "$WT_DIR" feature/WT-7-demo 2>/dev/null
+
+# (1) pk_in_linked_worktree distinguishes the main checkout from a linked worktree.
+in_main=$( cd "$FIXTURE" && source "$PK" && pk_in_linked_worktree && echo yes || echo no )
+in_wt=$(   cd "$WT_DIR"  && source "$PK" && pk_in_linked_worktree && echo yes || echo no )
+[ "$in_main" = no ] && [ "$in_wt" = yes ] \
+  && ok "done: pk_in_linked_worktree true in worktree, false in main" \
+  || fail "done: pk_in_linked_worktree true in worktree, false in main" "main=$in_main wt=$in_wt"
+
+# (2) pk done --merge from INSIDE the worktree refuses BEFORE merging.
+: > "$GH_LOG"
+OUT=$(cd "$WT_DIR" && PATH="$FIXTURE/shim:$PATH" "$PK" done WT-7 --merge 2>&1); RC=$?
+refused=0; merged=0
+case "$OUT" in *"must run from the parent repo"*) refused=1 ;; esac
+grep -q "pr merge" "$GH_LOG" 2>/dev/null && merged=1
+if [ $RC -ne 0 ] && [ $refused -eq 1 ] && [ $merged -eq 0 ]; then
+  ok "done: refuses from inside worktree before merging (no gh pr merge)"
+else
+  fail "done: refuses from inside worktree before merging" "rc=$RC refused=$refused merged=$merged gh='$(cat "$GH_LOG")'"
+fi
+
+# (3) the refusal left the worktree intact (nothing torn down under the session).
+[ -d "$WT_DIR" ] && ok "done: worktree intact after refusal" || fail "done: worktree intact after refusal" "$WT_DIR gone"
+
+# (4) Positive control: from the PARENT repo the guard must NOT misfire. (It still
+#     fails later at merge-verify — the gh shim returns no JSON — but must not
+#     print the parent-repo refusal.)
+: > "$GH_LOG"
+OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" "$PK" done WT-7 2>&1); RC=$?
+case "$OUT" in
+  *"must run from the parent repo"*) fail "done: parent-repo run passes the guard" "guard misfired: $OUT" ;;
+  *) ok "done: parent-repo run passes the guard" ;;
+esac
+
+git -C "$FIXTURE" worktree remove --force "$WT_DIR" 2>/dev/null
+cleanup
+FIXTURE=""
+
 # ── commit-format hook ───────────────────────────────────────────────────────
 echo "== commit-format hook (templates/hooks/validate-commit.sh) =="
 
