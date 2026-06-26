@@ -47,6 +47,27 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.9.0 — 2026-06-26
+
+> **`pk next` and `pk status` see structure now.** v4.8.0 made them order by *priority*; v4.9.0 makes them aware of *project* and *dependencies*. Two changes, both `bin/pk`.
+
+**`pk status`: grouped by project, with the Needs Spec queue.** It listed each state flat and didn't even fetch the project, so a multi-project board was a wall of identifiers; and the `Needs Spec` queue (pre-Approved) wasn't shown at all. Now each state is **grouped by project** — project groups ordered by their highest-priority issue (most-important project first), issues priority-sorted within each, orphans (`(no project)`) always last even if one holds an Urgent (an orphan is an anomaly to home via `/linear-hygiene`, not normal work). `Needs Spec` is shown as its own bucket beside `Approved`. The old `head -10` truncation is gone — `pk status` is the "show me the board" view, and hiding rows (especially the Needs Spec queue) worked against it.
+
+**`pk next`: dependency-aware — blocked work sinks, the suggestion stays startable.** `pk next` surfaced Approved issues by priority and suggested `.[0]` as the next `pk branch` with zero awareness of blocked-by — so a high-priority Approved issue blocked by an unfinished one sorted to the top and got recommended even though it can't be started (sharper since v4.8.0's priority sort). Now the two state queries fetch Linear `inverseRelations`, and:
+- An issue is **blocked** iff a relation of type `blocks` points at it (`inverseRelations`, the `.issue` side is the blocker) and that blocker is **not yet `Done`/`Canceled`**. Direction verified against Linear's published schema + recipes (a `blocks` relation is `issue` blocks `relatedIssue`).
+- Within each group, blocked issues **sink below ready work** and are tagged **`⛔ blocked by POC-X`** (nothing is hidden).
+- The `Run:` suggestion targets the **top *startable* issue** (`pk_first_ready_id`), not a blocked `.[0]`. When *every* Approved is blocked, it says so (`All Approved issues are blocked — clear POC-X first`) instead of recommending an unstartable one.
+- `pk status` flags blocked issues inside the project groups too.
+- **Fail-safe:** missing or unrecognized relations → the issue is treated as ready (never falsely blocked) and never crashes the pick.
+
+This is the daily-loop counterpart to the dependency gating that already lived in `/phase-plan` (composition) and `/06-linear-todo-runner` (batch scheduling). Direct blockers only (one level, matching the batch runner); cross-phase blockers count.
+
+Four new pure, smoke-tested helpers: `pk_issues_group_render`, `pk_issues_annotate_blocked`, `pk_issues_flat_render`, `pk_first_ready_id`. Suite **70 → 80**.
+
+> **Verify on first use:** the blocked-by direction was confirmed against Linear's docs/schema (pipekit-the-repo has no Linear to introspect live); when a consumer first runs `pk next`/`pk status` against a known blocked pair, confirm the `⛔ blocked by` tag names the actual blocker.
+
+---
+
 ## v4.8.0 — 2026-06-26
 
 > **Priority-aware surfacing — organise Linear so `pk next` shows the most important work.** Two coupled changes that share one goal: an important follow-up should be *visible* in `pk next` and *on top* of what it lists. One controls what enters `pk next`'s view; the other controls what sits at the top.
