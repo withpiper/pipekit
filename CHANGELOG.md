@@ -47,6 +47,21 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.10.0 — 2026-06-26
+
+> **`pk portfolio` — a new top-altitude view for project-managing yourself.** `pk next` answers "what's the next keystroke," `pk status` shows the current board — but neither tells you *where you are in the whole plan* or *what's gone cold while you were heads-down*. `pk portfolio` is the zoom-out above both.
+
+**The command.** `pk portfolio` (new `cmd_portfolio` + pure helper `pk_runway_render` in `bin/pk`) prints two things, read live from Linear:
+
+1. **Initiatives map** — every `i{N}.` initiative with its Linear status, the Active ones marked `← active`, and its current `I{N}.P{N}.` project.
+2. **Runway** — actionable issues (In Progress / UAT / Approved / Needs Spec) across **all Active-status initiatives** (you work several at once — "active" = Linear initiative status `active`, naturally multi-select; falls back to the single derived current initiative if none are Active), grouped by `I{N}.P{N}.` project and ordered initiative → sub-phase. Project-scoped queries per project × state — avoids the team-wide `first:25` truncation that would starve a phase's issues when other phases were touched more recently.
+
+**Runway ordering** is priority-first, *not* lifecycle-first, and blocked issues are **not** sunk: instead each blocker is lifted to rank just above the most urgent issue it blocks (`erank = min(own_rank, blocked_rank − 0.5)`, one level, only when the blocker is in the list — otherwise the `⛔` tag + reference suffices). Columns are width-aligned (titles clip at 60); each project header shows an **active count** and a **`⚠ Nd idle`** momentum flag computed from the newest issue's Linear `updatedAt` vs the new `Portfolio staleness days` config key (default 14). Smoke 80 → 89; new pure-render coverage (grouping, blocker-lift order, cross-initiative order, idle flag, alignment) + a dispatch case.
+
+**Terminology — `pk` output now speaks Linear.** `pk next` and `pk portfolio` user-facing strings say **Initiative** where they used to say "Phase" (Project and Issue already matched). The `i{N}.`/`I{N}.P{N}.` naming convention, internal variable/function names, and the methodology docs ("phase surface" in `method.md`/`GUIDE.md`/`CLAUDE.md`/SOPs — ~1,100 "phase" mentions, many of them *not* initiative-sense, e.g. the `/phase-plan` skill name and the "Phase Surface" concept) are **deliberately not swept here** — that's a larger, semantically-careful migration planned as its own release. This release aligns only what the daily-loop user reads on screen.
+
+**`pk status` unchanged** — kept as the full-board view by design.
+
 ## v4.9.0 — 2026-06-26
 
 > **`pk next` and `pk status` see structure now.** v4.8.0 made them order by *priority*; v4.9.0 makes them aware of *project* and *dependencies*. Two changes, both `bin/pk`.
