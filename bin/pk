@@ -30,7 +30,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.7.0"
+PK_VERSION="4.7.1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -656,6 +656,18 @@ pk_current_branch() {
   git branch --show-current 2>/dev/null
 }
 
+# True when CWD is inside a *linked* worktree (one created by `pk branch`), not
+# the main checkout. A linked worktree's per-tree git-dir
+# (.git/worktrees/<name>) differs from the shared common dir (.git); in the main
+# worktree they are identical. Used to make `pk done` hints worktree-aware —
+# pk done removes the worktree, so it must run from the parent, not from inside.
+pk_in_linked_worktree() {
+  local gd cgd
+  gd=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  cgd=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
+  [ "$gd" != "$cgd" ]
+}
+
 # Extract issue ID from current branch name. Looks for <PREFIX>-<digits> anywhere.
 pk_branch_issue_id() {
   local branch
@@ -977,10 +989,17 @@ cmd_next() {
       url=$(echo "$pr_state" | jq -r '.url')
       echo "PR: $state — $url"
       case "$state" in
-        OPEN)   echo ""; echo "Next: review/merge the PR, then  pk done" ;;
-        MERGED) echo ""; echo "Next: pk done" ;;
-        CLOSED) echo ""; echo "Next: PR closed without merge — investigate, then  pk done  to clean up" ;;
+        OPEN)   echo ""; echo "Next: review/merge the PR, then  pk done $issue" ;;
+        MERGED) echo ""; echo "Next: pk done $issue" ;;
+        CLOSED) echo ""; echo "Next: PR closed without merge — investigate, then  pk done $issue  to clean up" ;;
       esac
+      # pk done removes the worktree, so it cannot run from inside one. When this
+      # hint is read from a worktree session (the common case after pk ship),
+      # spell out the safe sequence so the next step isn't a dead session.
+      if pk_in_linked_worktree; then
+        echo "      ↳ You're inside the worktree. Run  /pk-exit  here first, then"
+        echo "        run  pk done $issue  from the parent repo (pk done removes this worktree)."
+      fi
     else
       echo "PR: not opened yet"
       echo ""
@@ -1541,6 +1560,44 @@ cmd_done() {
     fi
   fi
 
+  # Refuse BEFORE doing anything (especially before --merge) if CWD is inside the
+  # worktree we are about to remove. pk done deletes that worktree; running it
+  # from inside kills the calling session mid-run — no /pk-exit, no deploy, dead
+  # session. This must precede the --merge block so a run-from-worktree mistake
+  # refuses without first merging the PR.
+  #
+  # The test is the pwd-inside-wt comparison ALONE. An earlier version also gated
+  # on `root != wt_path`, but pk_repo_root() is `git rev-parse --show-toplevel`,
+  # which from inside a linked worktree returns the worktree itself — so
+  # root == wt_path and the guard silently skipped exactly the dead-session case
+  # it exists to catch. The pwd-vs-wt_real check (pwd -P on both sides, so a
+  # session in a subdir still matches) is the real signal; the root compare was
+  # noise that defeated it.
+  local root parent_repo wt_path
+  root=$(pk_repo_root)
+  # The main worktree is always the first `worktree` entry — the parent to return to.
+  parent_repo=$(git worktree list --porcelain | awk '/^worktree / {print $2; exit}')
+  wt_path=$(git worktree list --porcelain | awk -v branch="$current" '
+    /^worktree / {wt=$2}
+    $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
+  ')
+  if [ -n "$wt_path" ]; then
+    local pwd_real wt_real
+    pwd_real=$(cd "$(pwd)" 2>/dev/null && pwd -P) || pwd_real=$(pwd)
+    wt_real=$(cd "$wt_path" 2>/dev/null && pwd -P) || wt_real="$wt_path"
+    case "$pwd_real/" in
+      "$wt_real"/*)
+        echo "ERROR: pk done must run from the parent repo, not inside the worktree it removes." >&2
+        echo "  worktree: $wt_path" >&2
+        echo "  cwd:      $pwd_real" >&2
+        echo "  Run /pk-exit in this session first (logs the session), then from the parent repo:" >&2
+        echo "    cd ${parent_repo:-$root}" >&2
+        echo "    pk done ${id:-$issue}" >&2
+        return 1
+        ;;
+    esac
+  fi
+
   # Optional: merge the PR for the user (v2.5.0, M3 opt-in).
   # Merge-commit per repo policy (squash is disabled, --merge produces an
   # anchor commit on the integration branch). If the PR is already merged,
@@ -1564,37 +1621,6 @@ cmd_done() {
     echo "    - Merge in GitHub UI, then rerun pk done." >&2
     echo "    - Or: pk done ${id:-} --merge  (lets pk run gh pr merge for you)." >&2
     return 1
-  fi
-
-  local root
-  root=$(pk_repo_root)
-  local wt_path
-  wt_path=$(git worktree list --porcelain | awk -v branch="$current" '
-    /^worktree / {wt=$2}
-    $1=="branch" && $2=="refs/heads/"branch {print wt; exit}
-  ')
-
-  # Refuse early if CWD is inside the worktree we are about to remove.
-  # Loop-notes #13: previously checked only `pwd == wt_path` (exact match);
-  # a session inside a subdir (skills/, scripts/) would slip past, then
-  # `git worktree remove --force` would destroy the session's CWD. We also
-  # move this check above the Linear comment + diff calc so we don't post
-  # "Shipped" notes for a run that's about to refuse.
-  if [ -n "$wt_path" ] && [ "$root" != "$wt_path" ]; then
-    local pwd_real wt_real
-    pwd_real=$(cd "$(pwd)" 2>/dev/null && pwd -P) || pwd_real=$(pwd)
-    wt_real=$(cd "$wt_path" 2>/dev/null && pwd -P) || wt_real="$wt_path"
-    case "$pwd_real/" in
-      "$wt_real"/*)
-        echo "ERROR: pk done must run from the parent repo, not inside the worktree it removes." >&2
-        echo "  worktree: $wt_path" >&2
-        echo "  cwd:      $pwd_real" >&2
-        echo "  Exit this session and rerun from the parent:" >&2
-        echo "    exit && cd $root && claude" >&2
-        echo "    pk done ${id:-$issue}" >&2
-        return 1
-        ;;
-    esac
   fi
 
   # Build the Linear close comment from git directly (v2.1.2+).

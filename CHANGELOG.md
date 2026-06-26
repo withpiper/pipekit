@@ -47,6 +47,21 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.7.1 — 2026-06-26
+
+> **`pk done` no longer destroys the session that runs it from inside the worktree.** A `bin/pk` safety fix; rides into every consumer on the next `sync-method.sh v4.7.1`. No methodology change, no new skills.
+
+`pk done` removes the feature worktree, so it must run from the parent repo. A guard existed to refuse a run-from-inside-the-worktree, but it was structurally defeated: it only fired when `root != wt_path`, and `root` came from `pk_repo_root()` → `git rev-parse --show-toplevel`, which **from inside a linked worktree returns the worktree itself**. So `root == wt_path`, the guard's outer condition was always false, and `pk done` fell straight through to `git worktree remove --force` — tearing down the directory the calling session lived in. With `--merge`, the PR was merged *first* (the `gh pr merge` block sat above the guard), so the failure mode was: merge the PR, then destroy the session — no `/pk-exit`, no deploy, dead session. Surfaced repeatedly on SiteLine, because the `pk next` hint kept suggesting bare `pk done` with no worktree caveat, luring the run.
+
+The fix, three parts:
+- **Un-gate the guard.** Drop the `&& [ "$root" != "$wt_path" ]` condition; the inner `pwd`-inside-`wt_real` check (`pwd -P` on both sides, so a session in a worktree *subdir* still matches) is the real signal — the `root` compare was noise that defeated it.
+- **Move the guard above `--merge`** so a run-from-worktree mistake refuses *before* merging anything. The refusal now points at the actual parent repo (the first `git worktree list` entry) and tells you to run `/pk-exit` first — the old message pointed `cd $root`, which was the worktree you needed to *leave*.
+- **Worktree-aware `pk next` hint.** New `pk_in_linked_worktree` helper (compares `--git-dir` to `--git-common-dir`); when the next-step hint is read from inside a worktree it now spells out the `/pk-exit` → leave → `pk done <ID>` sequence and names the issue, instead of bare `pk done`.
+
+4 new smoke tests pin the guard (helper distinguishes worktree vs main; refuses from inside before merging; worktree intact after refusal; parent-repo run not falsely blocked); suite **63 → 67**.
+
+---
+
 ## v4.7.0 — 2026-06-24
 
 > **VBW fully retired.** This release completes the retirement begun in v4.0.0 (executor removed), v4.1.0 (Linear-native phase surface), and v4.2.0 (plugin decoupled). VBW is no longer part of any Pipekit workflow, doc, or dependency.
