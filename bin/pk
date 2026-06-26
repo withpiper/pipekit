@@ -355,14 +355,57 @@ pk_issues_priority_sort() {
 pk_issues_group_render() {
   jq -r '
     def rank: if (.priority // 0) == 0 then 5 else .priority end;
+    def issueline:
+      if (.blocked // false)
+      then "    \(.identifier) — \(.title)  ⛔ blocked by \(.blockerIds | join(", "))"
+      else "    \(.identifier) — \(.title)" end;
     [ group_by(.project.name // "(no project)")[]
       | (.[0].project.name // "(no project)") as $p
       | { proj: $p,
           orphan: ($p == "(no project)"),
-          items: (sort_by(rank)),
+          items: (sort_by([(if (.blocked // false) then 1 else 0 end), rank])),
           best: ([ .[] | rank ] | min) } ]
     | sort_by([(if .orphan then 1 else 0 end), .best, .proj])[]
-    | "  \(.proj):", ( .items[] | "    \(.identifier) — \(.title)" )
+    | "  \(.proj):", ( .items[] | issueline )
+  '
+}
+
+# Annotate each issue (stdin: array enriched with inverseRelations) with
+# .blockerIds (its UNFINISHED blockers) and .blocked. A blocker is a Linear
+# inverseRelation of type "blocks" whose .issue (the blocking side) is not yet
+# Done/Canceled. Fail-safe: missing/unknown relations → no blockers (an issue is
+# never falsely blocked, and bad data never crashes the pick). Pure (no network).
+pk_issues_annotate_blocked() {
+  jq '
+    def open_blockers:
+      [ (.inverseRelations.nodes // [])[]
+        | select(.type == "blocks")
+        | select((.issue.state.name // "") | (. != "Done" and . != "Canceled"))
+        | .issue.identifier ];
+    map(.blockerIds = open_blockers | .blocked = ((.blockerIds | length) > 0))
+  '
+}
+
+# Render an annotated array (stdin) as a flat list for pk next: ready issues
+# first (priority-sorted), then blocked (priority-sorted) tagged with their
+# unfinished blockers. The sink keeps an unstartable issue off the top.
+pk_issues_flat_render() {
+  jq -r '
+    def rank: if (.priority // 0) == 0 then 5 else .priority end;
+    sort_by([(if .blocked then 1 else 0 end), rank])[]
+    | if .blocked
+      then "  \(.identifier) — \(.title)  ⛔ blocked by \(.blockerIds | join(", "))"
+      else "  \(.identifier) — \(.title)" end
+  '
+}
+
+# The startable next issue (stdin: annotated array): highest-priority issue with
+# no unfinished blocker. Empty when every issue is blocked (or the list is empty)
+# — the caller then says so instead of suggesting an unstartable issue.
+pk_first_ready_id() {
+  jq -r '
+    def rank: if (.priority // 0) == 0 then 5 else .priority end;
+    [ .[] | select(.blocked | not) ] | sort_by(rank) | (.[0].identifier // "")
   '
 }
 
@@ -381,7 +424,7 @@ pk_linear_issues_in_state_project() {
     pk_linear_issues_in_state "$state"
     return $?
   fi
-  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } project { name } } } }'
+  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
   # Most-important-first (orderBy: updatedAt is the API-side tiebreak; the jq
   # sort in pk_issues_priority_sort is the importance ranking on top of it).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" --arg project "$project_id" '{team:$team, state:$state, project:$project}')" \
@@ -397,7 +440,7 @@ pk_linear_issues_in_state() {
     echo "ERROR: Team name not set in method.config.md" >&2
     return 1
   fi
-  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } project { name } } } }'
+  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
   # Most-important-first (see pk_linear_issues_in_state_project for the rationale).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" '{team:$team, state:$state}')" \
     | jq -r '.data.issues.nodes // []' | pk_issues_priority_sort
@@ -1062,36 +1105,44 @@ cmd_next() {
     fi
     echo ""
     local in_progress approved needs_spec ip_count ap_count ns_count
-    in_progress=$(pk_linear_issues_in_state_project "In Progress" "$phase_project" 2>/dev/null || echo "[]")
-    approved=$(pk_linear_issues_in_state_project "Approved" "$phase_project" 2>/dev/null || echo "[]")
-    needs_spec=$(pk_linear_issues_in_state_project "Needs Spec" "$phase_project" 2>/dev/null || echo "[]")
+    # Annotate blocked-by once per group (Linear inverseRelations → .blocked) so
+    # the listing sinks blocked work and the "next" pick skips it.
+    in_progress=$(pk_linear_issues_in_state_project "In Progress" "$phase_project" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
+    approved=$(pk_linear_issues_in_state_project "Approved" "$phase_project" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
+    needs_spec=$(pk_linear_issues_in_state_project "Needs Spec" "$phase_project" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
     ip_count=$(echo "$in_progress" | jq 'length')
     ap_count=$(echo "$approved" | jq 'length')
     ns_count=$(echo "$needs_spec" | jq 'length')
 
     if [ "$ip_count" -gt 0 ]; then
       echo "In Progress ($ip_count):"
-      echo "$in_progress" | jq -r '.[] | "  \(.identifier) — \(.title)"'
+      echo "$in_progress" | pk_issues_flat_render
       echo ""
     fi
     if [ "$ap_count" -gt 0 ]; then
       echo "Approved — ready for pk branch ($ap_count):"
-      echo "$approved" | jq -r '.[] | "  \(.identifier) — \(.title)"'
-      local next_id
-      next_id=$(echo "$approved" | jq -r '.[0].identifier')
+      echo "$approved" | pk_issues_flat_render
       echo ""
-      echo "Run:  pk branch $next_id"
+      local next_id
+      next_id=$(echo "$approved" | pk_first_ready_id)
+      if [ -n "$next_id" ]; then
+        echo "Run:  pk branch $next_id"
+      else
+        echo "All Approved issues are blocked — clear $(echo "$approved" | jq -r '[.[].blockerIds[]] | unique | join(", ")') first."
+      fi
       echo ""
     fi
     if [ "$ns_count" -gt 0 ]; then
       echo "Needs Spec — run /light-spec to advance ($ns_count):"
-      echo "$needs_spec" | jq -r '.[] | "  \(.identifier) — \(.title)"'
+      echo "$needs_spec" | pk_issues_flat_render
       echo ""
       if [ "$ap_count" = "0" ]; then
         local first_ns
-        first_ns=$(echo "$needs_spec" | jq -r '.[0].identifier')
-        echo "Run:  /light-spec $first_ns   (or batch the queue)"
-        echo ""
+        first_ns=$(echo "$needs_spec" | pk_first_ready_id)
+        if [ -n "$first_ns" ]; then
+          echo "Run:  /light-spec $first_ns   (or batch the queue)"
+          echo ""
+        fi
       fi
     fi
     if [ "$ip_count" = "0" ] && [ "$ap_count" = "0" ] && [ "$ns_count" = "0" ]; then
@@ -1117,18 +1168,23 @@ cmd_next() {
   # Legacy fallback — no phase context available
   echo "On $current — looking for next Approved issue in Linear..."
   local approved count
-  approved=$(pk_linear_issues_in_state "Approved" 2>/dev/null || echo "[]")
+  approved=$(pk_linear_issues_in_state "Approved" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
   count=$(echo "$approved" | jq 'length')
   if [ "$count" = "0" ]; then
     echo "No Approved issues. Check  pk status  for the full board."
     return 0
   fi
-  local next_id next_title
-  next_id=$(echo "$approved" | jq -r '.[0].identifier')
-  next_title=$(echo "$approved" | jq -r '.[0].title')
-  echo "Next: $next_id — $next_title"
-  echo ""
-  echo "Run:  pk branch $next_id"
+  local next_id
+  next_id=$(echo "$approved" | pk_first_ready_id)
+  if [ -n "$next_id" ]; then
+    local next_title
+    next_title=$(echo "$approved" | jq -r --arg id "$next_id" '.[] | select(.identifier == $id) | .title')
+    echo "Next: $next_id — $next_title"
+    echo ""
+    echo "Run:  pk branch $next_id"
+  else
+    echo "All $count Approved issues are blocked — clear $(echo "$approved" | jq -r '[.[].blockerIds[]] | unique | join(", ")') first."
+  fi
   if [ "$count" -gt 1 ]; then
     echo ""
     echo "($count Approved issues total. Use  pk status  to see all.)"
@@ -1187,7 +1243,7 @@ cmd_status() {
       # pk_issues_group_render). No truncation — pk status is the "show me the
       # board" view; hiding rows works against that (and against seeing the full
       # Needs Spec queue).
-      { echo "$issues" | pk_issues_group_render; } || true
+      { echo "$issues" | pk_issues_annotate_blocked | pk_issues_group_render; } || true
     fi
   done
   # Local in-flight
