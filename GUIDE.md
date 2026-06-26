@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.10.0** — Last updated: 2026-06-26 12:00  *(**v4.10.0 — `pk portfolio`, the cross-initiative orientation view.** A top-altitude view above `pk status`: an initiatives map (every `i<N>.` with Linear status, Active ones marked `← active`, → current `I<N>.P<N>.` project) + a **runway** of actionable issues (In Progress/UAT/Approved/Needs Spec) across all Active-status initiatives (multi-select — "active" = Linear initiative status `active`; falls back to the single derived current initiative when none Active), grouped by `I<N>.P<N>.` project and ordered initiative → sub-phase. Runway ordering is **priority-first** with blocked issues NOT sunk — a blocker is lifted to rank just above the most urgent issue it blocks; columns width-aligned; per-project active count + `⚠ Nd idle` momentum flag (Linear `updatedAt` vs the new `Portfolio staleness days` key, default 14). Project-scoped queries avoid the team-wide `first:25` truncation. `pk next`/`pk portfolio` user-facing output terminology aligned to Linear (phase → initiative); the docs-wide "phase" sweep (~1,100 mentions, many not initiative-sense — the `/phase-plan` skill, the "Phase Surface" concept) is deferred to its own release. `pk status` unchanged. Smoke 80→89. Carries **v4.9.0 — pk next/status see structure: project grouping + dependency-awareness.** `pk status` shows the `Needs Spec` queue and groups every state by project (groups ordered by their top-priority issue, issues priority-sorted within, orphans last). `pk next` reads Linear `inverseRelations` and is **dependency-aware**: issues with an unfinished blocker sink below ready work, tagged `⛔ blocked by X`, and the `Run:` suggestion targets the top *startable* issue (or says so when every Approved is blocked) — a blocked high-priority issue is no longer recommended. New pure helpers `pk_issues_group_render` / `pk_issues_annotate_blocked` / `pk_issues_flat_render` / `pk_first_ready_id`. Smoke 70→80. Carries **v4.8.0 — priority-aware surfacing.** `/linear-hygiene` routes Triage state by **priority, not tier** (`Normal+` → `Needs Spec`, `Low` → `Backlog`; catch-all floor flips `none → Low`; multi-ask bundles → `Backlog` + `/brainstorm-review`), and `pk next`/`pk status` order each state group **most-important-first** (new pure `pk_issues_priority_sort`, None last) so the listing and the suggested next action (`pk branch`/`/light-spec` on `.[0]`) point at the top-priority issue. The goal: organise Linear so `pk next` surfaces the most important work. Smoke 67→70. Carries **v4.7.1 — `pk done` no longer kills a session run from inside the worktree.** The guard meant to refuse a run-from-inside-the-worktree was defeated by `pk_repo_root` (`git rev-parse --show-toplevel`) resolving to the worktree itself — so `root == wt_path`, the guard skipped, and `pk done` tore down the calling session's CWD; with `--merge`, it merged the PR first. Un-gated the guard, moved it above the `--merge` block, pointed the refusal at the real parent repo, and made the `pk next` hint worktree-aware (`/pk-exit` → leave → `pk done <ID>`). Smoke 63→67. Carries v4.7.0 — VBW fully retired: docs/skills/SOPs/templates/`bin/pk` debranded (`pk_vbw_*` → `pk_legacy_*`), VBW plugin uninstalled, dead `/vbw:vibe --archive` hook removed; only a read-only `bin/pk` legacy `.vbw-planning/` fallback remains for un-migrated projects. Smoke 63/63. Carries v4.6.0: `pk deploy [<env>]` — a first-class deploy verb for script-deploy projects (Stage 4). Resolves `<env>` to the configured `Deploy command` in method.config.md and runs it (bare / `prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through; thin delegate — the script owns confirmation + safety). `pk done`'s post-merge reminder now points at `pk deploy`. Smoke 56→63. Carries v4.5.0: projects carry their initiative number in the phase surface — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`, so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`; `/roadmap-create` + `/phase-plan` author the new form. Carries v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3). Runs at the Building → UAT seam (after `/verify`, before `pk ship`): classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the category checklist against the diff on a match — none matched → instant PASS. Portable framework with project signals in `resources/security-categories.md`; new `sop/Security_Gate_SOP.md`; advisory this release. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples, e.g. a `gh pr comment --body`) no longer trips the advisory format nudge; the `cat <<` fallback is replaced by an in-`awk` `-F-` heredoc message extractor (smoke 50→54). Hook-only, no methodology change. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). A second gate beside `/verify`: `/verify` proves the code is correct (every task, at ship), `/prod-ready` proves production can absorb it safely (once per feature, at the production boundary — before the final `pk promote`, or the merge to `main` on 1-tier). Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); portable framework with project checks in `resources/prod-readiness-checks.md`; new `sop/Production_Readiness_SOP.md`. Advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
+**v4.11.0** — Last updated: 2026-06-26 15:33  *(**v4.11.0 — terminology aligned to Linear.** The docs-wide "phase" → "initiative" sweep v4.10.0 deferred lands here: roadmap-phase prose now reads *initiative* and the **Phase Surface** concept is **Initiative Surface** across every active doc, skill, and SOP (~280 in-place swaps, 27 files; a balanced word-for-word diff). Deliberately kept — the `/phase-plan` skill name, `phase-detect`/`phase-slug` identifiers, the `Future Phases` Linear **state** name, `sub-phase` (the Project level, not "sub-initiative"), spec-preflight "Phase 3.6", generic skill-process "phases", and dated history. No `bin/pk` or command-output change — smoke 89/89. Carries **v4.10.0 — `pk portfolio`, the cross-initiative orientation view.** A top-altitude view above `pk status`: an initiatives map (every `i<N>.` with Linear status, Active ones marked `← active`, → current `I<N>.P<N>.` project) + a **runway** of actionable issues (In Progress/UAT/Approved/Needs Spec) across all Active-status initiatives (multi-select — "active" = Linear initiative status `active`; falls back to the single derived current initiative when none Active), grouped by `I<N>.P<N>.` project and ordered initiative → sub-phase. Runway ordering is **priority-first** with blocked issues NOT sunk — a blocker is lifted to rank just above the most urgent issue it blocks; columns width-aligned; per-project active count + `⚠ Nd idle` momentum flag (Linear `updatedAt` vs the new `Portfolio staleness days` key, default 14). Project-scoped queries avoid the team-wide `first:25` truncation. `pk next`/`pk portfolio` user-facing output terminology aligned to Linear (phase → initiative); the docs-wide "phase" sweep (~1,100 mentions, many not initiative-sense — the `/phase-plan` skill, the "Phase Surface" concept) is deferred to its own release. `pk status` unchanged. Smoke 80→89. Carries **v4.9.0 — pk next/status see structure: project grouping + dependency-awareness.** `pk status` shows the `Needs Spec` queue and groups every state by project (groups ordered by their top-priority issue, issues priority-sorted within, orphans last). `pk next` reads Linear `inverseRelations` and is **dependency-aware**: issues with an unfinished blocker sink below ready work, tagged `⛔ blocked by X`, and the `Run:` suggestion targets the top *startable* issue (or says so when every Approved is blocked) — a blocked high-priority issue is no longer recommended. New pure helpers `pk_issues_group_render` / `pk_issues_annotate_blocked` / `pk_issues_flat_render` / `pk_first_ready_id`. Smoke 70→80. Carries **v4.8.0 — priority-aware surfacing.** `/linear-hygiene` routes Triage state by **priority, not tier** (`Normal+` → `Needs Spec`, `Low` → `Backlog`; catch-all floor flips `none → Low`; multi-ask bundles → `Backlog` + `/brainstorm-review`), and `pk next`/`pk status` order each state group **most-important-first** (new pure `pk_issues_priority_sort`, None last) so the listing and the suggested next action (`pk branch`/`/light-spec` on `.[0]`) point at the top-priority issue. The goal: organise Linear so `pk next` surfaces the most important work. Smoke 67→70. Carries **v4.7.1 — `pk done` no longer kills a session run from inside the worktree.** The guard meant to refuse a run-from-inside-the-worktree was defeated by `pk_repo_root` (`git rev-parse --show-toplevel`) resolving to the worktree itself — so `root == wt_path`, the guard skipped, and `pk done` tore down the calling session's CWD; with `--merge`, it merged the PR first. Un-gated the guard, moved it above the `--merge` block, pointed the refusal at the real parent repo, and made the `pk next` hint worktree-aware (`/pk-exit` → leave → `pk done <ID>`). Smoke 63→67. Carries v4.7.0 — VBW fully retired: docs/skills/SOPs/templates/`bin/pk` debranded (`pk_vbw_*` → `pk_legacy_*`), VBW plugin uninstalled, dead `/vbw:vibe --archive` hook removed; only a read-only `bin/pk` legacy `.vbw-planning/` fallback remains for un-migrated projects. Smoke 63/63. Carries v4.6.0: `pk deploy [<env>]` — a first-class deploy verb for script-deploy projects (Stage 4). Resolves `<env>` to the configured `Deploy command` in method.config.md and runs it (bare / `prod` → `Deploy command`, `pk deploy dev` → `Deploy command dev`; args after `--` pass through; thin delegate — the script owns confirmation + safety). `pk done`'s post-merge reminder now points at `pk deploy`. Smoke 56→63. Carries v4.5.0: projects carry their initiative number in the phase surface — a Linear project under `i1.` is now `I1.P2. label`, not bare `P2.`, so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy `P{N}.`; `/roadmap-create` + `/phase-plan` author the new form. Carries v4.4.0: `/security-gate` — the feature-scoped security gate (gap #3). Runs at the Building → UAT seam (after `/verify`, before `pk ship`): classifies the feature diff into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and runs the category checklist against the diff on a match — none matched → instant PASS. Portable framework with project signals in `resources/security-categories.md`; new `sop/Security_Gate_SOP.md`; advisory this release. Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Carries v4.3.1: the commit-format hook is heredoc-aware — `git commit` inside a heredoc body (docs/examples, e.g. a `gh pr comment --body`) no longer trips the advisory format nudge; the `cat <<` fallback is replaced by an in-`awk` `-F-` heredoc message extractor (smoke 50→54). Hook-only, no methodology change. Carries v4.3.0: `/prod-ready` — the production-readiness gate (gap #2). A second gate beside `/verify`: `/verify` proves the code is correct (every task, at ship), `/prod-ready` proves production can absorb it safely (once per feature, at the production boundary — before the final `pk promote`, or the merge to `main` on 1-tier). Six operational checks (monitoring, secrets-in-bundle, rate limits, backups, flags, dashboard); portable framework with project checks in `resources/prod-readiness-checks.md`; new `sop/Production_Readiness_SOP.md`. Advisory this release. Carries v4.2.1: the sync force-tracks the re-homed commit hook in projects that gitignore `.claude/hooks/`. Carries v4.2.0 — VBW plugin decoupled — no longer required: its one functional dependency, the advisory commit-format hook, is re-homed as a Pipekit-owned hook at `.claude/hooks/validate-commit.sh` (source `templates/hooks/validate-commit.sh`); the legacy `.vbw-planning/` planning layer still exists for direct-VBW projects, slated for a separate, later retirement. Carries v4.1.0: Linear-native phase surface — `i{N}.`/`P{N}.` naming replaces `PHASES.md`/`linear-map.json`; `/vbw:init` dropped from Stage 0; carries v4.0.0 (VBW executor removed). The roadmap's phase order now lives in Linear: an `i{N}.` Initiative is an ordered phase, a `P{N}.` Project is an ordered sub-phase that holds the issues, and `pk next`/`pk status` derive the current phase live by numeric name prefix (legacy `PHASES.md`/`linear-map.json` fall back for un-migrated projects). Carries v4.0.0: VBW executor removed — native-on-Workflow is the sole executor (the `vbw` backend, `--backend=` flag, and `vbw-dev`/`vbw-scout` dispatch are gone; a stale `Backend: vbw`/`auto` refuses with a migration message). The VBW planning-layer artifacts (`.vbw-planning/` PLAN/SUMMARY/state files) are untouched — a separate, later retirement. Folds in the rc train: Linear MCP camelCase migration to `@tacticlaunch/mcp-linear` across 19 skills (rc3); `pk ship` sha-matched verify gate + `pk promote` auto-pick-next-hop (rc4); gap #1's artifact rule — `sop/Database_SOP.md` + `/light-spec` Phase 3.7 Migration Plan gate + Spec Review Agent § Migration Rule (rc5).)*
 
 ---
 
@@ -34,8 +34,8 @@ A complete guide to using Pipekit from project inception through production deli
    - [UAT](#uat)
 9. [Stage 4: Release](#stage-4-release)
 10. [Stage 5: Documentation Loop](#stage-5-documentation-loop)
-11. [Between Phases](#between-phases)
-12. [The Phase Model](#the-phase-model)
+11. [Between Initiatives](#between-initiatives)
+12. [The Initiative Model](#the-initiative-model)
 13. [The Strategy Doc Framework](#the-strategy-doc-framework)
 14. [The Linear Model](#the-linear-model)
 15. [Execution Model](#execution-model)
@@ -84,7 +84,7 @@ STAGE 0: FOUNDATION (a contract — greenfield path shown below)
 
       ──→ /roadmap-create ──→ /phase-plan ──→ /roadmap-review (GATE)
                 │                   │                │
-          Linear hierarchy      current phase    Stage 0
+          Linear hierarchy      current initiative    Stage 0
           (i{N}. → I{N}.P{N}.  derived live;     validated ✓
           → Issue) authored    first sub-phase
           in Linear            issues → "Needs Spec"
@@ -103,7 +103,7 @@ STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
   Stage 2: Plan + Build
     pk next ──→ pk branch <ID> ──→ /work <ID>   (→ /review-plan to gate the plan)
         │             │                  │
-    Phase-aware   Worktree +         Plan-verdict
+    Initiative-aware   Worktree +         Plan-verdict
     Linear        Linear → In        gate, then
     grouping      Progress           execute
 
@@ -133,13 +133,13 @@ STAGES 1-5: DEVELOPMENT PIPELINE (repeats per issue)
   Per session (not per issue):
     /pk-exit ──→ Logs/Sessions/<date>_<HHMM>.md  (last command of every Claude Code session)
 
-BETWEEN PHASES:
+BETWEEN INITIATIVES:
 ──────────────────────────────────────────────────────────────────────
 
-  /phase-plan --next ──→ /roadmap-review ──→ /light-spec (next phase begins)
+  /phase-plan --next ──→ /roadmap-review ──→ /light-spec (next initiative begins)
 ```
 
-**Stage 0** is the foundation contract — a set of artifacts the dev pipeline depends on. Greenfield projects build the contract by running the full Stage 0 chain; brownfield projects skip `/concept` and `/define`; inherited projects verify and proceed. See [Entry Modes](#stage-0-foundation) below. After Stage 0 is satisfied, the dev pipeline repeats for each phase of features. Between phases, `/phase-plan --next` selects the next batch and `/roadmap-review` validates before speccing begins again.
+**Stage 0** is the foundation contract — a set of artifacts the dev pipeline depends on. Greenfield projects build the contract by running the full Stage 0 chain; brownfield projects skip `/concept` and `/define`; inherited projects verify and proceed. See [Entry Modes](#stage-0-foundation) below. After Stage 0 is satisfied, the dev pipeline repeats for each initiative of features. Between initiatives, `/phase-plan --next` selects the next batch and `/roadmap-review` validates before speccing begins again.
 
 ---
 
@@ -346,7 +346,7 @@ This is where strategy becomes work items. The skill reads your strategy docs an
 
 **What it produces:**
 
-1. **Linear Initiatives** named `i{N}. label` — one per roadmap phase, ordered by the numeric prefix (`i1.`, `i2.`, …). This is the phase surface `pk next`/`pk status` read live.
+1. **Linear Initiatives** named `i{N}. label` — one per roadmap initiative, ordered by the numeric prefix (`i1.`, `i2.`, …). This is the initiative surface `pk next`/`pk status` read live.
 2. **Linear Projects** named `I{N}.P{N}. label` — ordered sub-phases (execution batches) within a phase; the issues live here. The project carries its initiative number (e.g. `I1.P2.`) so the phase reads at the project level — the unit you navigate in Linear. (`bin/pk` accepts legacy bare `P{N}.` too; the `P{N}` number sets order either way.)
 3. **Linear Issues** — one issue per requirement, with:
    - Correct status (On Deck for Stage 1, Future Phases for Stage 2+, Ideas for parking lot)
@@ -368,26 +368,26 @@ A narrative `ROADMAP.md` may still be written as an optional legacy/handoff arti
 
 **Skill:** `/phase-plan`
 **Input:** The populated Linear hierarchy (`i{N}.` Initiatives → `P{N}.` Projects → Issues)
-**Output:** Current phase derived live from Linear + issues in the current sub-phase promoted to "Needs Spec"
+**Output:** Current initiative derived live from Linear + issues in the current sub-phase promoted to "Needs Spec"
 
-A phase is a batch of issues selected for the current execution cycle. This skill selects which issues to work on next, validates dependencies, and promotes them so the spec pipeline can begin. It **derives and advances phase state via Linear initiative/project status** — there is no `PHASES.md` registry to write.
+An initiative is a batch of issues selected for the current execution cycle. This skill selects which issues to work on next, validates dependencies, and promotes them so the spec pipeline can begin. It **derives and advances initiative state via Linear initiative/project status** — there is no `PHASES.md` registry to write.
 
-**Phase composition guidelines:**
+**Initiative composition guidelines:**
 
 | Guideline | Target |
 |-----------|--------|
-| Phase size | 3-8 issues |
+| Initiative size | 3-8 issues |
 | Complexity mix | At least 1 Low for quick wins, no more than 2 High |
-| Dependencies | No issue blocked by something outside the phase (unless it's Done) |
+| Dependencies | No issue blocked by something outside the initiative (unless it's Done) |
 | Milestone coverage | Prefer completing milestones over splitting them |
 
-**What happens when you approve a phase:**
+**What happens when you approve an initiative:**
 
 1. Selected issues move from "On Deck" → "Needs Spec"
-2. If On Deck is now empty, issues from "Future Phases" get promoted to On Deck
-3. A Linear comment is posted on each issue noting its phase assignment
+2. If On Deck is now empty, issues from "Future Initiatives" get promoted to On Deck
+3. A Linear comment is posted on each issue noting its initiative assignment
 
-**Phase state is derived from Linear, not a file.** The current phase is the lowest-numbered `i{N}.` Initiative whose status is not `Completed`; the current sub-phase is the lowest-numbered `P{N}.` Project in it whose state is not `completed`/`canceled`. `/phase-plan` advances the phase by transitioning that initiative/project state in Linear — `pk next`/`pk status` then read the new current phase live. (Projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
+**Initiative state is derived from Linear, not a file.** The current initiative is the lowest-numbered `i{N}.` Initiative whose status is not `Completed`; the current sub-phase is the lowest-numbered `P{N}.` Project in it whose state is not `completed`/`canceled`. `/phase-plan` advances the initiative by transitioning that initiative/project state in Linear — `pk next`/`pk status` then read the new current initiative live. (Projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
 
 ---
 
@@ -408,13 +408,13 @@ Before the spec pipeline begins, `/roadmap-review` validates that Stage 0 is com
 | Linear board | Issues exist for requirements | Run `/roadmap-create` |
 | Phase defined | A non-`Completed` `i{N}.` Initiative with a current `P{N}.` Project | Run `/phase-plan` |
 
-**Ongoing health checks** (run every phase):
+**Ongoing health checks** (run every initiative):
 
 - **Completeness** — every roadmap requirement has a Linear issue
 - **Assignment** — issues are in the correct stage/project/milestone
 - **Dependencies** — `blocked_by` relations match the roadmap
 - **Ordering** — workflow states are consistent with dependency order
-- **Spec coverage** — how many issues in the current phase have specs
+- **Spec coverage** — how many issues in the current initiative have specs
 - **Doc freshness** — strategy docs flagged if features shipped without a sync
 
 If any check fails, the report tells you exactly which skill to run to fix it.
@@ -499,7 +499,7 @@ After agent review passes, you review the spec in Linear. This is where product 
 **Input:** Approved spec
 **Output:** Worktree + feature branch + Linear → In Progress
 
-`pk next` is phase-aware (v2.1.0+): it **derives the current phase live from the Linear hierarchy** — the lowest-numbered `i{N}.` Initiative that isn't `Completed`, then its lowest-numbered open `P{N}.` Project (by numeric name prefix, `P2` before `P10`; Linear's `sortOrder` is never used) — and groups that phase's Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Legacy `.vbw-planning/PHASES.md` + `linear-map.json` fall back automatically for un-migrated projects. Falls back to global "next Approved" when no phase context.
+`pk next` is initiative-aware (v2.1.0+): it **derives the current initiative live from the Linear hierarchy** — the lowest-numbered `i{N}.` Initiative that isn't `Completed`, then its lowest-numbered open `P{N}.` Project (by numeric name prefix, `P2` before `P10`; Linear's `sortOrder` is never used) — and groups that initiative's Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Legacy `.vbw-planning/PHASES.md` + `linear-map.json` fall back automatically for un-migrated projects. Falls back to global "next Approved" when no initiative context.
 
 `pk branch <ID>` is mechanical setup — idempotent against Linear+git ground truth. It creates the worktree, the branch, and transitions Linear:
 
@@ -731,27 +731,27 @@ Strategy Docs (vision) → Specs → Plans → Code → Strategy Docs (reality)
 **Critical rule: Code is truth.** If the implementation differs from the spec, the Strategy doc matches the code — not the spec. Specs describe intent; code describes reality.
 
 **When to run:**
-- After UAT passes for a phase
+- After UAT passes for an initiative
 - Before stakeholder presentations
 - Before onboarding new team members
 - When `/roadmap-review` flags doc staleness
 
 ---
 
-## Between Phases
+## Between Initiatives
 
-When a phase's issues are all Done (or a phase is otherwise complete):
+When an initiative's issues are all Done (or an initiative is otherwise complete):
 
-1. **`/phase-plan --next`** — archives the completed phase and proposes the next one
-   - Shows a brief retrospective: how long the phase took, complexity accuracy
+1. **`/phase-plan --next`** — archives the completed initiative and proposes the next one
+   - Shows a brief retrospective: how long the initiative took, complexity accuracy
    - Identifies newly unblocked issues (their blockers just completed)
-   - Proposes the next phase composition
+   - Proposes the next initiative composition
 2. **`/roadmap-review`** — validates the roadmap is still healthy before speccing
-3. **`/light-spec`** — begin speccing the next phase's issues
+3. **`/light-spec`** — begin speccing the next initiative's issues
 
 **`/phase-plan --status`** is available anytime for a progress dashboard:
 ```
-Phase 2 Status — 2026-04-15
+Initiative 2 Status — 2026-04-15
 
 | Issue | Title | Status | Days |
 |-------|-------|--------|------|
@@ -764,41 +764,41 @@ Progress: 1/4 Done (25%)
 Alert: PROJ-7 in "Needs Spec" for 4 days — run /light-spec PROJ-7
 ```
 
-**`/phase-plan --rebalance`** adjusts the current phase if priorities shift — add, remove, or swap issues.
+**`/phase-plan --rebalance`** adjusts the current initiative if priorities shift — add, remove, or swap issues.
 
 ---
 
-## The Phase Model
+## The Initiative Model
 
-Phases, milestones, and cycles serve different purposes. Understanding their relationship is important for phase planning.
+Initiatives, milestones, and cycles serve different purposes. Understanding their relationship is important for initiative planning.
 
 ### The Three Concepts
 
 | Concept | What It Is | Linear Construct | Lifespan |
 |---------|-----------|-----------------|----------|
-| **Phase** | An ordered roadmap phase | Linear **Initiative** named `i{N}. label` | Permanent (ordered by `{N}`) |
-| **Sub-phase** | An execution batch — what we're building right now; holds the issues | Linear **Project** named `I{N}.P{N}. label` (legacy bare `P{N}.` still parses) | Ordered within its phase by the `P{N}` number |
+| **Initiative** | An ordered roadmap initiative | Linear **Initiative** named `i{N}. label` | Permanent (ordered by `{N}`) |
+| **Sub-phase** | An execution batch — what we're building right now; holds the issues | Linear **Project** named `I{N}.P{N}. label` (legacy bare `P{N}.` still parses) | Ordered within its initiative by the `P{N}` number |
 | **Milestone (Work Package)** (optional) | A feature cluster — groups related issues for gating; orthogonal to phases | Linear Milestone | Intra-project grouping |
 | **Cycle** (optional) | A time-boxed sprint — capacity planning | Linear Cycle | Configurable duration |
 
 ### How They Relate
 
-**Milestones group by feature. Phases group by execution order.**
+**Milestones group by feature. Initiatives group by execution order.**
 
-A phase may pull from multiple milestones:
+An initiative may pull from multiple milestones:
 ```
-Phase 1:
+Initiative 1:
   - PROJ-1 from WP-1 (Foundation)
   - PROJ-2 from WP-1 (Foundation)
   - PROJ-3 from WP-2 (Search)
 ```
 
-A large milestone may span multiple phases:
+A large milestone may span multiple initiatives:
 ```
 WP-2 (Search) — 8 issues:
-  - Phase 1: PROJ-3, PROJ-4 (core search)
-  - Phase 2: PROJ-7, PROJ-8 (advanced search, export)
-  - Phase 3: PROJ-11, PROJ-12, PROJ-13, PROJ-14 (filters, saved searches)
+  - Initiative 1: PROJ-3, PROJ-4 (core search)
+  - Initiative 2: PROJ-7, PROJ-8 (advanced search, export)
+  - Initiative 3: PROJ-11, PROJ-12, PROJ-13, PROJ-14 (filters, saved searches)
 ```
 
 ### Milestone Gating
@@ -807,14 +807,14 @@ WP-2 (Search) — 8 issues:
 
 ### Linear Cycles (Optional)
 
-If you want time-boxed sprints with capacity tracking, map phases to Linear Cycles. This is optional — the method works without cycles. Cycles add:
+If you want time-boxed sprints with capacity tracking, map initiatives to Linear Cycles. This is optional — the method works without cycles. Cycles add:
 - Start/end dates
 - Team capacity tracking
 - Velocity measurement
 
-### Phase State Tracking
+### Initiative State Tracking
 
-Phases are tracked **live in Linear**, not in a committed file. A phase is a `i{N}.` Initiative; its sub-phases are `I{N}.P{N}.` Projects that hold the issues (v4.5.0 — the project carries its initiative number so the phase reads at the project level; legacy bare `P{N}.` still parses). The current phase is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current phase and the phase's overall progress straight from this hierarchy. (Un-migrated projects fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
+Initiatives are tracked **live in Linear**, not in a committed file. An initiative is a `i{N}.` Initiative; its sub-phases are `I{N}.P{N}.` Projects that hold the issues (v4.5.0 — the project carries its initiative number so the initiative reads at the project level; legacy bare `P{N}.` still parses). The current initiative is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current initiative and the initiative's overall progress straight from this hierarchy. (Un-migrated projects fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
 
 ---
 
@@ -892,20 +892,20 @@ Terminal:
 `[In <Env> →]*` is one state per non-final env in `Ship environments`. For 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. For 2-tier (`dev,main`): `In Dev → Done`. State maps 1:1 to environment: `UAT` = PR open on preview branch; `In Dev` = merged to dev; `In Beta` = promoted to beta; `Done` = on the final env.
 
 **Key distinction:**
-- **Building** = automated execution owns it (`/work`, native-on-Workflow). Phase-batched, planned work.
-- **In Progress** = You're doing it manually. Ad-hoc, outside the phase.
+- **Building** = automated execution owns it (`/work`, native-on-Workflow). Initiative-batched, planned work.
+- **In Progress** = You're doing it manually. Ad-hoc, outside the initiative.
 
-### Phase Management via Status
+### Initiative Management via Status
 
-| Status Group | Phase Role |
+| Status Group | Initiative Role |
 |-------------|-----------|
 | Ideas | Someday — evaluated but not scheduled |
-| Future Phases | Known future stage — not current or next |
-| On Deck | Next phase — staging area |
-| Needs Spec → UAT | Current phase — active pipeline |
+| Future Initiatives | Known future stage — not current or next |
+| On Deck | Next initiative — staging area |
+| Needs Spec → UAT | Current initiative — active pipeline |
 | Done | Shipped |
 
-`/phase-plan` manages the On Deck → Needs Spec promotion. Refilling On Deck from Future Phases happens when the current phase starts.
+`/phase-plan` manages the On Deck → Needs Spec promotion. Refilling On Deck from Future Initiatives happens when the current initiative starts.
 
 ### Labels
 
@@ -935,7 +935,7 @@ Terminal:
 
 **Native-on-Workflow is the sole executor.** `/work` plans the issue inline (parallel `Agent` calls for grounding) and executes on Claude Code's Workflow primitive — atomic commit per task, verify-before-integrate. There is no backend selection and no separate planning service: planning and execution both run in your Claude session, against the spec read live from Linear.
 
-The roadmap's phase order lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), authored directly by `/roadmap-create` — there is no scaffolded phase file to initialize. `pk next`/`pk status` derive the current phase live from that hierarchy.
+The roadmap's initiative order lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), authored directly by `/roadmap-create` — there is no scaffolded phase file to initialize. `pk next`/`pk status` derive the current initiative live from that hierarchy.
 
 | Pipeline Stage | Tool | Used when | Purpose |
 |---------------|------|-----------|---------|
@@ -948,7 +948,7 @@ The plan-safety net is per-task verify-before-integrate (`/work`) plus the `/ver
 
 ### Legacy `.vbw-planning/` fallback
 
-Pipekit fully retired VBW: no Pipekit skill, gate, or executor depends on it, and the VBW plugin is not installed. The one remaining vestige is read-only — `bin/pk` keeps a legacy fallback that reads `.vbw-planning/PHASES.md` / `linear-map.json` **only** for projects that haven't yet migrated to the Linear-native phase surface. Migrated projects (the normal path) never touch it. `/work` writes its task DAG and run trail to gitignored `.pk-work/`, never `.vbw-planning/`.
+Pipekit fully retired VBW: no Pipekit skill, gate, or executor depends on it, and the VBW plugin is not installed. The one remaining vestige is read-only — `bin/pk` keeps a legacy fallback that reads `.vbw-planning/PHASES.md` / `linear-map.json` **only** for projects that haven't yet migrated to the Linear-native initiative surface. Migrated projects (the normal path) never touch it. `/work` writes its task DAG and run trail to gitignored `.pk-work/`, never `.vbw-planning/`.
 
 ---
 
@@ -1117,10 +1117,10 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Startup | `/startup` | Full orchestrator (chains everything) |
 | Roadmap Create | `/roadmap-create` | Strategy → Linear `i{N}.`/`P{N}.` hierarchy (authored directly in Linear) |
 | Roadmap Verify | `/roadmap-create --verify` | Check Linear matches roadmap |
-| Phase Plan | `/phase-plan` | Select first/next phase |
-| Phase Status | `/phase-plan --status` | Current phase progress |
-| Phase Next | `/phase-plan --next` | Archive + plan next phase |
-| Phase Rebalance | `/phase-plan --rebalance` | Adjust current phase |
+| Initiative Plan | `/phase-plan` | Select first/next initiative |
+| Initiative Status | `/phase-plan --status` | Current initiative progress |
+| Initiative Next | `/phase-plan --next` | Archive + plan next initiative |
+| Initiative Rebalance | `/phase-plan --rebalance` | Adjust current initiative |
 
 ### Stage 1: Spec
 
@@ -1137,7 +1137,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
-| Find next | `pk next` | Phase-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
+| Find next | `pk next` | Initiative-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
 | Branch | `pk branch <ID>` | Worktree + feature branch + Linear → In Progress (idempotent) |
 | Work | `/work <ID>` | Plan + execute on native-on-Workflow. Verdict gate before code. |
 | Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
@@ -1191,7 +1191,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Status | `pk status` | Full unscoped Linear board view |
 | Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence), **upstream-staleness check** (v3.1.0 — warns when the synced Pipekit lags the method repo's latest release; offline-soft) |
 | Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
-| Sync Linear | `/sync-linear` | Reconcile strategy-doc / requirement drift against the Linear phase hierarchy |
+| Sync Linear | `/sync-linear` | Reconcile strategy-doc / requirement drift against the Linear initiative hierarchy |
 | Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
 | Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
@@ -1296,13 +1296,13 @@ Immediately after creating the issue, force one of three decisions:
 
 | Decision | What Happens |
 |----------|-------------|
-| **Now** | Route to pipeline — assign to a phase/stage, move to Needs Spec |
-| **Later** | Park with explicit trigger condition + target phase. Tagged `Parked` in Linear. |
+| **Now** | Route to pipeline — assign to an initiative/stage, move to Needs Spec |
+| **Later** | Park with explicit trigger condition + target initiative. Tagged `Parked` in Linear. |
 | **Kill** | Archive with rationale. Move to Canceled. |
 
 **Parking rules for "Later" items:**
 - Must have a trigger condition (e.g., "revisit when PROJ-56 ships")
-- Must have a target phase/stage (e.g., "Phase 4+")
+- Must have a target initiative/stage (e.g., "Initiative 4+")
 - Surfaced by `/roadmap-review` when trigger conditions are met
 
 ### REDUCE (for "Now" items)
@@ -1323,7 +1323,7 @@ If the brainstorm is broad, cut to v1 scope before entering the spec pipeline:
 | `/brainstorm` | EXPAND + immediate HOLD + optional REDUCE |
 | `/brainstorm-review` | Batch HOLD for untriaged backlog |
 | `/roadmap-review` | Surfaces parked items whose triggers have fired |
-| `/phase-plan --rebalance` | Adds "Now" dispositions to current phase |
+| `/phase-plan --rebalance` | Adds "Now" dispositions to current initiative |
 
 ---
 
@@ -1351,7 +1351,7 @@ Brevity, `[TBD]`, limited context are fine. Hidden assumptions and implicit beha
 AI proposes, reviews, and executes. Humans decide. AI never locks in a product decision — it presents analysis and waits for the call.
 
 ### Code Is Truth
-When code and documentation disagree, trust the code. Strategy docs track reality, not aspirations. `/strategy-sync` enforces this after every phase.
+When code and documentation disagree, trust the code. Strategy docs track reality, not aspirations. `/strategy-sync` enforces this after every initiative.
 
 ### Every Step Forward Is a PR
 No direct merges between long-lived branches. Each promotion (dev → beta → main) is a PR with CI gates. Hotfixes cherry-pick back immediately.

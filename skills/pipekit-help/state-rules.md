@@ -27,7 +27,7 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 **Match:** All foundation-contract artifacts present AND no commits in the last 14 days on the current branch AND no in-flight plan (`.pk-work/<ID>-PLAN.md`, or a legacy `.vbw-planning/phases/<latest>/PLAN.md` in an un-migrated project).
 
 **Recommend:** `pk next`
-**Why:** Foundation is intact and nothing is mid-flight — `pk next` is the phase-aware entry point that groups Linear by status with per-group hints. (Run `/startup --mode=inherited` if you want an explicit foundation audit first.)
+**Why:** Foundation is intact and nothing is mid-flight — `pk next` is the initiative-aware entry point that groups Linear by status with per-group hints. (Run `/startup --mode=inherited` if you want an explicit foundation audit first.)
 
 ### 1d. Partial foundation — diagnose first
 

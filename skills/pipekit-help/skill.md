@@ -27,13 +27,13 @@ Read each of these without writing. Stop reading as soon as a rule in `state-rul
 | `git rev-parse --abbrev-ref HEAD` | Current branch / worktree |
 | `git log -5 --oneline` | Recent commits (look for Linear prefixes like `PROJ-XXX`) |
 | `$STATE_DIR/pending-strategy-sync` (presence; `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`) | Post-archive hook marker — strategy sync owed |
-| Linear `i{N}.`/`I{N}.P{N}.` phase hierarchy (via `pk next` / `pk status`) | Foundation complete? Current phase position |
+| Linear `i{N}.`/`I{N}.P{N}.` initiative hierarchy (via `pk next` / `pk status`) | Foundation complete? Current initiative position |
 | `.pk-work/<ID>-PLAN.md` (presence) | Native-backend task DAG materialized for the in-flight issue? |
 | `.vbw-planning/phases/<latest>/PLAN.md` (presence, legacy-only) | Plan from an un-migrated project (legacy read-only fallback) |
 | `method.config.md` | Project context for messages |
 | Linear issue status (only if a single issue is clearly in scope) | Pipeline position |
 
-If a legacy `.vbw-planning/phases/*/PLAN.md` is present (un-migrated project), resolve the *latest* phase by mtime. Migrated projects derive phase position live from Linear and the native `.pk-work/` plan — don't assume the `.vbw-planning/` tree exists.
+If a legacy `.vbw-planning/phases/*/PLAN.md` is present (un-migrated project), resolve the *latest* initiative by mtime. Migrated projects derive initiative position live from Linear and the native `.pk-work/` plan — don't assume the `.vbw-planning/` tree exists.
 
 ## Algorithm
 
@@ -83,4 +83,4 @@ If a legacy `.vbw-planning/phases/*/PLAN.md` is present (un-migrated project), r
 
 ## Customization
 
-`state-rules.md` is the rule table. To add a project-specific rule (e.g., a custom phase marker), override the file via `.claude/overrides/skills/pipekit-help/state-rules.md` — see `method.md` § Sync-Safe Overrides.
+`state-rules.md` is the rule table. To add a project-specific rule (e.g., a custom initiative marker), override the file via `.claude/overrides/skills/pipekit-help/state-rules.md` — see `method.md` § Sync-Safe Overrides.

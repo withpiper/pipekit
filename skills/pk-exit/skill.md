@@ -94,7 +94,7 @@ If the session was pure execution with no decisions, write "—".>
 
 - The v1 `/end-session` skill (now archived) was the prior art. This skill restores its core function (narrative session log) without the v1 baggage (NEXT.md updates, branch-status orchestration — those moved to `pk next` / `pk done`).
 - The bash Stop hook was retired because: (a) Stop fires on every assistant turn, producing duplicate commit-list entries; (b) bash can't write narrative; (c) `pk done` doesn't need a journal cache — it reads `git log` directly.
-- This skill writes one file per session. It does not update Linear (that's `pk done`'s job at issue-close) and does not advance the phase surface (that's `/phase-plan`'s job, via Linear initiative/project state).
+- This skill writes one file per session. It does not update Linear (that's `pk done`'s job at issue-close) and does not advance the initiative surface (that's `/phase-plan`'s job, via Linear initiative/project state).
 
 ## What this skill does NOT do
 

@@ -187,13 +187,13 @@ If no approved updates were applied (user skipped all diffs), leave the marker i
 
 ### Doc Freshness
 Strategy docs now reflect all shipped features through YYYY-MM-DD.
-Next sync recommended after: [next phase ships]
+Next sync recommended after: [next initiative ships]
 ```
 
 ## Cadence
 
 Run at these moments:
-- **After UAT passes** for a phase or stage — the primary trigger
+- **After UAT passes** for an initiative or stage — the primary trigger
 - **Before stakeholder presentations** — ensure docs are current
 - **Before onboarding a new team member** — they'll read these docs first
 - **When `/roadmap-review` flags doc staleness**

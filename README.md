@@ -2,7 +2,7 @@
 
 **A structured way to ship software with AI — from idea to production, with a quality gate at every stage.**
 
-**v4.10.0** — Last updated: 2026-06-26. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
+**v4.11.0** — Last updated: 2026-06-26. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -182,7 +182,7 @@ claude mcp add --transport http --scope user linear-server https://mcp.linear.ap
 
 Reopen Claude Code and run `/mcp` to finish authorization. No workspace yet? Create a free one at [linear.app](https://linear.app/) first.
 
-> **A note on which Linear server to use.** Pipekit's interactive skills target [`@tacticlaunch/mcp-linear`](https://www.npmjs.com/package/@tacticlaunch/mcp-linear) (registered as `linear-server`). It exposes the initiative and relation tools the phase surface relies on, which the first-party remote lacks. The OAuth remote above is quickest for basic issue work, but if `pk status` shows no Roadmap section on a project that *has* `i{N}.` initiatives, switch `linear-server` to the tacticlaunch server. Register your choice in the project's committed `.mcp.json` so it is visible inside worktrees. Details in [`sop/Linear_SOP.md`](sop/Linear_SOP.md#linear-mcp-server).
+> **A note on which Linear server to use.** Pipekit's interactive skills target [`@tacticlaunch/mcp-linear`](https://www.npmjs.com/package/@tacticlaunch/mcp-linear) (registered as `linear-server`). It exposes the initiative and relation tools the initiative surface relies on, which the first-party remote lacks. The OAuth remote above is quickest for basic issue work, but if `pk status` shows no Roadmap section on a project that *has* `i{N}.` initiatives, switch `linear-server` to the tacticlaunch server. Register your choice in the project's committed `.mcp.json` so it is visible inside worktrees. Details in [`sop/Linear_SOP.md`](sop/Linear_SOP.md#linear-mcp-server).
 
 ### 5. Run the startup orchestrator
 

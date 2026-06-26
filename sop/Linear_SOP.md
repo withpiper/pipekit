@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.5.0** — Last updated: 2026-06-22  *(phase surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the phase reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.1.0's Linear-native phase surface — Initiative `i{N}.` = phase, ordered by name prefix. The roadmap's phase order lives in Linear, not a committed file; `pk next`/`pk status` derive the current phase live. The legacy `.vbw-planning/PHASES.md` and `linear-map.json` are retired (`bin/pk` reads them only as a read-only fallback for un-migrated projects). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.5.0** — Last updated: 2026-06-22  *(Initiative surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the initiative reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.1.0's Linear-native Initiative surface — Initiative `i{N}.` = initiative, ordered by name prefix. The roadmap's initiative order lives in Linear, not a committed file; `pk next`/`pk status` derive the current initiative live. The legacy `.vbw-planning/PHASES.md` and `linear-map.json` are retired (`bin/pk` reads them only as a read-only fallback for un-migrated projects). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -36,10 +36,10 @@ Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create
 
 ## Linear Model
 
-**The Linear hierarchy is the phase surface — the source of truth for roadmap order.** There is no committed phase file; `pk next`/`pk status` derive the current phase live from this hierarchy. `/roadmap-create` authors it; `/phase-plan` advances it.
+**The Linear hierarchy is the Initiative surface — the source of truth for roadmap order.** There is no committed phase file; `pk next`/`pk status` derive the current initiative live from this hierarchy. `/roadmap-create` authors it; `/phase-plan` advances it.
 
 ```
-Initiative "i{N}. label" = ordered roadmap PHASE       <- "Which phase ships this?"
+Initiative "i{N}. label" = ordered roadmap INITIATIVE       <- "Which initiative ships this?"
   +-- Project "I{N}.P{N}. label" = ordered SUB-PHASE   <- "Which sub-phase within the phase?"
        +-- Issue = work item                           <- "What work needs to happen?"
             +-- Milestone = Work Package (optional)     <- "What intra-project batch?"
@@ -54,40 +54,40 @@ Labels = Cross-cutting metadata        <- Filterable on everything
 
 ### Ordering is the numeric name prefix — never Linear `sortOrder`
 
-Phase and sub-phase order is read from the **integer in the name prefix**, parsed numerically (so `P2` sorts before `P10`). Linear's internal `sortOrder` field is an unreliable drag-rank and is **never** used to order phases.
+Initiative and sub-phase order is read from the **integer in the name prefix**, parsed numerically (so `P2` sorts before `P10`). Linear's internal `sortOrder` field is an unreliable drag-rank and is **never** used to order initiatives.
 
-- **Initiative `i{N}. label`** = an ordered roadmap **phase**. The `i{N}.` prefix is the roadmap opt-in: only prefixed initiatives are delivery phases. **Unprefixed initiatives are strategic themes** and are ignored by `pk next`.
-- **Project `I{N}.P{N}. label`** = an ordered **sub-phase** within a phase. Issues live in projects. The project carries its initiative number (v4.5.0+: `I1.P2. label`) so the phase reads at the project level — the navigable unit in Linear. `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets order either way.
+- **Initiative `i{N}. label`** = an ordered roadmap **initiative**. The `i{N}.` prefix is the roadmap opt-in: only prefixed initiatives are delivery initiatives. **Unprefixed initiatives are strategic themes** and are ignored by `pk next`.
+- **Project `I{N}.P{N}. label`** = an ordered **sub-phase** within an initiative. Issues live in projects. The project carries its initiative number (v4.5.0+: `I1.P2. label`) so the initiative reads at the project level — the navigable unit in Linear. `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets order either way.
 - **Issue** = a work item.
 
-**Current phase** = the lowest `i{N}` initiative whose status is not `Completed`. **Current sub-phase** = the lowest `P{N}` project whose state is not `completed` or `canceled`.
+**Current initiative** = the lowest `i{N}` initiative whose status is not `Completed`. **Current sub-phase** = the lowest `P{N}` project whose state is not `completed` or `canceled`.
 
 ### Each Layer's Job
 
 | Layer | Audience | Question | Lifespan |
 |---|---|---|---|
-| **Initiative** (`i{N}.`) | Partner | "Which roadmap phase?" | Permanent (one per phase) |
+| **Initiative** (`i{N}.`) | Partner | "Which roadmap initiative?" | Permanent (one per initiative) |
 | **Project** (`I{N}.P{N}.`) | Partner + You | "Which sub-phase?" | Permanent within phase |
 | **Milestone** (optional) | You | "What intra-project batch?" | Per-project |
 | **Issue** | You | "What work item?" | Permanent (work item) |
 | **Labels** | Everyone | Domain? Tier? Type? | Permanent (taxonomy) |
 
-The **Milestone = Work Package** layer is an optional intra-project grouping, orthogonal to the phase surface — use it to batch issues within a single project when useful, or skip it entirely.
+The **Milestone = Work Package** layer is an optional intra-project grouping, orthogonal to the Initiative surface — use it to batch issues within a single project when useful, or skip it entirely.
 
 ---
 
-## Phase Surface Mapping
+## Initiative Surface Mapping
 
-The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. The legacy phase-source files `.vbw-planning/PHASES.md` and `.vbw-planning/linear-map.json` are **retired** — no skill writes them; `bin/pk` reads them only as a read-only fallback for un-migrated projects.
+The roadmap's initiative order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. The legacy initiative-source files `.vbw-planning/PHASES.md` and `.vbw-planning/linear-map.json` are **retired** — no skill writes them; `bin/pk` reads them only as a read-only fallback for un-migrated projects.
 
 | Concept | Linear | Notes |
 |---|---|---|
-| Roadmap phase | Initiative `i{N}. label` | Ordered by the `i{N}` name prefix. The source of truth for phase order. |
-| Sub-phase | Project `I{N}.P{N}. label` | Ordered by the `P{N}` name prefix, within a phase. Issues live here. (Legacy bare `P{N}.` still parses.) |
+| Roadmap initiative | Initiative `i{N}. label` | Ordered by the `i{N}` name prefix. The source of truth for initiative order. |
+| Sub-phase | Project `I{N}.P{N}. label` | Ordered by the `P{N}` name prefix, within an initiative. Issues live here. (Legacy bare `P{N}.` still parses.) |
 | Work Package (optional) | Milestone | Optional intra-project batch within a project. |
 | Issue | Issue | The work item. |
 
-**The Linear hierarchy is the source of truth for phase order.** Task decomposition lives in the execution plan (`.pk-work/<ID>-PLAN.md`), authored and run by `/work` on the native-on-Workflow executor; Linear stays clean — one issue per feature.
+**The Linear hierarchy is the source of truth for initiative order.** Task decomposition lives in the execution plan (`.pk-work/<ID>-PLAN.md`), authored and run by `/work` on the native-on-Workflow executor; Linear stays clean — one issue per feature.
 
 ### What Lives Where
 
@@ -107,7 +107,7 @@ The roadmap's phase order lives in the **Linear hierarchy** (Initiative `i{N}.` 
 ### Pipeline
 
 ```
-Planned:   Triage -> Ideas -> Future Phases -> On Deck -> Needs Spec -> Specced -> Approved -> Building -> UAT -> In <FirstEnv> -> [In <Env> ->]* Done
+Planned:   Triage -> Ideas -> Future Initiatives -> On Deck -> Needs Spec -> Specced -> Approved -> Building -> UAT -> In <FirstEnv> -> [In <Env> ->]* Done
 Ad-hoc:    Triage -> In Progress -> UAT -> In <FirstEnv> -> [In <Env> ->]* Done                                                                -> Canceled
                                                                                                                                                 -> Duplicate
 ```
@@ -126,13 +126,13 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 |---|---|---|---|---|
 | **Triage** | triage (setting) | You | Pre-pipeline | External input: bug reports, client requests, `/brainstorm` output. Sort into the right place. Enable via Settings → Team → General, not created as a workflow state. |
 | **Ideas** | backlog | -- | Pre-pipeline | Triaged items to act on at some point, but not now. Parking lot for evaluated ideas. |
-| **Future Phases** | backlog | -- | Pre-pipeline | Belongs to a known future stage. Not in scope for current or next phase. |
-| **On Deck** | backlog | Scanning | Pre-pipeline | Next phase's batch. Start getting eyes on these, light-spec proactively if you get ahead. |
-| **Needs Spec** | backlog | You + Claude | Step 1 ready | Current phase. Needs `/light-spec` applied. |
+| **Future Initiatives** | backlog | -- | Pre-pipeline | Belongs to a known future stage. Not in scope for current or next initiative. |
+| **On Deck** | backlog | Scanning | Pre-pipeline | Next initiative's batch. Start getting eyes on these, light-spec proactively if you get ahead. |
+| **Needs Spec** | backlog | You + Claude | Step 1 ready | Current initiative. Needs `/light-spec` applied. |
 | **Specced** | unstarted | You | Steps 2-3 | Light spec applied, agent reviewed. Awaiting your sign-off. **Config-driven (v2.7.0+):** this is the default `Spec ready state`, but the state `/light-spec` publishes to and `pk spec-cycle` requires is whatever `method.config.md` § `Spec ready state` names. Two-state boards with no `Specced` state set it to `Needs Spec`. |
-| **Approved** | unstarted | `/work` (queued) | Post Step 3 | Human approved. Ready for execution when a phase batch is complete. |
-| **In Progress** | started | You | Ad-hoc | Manual work outside the phase: hotfixes, quick bug fixes, chores. Not phase-managed. |
-| **Building** | started | `/work` | Steps 4-7 | Plan + native `/work` execution + `/verify` QA. Current-phase execution queue only. |
+| **Approved** | unstarted | `/work` (queued) | Post Step 3 | Human approved. Ready for execution when an initiative batch is complete. |
+| **In Progress** | started | You | Ad-hoc | Manual work outside the initiative: hotfixes, quick bug fixes, chores. Not initiative-managed. |
+| **Building** | started | `/work` | Steps 4-7 | Plan + native `/work` execution + `/verify` QA. Current-initiative execution queue only. |
 | **UAT** | started | You | Step 8a | PR open on preview branch (pre-merge — v2.6.0+ opens as Draft; `pk ready` flips to Ready to fire outside reviewers). Code review + preview-URL acceptance testing happens here. **v2.4.3+**: `pk promote` (Phase 1) refuses if any bundled issue is still in UAT (PR not merged) — pass `--confirmed` to bypass after env-UAT signoff. |
 | **In `<FirstEnv>`** (e.g. `In Dev`) | started | You | Step 8b | Code merged to first deploy env. Interactive UAT in progress, or signed-off-awaiting-promote. Set by `pk done` after merge confirmation. |
 | **In `<Env>`** (e.g. `In Beta`) | started | You | Step 8c+ | Code promoted to a non-final env. One state per non-final env in `Ship environments`. **v2.6.0+**: set by `pk promote <env> --finish` (Phase 2, after the promote PR merges) — replaces the pre-v2.6.0 optimistic-at-PR-open transition. |
@@ -145,13 +145,13 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 | From | To | Trigger | Who |
 |---|---|---|---|
 | Triage | Ideas / Needs Spec / In Progress | You triage it | You |
-| Ideas | Future Phases / On Deck | Stage/phase assignment | You |
-| Future Phases | On Deck | Promoted for next phase | You |
-| On Deck | Needs Spec | Current phase begins | You |
+| Ideas | Future Initiatives / On Deck | Stage/initiative assignment | You |
+| Future Initiatives | On Deck | Promoted for next initiative | You |
+| On Deck | Needs Spec | Current initiative begins | You |
 | Needs Spec | Specced | `/light-spec` applied + agent reviewed | Claude + You |
 | Specced | Needs Spec | Agent or human sends back for revision | You |
 | Specced | Approved | You approve scope, decisions, priority | You |
-| Approved | Building | Phase batch is ready for execution | You (or `/work` pickup) |
+| Approved | Building | Initiative batch is ready for execution | You (or `/work` pickup) |
 | Building | UAT | `/verify` QA passes + `pk ship` | `/verify` QA + you |
 | UAT | In `<FirstEnv>` | `pk done` after PR merge (or `pk done --merge`) | You + `pk done` |
 | UAT | Done | `pk done` on 1-tier project (first env IS final env) | You + `pk done` |
@@ -166,32 +166,32 @@ Every status maps to a pipeline position. An issue's status tells you whose turn
 
 | Lane | Path | Managed By |
 |---|---|---|
-| **Planned (features)** | Ideas → Future Phases → On Deck → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | Phase pipeline (`/work`) |
-| **Bug fix (into phase)** | Triage → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | Phase pipeline (enters the phase) |
+| **Planned (features)** | Ideas → Future Initiatives → On Deck → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | Initiative pipeline (`/work`) |
+| **Bug fix (into initiative)** | Triage → Needs Spec → Specced → Approved → Building → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | Initiative pipeline (enters the initiative) |
 | **Hotfix** | Triage → In Progress → UAT → In `<FirstEnv>` → [In `<Env>` →]* Done | You (manual fix) |
 | **Quick fix** | Triage → In Progress → Done | You (no UAT needed) |
 
 `[In <Env> →]*` is one state per non-final env in `Ship environments`. 3-tier (`dev,beta,main`): `In Dev → In Beta → Done`. 2-tier (`dev,main`): `In Dev → Done`. 1-tier (`main`): `UAT → Done` (no intermediate `In <Env>`).
 
-**Building** = phase-managed (`/work` plans and executes the batch). Phase-batched, trigger rules apply. Never put ad-hoc work here.
-**In Progress** = You're doing it by hand, outside the phase. The phase pipeline ignores these.
+**Building** = initiative-managed (`/work` plans and executes the batch). Initiative-batched, trigger rules apply. Never put ad-hoc work here.
+**In Progress** = You're doing it by hand, outside the initiative. The initiative pipeline ignores these.
 
-### Phase Management
+### Initiative Management
 
-**Which phase an issue belongs to is defined by the Linear hierarchy** — the `i{N}.` initiative (phase) and `P{N}.` project (sub-phase) it sits under, ordered by name prefix. `pk next`/`pk status` resolve the current phase live from that hierarchy (lowest non-`Completed` `i{N}` initiative). `/roadmap-create` authors the hierarchy; `/phase-plan` advances it. The workflow states below track *pipeline position within* the current phase, not phase membership.
+**Which initiative an issue belongs to is defined by the Linear hierarchy** — the `i{N}.` initiative (initiative) and `P{N}.` project (sub-phase) it sits under, ordered by name prefix. `pk next`/`pk status` resolve the current initiative live from that hierarchy (lowest non-`Completed` `i{N}` initiative). `/roadmap-create` authors the hierarchy; `/phase-plan` advances it. The workflow states below track *pipeline position within* the current initiative, not initiative membership.
 
-Within the active phase, the backlog is ordered by **pipeline proximity** (furthest out → closest to execution):
+Within the active initiative, the backlog is ordered by **pipeline proximity** (furthest out → closest to execution):
 
 ```
-Ideas → Future Phases → On Deck → Needs Spec
+Ideas → Future Initiatives → On Deck → Needs Spec
 ```
 
-- **In-flight (current phase)** = issues in Needs Spec + Specced + Approved + Building + UAT + any In `<Env>` state
-- **Queued (next phase)** = issues in On Deck
-- **Future** = issues in Future Phases
+- **In-flight (current initiative)** = issues in Needs Spec + Specced + Approved + Building + UAT + any In `<Env>` state
+- **Queued (next initiative)** = issues in On Deck
+- **Future** = issues in Future Initiatives
 - **Someday** = issues in Ideas
 
-When the current phase ships, promote On Deck → Needs Spec and refill On Deck from Future Phases.
+When the current initiative ships, promote On Deck → Needs Spec and refill On Deck from Future Initiatives.
 
 ---
 
@@ -199,10 +199,10 @@ When the current phase ships, promote On Deck → Needs Spec and refill On Deck 
 
 - **No sub-issues in Linear.** Task decomposition lives in the execution plan (`.pk-work/<ID>-PLAN.md`) only. Linear stays clean — one Issue per feature.
 - **Projects (`I{N}.P{N}.`) don't overlap.** Each issue lives in exactly one sub-phase project at a time.
-- **Milestones = Work Packages (optional).** When used, a milestone is an intra-project batch; an issue belongs to at most one. Orthogonal to the phase surface — skip it entirely when not useful.
-- **Tier labels are redundant with phase initiatives** — intentional. Labels persist after phases complete.
+- **Milestones = Work Packages (optional).** When used, a milestone is an intra-project batch; an issue belongs to at most one. Orthogonal to the Initiative surface — skip it entirely when not useful.
+- **Tier labels are redundant with initiatives** — intentional. Labels persist after initiatives complete.
 - **Urgent priority is reserved** for hotfixes and production emergencies only.
-- **Execution trigger:** phase execution triggers when a batch of related features in a Work Package reach "Building" — not when individual features are approved.
+- **Execution trigger:** initiative execution triggers when a batch of related features in a Work Package reach "Building" — not when individual features are approved.
 
 ### Ticket ID Convention
 
@@ -318,10 +318,10 @@ Key implementation details, architecture decisions, or constraints.
 
 ## Key IDs
 
-The **Linear hierarchy itself is the source of truth** for the roadmap's phase order (Initiative `i{N}.` / Project `P{N}.`, ordered by name prefix) — there is no committed phase file to keep in sync. Skills resolve initiatives and projects live by their name prefixes.
+The **Linear hierarchy itself is the source of truth** for the roadmap's initiative order (Initiative `i{N}.` / Project `P{N}.`, ordered by name prefix) — there is no committed phase file to keep in sync. Skills resolve initiatives and projects live by their name prefixes.
 
 Linear IDs that skills consume directly:
-1. `method.config.md` — team ID and state IDs for skill consumption (see the § Phase Surface contract).
+1. `method.config.md` — team ID and state IDs for skill consumption (see the § Initiative Surface contract).
 
 The legacy `.vbw-planning/linear-map.json` is **retired**: no skill writes it, and it is no longer the ID map. `bin/pk` reads it only as a read-only fallback for un-migrated projects.
 

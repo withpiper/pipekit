@@ -57,7 +57,7 @@ Do NOT inline the exploration into the main session even if you think "I can jus
    - What patterns does the codebase already use for similar features?
    - What database tables, APIs, or UI components are involved?
    - Are there any obvious constraints or blockers?
-2. Identify the issue's **phase context** from Linear: which `i{N}.` initiative (phase) and `I{N}.P{N}.` project (sub-phase) its Linear project belongs to. Derive it live (the issue's Linear project, or `pk next`) — there is no `linear-map.json` or `PHASES.md` to read. This anchors the spec to the right phase without guessing.
+2. Identify the issue's **initiative context** from Linear: which `i{N}.` initiative and `I{N}.P{N}.` project its Linear project belongs to. Derive it live (the issue's Linear project, or `pk next`) — there is no `linear-map.json` or `PHASES.md` to read. This anchors the spec to the right initiative without guessing.
 
 ### Phase 3 — Draft Light Spec
 
@@ -294,7 +294,7 @@ Same as `/brainstorm`, but with planning implications. Phase 3.6 maps these to `
 | **Trivial** | Single-step change, no decomposition. Often a typo/copy/rename. | `tier:quick` |
 | **Low (~2-4h)** | `/work` plans inline — spec is sufficient for `/linear-todo-runner` to pick up directly if AC section is complete. | `tier:quick` |
 | **Medium (~6-10h)** | Benefits from a single planning pass. The light spec provides enough for `/work` to generate a task DAG. | `tier:standard` |
-| **High (~12-20h+)** | Likely a larger task DAG across a phase. The light spec seeds `/work`'s `--deep` parallel-grounding decomposition. | `tier:heavy` |
+| **High (~12-20h+)** | Likely a larger task DAG across an initiative. The light spec seeds `/work`'s `--deep` parallel-grounding decomposition. | `tier:heavy` |
 | **Very High / Critical** | Cross-phase, cross-team, or migrates load-bearing infrastructure. Always heavy. | `tier:heavy` |
 
 The auto-derived tier feeds into:
@@ -340,6 +340,6 @@ After the spec is drafted and posted to Linear, emit an inline `➜ Next:` line 
 ## Related Skills
 
 - `/brainstorm` — lighter: feasibility-only, no structured spec
-- `/sync-linear` — legacy: reconciles `.vbw-planning/` files ↔ Linear (un-migrated projects only; phase surface is Linear-native as of v4.1.0)
+- `/sync-linear` — legacy: reconciles `.vbw-planning/` files ↔ Linear (un-migrated projects only; initiative surface is Linear-native as of v4.1.0)
 - `/linear-todo-runner` — executes specced issues in parallel (requires AC section)
 - `/spec-validator` — validates full Strategy docs (heavier than light specs)

@@ -1,11 +1,11 @@
 ---
 name: roadmap-create
-description: Build a staged roadmap from strategy docs and author it directly into Linear as the native phase surface — Initiatives (i{N}. phases), Projects (P{N}. sub-phases), and Issues. Use as Stage 0 step 6 after /strategy-create, when bootstrapping the Linear hierarchy for a new project.
+description: Build a staged roadmap from strategy docs and author it directly into Linear as the native initiative surface — Initiatives (i{N}. initiatives), Projects (P{N}. sub-phases), and Issues. Use as Stage 0 step 6 after /strategy-create, when bootstrapping the Linear hierarchy for a new project.
 ---
 
 # Roadmap Create Skill
 
-You are a roadmap builder. Your job is to extract requirements from strategy docs and the project definition and author them into **Linear** as the native phase surface. Read `method.config.md` for project context — especially **§ Phase Surface**, which defines the naming convention this skill must apply.
+You are a roadmap builder. Your job is to extract requirements from strategy docs and the project definition and author them into **Linear** as the native initiative surface. Read `method.config.md` for project context — especially **§ Initiative Surface**, which defines the naming convention this skill must apply.
 
 ## Triggers
 
@@ -17,10 +17,10 @@ You are a roadmap builder. Your job is to extract requirements from strategy doc
 
 - `project-definition.md` must exist (output of `/define`)
 - `Strategy/` docs should exist (output of `/strategy-create`)
-- `method.config.md` should exist with Linear configuration (and `§ Phase Surface`)
+- `method.config.md` should exist with Linear configuration (and `§ Initiative Surface`)
 - Linear MCP server must be connected (`mcp__linear-server__*` tools available)
 
-> **No `/vbw:init` step.** The phase surface is now Linear itself — there is no `.vbw-planning/`
+> **No `/vbw:init` step.** The initiative surface is now Linear itself — there is no `.vbw-planning/`
 > scaffold, `PHASES.md`, or `linear-map.json` to create. The Linear Initiative→Project→Issue
 > hierarchy *is* the roadmap. (Existing projects with legacy `.vbw-planning/` files keep working via
 > bin/pk's fallback; this skill no longer writes them.)
@@ -32,11 +32,11 @@ Every requirement traces to a strategy doc section; every Linear issue traces to
 output is a **live, ordered Linear hierarchy** that `pk next` / `pk status` read directly — no mirror
 file to drift.
 
-## The phase surface (read `method.config.md § Phase Surface` first)
+## The initiative surface (read `method.config.md § Initiative Surface` first)
 
 | Roadmap concept | Linear construct | Naming | Ordering |
 |-----------------|-----------------|--------|----------|
-| Stage / phase | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | by `{N}`, numeric |
+| Stage / initiative | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | by `{N}`, numeric |
 | Feature cluster / sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Search`) | by the `P{N}` number, numeric, within its initiative |
 | Requirement | **Issue** | (Linear identifier) | priority / state |
 | Work Package (optional) | **Milestone** | (free) | orthogonal grouping inside a project |
@@ -44,11 +44,11 @@ file to drift.
 - **The `i{N}.` / `I{N}.P{N}.` prefixes are mandatory** — they carry order *and* mark which initiatives are
   delivery phases. Linear's `sortOrder` is NOT used (it's an unreliable drag-rank).
 - **Projects carry their initiative number** (v4.5.0+): a project under `i1.` is named `I1.P2. label`, not
-  bare `P2.` — initiatives sit above projects in Linear and get buried, so the phase reads at the project
+  bare `P2.` — initiatives sit above projects in Linear and get buried, so the initiative reads at the project
   level (the unit you navigate). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}`
   number still sets sub-phase order. **Author the `I{N}.P{N}.` form.**
 - Number phases and sub-phases by execution order. Leave gaps if useful (`i1, i2, i3`).
-- Strategic / north-star initiatives that aren't delivery phases: **do not** give them an `i{N}.`
+- Strategic / north-star initiatives that aren't delivery initiatives: **do not** give them an `i{N}.`
   prefix — they'll be correctly ignored by the roadmap walk.
 
 ## Execution Steps
@@ -90,7 +90,7 @@ Optionally also write a human-readable narrative `ROADMAP.md` at the project roo
 doctrine in `method.md` — a legitimate *optional* artifact). **Do not** write `linear-map.json` or
 `.vbw-planning/PHASES.md` — those are retired; the Linear hierarchy is the source of truth. Tell the user:
 
-_"Proposed {K} phases (i1–i{K}) with {M} sub-phases (projects) and {N} requirements. Approve before I
+_"Proposed {K} initiatives (i1–i{K}) with {M} sub-phases (projects) and {N} requirements. Approve before I
 create them in Linear? (y/n/edit)"_
 
 ### Phase 3 — Author the hierarchy in Linear
@@ -99,7 +99,7 @@ create them in Linear? (y/n/edit)"_
 
 On approval, create top-down. Apply the naming convention exactly.
 
-1. **Initiatives** (the phases) — one per stage, named `i{N}. label`:
+1. **Initiatives** — one per stage, named `i{N}. label`:
    - If your MCP exposes an initiative-create tool (e.g. `mcp__linear-server__linear_createInitiative`),
      use it. Otherwise create them in the Linear UI (Settings → Initiatives) with the `i{N}.` prefix and
      tell the user exactly which to make. Set initiative status: current stage → `Active`, later stages →
@@ -120,7 +120,7 @@ On approval, create top-down. Apply the naming convention exactly.
 
 ### Phase 4 — Verify the surface
 
-Confirm the native phase surface is well-formed (this is what `pk next` will read):
+Confirm the native initiative surface is well-formed (this is what `pk next` will read):
 
 1. Every delivery initiative is named `i{N}.` with a unique, ordered `{N}`.
 2. Every project is named `I{N}.P{N}.` — its initiative number, then a unique `P{N}` within that initiative (e.g. `I1.P1.`, `I1.P2.`).
@@ -167,7 +167,7 @@ Next steps:
 
 ## Common Drifts to Avoid
 
-- **Unprefixed delivery initiatives** → if it's a phase, it gets an `i{N}.`; if it's a strategic theme, it doesn't. Mixing them up makes `pk next` either skip a phase or surface a non-phase.
+- **Unprefixed delivery initiatives** → if it's an initiative, it gets an `i{N}.`; if it's a strategic theme, it doesn't. Mixing them up makes `pk next` either skip an initiative or surface a non-initiative.
 - **Relying on Linear `sortOrder`** → never. Order is the prefix number, parsed numerically. Drag-order in the UI is cosmetic.
 - **Vague requirements** → too vague to be an issue = too vague for the roadmap. Push back to strategy docs.
 - **Flat issue lists** → create the full Initiative→Project hierarchy so `pk next`/`pk status` can scope.
@@ -182,6 +182,6 @@ from Linear.
 
 - `/define` — previous step: creates the project definition
 - `/strategy-create` — creates the strategy docs this skill reads
-- `/phase-plan` — next step: confirm the current phase, promote its first issues to Needs Spec
+- `/phase-plan` — next step: confirm the current initiative, promote its first issues to Needs Spec
 - `/roadmap-review` — validates the Linear hierarchy after creation
-- `method.config.md § Phase Surface` — the naming-convention contract this skill applies
+- `method.config.md § Initiative Surface` — the naming-convention contract this skill applies

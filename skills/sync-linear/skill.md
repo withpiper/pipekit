@@ -1,27 +1,27 @@
 ---
 name: sync-linear
-description: Reconcile strategy-doc / requirement drift against the Linear board's i{N}./I{N}.P{N}. phase hierarchy. Use when issues are mis-placed across projects, or initiatives/projects drift from the naming convention (projects are named I{N}.P{N}.; bare P{N}. is legacy-valid). Linear is the source of truth; there is no PHASES.md/linear-map.json to sync.
+description: Reconcile strategy-doc / requirement drift against the Linear board's i{N}./I{N}.P{N}. initiative hierarchy. Use when issues are mis-placed across projects, or initiatives/projects drift from the naming convention (projects are named I{N}.P{N}.; bare P{N}. is legacy-valid). Linear is the source of truth; there is no PHASES.md/linear-map.json to sync.
 ---
 
 # Sync Linear Skill
 
-**v4.1.0** — Last updated: 2026-06-21 *(Linear-native phase surface — no PHASES.md/linear-map.json to sync. The phase order and Initiative→Project→Issue hierarchy live entirely in Linear; this skill reconciles strategy-doc and requirement drift against that board, not against committed phase files.)*
+**v4.1.0** — Last updated: 2026-06-21 *(Linear-native initiative surface — no PHASES.md/linear-map.json to sync. The initiative order and Initiative→Project→Issue hierarchy live entirely in Linear; this skill reconciles strategy-doc and requirement drift against that board, not against committed phase files.)*
 
-You are a Linear hierarchy reconciliation coordinator. Your job is to keep the Linear board's phase hierarchy coherent with the project's strategy docs and requirements. Read `method.config.md` for project context — specifically `## Phase Surface`, which defines the canonical model.
+You are a Linear hierarchy reconciliation coordinator. Your job is to keep the Linear board's initiative hierarchy coherent with the project's strategy docs and requirements. Read `method.config.md` for project context — specifically `## Initiative Surface`, which defines the canonical model.
 
-**Linear is the source of truth for the phase surface.** There is no planning-file mirror to push to or pull from. Phase order is encoded directly in Linear object names, not in a file and not in Linear's `sortOrder`.
+**Linear is the source of truth for the initiative surface.** There is no planning-file mirror to push to or pull from. Initiative order is encoded directly in Linear object names, not in a file and not in Linear's `sortOrder`.
 
-## Canonical Model (Phase Surface)
+## Canonical Model (Initiative Surface)
 
-Per `method.config.md` § Phase Surface:
+Per `method.config.md` § Initiative Surface:
 
 | Linear object | Role | Order |
 |---------------|------|-------|
-| **Initiative** `i{N}. label` | ordered **PHASE** | integer `{N}` in the name prefix |
+| **Initiative** `i{N}. label` | ordered **INITIATIVE** | integer `{N}` in the name prefix |
 | **Project** `I{N}.P{N}. label` | ordered **SUB-PHASE** | the `P{N}` integer in the name prefix |
 | **Issue** | individual requirement/task | lives inside the right `I{N}.P{N}.` project |
 
-Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / the `P{N}` number). Linear's `sortOrder` is **never** used to determine phase order — always parse the name prefix. **Projects carry their initiative number** (v4.5.0+: `I1.P2. label`) so the phase reads at the project level; legacy bare `P{N}.` is still valid (`bin/pk` accepts both) — treat a bare `P{N}.` as a rename candidate, not an error.
+Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / the `P{N}` number). Linear's `sortOrder` is **never** used to determine initiative order — always parse the name prefix. **Projects carry their initiative number** (v4.5.0+: `I1.P2. label`) so the initiative reads at the project level; legacy bare `P{N}.` is still valid (`bin/pk` accepts both) — treat a bare `P{N}.` as a rename candidate, not an error.
 
 **Retired surfaces** — this skill never reads or writes them; they exist only as a `bin/pk` fallback for un-migrated projects:
 - `.vbw-planning/PHASES.md`
@@ -40,7 +40,7 @@ This skill is invoked when the user says:
 
 ## What This Skill Reconciles
 
-It detects and proposes fixes for **drift between the project's strategy docs / requirements and the Linear board's phase hierarchy**:
+It detects and proposes fixes for **drift between the project's strategy docs / requirements and the Linear board's initiative hierarchy**:
 
 1. **Naming-convention drift** — initiatives not named `i{N}. label`, projects not named `I{N}.P{N}. label` (a bare `P{N}.` is legacy-valid but a rename candidate; flag it as such, not as an error), duplicate or gapped prefixes (`i1, i3` with no `i2`), an `I{N}.` prefix that disagrees with the project's parent initiative, or out-of-order numbering.
 2. **Placement drift** — issues sitting in the wrong `I{N}.P{N}.` project (or no project at all) given what the strategy docs say belongs in that sub-phase.
@@ -60,7 +60,7 @@ It does **not** reconcile a planning-file mirror — there is none. All reconcil
 
 To reconcile, build a live picture of the hierarchy from Linear (never from a map file):
 
-1. **List initiatives** via `mcp__linear-server__linear_getInitiatives` (or search) — these are the phases. Parse `i{N}.` from each name to get phase order.
+1. **List initiatives** via `mcp__linear-server__linear_getInitiatives` (or search) — these are the initiatives. Parse `i{N}.` from each name to get initiative order.
 2. **List projects** under each initiative via `mcp__linear-server__linear_getProjects` — these are the sub-phases. Parse `P{N}.` from each name to get sub-phase order.
 3. **List issues** in each project via `mcp__linear-server__linear_searchIssues` — these are the requirements/tasks.
 4. **Read the strategy docs** named in `method.config.md` — these define what *should* exist and where. This is the requirement side of the reconciliation.
@@ -71,7 +71,7 @@ The Linear team ID and workflow state IDs come from `method.config.md` (or are r
 
 ### Check Mode (default, read-only)
 
-1. **Read** `method.config.md` § Phase Surface for the convention and the Linear team/state references.
+1. **Read** `method.config.md` § Initiative Surface for the convention and the Linear team/state references.
 2. **Read** the strategy docs listed in `method.config.md`.
 3. **Build the live hierarchy** from Linear (initiatives → projects → issues) per *Reading the Board* above.
 4. **Detect naming-convention drift:**
@@ -208,7 +208,7 @@ In **check** mode the Action column is advisory only. In **fix** mode each row i
 
 ## Important Notes
 
-- **Linear is the phase surface.** Parse phase/sub-phase order from the `i{N}.` / `P{N}.` name prefix — never from `sortOrder`, never from a planning file.
+- **Linear is the initiative surface.** Parse initiative/sub-phase order from the `i{N}.` / `P{N}.` name prefix — never from `sortOrder`, never from a planning file.
 - **`linear-map.json` and `PHASES.md` are retired** — this skill never reads or writes them. Resolve Linear IDs from `method.config.md` or live MCP queries.
 - **`ROADMAP.md`, if present, is optional legacy narrative** — read it for human context only; it is not a reconciliation source or target.
 - **Initiative/project descriptions** use Markdown (`## Phase`, `### Scope`, `### Success Criteria`); normalize formatting when reading edits made in Linear's rich-text editor.

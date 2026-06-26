@@ -120,7 +120,7 @@ For each artifact in the foundation contract (see `method.md` § Foundation Cont
 | Project definition | `project-definition.md` | Run `/define` to retrofit |
 | Strategy docs | `Strategy/*.md` (matching `method.config.md` manifest) | Run `/strategy-create` to retrofit, or wait for `/strategy-from-code` in v1.4.0 |
 | Project config | `method.config.md` | Run `/startup --mode=brownfield` (it populates config from existing project state) |
-| Phase hierarchy | Linear `i{N}.` initiatives with `I{N}.P{N}.` projects | Run `/roadmap-create` (authors the `i{N}.`/`I{N}.P{N}.` hierarchy directly in Linear) |
+| Initiative hierarchy | Linear `i{N}.` initiatives with `I{N}.P{N}.` projects | Run `/roadmap-create` (authors the `i{N}.`/`I{N}.P{N}.` hierarchy directly in Linear) |
 | Phase plan | Current phase derivable live from Linear (`pk next` / `pk status`) | Run `/phase-plan` |
 
 For the Strategy docs check, read `method.config.md` § Strategy Docs to get the manifest, then verify each listed file exists. If `method.config.md` itself is missing, treat the manifest check as deferred — flag the config gap as the blocker.
@@ -132,14 +132,14 @@ For the Strategy docs check, read `method.config.md` § Strategy Docs to get the
 ```
 Foundation OK.
 
-  Current phase: {phase name derived live from Linear}
-  Issues in flight: {N in the current phase's projects}
+  Current initiative: {initiative name derived live from Linear}
+  Issues in flight: {N in the current initiative's projects}
 
-➜ Next: pk next  (phase-aware: groups Linear by status with per-group hints)
-   or:   /light-spec PROJ-XXX  (begin speccing an issue from the current phase)
+➜ Next: pk next  (initiative-aware: groups Linear by status with per-group hints)
+   or:   /light-spec PROJ-XXX  (begin speccing an issue from the current initiative)
 ```
 
-Derive the current phase live from Linear (`i{N}.` initiative → `P{N}.` project, ordered by the integer in each name prefix) — e.g. via `pk next` — to extract the current phase name and issue list. If multiple issues are in flight (status In Progress / Building), recommend `pk status` instead so the user sees the full board.
+Derive the current initiative live from Linear (`i{N}.` initiative → `P{N}.` project, ordered by the integer in each name prefix) — e.g. via `pk next` — to extract the current initiative name and issue list. If multiple issues are in flight (status In Progress / Building), recommend `pk status` instead so the user sees the full board.
 
 **If anything is missing:**
 
@@ -215,7 +215,7 @@ For **inherited** mode, the tracker is read-only — the foundation check produc
 
 The steps below describe the **greenfield** flow in full. Brownfield skips Steps 1-2 (and Steps 3-4, since the codebase already exists) and adapts the others as noted in [Mode Routing](#mode-routing) above. Inherited mode does not execute these steps — it runs the Foundation Check and exits.
 
-Stage 0 chain (greenfield): `/concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan`. `/vbw:init` is **not** part of this chain — the Linear `i{N}.`/`P{N}.` hierarchy that `/roadmap-create` authors is the phase surface; there is no `.vbw-planning/` scaffold step.
+Stage 0 chain (greenfield): `/concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan`. `/vbw:init` is **not** part of this chain — the Linear `i{N}.`/`P{N}.` hierarchy that `/roadmap-create` authors is the initiative surface; there is no `.vbw-planning/` scaffold step.
 
 Each step checks if its output already exists and offers to skip — making `/startup` resumable. If you stop after Step 4, re-running picks up at Step 5.
 
@@ -561,13 +561,13 @@ Fill in `method.config.md` with any remaining project-specific values.
 
 ### Step 7 — Roadmap
 
-**Check:** Does the Linear board already have an `i{N}.`/`P{N}.` phase hierarchy?
+**Check:** Does the Linear board already have an `i{N}.`/`P{N}.` initiative hierarchy?
 
 Two possible states:
-1. **No phase hierarchy yet** (most common — fresh project) → Run `/roadmap-create`. It authors the Linear `i{N}.` initiative / `I{N}.P{N}.` project hierarchy directly from the strategy docs and seeds the issues underneath. This is the expected flow for new projects.
+1. **No initiative hierarchy yet** (most common — fresh project) → Run `/roadmap-create`. It authors the Linear `i{N}.` initiative / `I{N}.P{N}.` project hierarchy directly from the strategy docs and seeds the issues underneath. This is the expected flow for new projects.
 2. **Already populated by `/roadmap-create`** (re-running `/startup`) → Ask: _"Roadmap appears fully populated. Skip, or redo?"_
 
-To tell empty vs. populated: check whether the Linear board has any `i{N}.` initiatives with `P{N}.` projects and Linear-traced issues underneath. An optional legacy `.vbw-planning/ROADMAP.md` may exist from a prior version, but the Linear hierarchy is the authoritative phase surface.
+To tell empty vs. populated: check whether the Linear board has any `i{N}.` initiatives with `P{N}.` projects and Linear-traced issues underneath. An optional legacy `.vbw-planning/ROADMAP.md` may exist from a prior version, but the Linear hierarchy is the authoritative initiative surface.
 
 The Pipekit flow is:
 
@@ -575,7 +575,7 @@ The Pipekit flow is:
 /roadmap-create (authors the Linear i{N}./P{N}. hierarchy + seeds issues) → /phase-plan → /light-spec → pk branch → /work (native-on-Workflow)
 ```
 
-**Output:** Linear board seeded with the `i{N}.` initiative / `P{N}.` project hierarchy and the issues underneath. The phase order lives in Linear (the integer prefix in each `i{N}.`/`P{N}.` name) — `pk next` / `pk status` derive the current phase live from it.
+**Output:** Linear board seeded with the `i{N}.` initiative / `P{N}.` project hierarchy and the issues underneath. The initiative order lives in Linear (the integer prefix in each `i{N}.`/`P{N}.` name) — `pk next` / `pk status` derive the current initiative live from it.
 
 ### Step 8 — Project-Specific Skills
 
@@ -653,7 +653,7 @@ Run `/roadmap-review` to validate:
 - Concept brief exists
 - Project definition exists
 - Strategy docs match config
-- Linear `i{N}.`/`P{N}.` phase hierarchy populated
+- Linear `i{N}.`/`P{N}.` initiative hierarchy populated
 - Linear board seeded (initiatives, projects, milestones, issues)
 - Dependencies correctly set
 - All method.config.md fields populated (no TBDs)
@@ -665,11 +665,11 @@ If any check fails, diagnose and fix before proceeding to Step 11. Do not move i
 
 ### Step 11 — Phase Plan
 
-**Check:** Is a current phase already derivable live from Linear (`pk next` / `pk status` resolve a phase)?
+**Check:** Is a current initiative already derivable live from Linear (`pk next` / `pk status` resolve an initiative)?
 - If yes: _"Phase already planned. Skip or replan?"_
 - If no: Run `/phase-plan`
 
-`/phase-plan` selects 3-8 issues for the first execution phase and promotes them from "On Deck" → "Needs Spec" in Linear. It derives/advances phase state via Linear (`i{N}.` initiative → `P{N}.` project). This is the point where execution begins — the first issues become actionable.
+`/phase-plan` selects 3-8 issues for the first execution initiative and promotes them from "On Deck" → "Needs Spec" in Linear. It derives/advances phase state via Linear (`i{N}.` initiative → `P{N}.` project). This is the point where execution begins — the first issues become actionable.
 
 **Output:** First phase defined, issues in "Needs Spec", ready for `/light-spec`
 
