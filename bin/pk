@@ -9,6 +9,7 @@
 # Subcommands:
 #   pk next                 — what should I do now? (Linear + git → next command)
 #   pk status               — quick triage of in-flight + UAT + Approved
+#   pk portfolio            — cross-initiative map: all i<N>. + active runway
 #   pk branch <ID>          — create worktree+branch, Linear → In Progress
 #   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
 #   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
@@ -30,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.9.0"
+PK_VERSION="4.10.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -409,6 +410,75 @@ pk_first_ready_id() {
   '
 }
 
+# Render an annotated array (stdin) as the pk portfolio "runway": issues grouped
+# by their P<N>. sub-phase (project), groups ordered by the P<N> number. Within a
+# project, issues sort PRIORITY-FIRST (most important on top). Blocked issues are
+# NOT sunk — instead each blocker is lifted to rank just above the most urgent
+# issue it blocks, so a high-priority blocked item pulls its blocker up next to
+# it (lifecycle breaks ties). Each project header carries its active count and an
+# "⚠ Nd idle" flag when its newest issue .updatedAt is older than $staleDays.
+# Columns (id, title) are width-aligned; long titles clip at 60.
+# Args: $1 = now (epoch seconds, default 0 → idle never flags), $2 = staleDays
+# (default 99999). Pure (given now/staleDays) — smoke-covered.
+pk_runway_render() {
+  jq -r --argjson now "${1:-0}" --argjson staleDays "${2:-99999}" '
+    def rank: if (.priority // 0) == 0 then 5 else .priority end;
+    def life:
+      (.state.name // "") as $s
+      | if   $s == "In Progress" then 5
+        elif $s == "Building"    then 5
+        elif $s == "UAT"         then 4
+        elif $s == "Approved"    then 3
+        elif $s == "Needs Spec"  then 2
+        else 1 end;
+    def action:
+      if (.blocked // false)
+      then "⛔ blocked by \(.blockerIds | join(", "))"
+      else (.state.name // "") as $s
+        | if   $s == "Needs Spec"  then "needs spec → /light-spec"
+          elif $s == "Approved"    then "spec ready → pk branch \(.identifier)"
+          elif $s == "In Progress" then "in progress → /verify"
+          elif $s == "Building"    then "building → /verify"
+          elif $s == "UAT"         then "in UAT → pk done \(.identifier)"
+          else $s end
+      end;
+    def pad($s; $w): ($w - ($s|length)) as $n | $s + (if $n > 0 then (" " * $n) else "" end);
+    def clip($s; $w): if (($s|length) > $w) then (($s[0:($w-1)]) + "…") else $s end;
+    def pnum:
+      (.project.name // "") as $p
+      | if ($p | test("[pP][0-9]+")) then ($p | capture("[pP](?<n>[0-9]+)") | .n | tonumber) else 9999 end;
+    def inum:
+      (.project.name // "") as $p
+      | if ($p | test("[iI][0-9]+\\.")) then ($p | capture("[iI](?<n>[0-9]+)") | .n | tonumber) else 9999 end;
+    # Days since the most recent .updatedAt across a project group ($. = array).
+    def idledays:
+      ( [ .[] | (.updatedAt // null) | select(. != null)
+          | (try (.[0:19] + "Z" | fromdateiso8601) catch null) | select(. != null) ] | max ) as $mu
+      | if $mu == null then null else (($now - $mu) / 86400 | floor) end;
+
+    . as $all
+    # A blocker inherits the urgency of what it blocks: for each blocked issue X,
+    # its blocker B gets a candidate rank of (rank(X) - 0.5) so B sorts just above
+    # X. $lift maps blocker-id → the best (lowest) such candidate.
+    | ( reduce ($all[] | . as $x | ($x.blockerIds // [])[] | {b: ., r: (($x|rank) - 0.5)}) as $e
+          ({}; .[$e.b] = (if (.[$e.b] == null) then $e.r else ([.[$e.b], $e.r] | min) end)) ) as $lift
+    | ($all | map(. + { erank: ([ (.|rank), ($lift[.identifier] // 999) ] | min) })) as $items
+    | (([ $items[] | (.identifier|length) ] | max) // 0) as $idW
+    | (([ $items[] | (.title|length) ] | max) // 0) as $rawT
+    | (if $rawT > 60 then 60 else $rawT end) as $titleW
+    | [ ($items | group_by(.project.name // "(no project)"))[]
+        | { proj: (.[0].project.name // "(no project)"),
+            inn:  (.[0] | inum),
+            pn:   (.[0] | pnum),
+            count: length,
+            idle:  idledays,
+            items: sort_by([.erank, (10 - life)]) } ]
+    | sort_by([.inn, .pn, .proj])[]
+    | ( "  \(.proj)  (\(.count))" + (if (.idle != null and .idle >= $staleDays) then "  ⚠ \(.idle)d idle" else "" end) ),
+      ( .items[] | "    " + pad(.identifier; $idW) + "  " + pad(clip(.title; $titleW); $titleW) + " · " + action )
+  '
+}
+
 # Get issues in a state for the current team, scoped to a Linear project ID.
 # Same shape as pk_linear_issues_in_state but adds project filter. Empty
 # project_id falls back to the unscoped query.
@@ -424,7 +494,7 @@ pk_linear_issues_in_state_project() {
     pk_linear_issues_in_state "$state"
     return $?
   fi
-  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
+  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority updatedAt state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
   # Most-important-first (orderBy: updatedAt is the API-side tiebreak; the jq
   # sort in pk_issues_priority_sort is the importance ranking on top of it).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" --arg project "$project_id" '{team:$team, state:$state, project:$project}')" \
@@ -440,7 +510,7 @@ pk_linear_issues_in_state() {
     echo "ERROR: Team name not set in method.config.md" >&2
     return 1
   fi
-  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
+  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority updatedAt state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
   # Most-important-first (see pk_linear_issues_in_state_project for the rationale).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" '{team:$team, state:$state}')" \
     | jq -r '.data.issues.nodes // []' | pk_issues_priority_sort
@@ -1099,9 +1169,9 @@ cmd_next() {
 
   if [ -n "$phase_name" ] && [ -n "$phase_project" ]; then
     if [ "$phase_src" = "native" ]; then
-      echo "On $current — Phase: $phase_name (Linear)"
+      echo "On $current — Initiative: $phase_name (Linear)"
     else
-      echo "On $current — Phase: $phase_name"
+      echo "On $current — Initiative: $phase_name"
     fi
     echo ""
     local in_progress approved needs_spec ip_count ap_count ns_count
@@ -1146,9 +1216,9 @@ cmd_next() {
       fi
     fi
     if [ "$ip_count" = "0" ] && [ "$ap_count" = "0" ] && [ "$ns_count" = "0" ]; then
-      echo "Phase $phase_name has no In Progress / Approved / Needs Spec issues."
+      echo "Initiative $phase_name has no In Progress / Approved / Needs Spec issues."
       if [ "$phase_src" = "native" ]; then
-        echo "Check  pk status  for the full board, or advance the phase in Linear (initiative/project state)."
+        echo "Check  pk status  for the full board, or advance the initiative/project state in Linear."
       else
         echo "Check  pk status  for the full board, or update PHASES.md to the next phase."
       fi
@@ -1160,7 +1230,7 @@ cmd_next() {
     global_count=$(echo "$global_approved" | jq 'length')
     outside_count=$((global_count - ap_count))
     if [ "$outside_count" -gt 0 ]; then
-      echo "Other phases: $outside_count Approved issue(s) outside current phase. Use  pk status  to see all."
+      echo "Other initiatives: $outside_count Approved issue(s) outside the current initiative. Use  pk status  to see all."
     fi
     return 0
   fi
@@ -1252,6 +1322,109 @@ cmd_status() {
   local prefix
   prefix=$(pk_worktree_prefix)
   git worktree list | grep -F "$prefix" || echo "  (none)"
+}
+
+# pk portfolio — the cross-phase map (one altitude above pk status). Lists every
+# i<N>. phase with a you-are-here marker, then lays out the current phase's
+# ordered runway (In Progress / UAT / Approved / Needs Spec) with a per-issue
+# action tag and a single suggested next move. Read-only; one Linear fetch for
+# the phase map, reused for the current-phase context (no double query).
+cmd_portfolio() {
+  local team
+  team=$(pk_team_name)
+  if [ -z "$team" ]; then
+    echo "ERROR: Team name not set in method.config.md" >&2
+    return 1
+  fi
+  echo "── Portfolio: $team ──"
+
+  # Single initiatives fetch drives both the phase map and the native phase
+  # context (current i<N. initiative name + its live P<N>. project id).
+  local init_json roadmap phase_name phase_project nat
+  init_json=$(pk_linear_initiatives_json)
+  roadmap=$(pk_native_roadmap_summary "$init_json")
+  nat=$(pk_native_phase_context "$init_json")
+  phase_name=$(printf '%s' "$nat" | cut -f1)
+  phase_project=$(printf '%s' "$nat" | cut -f2)
+  # Legacy/file projects (no i<N>. initiatives): fall back to pk_phase_context.
+  if [ -z "$phase_project" ]; then
+    local pc
+    pc=$(pk_phase_context)
+    phase_name=$(printf '%s' "$pc" | cut -f1)
+    phase_project=$(printf '%s' "$pc" | cut -f2)
+  fi
+
+  if [ -z "$roadmap" ] && [ -z "$phase_project" ]; then
+    echo ""
+    echo "No initiative map: no i<N>. initiatives in Linear (or no LINEAR_API_KEY)."
+    echo "Run  pk status  for the board, or name your delivery initiatives i1., i2., … to enable the map."
+    return 0
+  fi
+
+  # Phase map — mark every Active-status phase (the ones that feed the runway).
+  if [ -n "$roadmap" ]; then
+    echo ""
+    echo "Initiatives (i<N>. → current P<N>. project):"
+    printf '%s\n' "$roadmap" | while IFS= read -r line; do
+      case "$line" in
+        *"[Active]"*) printf '%s   ← active\n' "$line" ;;
+        *) printf '%s\n' "$line" ;;
+      esac
+    done
+  fi
+
+  # Runway — actionable issues (In Progress / UAT / Approved / Needs Spec) across
+  # ALL Active-status phases (you work several at once), grouped by sub-phase.
+  # "Active" = Linear initiative status == "active". Project-scoped queries (one
+  # per project × state) avoid the team-wide first:25 truncation. Falls back to
+  # the single derived current phase when nothing is marked Active.
+  local proj_ids="" runway_label="active initiatives"
+  proj_ids=$(printf '%s' "$init_json" | jq -r '
+    (.data.initiatives.nodes // [])[]
+    | select(.name | test("^[iI][0-9]+\\."))
+    | select((.status // "") | ascii_downcase == "active")
+    | (.projects.nodes // [])[]
+    | select(.name | test("^([iI][0-9]+\\.)?[pP][0-9]+\\."))
+    | select(.state != "completed" and .state != "canceled")
+    | .id' 2>/dev/null)
+  # Fallback: the single derived current phase (no initiative marked Active, or
+  # legacy/file path).
+  if [ -z "$proj_ids" ] && [ -n "$phase_project" ]; then
+    proj_ids="$phase_project"
+    runway_label="${phase_name:-current phase}"
+  fi
+
+  local combined="[]" pid st chunk
+  for pid in $proj_ids; do
+    for st in "In Progress" "UAT" "Approved" "Needs Spec"; do
+      chunk=$(pk_linear_issues_in_state_project "$st" "$pid" 2>/dev/null || echo "[]")
+      combined=$(printf '%s\n%s\n' "$combined" "$chunk" | jq -s 'add' 2>/dev/null || printf '%s' "$combined")
+    done
+  done
+  combined=$(printf '%s' "$combined" | pk_issues_annotate_blocked 2>/dev/null || echo "[]")
+
+  local count now_epoch stale_days
+  count=$(printf '%s' "$combined" | jq 'length' 2>/dev/null || echo 0)
+  now_epoch=$(date +%s 2>/dev/null || echo 0)
+  stale_days=$(pk_config "Portfolio staleness days" "14")
+  case "$stale_days" in ''|*[!0-9]*) stale_days=14 ;; esac
+  echo ""
+  echo "Runway — ${runway_label} ($count):"
+  if [ "$count" -gt 0 ]; then
+    printf '%s' "$combined" | pk_runway_render "$now_epoch" "$stale_days"
+    echo ""
+    # One suggested move (mirrors pk next: top startable Approved, else Needs Spec).
+    local next_id ns_id
+    next_id=$(printf '%s' "$combined" | jq '[.[] | select(.state.name == "Approved")]' 2>/dev/null | pk_first_ready_id)
+    if [ -n "$next_id" ]; then
+      echo "Next:  pk branch $next_id"
+    else
+      ns_id=$(printf '%s' "$combined" | jq '[.[] | select(.state.name == "Needs Spec")]' 2>/dev/null | pk_first_ready_id)
+      [ -n "$ns_id" ] && echo "Next:  /light-spec $ns_id"
+    fi
+  else
+    echo "  (no actionable issues — set an initiative's Linear status to Active, or see pk status)"
+  fi
 }
 
 cmd_branch() {
@@ -2765,6 +2938,7 @@ pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
 Subcommands:
   pk next                         What should I do now?
   pk status                       Quick triage of the Linear board + worktrees
+  pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
   pk ship [--env=<env>] [--review] [--ready]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/.
   pk ready [<ID>]                 Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch.
@@ -3050,6 +3224,7 @@ main() {
   case "$sub" in
     next)     cmd_next "$@" ;;
     status)   cmd_status "$@" ;;
+    portfolio) cmd_portfolio "$@" ;;
     branch)   cmd_branch "$@" ;;
     ship)     cmd_ship "$@" ;;
     ready)    cmd_ready "$@" ;;

@@ -2,7 +2,7 @@
 
 **A structured way to ship software with AI — from idea to production, with a quality gate at every stage.**
 
-**v4.9.0** — Last updated: 2026-06-26. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
+**v4.10.0** — Last updated: 2026-06-26. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -48,8 +48,8 @@ The rest of this README (and the deeper docs) lean on a handful of terms. Here t
 |------|---------------|
 | **Executor** | The thing that actually writes code. In Pipekit this is **native-on-Workflow** — Claude Code's first-party orchestration primitive. `/work` plans a feature, then runs it on the executor: a task list, one atomic commit per task, each verified before it integrates. |
 | **The gates** | Independent checks the work must pass — `/verify`, `/security-gate`, `/prod-ready`, antagonistic PR review. This is where correctness is enforced, *not* inside the executor. |
-| **Linear** | The issue tracker Pipekit uses, for two jobs: cross-issue visibility, and the **phase surface**. |
-| **The phase surface** | How Pipekit reads "what's next" live from Linear. Initiatives named `i1.`, `i2.` are **phases**; projects under them named `I1.P1.`, `I1.P2.` are **sub-phases** that hold the issues. The number prefix sets the order. `pk next` derives the current phase from this hierarchy. |
+| **Linear** | The issue tracker Pipekit uses, for two jobs: cross-issue visibility, and reading the roadmap (below). |
+| **The roadmap (in Linear)** | Pipekit reads "what's next" live from Linear's own hierarchy — same words Linear uses. **Initiatives** named `i1.`, `i2.` are the ordered chunks of the roadmap; **Projects** under them (`I1.P1.`, `I1.P2.`) are the ordered sub-chunks that hold the **Issues**. The number prefix sets the order. `pk next` finds the current initiative; `pk portfolio` shows the whole map. |
 | **WIT** | A work item — a single Linear issue moving through the pipeline. |
 | **Worktree** | `pk branch <ID>` creates an isolated git worktree for each issue, so work on one feature never disturbs another. |
 | **Stage 0** | The one-time project bootstrap (idea → roadmap). |
@@ -68,7 +68,7 @@ Stage 0 is a *contract* — a set of artifacts the dev pipeline requires — not
 | Strategy | `/strategy-create` | `Strategy/` docs (including Design Direction) |
 | Setup | `/startup` | Repo, database, deploy, Linear workspace |
 | Roadmap | `/roadmap-create` | Linear `i{N}.` / `I{N}.P{N}.` hierarchy |
-| Phase plan | `/phase-plan` | First sub-phase's issues, queued in "Needs Spec" |
+| Phase plan | `/phase-plan` | First Project's issues, queued in "Needs Spec" |
 
 ### The daily loop (run per issue)
 
@@ -77,7 +77,7 @@ Stage 0 is a *contract* — a set of artifacts the dev pipeline requires — not
 | 1 | Spec | `/light-spec` | Write the feature spec (codebase-aware, an AI-to-AI contract) |
 | 2 | Agent review | `/light-spec-revise` | An independent agent reviews; surgical revisions applied |
 | 3 | Human review | Linear UI | You sign off on the spec |
-| 4 | Find next | `pk next` | Reads the current phase live from Linear, groups issues by status, surfaces the highest-priority startable issue (skips ones with unfinished blockers) |
+| 4 | Find next | `pk next` | Reads the current initiative live from Linear, groups issues by status, surfaces the highest-priority startable issue (skips ones with unfinished blockers) |
 | 5 | Branch | `pk branch <ID>` | Creates a worktree + branch, moves the issue to In Progress |
 | 6 | **Work** | `/work <ID>` | Plans the issue inline, then builds it on the executor — task list, atomic commit per task, verify-before-integrate |
 | 7 | **Verify** | `/verify` | Pre-deploy gate: types + lint + tests, checked against the spec's acceptance criteria |
@@ -93,6 +93,18 @@ Stage 0 is a *contract* — a set of artifacts the dev pipeline requires — not
 | 13 | Strategy sync | `/strategy-sync` | Update the strategy docs to match what actually shipped |
 
 > **Working in a worktree?** `pk done` runs from the parent repo and deletes the worktree. So inside a worktree session, run `/pk-exit` first, then leave the worktree and run `pk done` from the parent.
+
+### Seeing where you stand
+
+Three commands answer "what now?" at three altitudes — all read live from Linear, nothing to maintain:
+
+| Command | Altitude | Answers |
+|---------|----------|---------|
+| `pk next` | One action | The single best next step in your current initiative — priority- and dependency-aware. |
+| `pk status` | The board | Every in-flight / Approved / Needs-Spec issue, grouped by Project. |
+| `pk portfolio` | The whole map | Every `i{N}.` Initiative (active ones marked `← active`), then a **runway** of actionable work across all active Initiatives — grouped by `I{N}.P{N}.` Project, ordered priority-first, with a blocked item's blocker pulled up right above it, and a `⚠ Nd idle` flag on any sub-phase that's gone quiet. |
+
+`pk portfolio` is the zoom-out. When your head is deep in the code, it's the one screen that shows which Initiatives are live, what's next in each, and what's gone cold — exactly the part of project-managing-yourself that slips when you're heads-down.
 
 ### Fast lanes over the loop
 
