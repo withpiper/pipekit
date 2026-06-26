@@ -196,6 +196,111 @@ v=$(printf '%s' '[{"identifier":"X"},{"identifier":"Y","priority":2}]' | unit_pr
 v=$(printf '%s' '[]' | unit_prio_sort)
 [ "$v" = '[]' ] && ok "prio sort: empty array → empty (no crash)" || fail "prio sort: empty array" "got $v"
 
+# ── Unit tests: pk status project grouping (sourced) ─────────────────────────
+# pk_issues_group_render groups a JSON issue array by project for pk status:
+# project groups ordered by their highest-priority issue, issues priority-sorted
+# within, orphans ("(no project)") last. Pure render (no network).
+
+echo "== pk status project grouping (sourced) =="
+
+unit_group() { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_group_render ); }
+
+# The orphan here carries Urgent (1) — it must STILL sink last (orphans are an
+# anomaly to home, not normal work), proving orphan-last beats priority order.
+GROUP_IN='[
+  {"identifier":"POC-3","title":"client ask","priority":3,"project":{"name":"Export"}},
+  {"identifier":"POC-1","title":"margin core","priority":2,"project":{"name":"Margin"}},
+  {"identifier":"POC-9","title":"orphan","priority":1,"project":null},
+  {"identifier":"POC-4","title":"label tweak","priority":3,"project":{"name":"Export"}}
+]'
+out=$(printf '%s' "$GROUP_IN" | unit_group)
+# Margin (High=2) group leads; Export (Normal=3) next; orphan last despite Urgent.
+exp='  Margin:
+    POC-1 — margin core
+  Export:
+    POC-3 — client ask
+    POC-4 — label tweak
+  (no project):
+    POC-9 — orphan'
+[ "$out" = "$exp" ] && ok "group: projects by top priority; orphans last even when Urgent" \
+  || fail "group: projects by top priority; orphans last even when Urgent" "got:
+$out"
+
+# Single project, no orphans → one group header.
+out=$(printf '%s' '[{"identifier":"Z-1","title":"t","priority":2,"project":{"name":"Solo"}}]' | unit_group)
+[ "$out" = "$(printf '  Solo:\n    Z-1 — t')" ] && ok "group: single project renders one header" || fail "group: single project" "got: $out"
+
+out=$(printf '%s' '[]' | unit_group)
+[ -z "$out" ] && ok "group: empty array → no output (no crash)" || fail "group: empty array" "got: $out"
+
+# Blocked issues (annotated upstream) render with the ⛔ tag and sink within
+# their project group, below ready work.
+BLK_IN='[
+  {"identifier":"R-2","title":"ready","priority":3,"project":{"name":"Solo"},"blocked":false},
+  {"identifier":"R-1","title":"blocked hi","priority":2,"project":{"name":"Solo"},"blocked":true,"blockerIds":["R-9"]}
+]'
+out=$(printf '%s' "$BLK_IN" | unit_group)
+exp='  Solo:
+    R-2 — ready
+    R-1 — blocked hi  ⛔ blocked by R-9'
+[ "$out" = "$exp" ] && ok "group: blocked issue sinks within group + ⛔ tag" || fail "group: blocked tag/sink" "got:
+$out"
+
+# ── Unit tests: dependency-aware pk next (sourced) ───────────────────────────
+# pk_issues_annotate_blocked reads Linear inverseRelations (type "blocks"; the
+# .issue side is the blocker) and marks an issue blocked iff a blocker is not yet
+# Done/Canceled. pk_first_ready_id picks the top-priority STARTABLE issue;
+# pk_issues_flat_render sinks blocked work and tags it. Fail-safe on missing data.
+
+echo "== dependency-aware pk next (sourced) =="
+
+unit_annotate()  { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_annotate_blocked ); }
+unit_flat()      { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_flat_render ); }
+unit_ready()     { ( cd "$REPO_ROOT" && source "$PK" && pk_first_ready_id ); }
+
+# Blocker In Progress → blocked; blocker Done → ready; Canceled → ready; none → ready.
+DEP_IN='[
+  {"identifier":"A","title":"open blocker","priority":1,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X1","state":{"name":"In Progress"}}}]}},
+  {"identifier":"B","title":"done blocker","priority":3,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X2","state":{"name":"Done"}}}]}},
+  {"identifier":"C","title":"cancelled blocker","priority":3,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X3","state":{"name":"Canceled"}}}]}},
+  {"identifier":"D","title":"no relations","priority":4,"inverseRelations":{"nodes":[]}}
+]'
+ann=$(printf '%s' "$DEP_IN" | unit_annotate)
+v=$(printf '%s' "$ann" | jq -c '[.[] | {id:.identifier, blocked:.blocked}]')
+[ "$v" = '[{"id":"A","blocked":true},{"id":"B","blocked":false},{"id":"C","blocked":false},{"id":"D","blocked":false}]' ] \
+  && ok "annotate: open blocker→blocked; Done/Canceled/none→ready" \
+  || fail "annotate: blocked detection" "got $v"
+
+# Only the UNFINISHED blocker is listed (a "related" relation is ignored, a Done blocker dropped).
+MULTI='[{"identifier":"M","title":"t","priority":2,"inverseRelations":{"nodes":[
+  {"type":"blocks","issue":{"identifier":"OPEN1","state":{"name":"UAT"}}},
+  {"type":"blocks","issue":{"identifier":"DONE1","state":{"name":"Done"}}},
+  {"type":"related","issue":{"identifier":"REL1","state":{"name":"Backlog"}}}
+]}}]'
+v=$(printf '%s' "$MULTI" | unit_annotate | jq -c '.[0].blockerIds')
+[ "$v" = '["OPEN1"]' ] && ok "annotate: only unfinished blocks-relations counted" || fail "annotate: blocker filtering" "got $v"
+
+# first ready = highest-priority unblocked. Here Urgent A is blocked, so B (Normal) wins over D (Low).
+v=$(printf '%s' "$ann" | unit_ready)
+[ "$v" = "B" ] && ok "first ready: skips blocked Urgent, picks top ready" || fail "first ready" "got '$v', want B"
+
+# all blocked → empty (caller says 'all blocked' instead of suggesting one).
+v=$(printf '%s' '[{"identifier":"Z","priority":1,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"Q","state":{"name":"Approved"}}}]}}]' | unit_annotate | unit_ready)
+[ -z "$v" ] && ok "first ready: all blocked → empty" || fail "first ready: all blocked" "got '$v'"
+
+# flat render: ready first (priority order), blocked sunk + tagged.
+out=$(printf '%s' "$ann" | unit_flat)
+exp='  B — done blocker
+  C — cancelled blocker
+  D — no relations
+  A — open blocker  ⛔ blocked by X1'
+[ "$out" = "$exp" ] && ok "flat render: ready-first, blocked sunk + tagged" || fail "flat render" "got:
+$out"
+
+# Fail-safe: an issue with NO inverseRelations field at all → ready, no crash.
+v=$(printf '%s' '[{"identifier":"N","priority":2}]' | unit_annotate | jq -c '.[0].blocked')
+[ "$v" = "false" ] && ok "annotate: absent inverseRelations → ready (fail-safe)" || fail "annotate: absent relations" "got $v"
+
 # ── CLI tests: dispatch + help guard ─────────────────────────────────────────
 
 echo "== dispatch =="
