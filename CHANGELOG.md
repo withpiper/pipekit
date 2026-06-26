@@ -47,6 +47,24 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.8.0 — 2026-06-26
+
+> **Priority-aware surfacing — organise Linear so `pk next` shows the most important work.** Two coupled changes that share one goal: an important follow-up should be *visible* in `pk next` and *on top* of what it lists. One controls what enters `pk next`'s view; the other controls what sits at the top.
+
+**`/linear-hygiene` routes Triage state by priority, not difficulty.** The old rule sent Triage → `Backlog` by default and → `Needs Spec` only for `tier:standard`/`tier:heavy` items. But tier is a *size* estimate, not an *importance* signal — so an important-but-unsized follow-up got buried in `Backlog`, where `pk next` can't see it (`pk next` surfaces `In Progress` / `Approved` / `Needs Spec`, not `Backlog`/`Triage`). The new rule routes by the **resolved priority**:
+- `Normal (3)` or higher → **`Needs Spec`** (important enough to slate for speccing, so `pk next` surfaces it).
+- `Low (4)` → **`Backlog`** (homed and prioritized, not yet on the spec lane).
+- **Priority catch-all floor flips `none → Low`** (was `Normal`). This is what makes the cut behave: an item with no importance signal is *Low until proven otherwise*, so it doesn't get slated for speccing just for existing. `Normal+` now means "a signal said this matters" (`Client Request` → High, `Bug` → Normal, blocks-something → ≥Normal).
+- **Exception — bundles:** a multi-ask item (raw feedback often packs several: "grid lines + header parity + column-hide + logo") routes to `Backlog` + a `/brainstorm-review` flag *regardless of priority* — `Needs Spec` is for one spec-able thing, not a pile. This keeps the change from re-creating premature-spec for important items.
+
+This nudges `/linear-hygiene` slightly further into disposition (it now decides "slate this to spec"), but it stays placement, not verdict: it never renders Now/Later/Kill, never Parks, never Cancels — that's still `/brainstorm-review`.
+
+**`pk next` / `pk status` order each state group most-important-first.** The state-query helpers fetched with `orderBy: updatedAt`, so even with important items in `Needs Spec`, the *most* important wasn't on top — and `.[0]`, the suggested next action (`pk branch` / `/light-spec`), pointed at the most recently *touched*, not the most important. New pure helper `pk_issues_priority_sort` ranks a fetched issue array Urgent → High → Normal → Low → None (priority `0`/None sorts **last**, not first as a naive numeric sort would); both helpers route through it. Linear's `orderBy` enum has no priority field, so the ranking is client-side over a fetched `priority`. Net: the listing leads with the top item and the "Run:" suggestion targets it.
+
+3 new smoke tests pin the sort (ordering, absent-priority → last, empty input); suite **67 → 70**.
+
+---
+
 ## v4.7.1 — 2026-06-26
 
 > **`pk done` no longer destroys the session that runs it from inside the worktree.** A `bin/pk` safety fix; rides into every consumer on the next `sync-method.sh v4.7.1`. No methodology change, no new skills.
