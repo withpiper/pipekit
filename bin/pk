@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.11.0"
+PK_VERSION="4.12.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -203,10 +203,98 @@ pk_linear_gql() {
     echo "ERROR: Linear API key not set. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..." >&2
     return 1
   fi
+  # Guarded writes: any mutation must first prove the resolved token belongs to
+  # this project's pinned workspace (pk_linear_guard). Reads are never guarded —
+  # a wrong-board read is harmless, and the guard itself issues a read.
+  case "${query#"${query%%[![:space:]]*}"}" in
+    mutation*) pk_linear_guard || return 1 ;;
+  esac
   curl -sS -X POST https://api.linear.app/graphql \
     -H "Authorization: $key" \
     -H "Content-Type: application/json" \
     --data "$(jq -n --arg q "$query" --argjson v "$variables" '{query:$q, variables:$v}')"
+}
+
+# ── Guarded Linear writes ─────────────────────────────────────────────────────
+# Before any Linear mutation, prove the resolved token actually belongs to the
+# workspace this project is pinned to — and refuse otherwise. A stale or
+# cross-project token (wrong direnv env, wrong 1Password vault, a global `pk`
+# symlinked into another repo) would otherwise quietly land issue transitions and
+# comments on the WRONG board. The pin is Team ID (a globally-unique UUID;
+# resolving under the token proves same-workspace) or, if Team ID is unset,
+# Workspace slug vs the org urlKey. Cached per-invocation. Pattern adapted from
+# KyaniteHQ/linctl — but pipekit fails CLOSED only on a *confirmed* mismatch and
+# fails OPEN (warn + allow) when it simply can't reach Linear to verify, so a
+# transient hiccup never false-blocks the daily loop (a genuinely bad token still
+# makes the mutation itself fail loudly).
+
+# Pure decision (no I/O — unit-tested in tests/pk-smoke.sh). Args:
+#   team_id  slug  reachable("1"|"")  resolved_team  resolved_org_key
+# Echoes: "ok" | "skip:<why>" | "fail:<why>".
+pk_linear_guard_verdict() {
+  local team_id="$1" slug="$2" reachable="$3" resolved_team="$4" resolved_org_key="$5"
+  if [ "$reachable" != "1" ]; then
+    echo "skip:could not reach Linear to verify the target workspace"
+    return 0
+  fi
+  if [ -n "$team_id" ]; then
+    if [ -n "$resolved_team" ]; then
+      echo "ok"
+    else
+      echo "fail:the configured Team ID ($team_id) did not resolve under this token (wrong workspace, or the token is invalid/expired)"
+    fi
+    return 0
+  fi
+  if [ -n "$slug" ]; then
+    if [ -z "$resolved_org_key" ]; then
+      echo "skip:token response carried no workspace to check against Workspace slug '$slug'"
+    elif [ "$slug" = "$resolved_org_key" ]; then
+      echo "ok"
+    else
+      echo "fail:token resolves to workspace '$resolved_org_key' but method.config.md pins Workspace slug '$slug'"
+    fi
+    return 0
+  fi
+  echo "skip:no Team ID or Workspace slug in method.config.md to pin the workspace"
+}
+
+PK_LINEAR_GUARD_STATE=""
+pk_linear_guard() {
+  case "$PK_LINEAR_GUARD_STATE" in ok|skip) return 0 ;; esac
+  local team_id slug resp resolved_team="" resolved_org_key="" reachable=""
+  team_id=$(pk_team_id)
+  slug=$(pk_config "Workspace slug" "")
+  if [ -n "$team_id" ]; then
+    resp=$(pk_linear_gql 'query($id: String!) { team(id: $id) { id name organization { urlKey name } } }' \
+             "$(jq -n --arg id "$team_id" '{id:$id}')" 2>/dev/null || true)
+    [ -n "$resp" ] && reachable="1"
+    resolved_team=$(printf '%s' "$resp" | jq -r '.data.team.name // empty' 2>/dev/null || true)
+    resolved_org_key=$(printf '%s' "$resp" | jq -r '.data.team.organization.urlKey // empty' 2>/dev/null || true)
+  elif [ -n "$slug" ]; then
+    resp=$(pk_linear_gql 'query { viewer { organization { urlKey name } } }' '{}' 2>/dev/null || true)
+    [ -n "$resp" ] && reachable="1"
+    resolved_org_key=$(printf '%s' "$resp" | jq -r '.data.viewer.organization.urlKey // empty' 2>/dev/null || true)
+  else
+    reachable="1"   # nothing to pin on; verdict resolves to a "no pins" skip
+  fi
+  local verdict
+  verdict=$(pk_linear_guard_verdict "$team_id" "$slug" "$reachable" "$resolved_team" "$resolved_org_key")
+  case "$verdict" in
+    ok)
+      PK_LINEAR_GUARD_STATE="ok"; return 0 ;;
+    skip:*)
+      echo "⚠️  pk: Linear write guard not enforced — ${verdict#skip:}." >&2
+      PK_LINEAR_GUARD_STATE="skip"; return 0 ;;
+    fail:*)
+      local var; var=$(pk_linear_api_key_var)
+      {
+        echo ""
+        echo "⛔ pk: refusing to write to Linear — ${verdict#fail:}."
+        echo "   Blocked to keep this write off the wrong board. Fix the token, then retry:"
+        echo "     echo \$$var   ·   direnv allow / unlock 1Password   ·   method.config.md → Team ID / Workspace slug"
+      } >&2
+      return 1 ;;
+  esac
 }
 
 # Get issue by identifier (e.g. "RS-30"). Prints JSON.
@@ -740,7 +828,7 @@ pk_linear_set_state() {
     fi
   fi
   local mutation='mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: {stateId: $state}) { success } }'
-  pk_linear_gql "$mutation" "$(jq -n --arg id "$issue_uuid" --arg state "$state_id" '{id:$id, state:$state}')" >/dev/null
+  pk_linear_gql "$mutation" "$(jq -n --arg id "$issue_uuid" --arg state "$state_id" '{id:$id, state:$state}')" >/dev/null || return 1
   echo "  Linear: $id $current_state → $state_name"
 }
 
@@ -756,7 +844,7 @@ pk_linear_comment() {
     return 1
   fi
   local mutation='mutation($issue: String!, $body: String!) { commentCreate(input: {issueId: $issue, body: $body}) { success } }'
-  pk_linear_gql "$mutation" "$(jq -n --arg issue "$issue_uuid" --arg body "$body" '{issue:$issue, body:$body}')" >/dev/null
+  pk_linear_gql "$mutation" "$(jq -n --arg issue "$issue_uuid" --arg body "$body" '{issue:$issue, body:$body}')" >/dev/null || return 1
   echo "  Linear: comment posted on $id"
 }
 
