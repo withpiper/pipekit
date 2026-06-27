@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.11.0** — Last updated: 2026-06-26  *(**v4.11.0** — the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
+**v4.12.0** — Last updated: 2026-06-27  *(**v4.12.0** — `Team ID` / `Workspace slug` now also pin `pk`'s **write guard**: `bin/pk` refuses a Linear mutation when the resolved token's workspace doesn't match these pins (fail-closed on a confirmed mismatch; skipped with a warning if neither is set). Carries v4.11.0: the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -23,6 +23,12 @@ Project-specific values that portable skills read at runtime. Copy this file to 
 | **Team name** | `YourTeam` |
 | **Team ID** | `00000000-0000-0000-0000-000000000000` |
 | **Issue prefix** | `XXX` |
+
+> **`Team ID` and `Workspace slug` also pin `pk`'s write guard.** Before any Linear
+> mutation, `pk` verifies the resolved token belongs to this workspace and refuses on a
+> confirmed mismatch — so a stale or cross-project token can't write to the wrong board.
+> Set at least one (Team ID is the strongest pin); with neither set the guard is skipped
+> with a one-time warning.
 
 ### Workflow State IDs
 

@@ -47,6 +47,18 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.12.0 — 2026-06-27
+
+> **Guarded Linear writes — `pk` won't land an issue on the wrong board.** Before any Linear *mutation*, `bin/pk` now proves the resolved API token actually belongs to this project's workspace, and refuses the write on a confirmed mismatch. A stale or cross-project token — wrong direnv env, wrong 1Password vault, a global `pk` symlinked into another repo — can no longer quietly transition issues or post comments on someone else's board.
+
+**How it pins.** The check runs at the single `pk_linear_gql` chokepoint, fired only when the query is a `mutation` (reads are never guarded — a wrong-board read is harmless, and the guard itself reads). It pins on **Team ID** (a globally-unique UUID; resolving under the token proves same-workspace) or, when Team ID is unset, **Workspace slug** vs the token's org `urlKey`. Verified once per invocation, then cached.
+
+**Fail-closed, but only on a *confirmed* mismatch.** Adapted from [KyaniteHQ/linctl](https://github.com/KyaniteHQ/linctl)'s target-pinned guarded writes — with one deliberate softening for a daily driver: pipekit fails *open* (warns + allows) when it simply can't reach Linear to verify, so a transient network hiccup never false-blocks the loop. A genuinely bad token still makes the mutation itself fail loudly. Projects with neither pin set get a one-time warning and proceed (backward-compatible).
+
+**Implementation.** New pure `pk_linear_guard_verdict` (a 5-arg decision, fully unit-tested) split from the I/O wrapper `pk_linear_guard`; the two writers (`pk_linear_set_state`, `pk_linear_comment`) hardened so a blocked mutation never prints a misleading success line. No methodology change, no change to any read command. Smoke **89 → 95** (six verdict-branch tests). Live-verified against a production Linear workspace: a legitimate token → `ok` (no false-block), a foreign team UUID → `Entity not found` (the fail path is real).
+
+**Config.** `Team ID` / `Workspace slug` in `method.config.md` now do double duty as the write-guard pins — documented in `method.config.template.md`.
+
 ## v4.11.0 — 2026-06-26
 
 > **The docs speak Linear now.** v4.10.0 aligned what `pk` *prints* (phase → initiative) but deliberately deferred the documentation. This release finishes the job: the methodology docs, skills, and SOPs say **initiative** wherever they mean a Linear Initiative, and the **Phase Surface** concept is now the **Initiative Surface** — so a reader never has to translate between Pipekit's words and Linear's.

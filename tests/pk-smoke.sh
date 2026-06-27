@@ -860,6 +860,45 @@ else
   [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
 fi
 
+# ── Unit tests: Linear write guard verdict (sourced, no network) ─────────────
+# pk_linear_guard_verdict is pure: (team_id, slug, reachable, resolved_team,
+# resolved_org_key) → "ok" | "skip:<why>" | "fail:<why>". It gates every Linear
+# mutation at the pk_linear_gql chokepoint. Team ID (a globally-unique UUID) is
+# the strong pin; Workspace slug is the fallback. Fails CLOSED only on a
+# confirmed mismatch; fails OPEN (skip) when Linear is unreachable so a transient
+# hiccup never false-blocks the daily loop.
+unit_guard() { ( cd "$REPO_ROOT" && source "$PK" && pk_linear_guard_verdict "$@" ); }
+
+case "$(unit_guard "TID-uuid" "" 1 "Eng" "")" in
+  ok) ok "guard: team id resolves under token → ok" ;;
+  *)  fail "guard: team id resolves under token → ok" "got: $(unit_guard "TID-uuid" "" 1 "Eng" "")" ;;
+esac
+
+case "$(unit_guard "TID-uuid" "" 1 "" "")" in
+  fail:*) ok "guard: team id not visible → fail closed" ;;
+  *)      fail "guard: team id not visible → fail closed" "got: $(unit_guard "TID-uuid" "" 1 "" "")" ;;
+esac
+
+case "$(unit_guard "TID-uuid" "piper-poc" "" "" "")" in
+  skip:*) ok "guard: unreachable → skip (fail open)" ;;
+  *)      fail "guard: unreachable → skip (fail open)" "got: $(unit_guard "TID-uuid" "piper-poc" "" "" "")" ;;
+esac
+
+case "$(unit_guard "" "piper-poc" 1 "" "piper-poc")" in
+  ok) ok "guard: slug matches org urlKey → ok" ;;
+  *)  fail "guard: slug matches org urlKey → ok" "got: $(unit_guard "" "piper-poc" 1 "" "piper-poc")" ;;
+esac
+
+case "$(unit_guard "" "piper-poc" 1 "" "other-org")" in
+  fail:*) ok "guard: slug mismatch → fail closed" ;;
+  *)      fail "guard: slug mismatch → fail closed" "got: $(unit_guard "" "piper-poc" 1 "" "other-org")" ;;
+esac
+
+case "$(unit_guard "" "" 1 "" "")" in
+  skip:*) ok "guard: no pin configured → skip" ;;
+  *)      fail "guard: no pin configured → skip" "got: $(unit_guard "" "" 1 "" "")" ;;
+esac
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
