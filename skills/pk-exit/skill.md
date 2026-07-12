@@ -59,7 +59,9 @@ If the session was pure execution with no decisions, write "—".>
 
 ## Outstanding / next session
 
-<Bulleted list of what's left. Loose ends, deferred work, follow-ups. Be specific (issue IDs, file paths) so future-you can pick up cold.>
+<Bulleted list of what's left. Loose ends, deferred work, follow-ups. Be specific (issue IDs, file paths) so future-you can pick up cold.
+
+When `pk done` for this session's issue is among them, check the PR state first (`gh pr view --json state`) and write the step that matches reality: PR **merged** → `pk done <ID>` plain — never suggest `--merge` for an already-merged PR (the flag is redundant there and reads as an instruction). PR **still open** → "merge the PR once green, then `pk done <ID>`" (or `pk done <ID> --merge` to let pk run the merge). Run from the parent repo either way.>
 - Board hygiene: <N orphaned/untriaged follow-ups from /linear-hygiene --check, or "—">
 
 ## QA / verification trail
@@ -98,6 +100,6 @@ If the session was pure execution with no decisions, write "—".>
 
 ## What this skill does NOT do
 
-- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge — it transitions Linear UAT → `In <FirstEnv>` and removes the worktree, so it must run when the human is ready, not on autopilot. `/pk-exit` writes the session log and stops — it does not chain into cleanup. The WIT-451 canary 2026-05-13 surfaced the cost of auto-chaining: a worker session ran `pk done` before the human finished UAT and wiped the worktree mid-test. If the user wants cleanup, they run `pk done <ID>` (or `pk done <ID> --merge`) themselves from the parent repo.
+- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge — it transitions Linear UAT → `In <FirstEnv>` and removes the worktree, so it must run when the human is ready, not on autopilot. `/pk-exit` writes the session log and stops — it does not chain into cleanup. The WIT-451 canary 2026-05-13 surfaced the cost of auto-chaining: a worker session ran `pk done` before the human finished UAT and wiped the worktree mid-test. If the user wants cleanup, they run `pk done <ID>` themselves from the parent repo — suggest `--merge` only when the PR is still open (it makes pk run `gh pr merge` first; on an already-merged PR it's redundant).
 - **No `pk promote` invocation, ever.** Same rationale. Promotion is a Stage 4 human step.
 - **No Linear state writes.** Comments and state transitions belong to `pk branch`, `pk ship`, `pk done`, and `pk promote` — each at its own deliberate human step.

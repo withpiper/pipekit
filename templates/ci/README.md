@@ -88,8 +88,8 @@ Pipekit defaults `pk ship` to opening PRs as **Draft**. Iterate freely on a Draf
 pk ship                # opens PR as Draft. No reviewers fire.
 # ... iterate, push, fix, push ...
 pk ready WIT-123       # flips Draft → Ready. Reviewers fire here.
-# ... review, address feedback if any ...
-pk done WIT-123 --merge
+# ... review, address feedback, merge once green ...
+pk done WIT-123        # verifies the merge + cleans up (--merge instead lets pk run gh pr merge)
 ```
 
 Use `pk ship --ready` to skip the Draft state on tiny one-shot PRs where iteration won't happen.
