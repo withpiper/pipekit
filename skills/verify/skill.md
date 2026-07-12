@@ -184,7 +184,7 @@ git diff "origin/$INTEGRATION...HEAD"
 
 Use `subagent_type: "general-purpose"`.
 
-The subagent is configured with `allowed-tools: Read, Bash, Write` (the `Write` permission is what lets it land the verdict file). Recommend `model: sonnet` — deterministic file-shaping work.
+The subagent is configured with `allowed-tools: Read, Bash, Write` (the `Write` permission is what lets it land the verdict file). Run it on the **verification** tier per `method.config.md § Model Policy` (default `sonnet`, effort `high`).
 
 Use Task tool with:
 
@@ -314,7 +314,7 @@ The reasoning: these are the exact surfaces where shipping without adversarial r
 
 Use `subagent_type: "general-purpose"` (same agent as QA — only the prompt differs).
 
-Configure with `allowed-tools: Read, Bash, Write`. Recommend `model: opus` — adversarial review benefits from deeper reasoning.
+Configure with `allowed-tools: Read, Bash, Write`. Run it on the **plan-review / adversarial** tier per `method.config.md § Model Policy` (default `opus`, effort `xhigh`) — adversarial review benefits from deeper reasoning.
 
 Use Task tool with:
 
@@ -396,7 +396,7 @@ Backend-pluggable:
 - prefer `subagent_type: "pr-review-toolkit:code-reviewer"` (the same specialist `/pr-security-review` uses)
 - fall back to `general-purpose` if the toolkit isn't installed (warn, mirroring the QA fallback in the Failure model)
 
-Configure `allowed-tools: Read, Bash, Write`, `model: opus`. Use the Task tool with:
+Configure `allowed-tools: Read, Bash, Write`, on the **plan-review / adversarial** tier per `method.config.md § Model Policy` (default `opus`, effort `xhigh` — migrations are high-stakes on every tier). Use the Task tool with:
 
 - `description: "Migration review of <ISSUE-ID>"`
 - Prompt:
@@ -519,7 +519,7 @@ If `SECCATS` is empty (no categories file), **skip this check silently** — the
    ```
    If `CHANGED` is **still empty** after both committed-diff attempts, do **not** emit a clean pass — the surface is *indeterminate* (stale/missing `origin/$INTEGRATION`, detached HEAD). Surface `FLAG: security gate — could not determine changed surface; classify manually` and treat it as a flag (fail-safe, mirroring `/prod-ready`'s blank-build handling — a miss here would ship an unreviewed sensitive change).
 
-2. **Classify + review** by following the `/security-gate` skill (`skills/security-gate/skill.md`, or `.claude/skills/` in consuming projects) against `CHANGED`, using the project's `$SECCATS` definitions and the `sop/Security_Gate_SOP.md` per-category checklists. Spawn it as the gate's own read-only sub-agents (`general-purpose`, `model: sonnet`, `allowed-tools: Read, Bash, Grep, Glob`). The verdict is `PASS` (no category matched, or all matched checklists clean) / `FAIL` (any confirmed Critical or High) / `WARNINGS` (Medium/Low only).
+2. **Classify + review** by following the `/security-gate` skill (`skills/security-gate/skill.md`, or `.claude/skills/` in consuming projects) against `CHANGED`, using the project's `$SECCATS` definitions and the `sop/Security_Gate_SOP.md` per-category checklists. Spawn it as the gate's own read-only sub-agents (`general-purpose`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`). The verdict is `PASS` (no category matched, or all matched checklists clean) / `FAIL` (any confirmed Critical or High) / `WARNINGS` (Medium/Low only).
 
 Surface the flag carrying the verdict — never a bare pointer (same discipline as the migration flag):
 

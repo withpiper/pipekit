@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.4.0** — Last updated: 2026-06-22  *(added `/security-gate` (Stage 3 feature-scoped security gate, gap #3) to the portable-skills table — advisory framework, project category signals in `resources/security-categories.md`. Carries v4.3.0: added `/prod-ready` (Stage 4 production-readiness gate) to the portable-skills table — advisory framework, project checks in `resources/prod-readiness-checks.md`. Carries v4.0.0: native-on-Workflow is the sole executor — execution framing points at the native executor; the legacy `.vbw-planning/` planning layer is retired (`bin/pk` read-only fallback for un-migrated projects). Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
+**v4.13.0** — Last updated: 2026-07-12  *(**v4.13.0 — Model Policy roles.** § "Pinning models on subagents" is now the canonical role table — grounding/lookup `haiku`/`low`, execution `sonnet`/`medium`, verification `sonnet`/`high`, plan-review/adversarial `opus`/`xhigh` — with `method.config.md § Model Policy` as the per-project override surface. Skills cite a role plus its default inline, never a bare model name: the same rule that keeps Linear IDs out of portable skills, applied to the time-varying axis. Carries v4.4.0: added `/security-gate` (Stage 3 feature-scoped security gate, gap #3) to the portable-skills table — advisory framework, project category signals in `resources/security-categories.md`. Carries v4.3.0: added `/prod-ready` (Stage 4 production-readiness gate) to the portable-skills table — advisory framework, project checks in `resources/prod-readiness-checks.md`. Carries v4.0.0: native-on-Workflow is the sole executor — execution framing points at the native executor; the legacy `.vbw-planning/` planning layer is retired (`bin/pk` read-only fallback for un-migrated projects). Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
 
 ---
 
@@ -206,21 +206,22 @@ When a skill's behavior depends on tool calls or subagents, give explicit guidan
 
 ---
 
-### Pinning models on subagents
+### Pinning models on subagents — the Model Policy roles
 
-Any skill that invokes `Agent()` should **explicitly pass `model:`** rather than relying on default inheritance. A skill that runs inside an Opus session will otherwise silently run execution agents on Opus too — expensive and usually unnecessary.
+Any skill that invokes `Agent()` should **explicitly pass `model:`** rather than relying on default inheritance. A skill that runs inside a frontier-model session will otherwise silently run execution agents on that model too — expensive and usually unnecessary.
 
-Defaults we've found to work well:
+**Skills reference roles, not model names.** The project's `method.config.md § Model Policy` maps each role to a model + effort tier; when the section (or a row) is absent, the defaults below apply. This is the same rule that keeps Linear IDs and paths out of portable skills — model names are hardcoded values that vary over *time* instead of per-project, and a docs-wide sweep at every model generation doesn't scale. Re-point one row in the config instead.
 
-| Agent role | Default model |
-|------------|---------------|
-| Planning (`plan-reviewer`, spec reviewers) | `opus` |
-| Execution (native Workflow task agents, batch runners) | `sonnet` |
-| Verification (QA review subagent) | `sonnet` |
+| Role | Used by | Default model | Default effort |
+|------|---------|---------------|----------------|
+| Grounding / lookup | read-only fact sweeps: Explore/scout-type subagents | `haiku` | `low` |
+| Execution | native Workflow task agents, batch runners, mechanical file-shaping subagents, gate classifiers | `sonnet` | `medium` |
+| Verification | QA review subagent | `sonnet` | `high` |
+| Plan review / adversarial | `plan-reviewer`, antagonistic reviewer, spec reviewers | `opus` | `xhigh` |
 
-Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents).
+When a skill spawns a subagent, spell out the role and its default inline — e.g. *"execution tier per `method.config.md § Model Policy`, default `sonnet`"* — so the skill still works in a project whose config predates the section.
 
-This defaults-plus-flag pattern is the forerunner of Anthropic's model-use decision tree (in beta). When that ships, individual skills should migrate to it; this SOP section will point there instead.
+Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents). A structural sibling worth knowing about (not yet adopted): escalate-on-failure — start a task on the cheapest plausible role and re-run one tier up after repeated verify failures.
 
 ---
 

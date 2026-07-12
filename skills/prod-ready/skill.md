@@ -112,7 +112,7 @@ Run the six checks. Each is tagged by how it's verified:
 - **agent-verifiable** — a read-only sub-agent reads the code/config and returns a verdict with `file:line` evidence
 - **manual-confirm** — the skill cannot prove it; ask the user to confirm (paste a URL / answer yes-no), and record their answer
 
-Spawn the agent-verifiable checks as **parallel read-only sub-agents** (`subagent_type: "general-purpose"`, `model: sonnet`, `allowed-tools: Read, Bash, Grep, Glob`). They return findings with evidence; they do not fix. Each finding carries `file:line` or a command result.
+Spawn the agent-verifiable checks as **parallel read-only sub-agents** (`subagent_type: "general-purpose"`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium`, `allowed-tools: Read, Bash, Grep, Glob`). They return findings with evidence; they do not fix. Each finding carries `file:line` or a command result.
 
 | # | Check | Kind | What it verifies (specifics from the checks file) |
 |---|-------|------|----|

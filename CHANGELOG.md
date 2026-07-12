@@ -47,6 +47,31 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.13.0 — 2026-07-12
+
+> **Model Policy — skills reference model roles, not model names.** Portable skills used to hardcode `model: opus` / `model: sonnet` at every subagent spawn site (~10 call sites), which meant every model generation forced a docs-wide sweep — and the sweep never fully happened: four skills still reasoned about "Opus 4.7 defaults" two generations later. This release applies Pipekit's own no-hardcoded-values rule to the time-varying axis: skills now cite a **role**, and the role → model + effort mapping lives in one place.
+
+**The roles.** A new optional `method.config.md § Model Policy` section maps four agent roles to a model + effort tier:
+
+| Role | Default model | Default effort |
+|------|---------------|----------------|
+| Grounding / lookup | `haiku` | `low` |
+| Execution | `sonnet` | `medium` |
+| Verification | `sonnet` | `high` |
+| Plan review / adversarial | `opus` | `xhigh` |
+
+Skills cite the role **with its default inline** ("execution tier per `method.config.md § Model Policy`, default `sonnet`"), so a project whose config predates the section sees zero behavior change, and re-pointing a tier at the next model generation is a one-row config edit. `sop/Skills_SOP.md § Pinning models on subagents` is the canonical reference; the section is documented in `method.config.template.md`.
+
+**Pin sweep.** Inline `model:` pins replaced with role references in `/review-plan` (plan-reviewer spawn), `/verify` (QA subagent, antagonistic reviewer, migration reviewer, embedded security-gate spawn), `/security-gate` (classifier + per-category reviewers), `/prod-ready` (check subagents), plus the `method.md` and `GUIDE.md` plan-reviewer references. Model defaults are unchanged from the previous hardcoded values; effort defaults are newly explicit, sourced from current Anthropic guidance.
+
+**De-staling.** Model-version-anchored prose made model-agnostic where the behavior persists across generations: the design-default probes in `/strategy-create` + `/startup` (the cream/serif/terracotta house style — now framed as "current Claude models", with the counter-it-concretely guidance), the Explore-subagent mandate in `/01-light-spec`, and the parallel-spawn mandate in `/06-linear-todo-runner`. `sop/Session_Management_SOP.md`'s effort section is re-anchored: session default `high` with `xhigh` reserved for the most capability-sensitive steps, and an explicit "sweep *downward* on upgrade" note — newer generations deliver more per effort level (current-frontier `low` often exceeds previous-generation `xhigh`), so porting old effort settings forward over-provisions.
+
+**Considered + deferred** (surfaced by a review of the pilotfish repo, which independently arrived at role-indirected model routing): **escalate-on-failure** (start a task on the cheapest plausible role, re-run one tier up after two verify failures) — a natural fit for the native executor's verify-before-integrate loop, deferred until the Model Policy section has real-world mileage; **pinning `/work` grounding agents to haiku** — the role row exists as guidance, but `/work`'s grounding path is untouched this release.
+
+**No `bin/pk` behavior change** — `PK_VERSION` bump only; smoke 95/95.
+
+---
+
 ## v4.12.0 — 2026-06-27
 
 > **Guarded Linear writes — `pk` won't land an issue on the wrong board.** Before any Linear *mutation*, `bin/pk` now proves the resolved API token actually belongs to this project's workspace, and refuses the write on a confirmed mismatch. A stale or cross-project token — wrong direnv env, wrong 1Password vault, a global `pk` symlinked into another repo — can no longer quietly transition issues or post comments on someone else's board.

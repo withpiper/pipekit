@@ -153,7 +153,7 @@ For each issue at the front of the queue (up to max-agents):
 
 ### Phase 3 — Agent Spawn & Lifecycle
 
-**Subagent mandate for this skill:** spawn parallel worktree agents even though Opus 4.7 defaults to fewer subagents. The whole point of `/linear-todo-runner` is fanning out independent work across isolated worktrees. A single-session sequential loop would defeat the purpose. Spawn up to `max-agents` in the same turn when the dependency graph permits; don't serialize them.
+**Subagent mandate for this skill:** spawn parallel worktree agents — recent Claude models are conservative about delegating unless a skill states when delegation is wanted, and this skill wants it. The whole point of `/linear-todo-runner` is fanning out independent work across isolated worktrees. A single-session sequential loop would defeat the purpose. Spawn up to `max-agents` in the same turn when the dependency graph permits; don't serialize them.
 
 **Worktree isolation is the orchestrator's job, not the Agent tool's.** Each agent gets a real `git worktree add` before it spawns, and is told via its prompt to `cd` into that worktree as its first action and verify (`pwd` + `git rev-parse --show-toplevel`) before any edits. The Agent tool itself currently exposes no working-directory parameter — `isolation: "worktree"` is a no-op on current harnesses (see Prerequisites), and there is no `cwd` parameter. The prompt-level `cd` + verification is the actual containment mechanism, so it is NOT optional.
 

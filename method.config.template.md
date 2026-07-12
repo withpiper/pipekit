@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.12.0** — Last updated: 2026-06-27  *(**v4.12.0** — `Team ID` / `Workspace slug` now also pin `pk`'s **write guard**: `bin/pk` refuses a Linear mutation when the resolved token's workspace doesn't match these pins (fail-closed on a confirmed mismatch; skipped with a warning if neither is set). Carries v4.11.0: the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
+**v4.13.0** — Last updated: 2026-07-12  *(**v4.13.0** — new optional `## Model Policy` section: role → model + effort table that portable skills reference instead of hardcoding model names; absent section = documented defaults, no behavior change. Carries **v4.12.0** — `Team ID` / `Workspace slug` now also pin `pk`'s **write guard**: `bin/pk` refuses a Linear mutation when the resolved token's workspace doesn't match these pins (fail-closed on a confirmed mismatch; skipped with a warning if neither is set). Carries v4.11.0: the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -163,6 +163,29 @@ Tiers shape which gates apply to an issue. `/work` infers the tier from issue la
 Per-tier templates live at `pipekit/templates/tier-{quick,standard,heavy}.md`.
 
 To disable a tier in this project, remove its row above. Removing **Standard** is not allowed — it is the fallback.
+
+## Model Policy
+
+Which model and effort tier each **agent role** runs on. Portable skills reference roles, never
+model names — when a new model generation ships, re-point a row here and every skill follows.
+This section is **optional**: if it's absent (or a role has no row), skills use the defaults below,
+so un-migrated projects see no behavior change.
+
+| Role | Used by | Default model | Default effort |
+|------|---------|---------------|----------------|
+| **Grounding / lookup** | read-only fact sweeps: Explore/scout-type subagents spawned by skills | `haiku` | `low` |
+| **Execution** | native Workflow task agents, batch runners, mechanical file-shaping subagents, gate classifiers (`/security-gate`, `/prod-ready`) | `sonnet` | `medium` |
+| **Verification** | `/verify` QA review subagent | `sonnet` | `high` |
+| **Plan review / adversarial** | `plan-reviewer` (`/review-plan`), antagonistic reviewer (`/verify --review`), spec reviewers | `opus` | `xhigh` |
+
+- **The session model is not configured here** — that's whatever the human runs Claude Code on.
+  Roles govern *spawned subagents* only.
+- Model values are harness aliases (`haiku` / `sonnet` / `opus`), which resolve to the current
+  generation automatically. Pin an exact model ID only when you have a specific reason.
+- Effort defaults follow current Anthropic guidance (`high` as the general default, `xhigh` for
+  the hardest review work, `low` sufficient for mechanical lookups on current-generation models).
+  Effort calibration shifts between model generations — re-validate rather than assuming the
+  mapping ports unchanged.
 
 ## Pre-Deploy Gate
 
