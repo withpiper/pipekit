@@ -66,7 +66,12 @@ SUBJECTS=$(printf '%s\n' "$COMMAND" | awk '
       pre = substr(s, 1, gc - 1)                  # text before this occurrence
       sub(/[ \t]+$/, "", pre)                     # trim trailing spaces/tabs only
       bc = substr(pre, length(pre), 1)            # char just before "git commit"
-      real = (length(pre) == 0 || bc ~ /[;&|(){}`]/)   # invocation, not data?
+      # Backtick is deliberately NOT an operator here: markdown inline code
+      # (`git commit -m ...` in a gh/PR --body string) is common Claude output,
+      # while archaic `git commit`-in-backticks cmd-subst is essentially unused.
+      # Treating ` as a boundary made doc-prose count as a real invocation and
+      # (with a <<EOF elsewhere in the prose) nudge on the next body line.
+      real = (length(pre) == 0 || bc ~ /[;&|(){}]/)    # invocation, not data?
       s = substr(s, gc + 10)                      # past this "git commit"
       ngc = index(s, "git commit")                # bound: next commit on this line
       seg = (ngc > 0) ? substr(s, 1, ngc - 1) : s
