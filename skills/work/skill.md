@@ -181,6 +181,7 @@ Send these two Agent invocations **in a single message** (parallel execution):
 
 1. **Spec validator subagent.** Use Task tool with:
    - `subagent_type: "general-purpose"` (or `"spec-validator"` if a project-local subagent of that name exists)
+   - plan-review tier per `method.config.md § Model Policy` (default `model: opus`, effort `xhigh`) — spec review gates an AI-to-AI contract
    - `description: "Validate spec for <ISSUE-ID>"`
    - Prompt template:
      ```
@@ -205,6 +206,7 @@ Send these two Agent invocations **in a single message** (parallel execution):
 
 2. **Codebase explorer subagent.** Use Task tool with:
    - `subagent_type: "Explore"`
+   - grounding tier per `method.config.md § Model Policy` (default `model: haiku`, effort `low`) — read-only fact sweep, conclusions only
    - `description: "Survey code areas for <ISSUE-ID>"`
    - Prompt template:
      ```
@@ -365,6 +367,8 @@ Drive execution with the **Workflow tool**. The workflow:
 
 Each task agent's prompt carries: the single task entry (title, files, change, verify, done), the relevant spec slice, and the discipline (atomic commit, conventional format, surface-don't-loop). It does **not** carry the whole plan — task scope is the task, the orchestrator owns the DAG.
 
+> **Task agents run on the execution tier** per `method.config.md § Model Policy` (default `model: sonnet`, effort `medium`) — pass `model`/`effort` explicitly in every `agent()` call (and on every fallback Task dispatch). Never let task agents inherit the session model: a frontier-model session would otherwise silently run every atomic task at frontier cost. If a specific task genuinely needs heavier reasoning (race conditions, cross-layer bugs), surface that to the human rather than escalating unilaterally.
+
 ## Step 6 — Security review (tier-aware)
 
 **Tier-aware gate** (resolved against `$TIER` from Step 2.6):
@@ -379,6 +383,7 @@ After execution completes, invoke the review when the gate fires:
 
 Use Task tool with:
 - `subagent_type: "security-review"` (project may have this; otherwise `"general-purpose"`)
+- plan-review/adversarial tier per `method.config.md § Model Policy` (default `model: opus`, effort `xhigh`) — adversarial review benefits from deeper reasoning
 - `description: "Security review of <ISSUE-ID> diff"`
 - Prompt template:
   ```
