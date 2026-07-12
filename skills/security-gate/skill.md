@@ -101,7 +101,7 @@ Security gate: <ISSUE | (no issue)>  ·  Base: <BASE>  ·  Changed files: <n>  �
 
 ## Step 2 — Classify the change (sub-agent, evidence-based)
 
-Spawn a read-only classifier sub-agent (`subagent_type: "general-purpose"`, `model: sonnet`, `allowed-tools: Read, Bash, Grep, Glob`). Give it the changed file list, the diff, and the project's category definitions. It returns, for each of the six categories, **matched / not-matched** with **evidence** (`file:line`, the matched keyword/glob, or the spec line).
+Spawn a read-only classifier sub-agent (`subagent_type: "general-purpose"`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`). Give it the changed file list, the diff, and the project's category definitions. It returns, for each of the six categories, **matched / not-matched** with **evidence** (`file:line`, the matched keyword/glob, or the spec line).
 
 **Classify from opened files, never from a filename alone.** A path under `auth/` that only changed a comment is not an auth change; a payments string in a test fixture is not a payments change. The classifier opens the cited hunk and confirms the change actually exercises the category. Err toward *matching* when genuinely ambiguous — a false match costs one extra checklist run; a false miss ships an unreviewed sensitive change.
 
@@ -122,7 +122,7 @@ If **no category matches**, skip to Step 5 with status **PASS (no sensitive cate
 
 ## Step 3 — Per-category review (parallel sub-agents)
 
-For **each matched category**, spawn a read-only review sub-agent (`general-purpose`, `model: sonnet`, `allowed-tools: Read, Bash, Grep, Glob`) scoped to the **feature diff**. Run them in parallel. Each runs its category checklist and returns findings with `file:line` evidence, a **severity** (Critical/High/Medium/Low) and a **confidence** — and, where the category checklist is clean, an explicit cited "verified, no issue" verdict (coverage before filtering, per `/security-review`).
+For **each matched category**, spawn a read-only review sub-agent (`general-purpose`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`) scoped to the **feature diff**. Run them in parallel. Each runs its category checklist and returns findings with `file:line` evidence, a **severity** (Critical/High/Medium/Low) and a **confidence** — and, where the category checklist is clean, an explicit cited "verified, no issue" verdict (coverage before filtering, per `/security-review`).
 
 Per-category checklist (the project file refines the specifics):
 

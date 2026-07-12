@@ -41,6 +41,8 @@ fi
 #   - subject + body via two -m: git commit -m "feat(x): s" -m "body paragraph"
 #   - chained commits:           git commit -m "fix(a): 1" && git commit -m "fix(b): 2"
 #   - heredoc-authored commit:   git commit -F- <<EOF ... (first body line = subject)
+#   - cmd-subst heredoc commit:  git commit -m "$(cat <<EOF ... )" (first body line = subject;
+#     without this the truncated literal `$(cat <<EOF` false-fired the nudge)
 # The awk runs line-by-line, tracking heredoc open/close so a body is never scanned
 # for invocations — only consumed as the message of a bare `git commit ... <<DELIM`.
 SUBJECTS=$(printf '%s\n' "$COMMAND" | awk '
@@ -59,12 +61,17 @@ SUBJECTS=$(printf '%s\n' "$COMMAND" | awk '
     }
 
     # Not in a heredoc: scan this line for real `git commit` invocations.
-    s = line; real_bare = 0
+    s = line; real_bare = 0; msub = 0
     while ((gc = index(s, "git commit")) > 0) {
       pre = substr(s, 1, gc - 1)                  # text before this occurrence
       sub(/[ \t]+$/, "", pre)                     # trim trailing spaces/tabs only
       bc = substr(pre, length(pre), 1)            # char just before "git commit"
-      real = (length(pre) == 0 || bc ~ /[;&|(){}`]/)   # invocation, not data?
+      # Backtick is deliberately NOT an operator here: markdown inline code
+      # (`git commit -m ...` in a gh/PR --body string) is common Claude output,
+      # while archaic `git commit`-in-backticks cmd-subst is essentially unused.
+      # Treating ` as a boundary made doc-prose count as a real invocation and
+      # (with a <<EOF elsewhere in the prose) nudge on the next body line.
+      real = (length(pre) == 0 || bc ~ /[;&|(){}]/)    # invocation, not data?
       s = substr(s, gc + 10)                      # past this "git commit"
       ngc = index(s, "git commit")                # bound: next commit on this line
       seg = (ngc > 0) ? substr(s, 1, ngc - 1) : s
@@ -73,8 +80,12 @@ SUBJECTS=$(printf '%s\n' "$COMMAND" | awk '
           q = substr(seg, RSTART + RLENGTH - 1, 1)
           rest = substr(seg, RSTART + RLENGTH)
           cq = index(rest, q)
-          end = (cq > 0) ? cq - 1 : length(rest)  # subject ends at closing quote or EOL
-          print substr(rest, 1, end)
+          if (cq == 0 && rest ~ /\$\(cat[ \t]+<</) {
+            msub = 1                              # -m "$(cat <<EOF...)": subject = heredoc line 1
+          } else {
+            end = (cq > 0) ? cq - 1 : length(rest)  # subject ends at closing quote or EOL
+            print substr(rest, 1, end)
+          }
         } else {
           real_bare = 1                           # bare commit (no -m): maybe -F- <<EOF
         }
@@ -90,7 +101,7 @@ SUBJECTS=$(printf '%s\n' "$COMMAND" | awk '
         h_dash = (substr(op, 3, 1) == "-") ? 1 : 0
         d = op; sub(/^<<-?[ \t]*("|'\''|\\)?/, "", d)
         h_delim = d; in_h = 1; captured = 0
-        want_body = (real_bare ? 1 : 0)           # body is the message only for a bare commit
+        want_body = ((real_bare || msub) ? 1 : 0) # message from body: bare -F- commits AND -m "$(cat <<EOF)"
       }
     }
   }')

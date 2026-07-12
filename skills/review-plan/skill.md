@@ -92,12 +92,12 @@ and let you review manually.
 
 ### Step 4 — Spawn the plan-reviewer agent
 
-Use the Agent tool with `subagent_type: "plan-reviewer"`. Pin model to `opus` — review has to catch what planning missed; same reasoning budget as Lead.
+Use the Agent tool with `subagent_type: "plan-reviewer"`. Pin the **plan-review / adversarial** tier per `method.config.md § Model Policy` (default `opus`, effort `xhigh`) — review has to catch what planning missed; give it at least the reasoning budget planning had.
 
 ```
 Agent(
   subagent_type: "plan-reviewer",
-  model: "opus",
+  model: "{plan-review tier — default opus}",
   description: "Review {phase-slug} plan",
   prompt: "Independent review of the plan(s) for {phase-slug} before execution.
 
@@ -212,7 +212,7 @@ User: /review-plan RS-14
 ## Verifying plan-reviewer agent…
 ✓ .claude/agents/plan-reviewer.md installed
 
-## Spawning plan-reviewer (opus)…
+## Spawning plan-reviewer (plan-review tier: opus)…
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Plan Review Verdict: Revise — 7/10

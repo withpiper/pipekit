@@ -531,7 +531,7 @@ Walk through the template at `templates/strategy/design-direction.md`:
 4. **Color & theme** — ask: _"Any colors in mind? Light or dark theme? Both?"_
 5. **Motion** — ask: _"How much animation? Subtle transitions, or more expressive?"_
 6. **Anti-patterns** — ask: _"Anything you specifically don't want? Generic dashboards, specific styles to avoid?"_
-7. **Explicit counter to AI defaults** — ask directly: _"Opus 4.7 defaults to a warm cream/serif/terracotta aesthetic with Space Grotesk typography. If that's not what you want (for dashboards, dev tools, fintech, healthcare, enterprise), we need to specify the opposite. Is your aesthetic warm/editorial, or do you need cool/technical/monochrome/other?"_ Record the answer in the Anti-Patterns section explicitly.
+7. **Explicit counter to AI defaults** — ask directly: _"Current Claude models default to a warm cream/serif/terracotta aesthetic with Space Grotesk typography. If that's not what you want (for dashboards, dev tools, fintech, healthcare, enterprise), we need to specify a concrete alternative — generic 'not that' instructions just produce a different fixed palette. Is your aesthetic warm/editorial, or do you need cool/technical/monochrome/other?"_ Record the answer in the Anti-Patterns section explicitly.
 
 Write `Strategy/DesignDirection.md` with their answers. This doc is read by development agents and the `/frontend-design` skill during execution.
 

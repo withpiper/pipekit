@@ -47,6 +47,37 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.13.0 — 2026-07-12
+
+> **Model Policy — skills reference model roles, not model names.** Portable skills used to hardcode `model: opus` / `model: sonnet` at every subagent spawn site (~10 call sites), which meant every model generation forced a docs-wide sweep — and the sweep never fully happened: four skills still reasoned about "Opus 4.7 defaults" two generations later. This release applies Pipekit's own no-hardcoded-values rule to the time-varying axis: skills now cite a **role**, and the role → model + effort mapping lives in one place.
+
+**The roles.** A new optional `method.config.md § Model Policy` section maps four agent roles to a model + effort tier:
+
+| Role | Default model | Default effort |
+|------|---------------|----------------|
+| Grounding / lookup | `haiku` | `low` |
+| Execution | `sonnet` | `medium` |
+| Verification | `sonnet` | `high` |
+| Plan review / adversarial | `opus` | `xhigh` |
+
+Skills cite the role **with its default inline** ("execution tier per `method.config.md § Model Policy`, default `sonnet`"), so a project whose config predates the section sees zero behavior change, and re-pointing a tier at the next model generation is a one-row config edit. `sop/Skills_SOP.md § Pinning models on subagents` is the canonical reference; the section is documented in `method.config.template.md`.
+
+**Pin sweep.** Inline `model:` pins replaced with role references in `/review-plan` (plan-reviewer spawn), `/verify` (QA subagent, antagonistic reviewer, migration reviewer, embedded security-gate spawn), `/security-gate` (classifier + per-category reviewers), `/prod-ready` (check subagents), plus the `method.md` and `GUIDE.md` plan-reviewer references. Model defaults are unchanged from the previous hardcoded values; effort defaults are newly explicit, sourced from current Anthropic guidance.
+
+**`/work` now implements the policy — all four spawn sites pinned.** Previously `/work` passed no `model:` at any spawn site, so its subagents silently inherited the session model — on a frontier-model (Fable-class) session, every atomic task agent ran at frontier cost. Now: Workflow **task agents** → execution tier (default `sonnet`/`medium`, passed explicitly in every `agent()` call and every fallback Task dispatch, with a "surface, don't self-escalate" rule); `--deep` **codebase explorer** → grounding tier (default `haiku`/`low`); `--deep` **spec validator** and the Step 6 **security review** → plan-review/adversarial tier (default `opus`/`xhigh`). This closes the one divergence between the Model Policy table and actual behavior — the session model now governs only the session's own cognition (planning, synthesis, verdicts), never spawned lanes.
+
+**De-staling.** Model-version-anchored prose made model-agnostic where the behavior persists across generations: the design-default probes in `/strategy-create` + `/startup` (the cream/serif/terracotta house style — now framed as "current Claude models", with the counter-it-concretely guidance), the Explore-subagent mandate in `/01-light-spec`, and the parallel-spawn mandate in `/06-linear-todo-runner`. `sop/Session_Management_SOP.md`'s effort section is re-anchored: session default `high` with `xhigh` reserved for the most capability-sensitive steps, and an explicit "sweep *downward* on upgrade" note — newer generations deliver more per effort level (current-frontier `low` often exceeds previous-generation `xhigh`), so porting old effort settings forward over-provisions.
+
+**Considered + deferred** (surfaced by a review of the pilotfish repo, which independently arrived at role-indirected model routing): **escalate-on-failure** (start a task on the cheapest plausible role, re-run one tier up after two verify failures) — a natural fit for the native executor's verify-before-integrate loop, deferred until the Model Policy section has real-world mileage. (Pinning `/work`'s grounding agents to haiku was initially deferred too, then folded in pre-merge as part of the `/work` spawn-site sweep above.)
+
+**Rider: commit hook — two more false-positive shapes closed.** (1) `git commit -m "$(cat <<'EOF' … EOF)"` — the canonical multi-paragraph commit shape — misfired the advisory nudge: the `-m` value has no closing quote on its line, so the extractor validated the truncated literal `$(cat <<'EOF'` while the real subject sat unread on heredoc line 1. A sibling of the v4.3.1 heredoc-body fix (that release handled `git commit` *inside* a body; this handles a heredoc *feeding* `-m` via command substitution). The extractor now routes that shape into the existing first-body-line capture used by bare `-F- <<EOF` commits. (2) Markdown inline code in a `--body` string — `` `git commit -m ...` `` — counted as a *real* invocation because backtick was in the operator-boundary class (legacy `` `cmd` `` substitution); with a `<<EOF` elsewhere in the prose, the hook then "validated" the next body line. Backtick is dropped from the boundary class: markdown backticks are ubiquitous in Claude-authored PR comments, archaic backtick cmd-subst commits are essentially unused. Both shapes surfaced live during this release's own session. `templates/hooks/validate-commit.sh` + dogfood copy; 3 new smoke tests.
+
+**Rider: `pk done` hints are merge-aware — `--merge` is the exception, not the suggestion.** Sessions kept telling the user to run `pk done <ID> --merge` for PRs that were already merged (e.g. the POC-343 session log: branch merged as #615, log still prescribed `--merge`). `bin/pk` itself was already correct (`pk next` says "review/merge the PR, then `pk done X`" when OPEN, plain `pk done X` when MERGED; `--merge` only offered in the not-merged error path) — the parroting came from prose. Fixed at the two sources sessions actually read: `/pk-exit`'s log template now requires checking `gh pr view --json state` before writing the cleanup step (merged → plain `pk done <ID>`; open → "merge once green, then `pk done <ID>`" or `--merge`), and the consuming-project CLAUDE.md pipeline line now reads `[PR review + preview UAT → merge] → pk done` with an explicit "never suggest `--merge` for an already-merged PR" note. Syntax references (`pk done <ID> [--merge]` in tables) are unchanged — the flag is real; only the prompting was wrong.
+
+**No `bin/pk` behavior change** — `PK_VERSION` bump only; smoke 95→98 (three hook false-positive tests).
+
+---
+
 ## v4.12.0 — 2026-06-27
 
 > **Guarded Linear writes — `pk` won't land an issue on the wrong board.** Before any Linear *mutation*, `bin/pk` now proves the resolved API token actually belongs to this project's workspace, and refuses the write on a confirmed mismatch. A stale or cross-project token — wrong direnv env, wrong 1Password vault, a global `pk` symlinked into another repo — can no longer quietly transition issues or post comments on someone else's board.

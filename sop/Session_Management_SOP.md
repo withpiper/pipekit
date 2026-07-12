@@ -2,7 +2,7 @@
 
 > How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.8 and adapted for Pipekit's pipeline.
 
-**v2.7.0** — Last updated: 2026-06-05  *(session boundaries reframed as cognitive-load not token scarcity; handoff & session-log content discipline section; effort table + `ultracode` row; 4.7→4.8 refresh)*
+**v4.13.0** — Last updated: 2026-07-12  *(**v4.13.0 — effort guidance re-anchored to current models.** Session default is `high` with `xhigh` reserved for the most capability-sensitive steps; newer generations deliver more per effort level, so sweep *downward* on upgrade rather than porting old levels; subagent model + effort now lives in `method.config.md § Model Policy` roles. Carries v2.7.0: session boundaries reframed as cognitive-load not token scarcity; handoff & session-log content discipline section; effort table + `ultracode` row; 4.7→4.8 refresh)*
 
 ---
 
@@ -109,6 +109,8 @@ Subagents aren't just for parallelism — they're for **keeping tool output nois
 
 These levels were calibrated on Opus 4.7. Treat the table as a **starting point, not a spec** — re-validate on your current model rather than assuming the mapping ports unchanged. The relative ordering (orchestration and AI-to-AI contracts want more effort than lookups and mechanical syncs) is the durable part; the specific level names may drift between releases.
 
+Two things have shifted since that calibration (Fable 5 / Opus 4.8 era, per Anthropic's current guidance): the recommended session default is `high` with `xhigh` reserved for the most capability-sensitive work (rather than `xhigh` everywhere), and newer models deliver substantially more per effort level — low effort on a current frontier model often exceeds `xhigh` on the previous generation — so when you upgrade, sweep *downward* (`medium`, even `low` for routine steps) before assuming the old level is still needed. **Subagent** effort is configured separately, per role, in `method.config.md § Model Policy`.
+
 | Task type | Effort level | Rationale |
 |-----------|-------------|-----------|
 | `/startup` orchestration | `xhigh` (default) | Complex multi-step with decisions and document synthesis |
@@ -118,7 +120,7 @@ These levels were calibrated on Opus 4.7. Treat the table as a **starting point,
 | `/06-linear-todo-runner` worker agents | `xhigh` | Each worker executes a full spec — needs high capability |
 | Codebase-wide audits, large migrations, multi-issue batches | `ultracode` | Claude Code's `/effort` menu option: pins `xhigh` **and** lets Claude auto-decide when to spawn a dynamic workflow (parallel subagents, verify-before-integrate). Token-heavy — reserve for work that genuinely spans many files or issues. Overlaps `/06-linear-todo-runner`'s hand-rolled parallel queue. |
 
-Don't port effort settings between model releases blindly — experiment when you upgrade. As of the 4.7 calibration, `xhigh` worked well as the default for most Pipekit skills; confirm that still holds on your model before relying on it.
+Don't port effort settings between model releases blindly — experiment when you upgrade. As of the 4.7 calibration, `xhigh` worked well as the default for most Pipekit skills; on current models, expect `high` (or lower) to match it on all but the hardest steps — confirm on your model before relying on either.
 
 ---
 

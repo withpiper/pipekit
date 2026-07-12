@@ -44,7 +44,7 @@ A light spec is an **AI→AI contract**: Generator → Reviewer → Planner. You
 
 Explore the codebase to understand what exists and what's needed.
 
-**When to use the Explore subagent (required — Opus 4.7 defaults to direct tool calls):**
+**When to use the Explore subagent (required — recent Claude models default to direct tool calls unless told when to delegate):**
 
 This phase MUST spawn an Explore subagent rather than calling Grep/Read directly. Two reasons:
 1. The exploration produces lots of intermediate output (file listings, pattern matches) that you only need the conclusion from. Keeping it in the subagent's context protects the main session from rot.
