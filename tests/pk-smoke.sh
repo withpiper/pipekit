@@ -856,6 +856,18 @@ else
   out=$(hook_run '{"tool_input":{"command":"git commit -F- <<EOF\nfeat(x): proper subject\nbody\nEOF"}}')
   [ -z "$out" ] && ok "hook: -F- heredoc good subject silent" || fail "hook: -F- heredoc good subject silent" "output: $out"
 
+  # Cmd-subst heredoc commit (git commit -m "$(cat <<EOF ... )"): the -m value has no
+  # closing quote on its line — the subject is heredoc line 1, NOT the literal "$(cat".
+  # Pre-fix this false-fired with: does not match format ... Got: $(cat <<EOF
+  out=$(hook_run '{"tool_input":{"command":"git commit -m \"$(cat <<EOF\nbad cmdsubst subject\nbody line\nEOF\n)\""}}')
+  case "$out" in
+    *"bad cmdsubst subject"*) ok "hook: -m cmd-subst heredoc subject validated" ;;
+    *) fail "hook: -m cmd-subst heredoc subject validated" "output: $out" ;;
+  esac
+
+  out=$(hook_run '{"tool_input":{"command":"git commit -m \"$(cat <<'"'EOF'"'\nchore(release): v9.9.9 — subject in heredoc\nbody line\nEOF\n)\""}}')
+  [ -z "$out" ] && ok "hook: -m cmd-subst heredoc good subject silent" || fail "hook: -m cmd-subst heredoc good subject silent" "output: $out"
+
   printf '%s' '{"tool_input":{"command":"git commit -m \"nope\""}}' | bash "$HOOK" >/dev/null 2>&1
   [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
 fi
