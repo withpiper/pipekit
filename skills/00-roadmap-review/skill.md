@@ -5,7 +5,7 @@ description: Audit roadmap health — issues, dependency order, spec coverage, d
 
 # Roadmap Review Skill
 
-**v4.14.0** — Last updated: 2026-07-14 *(add the optional, config-gated **Phase-Label Layer** check — new **Phase 3.5** — mirroring `ROADMAP.md`'s per-phase build order + parallelism onto the Linear board via labels + saved views + `sortOrder` + `blockedBy`, drift-checked against `ROADMAP.md`. No-op unless that section is *filled in* (the template ships it commented out — gate on active values, not the bare heading), so it's fully portable. Carries v4.1.0: validate the Linear-native initiative surface — order lives in `i{N}.`/`I{N}.P{N}.` names per `method.config.md` § Initiative Surface, not in `.vbw-planning/PHASES.md` or `linear-map.json`)*
+**v4.15.0** — Last updated: 2026-07-14 *(add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file. Carries v4.14.0: the optional, config-gated **Phase-Label Layer** check — new **Phase 3.5** — mirroring `ROADMAP.md`'s per-phase build order + parallelism onto the Linear board via labels + saved views + `sortOrder` + `blockedBy`, drift-checked against `ROADMAP.md`. No-op unless that section is *filled in* (the template ships it commented out — gate on active values, not the bare heading), so it's fully portable. Carries v4.1.0: validate the Linear-native initiative surface — order lives in `i{N}.`/`I{N}.P{N}.` names per `method.config.md` § Initiative Surface, not in `.vbw-planning/PHASES.md` or `linear-map.json`)*
 
 You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context — including the **§ Initiative Surface** contract that defines the Linear-native initiative model this skill validates. Run this before speccing a new initiative to ensure the roadmap is coherent and complete.
 
@@ -27,6 +27,7 @@ Validate that:
 6. Spec coverage is adequate for the next planned initiative
 7. Strategy docs are flagged if stale
 8. **(Optional)** The **phase-label layer mirrors `ROADMAP.md`** — if `method.config.md` has a *filled-in* `### Phase Label Layer` section, the phase/pool labels, `sortOrder`, and `blockedBy` relations on the board match the roadmap's curated order (Phase 3.5; skipped entirely when the section is absent or still commented out)
+9. **(Optional)** The **roadmap's checkboxes match Linear `Done` state** — if the roadmap source uses `- [ ]` / `- [x]` progress checkboxes, they reconcile with reality (Phase 2.5; report-only, skipped when the roadmap has no checkboxes)
 
 This is the **gate between Stage 0 (Foundation) and Stage 1 (Definition)** in the Pipekit pipeline. Run it before starting a new initiative of specs.
 
@@ -90,6 +91,19 @@ Source the requirements list from the strategy docs (the live source) or, if pre
 4. **Orphans:** Issues with NO matching requirement → flag for review (may be valid additions from brainstorming, or may be misassigned)
 
 Output: Completeness table per initiative (`i{N}.`).
+
+### Phase 2.5 — Roadmap Progress Reconciliation (checkbox ↔ Linear `Done`)
+
+**Skip this phase unless the roadmap source uses checkboxes.** Some projects track build progress with markdown checkboxes in their roadmap file — the `Roadmap source` key (default `ROADMAP.md`; see `method.config.md § Phase Label Layer`, else the root `ROADMAP.md`). If that file has no `- [ ]` / `- [x]` items, no-op and proceed to Phase 3. This check is **independent of the phase-label layer** — a project can have a checkboxed roadmap without opting into the label layer, so it is *not* gated behind the `### Phase Label Layer` config.
+
+When the roadmap source has checkboxes, reconcile both directions against Linear (using the issue states already fetched in Phase 1). This catches a roadmap file drifting from Linear reality — the two are edited by different hands at different times:
+
+- **Checked but not Done** — the roadmap shows `- [x]` for an issue whose Linear state is **not** `Done` (reopened, still in flight, or the box was ticked prematurely) → flag. A checked box asserts "shipped"; if Linear disagrees, one of them is wrong.
+- **Done but unchecked** — an issue is `Done` in Linear but the roadmap still shows `- [ ]` → flag; the roadmap is stale, the box wants ticking.
+
+**Report-only — never auto-fix.** The roadmap file is **human-owned** (`method.md § Initiative Surface Ownership` — skills never write `ROADMAP.md`), and a checkbox mismatch is ambiguous about *which* side is right (a `[x]`-but-not-`Done` could mean the issue reopened, not that the box is wrong). So surface both lists and let the human resolve — tick the box, reopen the issue, or correct the state. Do **not** edit the roadmap file and do **not** flip a Linear state from a checkbox.
+
+Output: a Roadmap Reconciliation section (Phase 8) listing each mismatch with its direction.
 
 ### Phase 3 — Initiative Surface Well-Formedness
 
@@ -305,6 +319,18 @@ Say "go" to scaffold, or redirect any line.
 
 **Orphans (issues without matching requirements):**
 - PROJ-176: "Entities blocked from 2 budgets with same name" — bug, not in roadmap
+
+### Roadmap Reconciliation  *(only if the roadmap source uses checkboxes — otherwise omit this block)*
+
+Report-only — the roadmap file is human-owned; resolve each by hand.
+
+**Checked but not `Done`** (box says shipped, Linear disagrees):
+- PROJ-402: `- [x]` in `ROADMAP.md` but Linear state is `In Progress` → reopened, or ticked early — reconcile
+
+**`Done` but unchecked** (roadmap is stale):
+- PROJ-388: `Done` in Linear but `ROADMAP.md` shows `- [ ]` → tick the box
+
+*(If both lists are empty: "✓ roadmap checkboxes match Linear.")*
 
 ### Assignment
 - X issues verified in correct `i{N}.` → `P{N}.` placement
