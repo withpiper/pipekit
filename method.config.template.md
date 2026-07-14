@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.13.0** — Last updated: 2026-07-12  *(**v4.13.0** — new optional `## Model Policy` section: role → model + effort table that portable skills reference instead of hardcoding model names; absent section = documented defaults, no behavior change. Carries **v4.12.0** — `Team ID` / `Workspace slug` now also pin `pk`'s **write guard**: `bin/pk` refuses a Linear mutation when the resolved token's workspace doesn't match these pins (fail-closed on a confirmed mismatch; skipped with a warning if neither is set). Carries v4.11.0: the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
+**v4.14.0** — Last updated: 2026-07-14  *(**v4.14.0** — new optional, commented-out `### Phase Label Layer` block under `## Initiative Surface`: the opt-in convention (phase/pool label names, `Order: Any`, one Manual-sorted saved view per label, `sortOrder` step) that `/roadmap-review` Phase 3.5 drift-checks and `/roadmap-create` Phase 3.5 scaffolds. Ships commented out — uncomment to opt in; skills no-op without an active section, so un-opted projects see zero behavior change. Carries **v4.13.0** — new optional `## Model Policy` section: role → model + effort table that portable skills reference instead of hardcoding model names; absent section = documented defaults, no behavior change. Carries **v4.12.0** — `Team ID` / `Workspace slug` now also pin `pk`'s **write guard**: `bin/pk` refuses a Linear mutation when the resolved token's workspace doesn't match these pins (fail-closed on a confirmed mismatch; skipped with a warning if neither is set). Carries v4.11.0: the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -78,6 +78,37 @@ derive the current initiative live from the Linear hierarchy; `/roadmap-create` 
 > legacy `.vbw-planning/PHASES.md` + `linear-map.json` automatically — `bin/pk` reads them read-only.
 > Rename your delivery initiatives with `i{N}.` prefixes to switch a project to the native surface,
 > then the files can be deleted. New projects are native from `/roadmap-create`.
+
+### Phase Label Layer (optional)
+
+An **opt-in visualization mirror** of `ROADMAP.md`'s build order onto the Linear board, for projects
+whose roadmap **phases span multiple `I{N}.P{N}.` projects** (so no single Linear project *is* a phase,
+and a plain project filter can't render "this phase, in order"). It answers *"what order do I run these
+in, what's parallel?"* — a question the `i{N}.`/`I{N}.P{N}.` surface above does **not** answer.
+`/roadmap-review` Phase 3.5 drift-checks it against `ROADMAP.md`; `/roadmap-create` Phase 3.5 scaffolds it.
+
+**The config table below ships commented out — that's the opt-out.** The skills gate on the *filled-in
+values*, not this heading: with the table commented (or its cells blank) there's no active config, so
+`/roadmap-review` Phase 3.5 no-ops and an un-opted project sees zero behavior change. **To opt in:**
+uncomment the block and replace the example label/view names with your own (drawn from *your*
+`ROADMAP.md`'s phase names — letters, numbered milestones, quarters, whatever it uses). If your phases
+map 1:1 to projects, you don't need this layer — the initiative surface already answers "what order."
+
+<!-- OPT IN by uncommenting this block and filling your values:
+| Key | Value |
+|-----|-------|
+| **Sequenced phase labels** | `Roadmap: Phase A`, `Roadmap: Phase B`, `Roadmap: Phase C` |
+| **Continuous pool label** | `Roadmap: Continuous` |
+| **Order label** | `Order: Any` |
+| **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over MCP) |
+| **`sortOrder` step** | `1000` (gap between adjacent issues; leaves slack to insert without a renumber) |
+| **Roadmap source** | `ROADMAP.md` (the file whose per-phase issue lists this layer mirrors) |
+
+- **Phase labels come from your own `ROADMAP.md` phase names** — the values above are SiteLine-shaped examples, not a contract.
+- **Continuous is named-items-only:** only issues `ROADMAP.md` names by identifier get the pool label — never every open issue in the pool's projects.
+- **Order = real `blockedBy` relations**, never description prose. `Order: Any` marks issues with no intra-phase dependency (safe to run anytime / in parallel).
+- One issue carries **at most one** `Roadmap: Phase *` label (or the pool label) — never two, and never both `Order: Any` and an unresolved `blockedBy`.
+-->
 
 ## Slack (optional)
 

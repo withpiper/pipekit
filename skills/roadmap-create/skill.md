@@ -118,6 +118,20 @@ On approval, create top-down. Apply the naming convention exactly.
 5. **Labels** — type label (Feature/Improvement/Research) + domain label per feature cluster.
 6. **Milestones (optional)** — only for a project with >6 issues that benefits from intra-project gating.
 
+### Phase 3.5 — Phase-Label Layer scaffold (optional; config-gated)
+
+**Skip unless the project wants the phase-label layer** — either `method.config.md` has a *filled-in* `### Phase Label Layer` section (the template ships it commented out; gate on active label values, not the bare heading), or the human opts in when offered. The layer is a *visualization mirror* of the roadmap's build order onto the Linear board — worth scaffolding here only when the roadmap's **phases span multiple `I{N}.P{N}.` projects**, so no single Linear project *is* a phase. For a project whose phases map 1:1 to projects, skip it (the initiative surface already answers "what order"). See `/roadmap-review` Phase 3.5 and `method.config.md § Phase Label Layer`. If the human opts in here but the config section is still commented, offer to fill it in as part of the scaffold.
+
+When opted in, offer to scaffold (all read the label/view convention from config — hardcode nothing):
+
+1. **Labels** — one team label per sequenced phase + the Continuous pool (e.g. `Roadmap: Phase A/B/C`, `Roadmap: Continuous`, drawn from this roadmap's own phase names) via `linear_createTeamLabel`, plus the `Order: Any` label.
+2. **Membership** — apply the phase label to each issue by the phase it sits under in the tree you just authored. **Continuous is named-items-only** — label just the issues you explicitly place there, never a whole project.
+3. **`sortOrder`** — set each issue's `sortOrder` to mirror the tree's top-to-bottom order within its phase, stepped (e.g. 1,000 apart) to leave insert slack. `linear_updateIssue`.
+4. **Saved views** — one ungrouped view per label via `linear_createSavedView` (**read an existing view's `filterData` first** — the DSL is undocumented). Tell the human to toggle the view to **Manual sort** in the Linear UI — that toggle is **not** settable over MCP, so the `sortOrder` you set only renders once they flip it.
+5. **Order** = real `blockedBy` relations for intra-phase dependencies (Phase 3 step 4 already creates these); `Order: Any` marks the rest. Never encode order as description prose.
+
+This is a scaffold, not an ongoing sync — once created, `/roadmap-review` Phase 3.5 drift-checks the layer against `ROADMAP.md`. If you skip it here (or you're adopting the layer on an already-built board), it's fully retrofittable later: `/roadmap-review` Phase 3.5 detects an un-scaffolded board and offers the same **bootstrap** (create labels + views, seed `sortOrder`, apply membership + relations) before it drift-checks.
+
 ### Phase 4 — Verify the surface
 
 Confirm the native initiative surface is well-formed (this is what `pk next` will read):
@@ -183,5 +197,6 @@ from Linear.
 - `/define` — previous step: creates the project definition
 - `/strategy-create` — creates the strategy docs this skill reads
 - `/phase-plan` — next step: confirm the current initiative, promote its first issues to Needs Spec
-- `/roadmap-review` — validates the Linear hierarchy after creation
+- `/roadmap-review` — validates the Linear hierarchy after creation (and drift-checks the phase-label layer, Phase 3.5)
 - `method.config.md § Initiative Surface` — the naming-convention contract this skill applies
+- `method.config.md § Phase Label Layer` — the opt-in convention for the Phase 3.5 scaffold (label names, order label, saved-view + `sortOrder` conventions)
