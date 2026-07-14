@@ -185,10 +185,10 @@ This is the spec-time half of gap #1's artifact rule. The Spec Review Agent (`te
    - `labels`: **merged list**: `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
      - Pull `existing_labels` from Phase 1's `linear_getIssueById` payload (new issues → empty list).
      - Strip any pre-existing `tier:quick | tier:standard | tier:heavy` label — the Phase 3.6 derivation replaces it. Other labels (`Feature`, `Finance`, domain tags, etc.) are preserved.
-     - Linear's `linear_updateIssue` replaces the labels list wholesale; passing the full merged set is required.
+     - The `labels` param on `linear_updateIssue` is a **wholesale set, not a delta** — it replaces the issue's whole label list — so pass the full merged set. (Dedicated delta tools, `linear_addIssueLabel` / `linear_removeIssueLabel`, do exist on `@tacticlaunch/mcp-linear`; a single wholesale `updateIssue` set is just cleaner here since Phase 5 reconciles the entire label list at once.)
 2. Store the issue ID for reference.
 
-**Why the merge:** `linear_updateIssue` doesn't support add/remove deltas — pass it the desired final state. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
+**Why the merge:** the `labels` param on `linear_updateIssue` is a wholesale set — pass it the desired final list. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
 
 ### Phase 6 — Spec Review Cycle (automated)
 

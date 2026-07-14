@@ -5,7 +5,7 @@ description: Audit roadmap health — issues, dependency order, spec coverage, d
 
 # Roadmap Review Skill
 
-**v4.1.0** — Last updated: 2026-06-21 *(validate the Linear-native initiative surface — initiative order lives in Linear `i{N}.` initiatives / `P{N}.` projects per `method.config.md` § Initiative Surface, not in `.vbw-planning/PHASES.md` or `linear-map.json`)*
+**v4.14.0** — Last updated: 2026-07-14 *(add the optional, config-gated **Phase-Label Layer** check — new **Phase 3.5** — mirroring `ROADMAP.md`'s per-phase build order + parallelism onto the Linear board via labels + saved views + `sortOrder` + `blockedBy`, drift-checked against `ROADMAP.md`. No-op unless that section is *filled in* (the template ships it commented out — gate on active values, not the bare heading), so it's fully portable. Carries v4.1.0: validate the Linear-native initiative surface — order lives in `i{N}.`/`I{N}.P{N}.` names per `method.config.md` § Initiative Surface, not in `.vbw-planning/PHASES.md` or `linear-map.json`)*
 
 You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context — including the **§ Initiative Surface** contract that defines the Linear-native initiative model this skill validates. Run this before speccing a new initiative to ensure the roadmap is coherent and complete.
 
@@ -26,6 +26,7 @@ Validate that:
 5. Workflow states are consistent with dependency ordering
 6. Spec coverage is adequate for the next planned initiative
 7. Strategy docs are flagged if stale
+8. **(Optional)** The **phase-label layer mirrors `ROADMAP.md`** — if `method.config.md` has a *filled-in* `### Phase Label Layer` section, the phase/pool labels, `sortOrder`, and `blockedBy` relations on the board match the roadmap's curated order (Phase 3.5; skipped entirely when the section is absent or still commented out)
 
 This is the **gate between Stage 0 (Foundation) and Stage 1 (Definition)** in the Pipekit pipeline. Run it before starting a new initiative of specs.
 
@@ -123,6 +124,72 @@ This is the core Linear-native validation. The initiative surface (per `method.c
 
 Output: an Initiative Surface section listing any naming/order/placement/lifecycle violations, each with the exact rename or re-parent to apply.
 
+### Phase 3.5 — Phase-Label Layer (optional; config-gated)
+
+**Skip this phase entirely unless `method.config.md` has a *filled-in* `### Phase Label Layer` section.** The template ships that section with its config table **commented out**, so the mere heading is not the signal — gate on the *active label/view values* (e.g. an uncommented `Sequenced phase labels` row). Table commented or cells blank → no active config → no-op, proceed to Phase 4. The layer is opt-in: a *visualization mirror* of `ROADMAP.md`'s hand-curated build order onto the Linear board, for projects whose roadmap **phases span multiple `I{N}.P{N}.` projects** (so no single Linear project *is* a phase, and a plain project filter can't render "this phase, in order").
+
+This layer is **additive**, not a replacement. It sits beside the two surfaces this skill already validates:
+
+| Surface | Answers | Lives in |
+|---|---|---|
+| `i{N}.`/`I{N}.P{N}.` initiative surface (Phase 3) | "What's the current initiative / sub-phase?" | Initiative + Project names |
+| **Phase-label layer (this phase)** | **"What order do I run these in — what's parallel?"** | Labels + saved views + `sortOrder` + `blockedBy` |
+| `ROADMAP.md` | Human-readable narrative source of truth | A committed file |
+
+The label layer **owns no state `ROADMAP.md` doesn't already assert** — so this phase is a drift check *of the mirror against the file*, nothing more.
+
+**Read the convention from config — hardcode nothing.** The `### Phase Label Layer` section names, per project:
+- the **roadmap source file** — the `Roadmap source` key (default `ROADMAP.md`). Read *that* file's per-phase issue lists as the source of truth; never hardcode the path. A project still on the legacy `.vbw-planning/ROADMAP.md` sets the key to it — this is the same file the Stage-0 check and Phase 1 locate, so the layer and the audit stay on one roadmap.
+- the **phase/pool label set** — e.g. `Roadmap: Phase A`, `Roadmap: Phase B`, `Roadmap: Continuous`. Derive the actual phase names from the roadmap source file's own headings (a project may letter phases, number milestones, use quarters — never assume "Phase A/B/C"). Config marks which labels are **sequenced phases** vs the standing **Continuous pool**.
+- the **order label** — e.g. `Order: Any` — marking an issue with no intra-phase dependency (safe to run anytime / in parallel).
+- the **saved-view convention** — one ungrouped, Manual-sorted saved view per label. *(Views are **created** at scaffold time — by `/roadmap-create` at authoring, or by this phase's **bootstrap** on an existing board — but are **not drift-checked** once they exist: this phase verifies label membership, `sortOrder`, and relations against the roadmap, not the ongoing state of a view. A later deleted/renamed view won't flag.)*
+- the **`sortOrder` step** — the `sortOrder` step key (default 1,000): the numeric gap between adjacent issues, leaving slack to insert later without a full renumber.
+
+**Materialization check — is the layer scaffolded yet? (the retrofit path).** Before drift-checking, determine whether the layer's infrastructure exists on the board. List the team labels and the saved views (`linear_getSavedViews`) and compare against the configured label/view set:
+
+- **Scaffolded** — every configured phase/pool label exists as a team label and each has its saved view → skip to the drift checks (A–D).
+- **Un-scaffolded** — none of the configured labels exist and there are no matching views → this is a **first-time retrofit**: rolling the layer onto an *existing* board (the rs-vault / Piper case — a project that already has a roadmap but never had the layer). Offer to **bootstrap** it (below).
+- **Partial** — some labels/views exist, some don't → bootstrap **only the missing infrastructure** (the absent labels + views, steps 1 & 5 below). Leave membership, `sortOrder`, and relations to the drift checks (A/B/D): a partially-populated board needs *reconciliation* (adds **and** removes), which is what A–D do — not the blind all-creates that only make sense on a from-nothing board.
+
+**Bootstrap — one-time scaffold onto an existing board.** This is the same create path `/roadmap-create` Phase 3.5 runs at initial authoring, re-homed here so an *established* board can adopt the layer without hand-building it (the layer was originally hand-built on SiteLine; this closes that gap). It has its **own explicit confirm** — present a **scaffold plan**, apply on `go` — because it's a distinct one-time operation that includes writes (view creation, `sortOrder` seeding) the end-of-skill drift prompt doesn't cover. The full six-step create below runs on a fully **un-scaffolded** board (all-creates, one `go`); on a **partial** board bootstrap runs only steps 1 & 5 (missing labels + views) and the drift checks own the rest. On `go`:
+
+1. **Create missing labels** — `linear_createTeamLabel` for each sequenced phase label, the Continuous pool label, and `Order: Any` (only the ones that don't already exist).
+2. **Apply membership** — label each issue by the phase the roadmap source places it under. Continuous is **named-items-only** (§A's rule applies — never bulk-label a whole project).
+3. **Seed `sortOrder`** — set each issue's `sortOrder` to the roadmap's top-to-bottom order within its phase, stepped by the `sortOrder` step key. **A seed of an unset value applies on the bootstrap confirm** — this is distinct from check B's flag-only *reorder*: seeding a blank order from the roadmap *is* the materialization; rewriting an already-curated order is the human-intent call B guards. Only seed issues whose `sortOrder` isn't already meaningfully set.
+4. **Create relations** — a `blockedBy` relation for each intra-phase dependency the roadmap names (§D).
+5. **Create views** — one ungrouped saved view per label (`linear_createSavedView`; read an existing view's `filterData` first — §Tooling).
+6. **Hand-off step (not optional to report):** tell the human to toggle each new view to **Manual sort** in the Linear UI — it's not settable over MCP, and until they do, the seeded `sortOrder` won't render. Report this as a *pending human step*, never as "views done."
+
+After bootstrap the drift checks below are a no-op on a freshly-scaffolded board; on a partial one they reconcile whatever bootstrap didn't create. A project whose phases map 1:1 to projects shouldn't be here at all — it has no `### Phase Label Layer` config, so Phase 3.5 already no-opped.
+
+Run these checks (all report-only — fixes fold into the end-of-skill fix prompt):
+
+**A. Membership drift.** For each phase/pool `ROADMAP.md` names, diff the issue identifiers it lists against current Linear label membership (`linear_searchIssues` filtered by the label). Report:
+- **Missing label** — `ROADMAP.md` lists the issue under a phase but the issue lacks the label → propose add.
+- **Stray label** — the issue carries the label but `ROADMAP.md` doesn't list it under that phase → propose remove. *(This is the Bug-1 failure mode: a `Roadmap: Phase X` label picked up as a side effect of a re-parent, not asserted by the roadmap — see the `/linear-hygiene` guardrail. Project membership ≠ phase-label membership.)*
+- **Continuous is named-items-only.** Only issues `ROADMAP.md` names by identifier get the pool label. **Never** propose labeling every open issue in the pool's projects — a phase-arc project deliberately holds a mix of phase-labeled work and unitemized capacity-fill the roadmap leaves unordered. Labeling the whole project would invent priority the roadmap doesn't assert.
+
+**B. `sortOrder` monotonicity.** Within each label, verify `sortOrder` is monotonic in `ROADMAP.md`'s top-to-bottom listed order. **Flag out-of-order pairs — do NOT auto-fix.** Reordering is a human-intent call; surface it and let the user confirm before any `linear_updateIssue` rewrites `sortOrder`.
+
+**C. Exclusivity + dependency consistency.**
+- No issue carries **two** `Roadmap: Phase *` labels — an issue lives in one sequenced phase (or the pool), not two. Flag conflicts.
+- No issue carries **both** `Order: Any` **and** an unresolved `blockedBy` relation — "any order" and "blocked by X" contradict. Flag; the human resolves which is true.
+
+**D. Dependencies are relations, not prose.** Intra-phase sequential order must be real `blockedBy` relations, never prose in a description (nothing enforces or surfaces prose). If `ROADMAP.md` narrates "X before Y" within a phase but no `blockedBy` relation exists, flag the missing relation. *(This overlaps Phase 4 — if Phase 4 already caught it, report it once, don't double-count.)*
+
+**Propose-then-apply.** Two confirm surfaces, kept separate:
+- **Bootstrap** (materialization on an un-scaffolded / partial board) has its **own** scaffold-plan confirm inside this phase — it creates labels + views, seeds `sortOrder`, and applies membership + relations in one `go`.
+- **Drift** (A–D on an already-scaffolded board) folds into the skill's existing "Want me to fix any of these now?" prompt (`linear_addIssueLabel` / `linear_removeIssueLabel` / `linear_createIssueRelation`).
+
+`sortOrder` handling differs by surface: **seeding** an unset order during bootstrap applies on the bootstrap confirm; **reordering** an already-set order (check B) stays **proposal-only** — never auto-applied.
+
+> **Tooling (verify against your installed MCP — a fast-moving, partly-undocumented surface, exactly what `pipekit-tooling.md`'s verify-installed-API rule is for):**
+> - Add/remove issue label: `mcp__linear-server__linear_addIssueLabel` / `linear_removeIssueLabel`. Create a missing phase label: `linear_createTeamLabel` (`teamId`, `name`, `color`).
+> - Saved views: `linear_createSavedView` uses an **undocumented internal `filterData` DSL** — **read an existing saved view first** (`linear_getSavedViews`) to confirm the current shape before authoring one. Example label filter: `{"and":[{"labels":{"and":[{"or":[{"name":{"eq":"Roadmap: Phase A"}}]}]}}]}`.
+> - `sortOrder` is a plain number on `linear_updateIssue` (lower sorts first) but **only renders in a view's Manual sort mode**, which a human must toggle in the Linear view UI — it is **not** settable over MCP. This skill sets labels + `sortOrder` *values*; the Manual-sort toggle is a one-time human step, so say so rather than reporting the view "done."
+> - Relations: `linear_createIssueRelation` (`blockedBy` / `blocks`).
+> - **Payload watch-out (same as `/linear-hygiene`):** a `linear_searchIssues` sweep across a project's several phase-arc projects can exceed one context. Dispatch a grounding-tier subagent (per `method.config.md § Model Policy`, default `haiku`, effort `low`) to digest and return a condensed `{identifier, phase-label, sortOrder}` table rather than pulling raw payloads into the skill context.
+
 ### Phase 4 — Dependency Validation
 
 1. Read light specs for issues that have them — extract dependency contracts (e.g., "PROJ-8 is a hard blocker for PROJ-7")
@@ -194,6 +261,35 @@ Present a summary dashboard:
 **Violations:**
 - Initiative "Onboarding" has delivery issues but no `i{N}.` prefix → rename to `i4. Onboarding` or confirm it is a strategic theme
 - PROJ-176: attached to initiative `i2.` with no project → re-parent into a `P{N}.` project
+
+### Phase-Label Layer  *(only if the `### Phase Label Layer` config is filled in — otherwise omit this block)*
+
+**State:** `scaffolded` — drift-check below. *(Or `un-scaffolded → bootstrap offered` / `partial → bootstrap missing pieces + drift-check` — show the scaffold plan instead of, or alongside, the drift table.)*
+
+**When un-scaffolded (retrofit) — scaffold plan:**
+```
+Bootstrap the phase-label layer onto this board? Will create:
+  Labels:     Roadmap: Phase A, Roadmap: Phase B, Roadmap: Continuous, Order: Any   (4 new)
+  Membership: 18 issues labelled per ROADMAP.md
+  sortOrder:  seed 18 issues (step 1000)
+  Relations:  3 blockedBy (intra-phase deps ROADMAP.md names)
+  Views:      4 saved views (1 per label)
+  ⚠ After: toggle each view to Manual sort in Linear (not settable over MCP)
+Say "go" to scaffold, or redirect any line.
+```
+
+**When scaffolded — drift table + drift list:**
+| Label | ROADMAP issues | Linear members | Missing | Stray | sortOrder |
+|-------|----------------|----------------|---------|-------|-----------|
+| Roadmap: Phase A | 7 | 7 | 0 | 1 | monotonic |
+| Roadmap: Phase B | 5 | 4 | 1 | 0 | monotonic |
+| Roadmap: Continuous | 6 | 6 | 0 | 0 | n/a (pool) |
+
+**Drift:**
+- PROJ-410: listed under Phase B in `ROADMAP.md`, missing `Roadmap: Phase B` → add label
+- PROJ-382: carries `Roadmap: Phase A` but `ROADMAP.md` places it under Continuous → remove `Roadmap: Phase A` (stray — likely from a re-parent; see `/linear-hygiene` guardrail)
+- Phase A order: PROJ-390 sorts before PROJ-388 but `ROADMAP.md` lists PROJ-388 first → **proposal only**, confirm reorder
+- PROJ-415: carries both `Order: Any` and `blockedBy PROJ-412` → contradiction, resolve
 
 ### Completeness
 | Phase | Requirements | Issues | Gaps | Orphans |
@@ -304,7 +400,7 @@ A mismatch is a hard flag — fix the surface, don't proceed to spec.
 ...
 ```
 
-Ask the user: _"Want me to fix any of these issues now? I can create missing issues, rename/re-parent phase initiatives and projects, set dependency links, or flag items for spec generation."_
+Ask the user: _"Want me to fix any of these issues now? I can create missing issues, rename/re-parent phase initiatives and projects, set dependency links, add/remove phase-labels to match `ROADMAP.md`, or flag items for spec generation."_ (Phase-label `sortOrder` reorders stay proposal-only — I'll list them but won't apply without your confirm.)
 
 ## Cadence
 
@@ -320,3 +416,5 @@ Run at these moments:
 - See `sop/Linear_SOP.md` — dependency graph and workflow states
 - `/strategy-sync` — runs after shipping to update Strategy docs (this skill flags staleness)
 - `/light-spec` — generates specs for issues flagged as needing them
+- `/linear-hygiene` — the placement janitor; it owns re-homing but **not** phase-label placement (that's Phase 3.5 here) — its guardrail keeps the two from colliding
+- `method.config.md § Phase Label Layer` — the opt-in convention Phase 3.5 reads (label names, order label, saved-view + `sortOrder` conventions)

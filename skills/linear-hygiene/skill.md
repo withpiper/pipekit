@@ -108,6 +108,7 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 - **Don't guess a project when confidence is low** — surface the top-2 candidates instead.
 - **Don't pull full board descriptions into context** — minimal fields board-wide, bodies only for the drift subset (Phase 1/2).
 - **Don't write in `--check` mode** — it's read-only by contract (`/pk-exit` depends on this).
+- **Don't infer or apply a phase-visualization label from a re-homed `projectId`.** When you set an orphan's project (Phase 3/5), **never** add a `Roadmap: Phase X` / `Roadmap: Continuous` label (or this project's equivalent, per `method.config.md § Phase Label Layer`) just because the target project belongs to a phase arc. **Project membership ≠ phase-label membership** — a phase-arc project routinely holds a mix of phase-labeled work and non-phase work. Phase-label placement is owned by `/roadmap-review`'s Phase-Label Layer pass (drift-checked against `ROADMAP.md`), not by this placement janitor. This skill mutates `projectId` / `priority` / `stateId` only — it must not touch `Roadmap: *` labels at all. *(Anchor: SiteLine POC-382 was re-parented into a Phase-A project during a placement pass and silently picked up a stray `Roadmap: Phase A` label, but `ROADMAP.md` places it under Continuous.)*
 
 ## Deferred to v2 (not in this version)
 
