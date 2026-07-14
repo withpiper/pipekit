@@ -47,6 +47,22 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.15.0 — 2026-07-14
+
+> **Roadmap Progress Reconciliation — the roadmap's checkboxes vs Linear `Done`.** A roadmap file with `- [ ]`/`- [x]` progress checkboxes and the Linear board are edited by different hands at different times, so they drift: a box gets ticked before the issue actually ships, or an issue lands `Done` and the roadmap is never updated. New **Phase 2.5** in `/roadmap-review` reconciles the two. This is the one check SiteLine's hand-rolled phase-label drift-check had that v4.14.0's Phase 3.5 didn't cover — now portable and upstream (surfaced while porting v4.14.0 to SiteLine).
+
+**The check (both directions, against the states already fetched in Phase 1):**
+- **Checked but not `Done`** — the roadmap shows `- [x]` for an issue whose Linear state isn't `Done` (reopened, still in flight, or ticked prematurely) → flag; a checked box asserts "shipped."
+- **`Done` but unchecked** — an issue is `Done` in Linear but the roadmap still shows `- [ ]` → flag; the roadmap is stale.
+
+**Report-only, and it never writes the roadmap.** `ROADMAP.md` is human-owned (`method.md § Initiative Surface Ownership` — skills never write it), and a mismatch is ambiguous about which side is right (a `[x]`-but-not-`Done` may mean the issue *reopened*, not that the box is wrong). So Phase 2.5 surfaces both lists and lets the human resolve — tick the box, reopen the issue, or fix the state. It never edits the roadmap file and never flips a Linear state from a checkbox.
+
+**Gating.** Reads the roadmap source (`Roadmap source` key, default `ROADMAP.md`); **no-op** if that file has no checkboxes. Deliberately **independent of the phase-label layer** — a project can keep a checkboxed roadmap without opting into `### Phase Label Layer`, so the check is *not* gated behind that config. A new Phase 8 report block surfaces the mismatches.
+
+**No `bin/pk` behavior change** — `PK_VERSION` bump only; smoke suite unchanged. One skill (`/roadmap-review`) + the release stamps.
+
+---
+
 ## v4.14.0 — 2026-07-14
 
 > **Roadmap Phase-Label Layer — render `ROADMAP.md`'s build order onto the Linear board.** The `i{N}.`/`I{N}.P{N}.` initiative surface answers *"what's the current initiative/sub-phase?"* — but a solo dev looking at N issues in a project still can't see *"what order do I run these in, and which are safe in parallel?"* A roadmap **phase** routinely spans multiple `I{N}.P{N}.` projects, so no single Linear container *is* a phase, and a plain project filter can't render "this phase, in order." This release makes a **label-based visualization mirror** of `ROADMAP.md` a first-class, config-gated, portable part of `/roadmap-review` — proven live on SiteLine's `piper-poc` across 24+ issues / 4 labels before being brought upstream.
