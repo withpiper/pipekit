@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.5.0** — Last updated: 2026-06-22  *(Initiative surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the initiative reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.1.0's Linear-native Initiative surface — Initiative `i{N}.` = initiative, ordered by name prefix. The roadmap's initiative order lives in Linear, not a committed file; `pk next`/`pk status` derive the current initiative live. The legacy `.vbw-planning/PHASES.md` and `linear-map.json` are retired (`bin/pk` reads them only as a read-only fallback for un-migrated projects). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.15.1** — Last updated: 2026-07-15 07:47  *(**v4.15.1** — document the optional `Roadmap: Phase *` / `Order: Any` phase-label family (v4.14.0+) in § Standard Labels, pointing to `method.config.md § Phase Label Layer` + the `/linear-hygiene` guardrail. Carries v4.5.0: Initiative surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the initiative reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.1.0's Linear-native Initiative surface — Initiative `i{N}.` = initiative, ordered by name prefix. The roadmap's initiative order lives in Linear, not a committed file; `pk next`/`pk status` derive the current initiative live. The legacy `.vbw-planning/PHASES.md` and `linear-map.json` are retired (`bin/pk` reads them only as a read-only fallback for un-migrated projects). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -258,6 +258,18 @@ Tier shapes *which gates apply* to an issue. `/work` and `/verify` infer the tie
 Per-project tier configuration lives in `method.config.md` § Tiers (a tier can be disabled by removing its row; Standard is the non-removable fallback).
 
 Domain labels are project-specific — define them in your Linear workspace to match your product areas.
+
+### Roadmap (optional — the phase-label layer)
+
+Projects that opt into the **phase-label layer** (`method.config.md § Phase Label Layer`, v4.14.0) carry two more label families that mirror `ROADMAP.md`'s build order onto the board — for roadmaps whose phases span multiple `I{N}.P{N}.` projects, so no single project *is* a phase. **Optional and project-named** — read the exact names from config; the values below are illustrative.
+
+| Label | Purpose |
+|---|---|
+| `Roadmap: Phase A` / `B` / `C` … | The sequenced roadmap phase an issue belongs to. A *label* (not a project) carries phase membership because phases cross project boundaries. One per issue; `sortOrder` mirrors the roadmap's top-to-bottom order within the phase. |
+| `Roadmap: Continuous` | The standing pool — items the roadmap names but doesn't sequence. **Named-items-only**, never bulk-applied to a whole project. |
+| `Order: Any` | The issue has no intra-phase dependency — safe to run anytime / in parallel. Sequential order uses real `blockedBy` relations, never this label. |
+
+`/roadmap-review` Phase 3.5 owns these — it scaffolds/bootstraps them onto the board and drift-checks them against `ROADMAP.md`. **`/linear-hygiene` must never infer or apply them** from a re-homed `projectId` (project membership ≠ phase-label membership). Full convention: `method.config.md § Phase Label Layer`.
 
 ---
 
