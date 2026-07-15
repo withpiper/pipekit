@@ -47,6 +47,18 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.15.1 — 2026-07-15
+
+> **Docs backfill — the instructional docs catch up to v4.14.0/v4.15.0.** The two prior releases bumped the constitutional-doc *stamps* but left some of the bodies stale (the exact drift the stamp discipline exists to catch — surfaced by an audit). This patch reconciles them. No `bin/pk`, skill, or methodology change; smoke suite unchanged.
+
+- **`GUIDE.md`** — the "Ongoing health checks" list under *Stage 0 Gate: Roadmap Review* enumerates what `/roadmap-review` actually does, and was missing **both** new phases. Added **Roadmap progress** (Phase 2.5, checkbox ↔ `Done`) and **Phase-label layer** (Phase 3.5), each marked optional / no-op-when-inapplicable.
+- **`sop/Linear_SOP.md`** — § Standard Labels documented every label family (Type/Flag/Tier) but not the phase-label layer's. Added a *Roadmap (optional)* subsection for the `Roadmap: Phase *` / `Order: Any` labels, pointing to `method.config.md § Phase Label Layer` and the `/linear-hygiene` guardrail. (This SOP syncs to consumers, so the tag carries it to rs-vault/Piper/SiteLine.)
+- **`RUNBOOK.md`** — new **Maintenance** section. The runbook was only the two per-issue loops; the periodic Linear housekeeping had no home. Added a cadence table for `/linear-hygiene`, `/brainstorm-review`, `/roadmap-review`, `/phase-plan`, plus a phase-label-layer upkeep note (bootstrap on first run → drift-check thereafter → the one manual Manual-sort toggle).
+
+**Verified as *correctly* left alone:** `README.md` (high-level intro — the layer is below its altitude), `STARTUP.md` / `Skills_SOP.md` (bootstrap-chain / catalog altitude; `STARTUP`'s stamp staying at v4.11.0 is the drift-signal convention working, not an oversight).
+
+---
+
 ## v4.15.0 — 2026-07-14
 
 > **Roadmap Progress Reconciliation — the roadmap's checkboxes vs Linear `Done`.** A roadmap file with `- [ ]`/`- [x]` progress checkboxes and the Linear board are edited by different hands at different times, so they drift: a box gets ticked before the issue actually ships, or an issue lands `Done` and the roadmap is never updated. New **Phase 2.5** in `/roadmap-review` reconciles the two. This is the one check SiteLine's hand-rolled phase-label drift-check had that v4.14.0's Phase 3.5 didn't cover — now portable and upstream (surfaced while porting v4.14.0 to SiteLine).
