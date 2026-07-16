@@ -258,6 +258,15 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 - **Don't fold test + fix into one commit.** The audit trail is part of the value.
 - **Don't promote `Urgent` bugs in a batch.** Blast radius mismatch.
 
+## Common Rationalizations
+
+| You're about to say… | The rebuttal |
+|---|---|
+| "The fix is obvious, repro is a waste of time" | Phase 2 is a GATE because unrepro'd bugs get guess-fixed and ship as silent regressions — and "this error is probably X" is a Red Flag, not a diagnosis. Can't repro → `needs-info`, not a guess-fix. |
+| "I'll write the test after the fix" | A test written against passing code tests the fix, not the spec (Red Flags). Test-first is the audit trail — the failing commit *is* the repro record. |
+| "It's urgent — skip the process" | Urgent changes the *routing* (solo promote, Phase 7), not the discipline. The postmortem stays mandatory for priority 1–3; urgency is when guess-fixes are most tempting and most expensive. |
+| "It's three small bugs, I'll batch them in one run" | One bug per run — a bundle gets one repro, one test, one postmortem, and two of the three bugs lose their audit trail. Split first (`/linear-hygiene`'s bundle rule exists for the same reason). |
+
 ## Origin
 
 Built locally in rs-vault, dogfooded on RS-94 (magic-link Enter-key OAuth misroute, 2026-05-07), promoted to Pipekit upstream after the first clean run. The pattern: build a candidate skill in a consuming project under `.claude/skills/<name>/`, dogfood on a real ticket, promote to `pipekit/skills/<name>/` once it earns its keep, sync back via `sync-method.sh`.

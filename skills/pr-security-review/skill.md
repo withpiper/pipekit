@@ -37,6 +37,15 @@ Run `/pr-security-review` when the PR touches **any** of:
 - Periodic codebase-wide security audits — use `/security-review` (different skill, different shape)
 - Broad PR review covering many dimensions — use `pr-review-toolkit:review-pr`
 
+## Common Rationalizations
+
+| You're about to say… | The rebuttal |
+|---|---|
+| "Semgrep/CI already passed" | CI catches known *patterns*; this skill reviews privilege-boundary *logic* — RLS policy scope, SECURITY DEFINER search_path, GRANT blast radius. Different failure class; both run. |
+| "The migration is one line" | One-line GRANT/POLICY changes have outsized blast radius, and an applied migration is frozen — the fix is a *new* migration (`pipekit-migrations.md`). Small diff ≠ small consequence; cheap review now vs. hardening-migration later. |
+| "It's behind RLS anyway" | RLS correctness is exactly what's under review (R1–R6). "The policy protects it" assumes the conclusion. |
+| "`/verify` passed" | `/verify` proves spec adherence; this rubric hunts what the spec didn't ask — the whole reason the antagonistic layer exists beside the gate layer. |
+
 ## Auto-trigger conditions
 
 When `/pr-fix` runs on a PR, it should suggest `/pr-security-review` as a sibling step if **any** of these match the diff:

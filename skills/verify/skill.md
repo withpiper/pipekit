@@ -733,6 +733,23 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | `$VERIFY_DIR` unwritable (perms, disk full) | Print error, fall through to stdout-only mode for this run (tier downgraded to virtual). Day 3 gate will block ship in this case since `verify-complete.md` cannot be written. |
 | Linear unreachable for tier lookup | `pk_linear_tier` returns "standard" — evidence layer still written. |
 
+## When NOT to use
+
+- Design / code-quality review of a PR — that's `/pr-fix` (interactive triage) or `pk ship --review` (antagonistic). `/verify` checks spec adherence, not what the spec forgot to ask.
+- Security audit — `/pr-security-review` (PR-scoped) or `/security-review` (repo-wide). `/verify`'s Step 6 security gate is a classifier pass, not a review.
+- Interactive UAT — `/verify` proves the code passes its gates; it is **not** a substitute for the human exercising the feature (RUNBOOK step [5e], the non-skippable Stage 3 gate).
+- Production-readiness — operational preconditions (monitoring, backups, flags) are `/prod-ready`, run once per feature at the production boundary, not per task.
+
+## Common Rationalizations
+
+| You're about to say… | The rebuttal |
+|---|---|
+| "It's a small change — skip the gate" | The gate is the gate. Simple-feeling changes are where silent regressions live (`pipekit-discipline.md` Red Flags, row 1 — it's row 1 because this excuse keeps recurring). |
+| "I already ran the tests earlier this session" | The evidence layer exists because *"Done" kept overstating reality* — issues marked shipped that git never built (v2.7.0-rc5 log-mining, both consumers). Exit codes in `evidence.txt` at this SHA, or it didn't happen. |
+| "CI will catch it on the PR anyway" | CI is the backstop, not the gate. A red PR wastes the reviewer pass and blocks the merge lane — `/verify` is cheaper than a bounced PR. |
+| "The preview/dashboard looks right" | A vendor-UI affirmative state is a *claim*, not evidence of effect (Red Flags). Closing on a green checkbox you never exercised is the false-ship pattern. |
+| "The gate fails on something unrelated — `--no-verify` past it" | Never route around a failing gate; fix the cause, or if the gate itself has drifted from CI, that's its own bug — raise it (`pipekit-tooling.md` § Pre-Deploy Gate). |
+
 ## What this skill does NOT do
 
 - No session-log writes — `/pk-exit` owns the session log.
