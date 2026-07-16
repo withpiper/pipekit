@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.0.0** — Last updated: 2026-06-20  *(new SOP — the schema-change *artifact* rule: every schema change lands as a tracked, reversible migration; schema-touching specs must carry a Migration Plan. Companion to the immutability rule in `.claude/rules/pipekit-migrations.md`.)*
+**v4.18.0** — Last updated: 2026-07-16  *(**v4.18.0 — migration safety Tiers 2+3 ship.** § How this is enforced grows from three points to five: `scripts/check-migration-drift.sh` (Tier 2 — branch-collision vs base tail, duplicate versions, `--remote` disk-vs-history via `supabase db push --dry-run`; synced to consumers) and `templates/ci/migration-drift.yml` (Tier 3 — the git-only checks on every PR touching `Migration dir`). Carries v4.0.0: new SOP — the schema-change *artifact* rule: every schema change lands as a tracked, reversible migration; schema-touching specs must carry a Migration Plan. Companion to the immutability rule in `.claude/rules/pipekit-migrations.md`.)*
 
 **Source of truth:** Your project's CLAUDE.md and `method.config.md § Migration dir` define the migration tool and directory. This SOP provides the methodology that applies regardless of tool.
 
@@ -65,11 +65,13 @@ In all cases: the **migration file is the artifact that ships in the PR**. Apply
 
 ## How this is enforced
 
-The artifact rule is enforced at three points in the pipeline, so a schema change can't slip through as an ad-hoc edit:
+The artifact rule is enforced at five points in the pipeline, so a schema change can't slip through as an ad-hoc edit:
 
 1. **Spec time** — `/light-spec` requires the Migration Plan section on any schema-touching spec (skill Phase 3.7). The **Spec Review Agent** (`templates/spec_review_skill.md` § Migration Rule) raises a **Blocking** issue if a schema-touching spec lacks a concrete plan. A spec without it does not reach Pass.
 2. **Verify time** — `/verify` spawns a migration-review subagent when the diff touches `Migration dir`, applying the `/pr-security-review` M1–M8 rubric (+ RLS / SECURITY DEFINER / GRANT). The flag carries a **Hold/Approve verdict**, not a raw diff. A Hold pauses auto-ship.
 3. **Review time** — `/pr-security-review` is the right tool for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, and auth surface. Use it on any PR whose Migration Plan touched policies or privileged tables.
+4. **Drift detection (Tier 2, v4.18.0)** — `scripts/check-migration-drift.sh` (synced to consumers) catches the drift classes that pass every local check: a **branch collision** (a new migration not strictly later than the base branch's migration tail — the WIT-550 class, invisible in a worktree because only the merge compares both trees), **duplicate/malformed versions on disk**, and — with `--remote`, best-effort via `supabase db push --dry-run` — **disk vs remote-history drift** (the MCP wall-clock-stamp class, 2026-05-27, ~5h deploy lockup). No `Migration dir` configured → clean skip; an unresolvable base ref warns but never false-blocks.
+5. **Merge time (Tier 3, v4.18.0)** — `templates/ci/migration-drift.yml` runs check 4's git-only mode on any PR touching `Migration dir`, with the PR base as the collision baseline — the one point where a parallel-branch collision is actually visible. Copy it to `.github/workflows/`, adjust the `paths:` filter; setup in `templates/ci/README.md`.
 
 The **immutability** invariant (frozen-file, hardening-during-review, parallel-branch coordination, MCP disk-drift, the three silent-failure patterns) is enforced by `.claude/rules/pipekit-migrations.md`, which auto-loads into every session. This SOP and that rule are complementary: the SOP is the *birth* of a migration (author it, plan it, apply it through the tool); the rule is its *life after apply* (it's frozen — fix forward, never edit back).
 

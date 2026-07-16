@@ -47,6 +47,23 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.18.0 — 2026-07-16
+
+> **Migration safety Tiers 2+3 — gap #1 completes.** Tier 1 (the artifact rule: every schema change is a tracked migration with a Migration Plan, v4.0.0-rc5) constrained how migrations are born. This release ships the two explicitly-deferred tiers that catch what survives it — the drift classes where every *local* check passes and the failure only surfaces on merge or deploy. Both anchor to real incidents that motivated the original gap analysis ("migrations is the biggest single win").
+
+**Tier 2 — `scripts/check-migration-drift.sh` (synced to consumers).** Three checks, each with the house opt-in pattern (no `Migration dir` configured → clean skip; unresolvable base ref → warn, never false-block):
+- **A. Branch collision** — a migration added on this branch that is **not strictly later** than the base branch's migration tail. The Piper WIT-550 class (2026-06-02): a same-day migration merged to `dev` mid-session; the collision was invisible in the worktree because local validation and `/verify` only ever see one branch's tree. The fix window is pre-merge — the script says so and points at `pipekit-migrations.md § Parallel Branch Coordination`.
+- **B. Duplicate / malformed versions on disk** — two branches picked the same timestamp, or a hand-named file the tool will mis-order.
+- **C. Remote-history drift (`--remote`, best-effort)** — delegates to `supabase db push --dry-run`, whose refusal *is* the authoritative check for "Remote migration versions not found in local migrations directory" (the MCP wall-clock-stamp incident, 2026-05-27, ~5h deploy lockup). Requires the CLI + a linked project; skipped with a note otherwise — checks A+B still run.
+
+**Tier 3 — `templates/ci/migration-drift.yml`.** Runs the git-only checks (A+B, credential-free) on any PR touching `Migration dir`, with the PR base as the collision baseline — the merge moment is the only point where both branches' trees are comparable, i.e. the only point the WIT-550 class is *visible*. Consumers copy it to `.github/workflows/` and adjust the `paths:` filter; setup in `templates/ci/README.md`.
+
+**Rider — `check-no-self-references.sh` now actually syncs.** The script is invoked by `pk verify` (the `Self-reference check` config key) and `Skills_SOP` says it "lives in pipekit and gets synced" — but it was never in `sync-method.sh`'s script list, so a consumer enabling the key got a silent skip. Found while wiring the drift script into the same list; both now sync with `chmod +x`.
+
+**Docs.** `Database_SOP § How this is enforced` grows from three enforcement points to five (spec / verify / review + drift-detection / merge-time CI); `templates/ci/README.md` documents the fourth template; the `Migration dir` template row lists its new consumers. No `bin/pk` logic change (`PK_VERSION` bump only); smoke **116 → 121** (skip path, clean path, WIT-550 collision, duplicate versions, unresolvable-base never-false-block).
+
+---
+
 ## v4.17.0 — 2026-07-16
 
 > **The sentinel gates go hard — `/security-gate` and `/prod-ready` stop being advisory.** Both gates shipped advisory (v4.4.0 / v4.3.0) with the hard gate as a documented fast-follow, each carrying its own § Future design. This release builds exactly that design, on the mechanics `/verify`'s `verify-complete.md` gate proved in production: **a PASS writes a sha-matched sentinel; the `pk` verb refuses without one; a FAIL writes nothing — the missing sentinel is the block.** An advisory gate everyone learns to ignore is worse than no gate; this is the enforcement thesis paying off on the two gates that bracket the feature lifecycle (entering UAT, entering production).

@@ -19,6 +19,14 @@ A third template does something different — state automation, not review:
 
 See [Merge-driven Linear transition](#merge-driven-linear-transition-linear-transitionyml) below.
 
+A fourth guards the migration chain (gap #1 Tier 3, v4.18.0):
+
+| File | Purpose | Type |
+|------|---------|------|
+| `migration-drift.yml` | Fail a PR whose new migration collides with the base branch's migration tail (or duplicates a version) | Deterministic, git-only, credential-free |
+
+It runs `scripts/check-migration-drift.sh` (synced by `sync-method.sh`) with the PR base as the baseline — catching the parallel-branch timestamp collision (Piper WIT-550) at the merge moment, the only point where both branches' trees are comparable. Copy to `.github/workflows/`, adjust the `paths:` filter to your `Migration dir`. No secrets needed — the `--remote` history check stays a local/deploy-time concern.
+
 Held back for v2.6.x: GitHub Copilot, GPT-4-based reviewers, and Codex GHAs — disqualified on the **IP-absorption pattern** (see `resources/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"), not on quality grounds.
 
 ## Installation

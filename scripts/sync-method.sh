@@ -250,6 +250,14 @@ sync_file "$TEMP/scripts/verify-next-md-defer.sh" "$PROJECT_ROOT/scripts/verify-
 [ -f "$PROJECT_ROOT/scripts/verify-next-md-defer.sh" ] && chmod +x "$PROJECT_ROOT/scripts/verify-next-md-defer.sh"
 sync_file "$TEMP/scripts/pipekit-configure-repo.sh" "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" "scripts/pipekit-configure-repo.sh"
 [ -f "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh"
+# v4.18.0 — migration-drift detector (gap #1 Tier 2; templates/ci/migration-drift.yml runs it in CI).
+sync_file "$TEMP/scripts/check-migration-drift.sh" "$PROJECT_ROOT/scripts/check-migration-drift.sh" "scripts/check-migration-drift.sh"
+[ -f "$PROJECT_ROOT/scripts/check-migration-drift.sh" ] && chmod +x "$PROJECT_ROOT/scripts/check-migration-drift.sh"
+# v4.18.0 rider — check-no-self-references.sh was invoked by `pk verify` (Self-reference
+# check key) and documented as synced, but was never in this list; consumers that enabled
+# the key got a silent skip. Now actually synced.
+sync_file "$TEMP/scripts/check-no-self-references.sh" "$PROJECT_ROOT/scripts/check-no-self-references.sh" "scripts/check-no-self-references.sh"
+[ -f "$PROJECT_ROOT/scripts/check-no-self-references.sh" ] && chmod +x "$PROJECT_ROOT/scripts/check-no-self-references.sh"
 # pipekit-journal-hook.sh retired in v2.1.2 — replaced by /pk-exit skill (writes Logs/Sessions/<date>_<HHMM>.md).
 
 # --- Sync v2 bin/pk dispatcher (alpha) ---

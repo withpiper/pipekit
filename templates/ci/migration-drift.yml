@@ -1,0 +1,38 @@
+# migration-drift.yml — Tier 3 of gap #1 (migration safety).
+#
+# Runs scripts/check-migration-drift.sh on any PR that touches the migration
+# dir, with the PR's base branch as the collision baseline. Catches the
+# parallel-branch timestamp collision (Piper WIT-550) *in CI, at the merge
+# moment* — the one point where the collision is visible, since both branches'
+# trees are finally comparable. Checks A+B only (git + filesystem, no
+# credentials); the --remote history check stays a local/deploy-time concern.
+#
+# Setup:
+#   1. Copy to .github/workflows/migration-drift.yml in your project.
+#   2. Adjust the `paths:` filter to your `Migration dir` (method.config.md).
+#   3. scripts/check-migration-drift.sh is synced by sync-method.sh — run
+#      ./scripts/sync-method.sh (or /pipekit-update) v4.18.0+ first.
+#
+# The job fails the PR check on drift — rename the colliding migration
+# (pre-merge is still before the freeze; pipekit-migrations.md § Parallel
+# Branch Coordination) and push.
+
+name: migration drift
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"   # ← adjust to your Migration dir
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # full history: the check compares against the base branch tree
+
+      - name: Check migration drift vs base branch
+        run: |
+          git fetch -q origin "${{ github.base_ref }}"
+          ./scripts/check-migration-drift.sh --base "origin/${{ github.base_ref }}"
