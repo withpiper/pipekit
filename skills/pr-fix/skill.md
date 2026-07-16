@@ -535,6 +535,24 @@ If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip 
 
 ---
 
+## When NOT to use
+
+- Migrations / RLS / SECURITY DEFINER / auth in the diff — run `/pr-security-review` **alongside** (different rubrics, different surface); `/pr-fix` alone under-covers privilege boundaries.
+- Repo-wide audit — `/security-review`; this skill is PR-scoped by design.
+- No PR and no reviewer findings yet — `pk ship --review` produces the antagonistic findings this skill triages; running `/pr-fix` first inverts the order.
+- Working-tree (uncommitted) review — `/code-review`; `/pr-fix`'s cross-spec handoff scan and Linear comment assume a PR exists.
+
+## Common Rationalizations
+
+| You're about to say… | The rebuttal |
+|---|---|
+| "The findings look wrong, I'll skip triage" | Don't self-adjudicate at a glance — that's what the two-axis triage is for. High-severity/low-confidence routes to INVESTIGATE (surfaced, verified, not trusted either way), not to the bin. |
+| "Just apply everything the reviewer said" | Never make decisions for the user (Calibration rule 8). LLM review is high-variance — findings get *fixed / rejected / deferred*, per human pick, and rejections are recorded too. |
+| "One review pass already ran, we're covered" | On high-stakes diffs (auth, money, migrations), run a second pass — same-model review variance is real enough that the engine is pluggable partly for this. |
+| "It's a handoff promise for a later PR, not this one" | Check the predecessor spec first (Phase 1.2.5). RS-64 shipped components whose integration its predecessor's spec had promised *in this PR* — the reviewer missed it because nobody fetched the handoff. Unfulfilled handoff = Critical regardless of this PR's own AC. |
+
+---
+
 ## Related Skills
 
 - `/code-review` — Lighter-weight review (no interactive discussion, no fixes)

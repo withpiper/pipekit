@@ -47,6 +47,18 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.16.0 — 2026-07-16
+
+> **High-stakes skill guardrails — the five gate skills now carry the SOP's own required sections, and the convention grows teeth.** `Skills_SOP § Body Conventions` has required `When NOT to use` + `Common Rationalizations` on ship/merge-gating skills since the convention was written — using `/verify` as its worked example. An audit (prompted by an external 9-point skill-format rubric) found the standard was itself under-applied: only `/pr-security-review` had `When NOT to use`, and **none** of the five had `Common Rationalizations` — including `/verify`, the SOP's own example. Near-equivalents turned out not to be equivalents: `What this skill does NOT do` is a *scope fence* (what the skill won't write), not the redirect anti-criteria of `When NOT to use`; `/work`'s `Anti-rationalization guard` guards against *Claude* defending broken visible state (RS-64), not against the *user* rationalizing skipping the skill.
+
+**Compliance sweep.** `/verify`, `/work`, `/pr-fix` gain both sections; `/pr-security-review` and `/pk-bug` gain `Common Rationalizations` (`/pk-bug`'s embedded "Do NOT use for" list and `Failure modes to avoid` already satisfied the other two). Each rationalization is a two-column skip-excuse → rebuttal table, and each rebuttal cites the documented incident or rule that earned it: the false-ship pattern and "Done overstating reality" (v2.7.0-rc5 log-mining) for `/verify`; WIT-451's auto-`pk done` mid-UAT and the no-guesswork stage principle for `/work`; the RS-64 handoff miss and the INVESTIGATE quadrant for `/pr-fix`; the frozen-file invariant for `/pr-security-review`; guess-fix regressions for `/pk-bug`.
+
+**The convention is extended to three required sections + one situational.** New third requirement: **Never-do guardrails** (house names `Drifts to Avoid` / `Failure modes to avoid`) — **every line must be a mistake that was actually made and corrected, with its anchor** (issue ID, date, or CHANGELOG version). A Never-do without a real incident behind it is a guess dressed as a rule — leave it out until the mistake happens; the sections stay short because they grow one corrected mistake at a time. Situational fourth: **output-producing skills** (specs, verdicts, gate reports, changelogs) should show one **good/weak example pair** with the difference named — one pair, not a gallery. (Adopted from the external rubric's two strongest items; the rest of that rubric was deliberately *not* adopted wholesale — uniform 9-section skills would bloat the low-stakes ones, which the SOP already warns against.)
+
+**No `bin/pk` behavior change** — `PK_VERSION` bump only; smoke unchanged. Five skills + `Skills_SOP` + release stamps.
+
+---
+
 ## v4.15.1 — 2026-07-15
 
 > **Docs backfill — the instructional docs catch up to v4.14.0/v4.15.0.** The two prior releases bumped the constitutional-doc *stamps* but left some of the bodies stale (the exact drift the stamp discipline exists to catch — surfaced by an audit). This patch reconciles them. No `bin/pk`, skill, or methodology change; smoke suite unchanged.

@@ -563,6 +563,22 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
 | Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |
 
+## When NOT to use
+
+- No Approved spec yet — `/light-spec` first; `/work` consumes specs, it doesn't write them. Executing an unapproved spec is guesswork crossing a stage boundary.
+- It's a bug — `/pk-bug` (repro gate + regression-test-first discipline `/work` doesn't have).
+- You're in the parent repo — `pk branch <ID>` first; `/work` runs inside the issue's worktree (Step 0 refuses otherwise).
+- Deciding *whether/where* an issue belongs — that's `/brainstorm-review` (disposition) or `/linear-hygiene` (placement), not execution.
+
+## Common Rationalizations
+
+| You're about to say… | The rebuttal |
+|---|---|
+| "This is simple, I don't need the plan step" | You definitely need a plan — simple-feeling changes are where silent regressions live (`pipekit-discipline.md` Red Flags, row 1). tier:quick already collapses the plan to one screen and the verdict to one keystroke; the floor is low on purpose. |
+| "The spec is 90% clear, I'll fill the gap myself" | No stage may introduce guesswork into the next (the core principle). Ambiguity goes *backward* — `revise: <feedback>` at the verdict gate — not forward into code. |
+| "While I'm here, let me also fix…" | Scope hygiene: flag the dependency and stop. Awareness of an adjacent problem ≠ obligation to resolve it — that's a follow-up issue, not a rider commit. |
+| "UAT will obviously pass, I'll run pk done now" | Never. A worker auto-fired `pk done` before the human finished UAT and wiped the worktree mid-test (WIT-451, 2026-05-13). That incident is why the two "ever" bullets below exist. |
+
 ## What this skill does NOT do
 
 - No `--auto` chain (the user is the chain).
