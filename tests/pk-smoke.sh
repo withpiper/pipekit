@@ -1095,6 +1095,67 @@ case "$(unit_guard "" "" 1 "" "")" in
   *)      fail "guard: no pin configured → skip" "got: $(unit_guard "" "" 1 "" "")" ;;
 esac
 
+# ── CLI tests: check-migration-drift.sh (gap #1 Tier 2, v4.18.0) ─────────────
+# Git-only checks A (branch collision vs base tail — the WIT-550 class) and
+# B (duplicate versions on disk). The --remote check needs a live supabase
+# link and is not smoke-testable; A+B are what the CI template runs.
+
+echo "== check-migration-drift (v4.18.0) =="
+
+DRIFT_SH="$REPO_ROOT/scripts/check-migration-drift.sh"
+
+make_fixture
+# (1) No Migration dir configured → clean skip, exit 0.
+write_config '```
+Backend: native
+```'
+out=$(cd "$FIXTURE" && "$DRIFT_SH" 2>&1); rc=$?
+[ $rc -eq 0 ] && case "$out" in *skipping*) ok "drift: no Migration dir → skip (exit 0)" ;; *) fail "drift: no Migration dir → skip (exit 0)" "out: $out" ;; esac \
+  || fail "drift: no Migration dir → skip (exit 0)" "rc=$rc"
+
+# Build a migration history: base (main) carries 001+003, feature branches vary.
+write_config '```
+Backend: native
+Integration branch: main
+Migration dir: db/migrations
+```'
+mkdir -p "$FIXTURE/db/migrations"
+echo "select 1;" > "$FIXTURE/db/migrations/20260101000000_init.sql"
+echo "select 3;" > "$FIXTURE/db/migrations/20260103000000_third.sql"
+git -C "$FIXTURE" add -A
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -qm "base migrations"
+
+# (2) Clean: feature adds a migration strictly later than the base tail.
+git -C "$FIXTURE" checkout -qb feat/clean
+echo "select 4;" > "$FIXTURE/db/migrations/20260104000000_fourth.sql"
+git -C "$FIXTURE" add -A && git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -qm "later migration"
+out=$(cd "$FIXTURE" && "$DRIFT_SH" --base main 2>&1); rc=$?
+[ $rc -eq 0 ] && case "$out" in *"no migration drift"*) ok "drift: later-than-tail migration is clean" ;; *) fail "drift: later-than-tail migration is clean" "out: $out" ;; esac \
+  || fail "drift: later-than-tail migration is clean" "rc=$rc out: $out"
+
+# (3) Collision: feature adds a migration EARLIER than the base tail (WIT-550).
+git -C "$FIXTURE" checkout -q main && git -C "$FIXTURE" checkout -qb feat/collide
+echo "select 2;" > "$FIXTURE/db/migrations/20260102000000_backdated.sql"
+git -C "$FIXTURE" add -A && git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -qm "backdated migration"
+out=$(cd "$FIXTURE" && "$DRIFT_SH" --base main 2>&1); rc=$?
+[ $rc -eq 1 ] && case "$out" in *"branch collision"*) ok "drift: earlier-than-tail migration flagged (WIT-550 class)" ;; *) fail "drift: earlier-than-tail migration flagged (WIT-550 class)" "out: $out" ;; esac \
+  || fail "drift: earlier-than-tail migration flagged (WIT-550 class)" "rc=$rc (want 1)"
+
+# (4) Duplicate version prefixes on disk → exit 1.
+git -C "$FIXTURE" checkout -q main
+echo "select 3b;" > "$FIXTURE/db/migrations/20260103000000_dupe.sql"
+out=$(cd "$FIXTURE" && "$DRIFT_SH" --base main 2>&1); rc=$?
+[ $rc -eq 1 ] && case "$out" in *"duplicate migration version"*) ok "drift: duplicate version on disk flagged" ;; *) fail "drift: duplicate version on disk flagged" "out: $out" ;; esac \
+  || fail "drift: duplicate version on disk flagged" "rc=$rc (want 1)"
+
+# (5) Unresolvable base ref → warn + still exit 0 (never false-block).
+rm -f "$FIXTURE/db/migrations/20260103000000_dupe.sql"
+out=$(cd "$FIXTURE" && "$DRIFT_SH" --base origin/nope 2>&1); rc=$?
+[ $rc -eq 0 ] && case "$out" in *"not resolvable"*) ok "drift: unresolvable base warns, never false-blocks" ;; *) fail "drift: unresolvable base warns, never false-blocks" "out: $out" ;; esac \
+  || fail "drift: unresolvable base warns, never false-blocks" "rc=$rc (want 0)"
+cleanup
+FIXTURE=""
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
