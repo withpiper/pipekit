@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.4.0** — Last updated: 2026-06-22  *(new SOP — the feature-scoped security gate: `/security-gate` classifies a change into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) at the Building → UAT seam and runs the category checklist against the feature diff before `pk ship`. Closes gap #3. Advisory in this release; a hard `pk ship` gate is a documented fast-follow.)*
+**v4.17.0** — Last updated: 2026-07-16  *(**v4.17.0 — the hard gate ships.** `/security-gate` (and `/verify` Flag check F, which embeds it) now writes a sha-matched `secgate-complete.md` sentinel on PASS, and `pk ship` **refuses** without a HEAD-matching sentinel on any project whose `Security categories` file exists — escapes `--force` (Linear audit comment) / `PK_SECGATE_BYPASS=1` (bypass.log). § Enforcement roadmap updated. Carries v4.4.0: new SOP — the feature-scoped security gate: `/security-gate` classifies a change into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) at the Building → UAT seam and runs the category checklist against the feature diff before `pk ship`. Closes gap #3.)*
 
 **Source of truth:** The concrete category signals for a project live in its definitions file (`resources/security-categories.md`, scaffolded from `templates/security-categories.template.md`) and `method.config.md`. This SOP provides the methodology that applies regardless of stack.
 
@@ -110,7 +110,7 @@ When a category matches, a read-only review sub-agent runs that category's check
 
 Every candidate finding is **adversarially verified** before it counts (try to refute it — is it reachable and exploitable given auth/RLS/real call sites?); refuted items go to an appendix, not the verdict. This keeps precision high without dropping the breadth from the finding stage.
 
-In this release the verdict is **advisory** — a FAIL does not mechanically block `pk ship`; it tells the human "don't ship to UAT until these close." See § Enforcement roadmap.
+The verdict is **enforced** (v4.17.0) — a PASS writes the sha-matched sentinel `pk ship` requires on any categories-armed project; a FAIL writes none, so `pk ship` refuses until the findings close and the gate re-runs. See § Enforcement roadmap.
 
 ## Project-type variants
 
@@ -133,6 +133,6 @@ Same word, different concern; both run. (Documented from the other side in `Prod
 
 ## Enforcement roadmap
 
-**This release: advisory.** `/security-gate` produces a PASS/FAIL report (`Reports/Security_Gate_<ISSUE>_<date>.md`) and posts a best-effort Linear comment on the feature's issue. It does **not** transition Linear state and does **not** block `pk ship`. Discipline (and this SOP) require running it before shipping a feature to UAT.
+**v4.3.0–v4.16.x: advisory.** The gate produced the PASS/FAIL report + Linear comment only; discipline carried the enforcement.
 
-**Fast-follow: hard gate.** A later release may have `/security-gate` write a sha-matched sentinel (mirroring `/verify`'s `verify-complete.md`) and have `pk ship` refuse to ship a feature whose classification **matched a sensitive category** without a fresh PASS sentinel — with a `--force` / `PK_SECGATE_BYPASS=1` escape that logs a Linear audit comment. Deferred until the classifier proves out on real features, to keep the first cut out of the CI-gated `bin/pk` logic. (A no-op for features that match no category — those never needed the sentinel.)
+**v4.17.0: hard gate (shipped).** On PASS — every PASS, including the no-category-matched instant PASS — the gate writes `Logs/SecurityGate/<date>/<issue>/secgate-complete.md` with the gated HEAD `sha:` (mirroring `/verify`'s `verify-complete.md`). `pk ship` refuses to push / open the PR when the project's `Security categories` file exists and no sentinel matches HEAD. The sentinel is written on the no-match path too because `pk ship` cannot classify a diff itself — the sentinel is how it knows the classifier ran clean at this HEAD. A FAIL or an indeterminate surface writes **nothing**; the missing sentinel is the block. Escapes: `pk ship --force` (logs a Linear audit comment) or `PK_SECGATE_BYPASS=1` (logs to `Logs/SecurityGate/bypass.log`). Projects without a categories file are untouched — the file that arms the skill arms the gate. The embedded run inside `/verify` Flag check F writes the same sentinel, so the `/work → /verify → pk ship` auto-rollover passes the gate without a separate manual step.

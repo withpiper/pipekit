@@ -47,6 +47,22 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.17.0 — 2026-07-16
+
+> **The sentinel gates go hard — `/security-gate` and `/prod-ready` stop being advisory.** Both gates shipped advisory (v4.4.0 / v4.3.0) with the hard gate as a documented fast-follow, each carrying its own § Future design. This release builds exactly that design, on the mechanics `/verify`'s `verify-complete.md` gate proved in production: **a PASS writes a sha-matched sentinel; the `pk` verb refuses without one; a FAIL writes nothing — the missing sentinel is the block.** An advisory gate everyone learns to ignore is worse than no gate; this is the enforcement thesis paying off on the two gates that bracket the feature lifecycle (entering UAT, entering production).
+
+**The `pk ship` gate (security).** `/security-gate` — standalone or embedded in `/verify` Flag check F — writes `Logs/SecurityGate/<date>/<issue>/secgate-complete.md` on **every PASS**, including the no-category-matched instant PASS: `pk ship` can't classify a diff itself, so the sentinel is how it knows the classifier ran clean *at this HEAD*. `pk ship` refuses to push / open the PR when the project's `Security categories` file exists and no sentinel matches HEAD. The Flag-check-F integration is load-bearing — without it, the `/work → /verify → pk ship` auto-rollover would block right after its own embedded gate passed.
+
+**The `pk promote` gate (prod-readiness).** `/prod-ready` writes `Logs/ProdReady/<date>/prodready-complete.md` stamped with the audited **source-branch head** (not issue-scoped — a promote bundles WITs). `pk promote` refuses the **final `Ship environments` hop only** when the project's `Prod-ready checks` file exists and no sentinel matches the source head — so a feature merged into the source branch *after* the audit correctly invalidates the sentinel (the batch changed; re-gate). Intermediate hops untouched. **Known limitation:** 1-tier projects (`Promote to main: false`) merge to `main` without `pk promote` — no seam to gate, prod-ready stays advisory there.
+
+**Escapes, all audited.** `pk ship --force` (Linear audit comment) · new `pk promote --force` (bypass.log) · `PK_SECGATE_BYPASS=1` / `PK_PRODREADY_BYPASS=1` (bypass.log). **Backward compatibility:** each gate is armed by the same file that arms its skill (`resources/security-categories.md` / `resources/prod-readiness-checks.md`) — projects without the file see zero behavior change, and opting in is one file.
+
+**Implementation.** Two new matchers (`pk_secgate_sentinel_for_head`, `pk_prodready_sentinel_for_sha`) mirroring the verify matcher, plus one **shared pure decision helper** `pk_gate_verdict` (the `pk_linear_guard_verdict` house pattern — both gates have the same table: bypass-env > skip > ok > bypass-force > block). Skills updated to write sentinels on PASS only; SOP § Enforcement roadmaps flipped to shipped; docs-wide advisory→hard sweep (CLAUDE.md, RUNBOOK flowchart [4a]/[8a], GUIDE, method.md pipeline rows). Smoke **98 → 116** (verdict units, matcher units, ship-gate E2E incl. the unarmed zero-change guarantee, promote-gate E2E on a bare remote).
+
+**Scoped + deferred to v4.18.0:** Migration safety Tier 2 (disk-vs-remote-history drift-detection script) + Tier 3 (CI template) — a second full release's blast radius; kept out of this PR deliberately.
+
+---
+
 ## v4.16.0 — 2026-07-16
 
 > **High-stakes skill guardrails — the five gate skills now carry the SOP's own required sections, and the convention grows teeth.** `Skills_SOP § Body Conventions` has required `When NOT to use` + `Common Rationalizations` on ship/merge-gating skills since the convention was written — using `/verify` as its worked example. An audit (prompted by an external 9-point skill-format rubric) found the standard was itself under-applied: only `/pr-security-review` had `When NOT to use`, and **none** of the five had `Common Rationalizations` — including `/verify`, the SOP's own example. Near-equivalents turned out not to be equivalents: `What this skill does NOT do` is a *scope fence* (what the skill won't write), not the redirect anti-criteria of `When NOT to use`; `/work`'s `Anti-rationalization guard` guards against *Claude* defending broken visible state (RS-64), not against the *user* rationalizing skipping the skill.

@@ -725,6 +725,184 @@ esac
 cleanup
 FIXTURE=""
 
+# ── Unit tests: pk_gate_verdict (pure, shared by secgate + prodready gates) ──
+# v4.17.0: one decision table serves both sentinel gates. Precedence is pinned:
+# bypass-env > skip(unconfigured) > ok(sentinel) > bypass-force > block.
+
+echo "== gate verdict (pure, v4.17.0) =="
+
+make_fixture
+gv() { ( cd "$FIXTURE" && source "$PK" && pk_gate_verdict "$@" ); }
+
+[ "$(gv 1 0 0 1)" = "bypass-env" ]   && ok "gate verdict: bypass env wins"                    || fail "gate verdict: bypass env wins" "got $(gv 1 0 0 1)"
+[ "$(gv 0 0 0 1)" = "bypass-env" ]   && ok "gate verdict: bypass env beats unconfigured"      || fail "gate verdict: bypass env beats unconfigured" "got $(gv 0 0 0 1)"
+[ "$(gv 0 0 0 0)" = "skip" ]         && ok "gate verdict: unconfigured → skip"                || fail "gate verdict: unconfigured → skip" "got $(gv 0 0 0 0)"
+[ "$(gv 1 1 0 0)" = "ok" ]           && ok "gate verdict: configured + sentinel → ok"         || fail "gate verdict: configured + sentinel → ok" "got $(gv 1 1 0 0)"
+[ "$(gv 1 0 1 0)" = "bypass-force" ] && ok "gate verdict: missing sentinel + --force"          || fail "gate verdict: missing sentinel + --force" "got $(gv 1 0 1 0)"
+[ "$(gv 1 0 0 0)" = "block" ]        && ok "gate verdict: configured + missing → block"       || fail "gate verdict: configured + missing → block" "got $(gv 1 0 0 0)"
+
+# ── Unit tests: secgate + prodready sentinel matchers ────────────────────────
+
+echo "== secgate / prodready sentinel matchers (v4.17.0) =="
+
+HEAD_SHA="0123456789abcdef0123456789abcdef01234567"
+OTHER_SHA="ffffffffffffffffffffffffffffffffffffffff"
+sg() { ( cd "$FIXTURE" && source "$PK" && pk_secgate_sentinel_for_head "$@" ); }
+pr() { ( cd "$FIXTURE" && source "$PK" && pk_prodready_sentinel_for_sha "$@" ); }
+
+mkdir -p "$FIXTURE/Logs/SecurityGate/20260101/ABC-123"
+printf '# secgate-complete\n\nissue: ABC-123\nstatus: PASS\nsha: %s\n' "$HEAD_SHA" \
+  > "$FIXTURE/Logs/SecurityGate/20260101/ABC-123/secgate-complete.md"
+out=$(sg ABC-123 "$HEAD_SHA"); rc=$?
+[ $rc -eq 0 ] && [ -n "$out" ] && ok "secgate matcher: HEAD-matching sentinel found" || fail "secgate matcher: HEAD-matching sentinel found" "rc=$rc"
+out=$(sg ABC-123 "$OTHER_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "secgate matcher: non-matching sha rejected" || fail "secgate matcher: non-matching sha rejected" "rc=$rc out='$out'"
+out=$(sg XYZ-999 "$HEAD_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "secgate matcher: other-issue sentinel ignored" || fail "secgate matcher: other-issue sentinel ignored" "rc=$rc"
+
+mkdir -p "$FIXTURE/Logs/ProdReady/20260101"
+printf '# prodready-complete\n\nstatus: PASS\nsha: %s\n' "$HEAD_SHA" \
+  > "$FIXTURE/Logs/ProdReady/20260101/prodready-complete.md"
+out=$(pr "$HEAD_SHA"); rc=$?
+[ $rc -eq 0 ] && [ -n "$out" ] && ok "prodready matcher: sha-matching sentinel found (any date)" || fail "prodready matcher: sha-matching sentinel found (any date)" "rc=$rc"
+out=$(pr "$OTHER_SHA"); rc=$?
+[ $rc -ne 0 ] && ok "prodready matcher: non-matching sha rejected" || fail "prodready matcher: non-matching sha rejected" "rc=$rc out='$out'"
+cleanup
+FIXTURE=""
+
+# ── CLI tests: security-gate ship gate (E2E, v4.17.0) ────────────────────────
+# Armed only when the `Security categories` file exists. A verify sentinel is
+# planted at HEAD throughout so only the NEW gate varies.
+
+echo "== security-gate ship gate (E2E, v4.17.0) =="
+
+make_fixture
+write_config '```
+Backend: native
+Integration branch: main
+Security categories: ./sec-cats.md
+```'
+git -C "$FIXTURE" checkout -q -b feat/ABC-123-widget
+SG_HEAD=$(git -C "$FIXTURE" rev-parse HEAD)
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-123"
+printf 'sha: %s\n' "$SG_HEAD" > "$FIXTURE/Logs/Verify/20260101/ABC-123/verify-complete.md"
+echo "auth: src/auth/**" > "$FIXTURE/sec-cats.md"
+
+# (a) categories file + no secgate sentinel → abort before push/gh.
+: > "$GH_LOG"
+run_pk ship
+g=0; p=0
+case "$RUN_OUT" in *"no secgate-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *Pushing*) p=1 ;; esac
+if [ $RUN_CODE -ne 0 ] && [ $g -eq 1 ] && [ $p -eq 0 ] && [ ! -s "$GH_LOG" ]; then
+  ok "secgate ship: armed + no sentinel aborts before push/gh"
+else
+  fail "secgate ship: armed + no sentinel aborts before push/gh" "rc=$RUN_CODE gate_msg=$g pushed=$p"
+fi
+
+# (b) HEAD-matching secgate sentinel → passes both gates (reaches push).
+mkdir -p "$FIXTURE/Logs/SecurityGate/20260101/ABC-123"
+printf 'issue: ABC-123\nstatus: PASS\nsha: %s\n' "$SG_HEAD" \
+  > "$FIXTURE/Logs/SecurityGate/20260101/ABC-123/secgate-complete.md"
+run_pk ship
+case "$RUN_OUT" in
+  *Pushing*) ok "secgate ship: HEAD-matching sentinel passes gate" ;;
+  *) fail "secgate ship: HEAD-matching sentinel passes gate" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+
+# (c) no categories file → gate unarmed → ships without any secgate sentinel
+#     (the zero-behavior-change guarantee for un-opted projects).
+rm -rf "$FIXTURE/Logs/SecurityGate" "$FIXTURE/sec-cats.md"
+run_pk ship
+case "$RUN_OUT" in
+  *Pushing*) ok "secgate ship: unarmed (no categories file) → no gate" ;;
+  *) fail "secgate ship: unarmed (no categories file) → no gate" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+
+# (d) PK_SECGATE_BYPASS=1 → armed gate skipped, bypass logged.
+echo "auth: src/auth/**" > "$FIXTURE/sec-cats.md"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_SECGATE_BYPASS=1 "$PK" ship 2>&1)
+case "$RUN_OUT" in
+  *"bypassed via PK_SECGATE_BYPASS"*) ok "secgate ship: PK_SECGATE_BYPASS=1 skips gate" ;;
+  *) fail "secgate ship: PK_SECGATE_BYPASS=1 skips gate" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+cleanup
+FIXTURE=""
+
+# ── CLI tests: prod-ready promote gate (E2E, bare remote, v4.17.0) ───────────
+# 2-env chain (dev,main): the only hop IS the final hop, so the gate arms when
+# the `Prod-ready checks` file exists. Sentinel sha must match origin/dev.
+
+echo "== prod-ready promote gate (E2E, v4.17.0) =="
+
+make_fixture
+PR_REMOTE=$(mktemp -d); git -C "$PR_REMOTE" init -q --bare
+git -C "$FIXTURE" remote add origin "$PR_REMOTE"
+git -C "$FIXTURE" branch dev
+# -u: promote step 1 syncs the source branch with a tracking `git pull --ff-only`.
+git -C "$FIXTURE" push -q -u origin main dev 2>/dev/null
+git -C "$FIXTURE" checkout -q dev
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "dev work"
+git -C "$FIXTURE" push -q origin dev 2>/dev/null
+git -C "$FIXTURE" checkout -q main
+# A trivially-green Pre-Deploy Gate: promote step 2 runs cmd_verify, which
+# returns 1 when the section is absent — the fixture must pass it to reach
+# the prod-ready gate under test.
+write_config '```
+Backend: native
+Integration branch: dev
+Ship environments: dev,main
+Prod-ready checks: ./prod-checks.md
+```
+
+## Pre-Deploy Gate
+
+```bash
+true
+```'
+echo "build: true" > "$FIXTURE/prod-checks.md"
+PR_SRC_SHA=$(git -C "$FIXTURE" rev-parse origin/dev)
+
+# (a) checks file + no sentinel → block before the PR opens.
+: > "$GH_LOG"
+run_pk promote main
+g=0; o=0
+case "$RUN_OUT" in *"no prodready-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *"Open promote PR"*) o=1 ;; esac
+if [ $RUN_CODE -ne 0 ] && [ $g -eq 1 ] && [ $o -eq 0 ]; then
+  ok "prodready promote: armed + no sentinel blocks final hop"
+else
+  fail "prodready promote: armed + no sentinel blocks final hop" "rc=$RUN_CODE gate_msg=$g opened=$o out: $(echo "$RUN_OUT" | tail -3)"
+fi
+
+# (b) sentinel matching origin/dev → gate passes, promote proceeds to the PR step.
+mkdir -p "$FIXTURE/Logs/ProdReady/20260101"
+printf 'status: PASS\nsha: %s\n' "$PR_SRC_SHA" > "$FIXTURE/Logs/ProdReady/20260101/prodready-complete.md"
+run_pk promote main
+g=0; o=0
+case "$RUN_OUT" in *"no prodready-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *"Open promote PR"*) o=1 ;; esac
+if [ $g -eq 0 ] && [ $o -eq 1 ]; then
+  ok "prodready promote: matching sentinel passes gate"
+else
+  fail "prodready promote: matching sentinel passes gate" "gate_msg=$g opened=$o out: $(echo "$RUN_OUT" | tail -3)"
+fi
+
+# (c) no checks file → gate unarmed → proceeds without any sentinel.
+rm -rf "$FIXTURE/Logs/ProdReady" "$FIXTURE/prod-checks.md"
+run_pk promote main
+g=0; o=0
+case "$RUN_OUT" in *"no prodready-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *"Open promote PR"*) o=1 ;; esac
+if [ $g -eq 0 ] && [ $o -eq 1 ]; then
+  ok "prodready promote: unarmed (no checks file) → no gate"
+else
+  fail "prodready promote: unarmed (no checks file) → no gate" "gate_msg=$g opened=$o out: $(echo "$RUN_OUT" | tail -3)"
+fi
+rm -rf "$PR_REMOTE"
+cleanup
+FIXTURE=""
+
 # ── CLI tests: pk done worktree guard (regression: SiteLine dead-session) ─────
 # pk done removes the feature worktree, so it must refuse when invoked from
 # inside one. The bug: the guard gated on `root != wt_path`, but pk_repo_root()
