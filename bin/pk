@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.16.0"
+PK_VERSION="4.17.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -879,6 +879,57 @@ pk_verify_sentinel_for_head() {
   return 1
 }
 
+# v4.17.0 — /security-gate sentinel matcher (same shape as the verify matcher).
+# /security-gate writes Logs/SecurityGate/<date>/<issue>/secgate-complete.md
+# on PASS only, recording the gated HEAD `sha:`. Date-independent + sha-matched
+# for the same two reasons as verify: no date recompute, no stale-commit vouch.
+pk_secgate_sentinel_for_head() {
+  local issue="$1" head="$2" f
+  [ -n "$head" ] || return 1
+  for f in Logs/SecurityGate/*/"${issue}"/secgate-complete.md; do
+    [ -f "$f" ] || continue
+    if grep -qE "^sha: ${head}([[:space:]]|\$)" "$f" 2>/dev/null; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# v4.17.0 — /prod-ready sentinel matcher. /prod-ready writes
+# Logs/ProdReady/<date>/prodready-complete.md on PASS only, recording the
+# `sha:` of the audited source branch head. Not issue-scoped — prod-ready is
+# per-feature/batch at the production boundary, and a promote bundles WITs.
+pk_prodready_sentinel_for_sha() {
+  local sha="$1" f
+  [ -n "$sha" ] || return 1
+  for f in Logs/ProdReady/*/prodready-complete.md; do
+    [ -f "$f" ] || continue
+    if grep -qE "^sha: ${sha}([[:space:]]|\$)" "$f" 2>/dev/null; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# v4.17.0 — pure gate-decision helper shared by the secgate (pk ship) and
+# prodready (pk promote) sentinel gates. Same house pattern as
+# pk_linear_guard_verdict: all inputs are args, no I/O, fully unit-testable.
+#   $1 configured      1 = the project's gate file exists (gate is armed)
+#   $2 sentinel_found  1 = a sha-matched PASS sentinel exists
+#   $3 force           1 = --force passed
+#   $4 bypass          1 = the gate's PK_*_BYPASS env var is set
+# Verdicts: bypass-env | skip | ok | bypass-force | block
+pk_gate_verdict() {
+  local configured="$1" sentinel_found="$2" force="$3" bypass="$4"
+  if [ "$bypass" = "1" ]; then echo "bypass-env"; return 0; fi
+  if [ "$configured" != "1" ]; then echo "skip"; return 0; fi
+  if [ "$sentinel_found" = "1" ]; then echo "ok"; return 0; fi
+  if [ "$force" = "1" ]; then echo "bypass-force"; return 0; fi
+  echo "block"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Git / worktree helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1705,6 +1756,42 @@ cmd_ship() {
   fi
   # ------------------------------------------------------------------------
 
+  # --- v4.17.0 security-gate sentinel (hard-fail, config-gated) -----------
+  # Armed only when the project's `Security categories` file exists — the
+  # same file that arms /security-gate itself, so un-opted projects see no
+  # change. /security-gate writes secgate-complete.md on PASS only (a FAIL
+  # or an indeterminate surface writes nothing), sha-stamped to the gated
+  # HEAD. Escapes: --force (Linear audit comment) or PK_SECGATE_BYPASS=1
+  # (emergency only, logs to Logs/SecurityGate/bypass.log).
+  local _sec_file _sec_configured=0 _sec_found=0 _sg_head _sg_verdict
+  _sec_file=$(pk_config "Security categories" "resources/security-categories.md")
+  [ -n "$_sec_file" ] && [ -f "$_sec_file" ] && _sec_configured=1
+  _sg_head=$(git rev-parse HEAD 2>/dev/null || echo "")
+  if [ "$_sec_configured" = "1" ] && pk_secgate_sentinel_for_head "$issue" "$_sg_head" >/dev/null; then
+    _sec_found=1
+  fi
+  _sg_verdict=$(pk_gate_verdict "$_sec_configured" "$_sec_found" "$([ "$force" = "true" ] && echo 1 || echo 0)" "${PK_SECGATE_BYPASS:-0}")
+  case "$_sg_verdict" in
+    bypass-env)
+      echo "⚠ security-gate sentinel bypassed via PK_SECGATE_BYPASS=1" >&2
+      mkdir -p Logs/SecurityGate 2>/dev/null
+      echo "$(date -u +%FT%TZ) ${issue}" >> Logs/SecurityGate/bypass.log 2>/dev/null || true
+      ;;
+    bypass-force)
+      echo "⚠ no secgate-complete.md matching HEAD ${_sg_head:0:8} — bypassed via --force." >&2
+      pk_linear_comment "$issue" "Shipped without a HEAD-matching secgate-complete.md (--force at $(date -u +%FT%TZ))" || true
+      ;;
+    block)
+      echo "ERROR: no secgate-complete.md matching current HEAD (${_sg_head:0:8}) for ${issue}." >&2
+      echo "       This project has a Security categories file (${_sec_file}), so the" >&2
+      echo "       security gate is required before ship. /security-gate writes the" >&2
+      echo "       sentinel on PASS; a FAIL must be closed and re-gated." >&2
+      echo "       Run /security-gate on this commit, or pass --force to bypass (logs a Linear comment)." >&2
+      return 1
+      ;;
+  esac
+  # ------------------------------------------------------------------------
+
   # Push (idempotent — git is fine with re-pushes)
   echo "Pushing $current..."
   git push -u origin "$current"
@@ -2273,7 +2360,7 @@ cmd_verify() {
 # Linear ~5 minutes ahead of reality while the promote PR was open.
 # Position-based state mapping: last hop → Done, any non-last → In <Env>.
 cmd_promote() {
-  local stash=false take_remote=false bootstrap=false confirmed=false finish=false target=""
+  local stash=false take_remote=false bootstrap=false confirmed=false finish=false force=false target=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --stash)       stash=true;       shift ;;
@@ -2281,6 +2368,7 @@ cmd_promote() {
       --bootstrap)   bootstrap=true;   shift ;;
       --confirmed)   confirmed=true;   shift ;;
       --finish)      finish=true;      shift ;;
+      --force)       force=true;       shift ;;
       --*)           echo "pk promote: unknown arg $1" >&2; return 2 ;;
       *)             target="$1";      shift ;;
     esac
@@ -2567,6 +2655,48 @@ cmd_promote() {
       fi
     fi
   fi
+
+  # --- v4.17.0 prod-ready sentinel (hard-fail, config-gated, final hop only) --
+  # Armed only when (a) this hop's target is the LAST `Ship environments`
+  # entry — the production boundary /prod-ready guards — and (b) the
+  # project's `Prod-ready checks` file exists (the file that arms
+  # /prod-ready itself, so un-opted projects see no change). /prod-ready
+  # writes prodready-complete.md on PASS only, sha-stamped to the audited
+  # source-branch head — a merge into the source branch after the audit
+  # goes correctly stale. Escapes: --force (Linear-less: promote is batch;
+  # logged to Logs/ProdReady/bypass.log) or PK_PRODREADY_BYPASS=1.
+  if [ "$target_idx" -eq $(( ${#envs_arr[@]} - 1 )) ]; then
+    local _pr_file _pr_configured=0 _pr_found=0 _pr_src_sha _pr_verdict
+    _pr_file=$(pk_config "Prod-ready checks" "resources/prod-readiness-checks.md")
+    [ -n "$_pr_file" ] && [ -f "$_pr_file" ] && _pr_configured=1
+    _pr_src_sha=$(git rev-parse "origin/$source" 2>/dev/null || git rev-parse "$source" 2>/dev/null || echo "")
+    if [ "$_pr_configured" = "1" ] && pk_prodready_sentinel_for_sha "$_pr_src_sha" >/dev/null; then
+      _pr_found=1
+    fi
+    _pr_verdict=$(pk_gate_verdict "$_pr_configured" "$_pr_found" "$([ "$force" = "true" ] && echo 1 || echo 0)" "${PK_PRODREADY_BYPASS:-0}")
+    case "$_pr_verdict" in
+      bypass-env)
+        echo "⚠ prod-ready sentinel bypassed via PK_PRODREADY_BYPASS=1" >&2
+        mkdir -p Logs/ProdReady 2>/dev/null
+        echo "$(date -u +%FT%TZ) $source->$target" >> Logs/ProdReady/bypass.log 2>/dev/null || true
+        ;;
+      bypass-force)
+        echo "⚠ no prodready-complete.md matching $source head ${_pr_src_sha:0:8} — bypassed via --force." >&2
+        mkdir -p Logs/ProdReady 2>/dev/null
+        echo "$(date -u +%FT%TZ) $source->$target FORCED" >> Logs/ProdReady/bypass.log 2>/dev/null || true
+        ;;
+      block)
+        echo "ERROR: no prodready-complete.md matching $source head (${_pr_src_sha:0:8})." >&2
+        echo "  '$target' is the production env and this project has a Prod-ready checks" >&2
+        echo "  file (${_pr_file}), so the readiness gate is required before the final promote." >&2
+        echo "  Run /prod-ready against $source (it writes the sentinel on PASS)," >&2
+        echo "  or pass --force to bypass (logged to Logs/ProdReady/bypass.log)." >&2
+        $stash_made && echo "  Note: your edits are stashed (git stash list)." >&2
+        return 1
+        ;;
+    esac
+  fi
+  # ----------------------------------------------------------------------------
 
   echo "  3. Open promote PR ($source → $target, $commits_ahead commits)"
 

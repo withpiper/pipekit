@@ -528,7 +528,18 @@ echo "FLAG: security gate — ${SECGATE_VERDICT} — categories: ${SECGATE_MATCH
 [ "$TIER" != "quick" ] && printf 'FLAG: security gate: %s — categories: %s\n' "$SECGATE_VERDICT" "${SECGATE_MATCHED:-none}" >> "$VERIFY_DIR/evidence.txt"
 ```
 
-A `PASS` with **no category matched** is the common, cheap case — emit no flag (the gate ran and found nothing sensitive). Only a category match (whether the verdict is FAIL, WARNINGS, or even a clean PASS the user should see) surfaces a flag. Like every other flag, a security-gate FAIL **pauses auto-ship** (Step 9) for the user to RECONCILE; it does **not** auto-downgrade the `/verify` status. Advisory this release — see `sop/Security_Gate_SOP.md` § Enforcement roadmap for the planned hard gate.
+3. **On PASS, write the secgate sentinel** (v4.17.0 — `pk ship` hard-requires it on any categories-armed project, so the embedded gate run must leave the same artifact a standalone `/security-gate` run would; without this, the auto-ship rollover would block right after its own gate passed):
+   ```bash
+   if [ "$SECGATE_VERDICT" = "PASS" ]; then
+     _sg_dir="Logs/SecurityGate/$(date +%Y%m%d)/${ISSUE}"
+     mkdir -p "$_sg_dir"
+     printf '# secgate-complete\n\nissue: %s\nstatus: PASS\nsha: %s\ncategories: %s\n' \
+       "$ISSUE" "$(git rev-parse HEAD)" "${SECGATE_MATCHED:-none}" > "$_sg_dir/secgate-complete.md"
+   fi
+   ```
+   Never on FAIL / WARNINGS-to-block / indeterminate — the missing sentinel is what makes `pk ship` refuse.
+
+A `PASS` with **no category matched** is the common, cheap case — emit no flag (the gate ran and found nothing sensitive), but **still write the sentinel**. Only a category match (whether the verdict is FAIL, WARNINGS, or even a clean PASS the user should see) surfaces a flag. Like every other flag, a security-gate FAIL **pauses auto-ship** (Step 9) for the user to RECONCILE; it does **not** auto-downgrade the `/verify` status. As of v4.17.0 the gate is **hard** at the `pk ship` seam: no HEAD-matching PASS sentinel on an armed project → ship refuses (`--force` / `PK_SECGATE_BYPASS=1` escape).
 
 ### Tally
 

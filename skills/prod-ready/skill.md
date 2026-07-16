@@ -1,6 +1,6 @@
 ---
 name: prod-ready
-description: Production-readiness gate for a feature about to reach its production environment — verifies the operational preconditions (error monitoring wired, no secrets in the client bundle, rate limiting on new public endpoints, backups active, feature flag for risky paths, dashboard chart) that the pre-deploy gate (/verify) does not. Advisory: produces a PASS/FAIL report + a Linear comment; it does not transition state. Portable framework; concrete checks live in a per-project checks file. Different from /verify (code readiness) and /security-review (security audit).
+description: Production-readiness gate for a feature about to reach its production environment — verifies the operational preconditions (error monitoring wired, no secrets in the client bundle, rate limiting on new public endpoints, backups active, feature flag for risky paths, dashboard chart) that the pre-deploy gate (/verify) does not. Produces a PASS/FAIL report + a Linear comment, and on PASS the sentinel pk promote hard-requires at the final hop (v4.17.0) on any project with a checks file; it does not transition state. Portable framework; concrete checks live in a per-project checks file. Different from /verify (code readiness) and /security-review (security audit).
 ---
 
 # /prod-ready
@@ -133,9 +133,9 @@ Collect every finding. Apply the severity rubric (below). The headline status:
 - **WARNINGS** — only Medium/Low findings, or manual-confirms the user couldn't confirm but judged acceptable.
 - **PASS** — every applicable check clean (or N/A), no Critical/High.
 
-This is advisory: a FAIL does **not** auto-block anything in this release. It tells the human "don't promote to `PROD_ENV` until these close." (A future release may add a hard `pk promote <PROD_ENV>` gate on a fresh PASS — see § Future.)
+**This gate is hard as of v4.17.0:** on a project with a `Prod-ready checks` file, `pk promote <PROD_ENV>` (the final `Ship environments` hop) refuses without a PASS sentinel matching the source branch head (Step 5 writes it). A FAIL writes **no sentinel** — close the findings and re-run; the escape hatches are `pk promote <env> --force` or `PK_PRODREADY_BYPASS=1` (both logged to `Logs/ProdReady/bypass.log`).
 
-## Step 5 — Generate the report
+## Step 5 — Generate the report + sentinel
 
 Write `<Prod-ready report path>/Production_Readiness_<ISSUE>_<YYYY-MM-DD>.md` (omit `<ISSUE>_` if no issue resolved):
 
@@ -172,7 +172,22 @@ Write `<Prod-ready report path>/Production_Readiness_<ISSUE>_<YYYY-MM-DD>.md` (o
 {specific, ordered — what to wire/fix before promoting to PROD_ENV}
 ```
 
-## Step 6 — Post the Linear comment + present to user
+**On PASS — and only on PASS — also write the sentinel** `pk promote` reads (v4.17.0 hard gate):
+
+```bash
+# The sha is the audited code: the head of the branch being promoted to PROD_ENV
+# (the second-to-last `Ship environments` entry — e.g. `dev` on 2-tier, `beta` on 3-tier).
+_src_branch="<second-to-last Ship environments entry>"
+_src_sha=$(git rev-parse "origin/${_src_branch}" 2>/dev/null || git rev-parse "${_src_branch}")
+_pr_dir="Logs/ProdReady/$(date +%Y%m%d)"
+mkdir -p "$_pr_dir"
+printf '# prodready-complete\n\nstatus: PASS\nsha: %s\nenv: %s\n' \
+  "$_src_sha" "$PROD_ENV" > "$_pr_dir/prodready-complete.md"
+```
+
+- **Never** write it on FAIL or WARNINGS-you'd-block-on. A missing sentinel is the blocking signal.
+- The `sha:` pins the audited source-branch head — a feature merged into the source branch *after* this audit correctly invalidates the sentinel (the batch changed; re-run the gate).
+- Not issue-scoped: prod-ready audits the promote batch at the boundary, and a promote bundles WITs.
 
 - If `ISSUE` resolved and Linear reachable: post a comment — the **Summary** block + a link/path to the report. **Do not** change state.
 - Present to the user: overall status, finding counts, top findings by severity, and the explicit next-action — `Promote to {PROD_ENV}` if PASS, or `Hold — close {n} finding(s) first` if FAIL.
@@ -189,7 +204,7 @@ Write `<Prod-ready report path>/Production_Readiness_<ISSUE>_<YYYY-MM-DD>.md` (o
 1. **Code readiness ≠ production readiness.** `/verify` proves the code; this proves the environment can absorb it. Never merge the two gates — different cadence, different failure modes.
 2. **Greps the built artifact, not source.** The secrets check is meaningless against source — a `.env` reference in source is fine; the same value baked into `.next/static/…` is a leak. Always build first.
 3. **Evidence-based.** Every finding cites a `file:line`, a command result, or a recorded user answer. No vibes.
-4. **Advisory, once per feature.** It reports and comments; it does not transition Linear state and does not run per task.
+4. **Hard-gated, once per feature.** It reports, comments, and (on PASS) writes the sentinel `pk promote` requires at the final hop; it does not transition Linear state and does not run per task.
 5. **Framework here, checks in the project.** Never hardcode a project's build command, secret prefixes, monitoring tool, or dashboard URL — they live in the checks file and `method.config.md`.
 
 ## What this skill does NOT do
@@ -197,9 +212,9 @@ Write `<Prod-ready report path>/Production_Readiness_<ISSUE>_<YYYY-MM-DD>.md` (o
 - No Linear state transitions — promotion owns those; this only comments.
 - No code modifications — sub-agents are read-only (`Read, Bash, Grep, Glob`).
 - No per-task running — that's `/verify`. This runs once, at the production boundary.
-- No hard blocking (this release) — advisory only. See § Future.
+- No blocking of its own — the skill writes the PASS sentinel; **`pk promote` does the refusing** at the final hop (v4.17.0). The skill never aborts a promote itself.
 - No session-log writes — `/pk-exit` owns the session log.
 
-## Future (documented, not built)
+## The hard gate (shipped v4.17.0)
 
-A later release may add a **hard gate**: `/prod-ready` writes a sha-matched sentinel (mirroring `/verify`'s `verify-complete.md`), and `pk promote <PROD_ENV>` refuses to open the production PR without a fresh PASS sentinel (with a `--force` / `PK_PRODREADY_BYPASS=1` escape + Linear audit comment). Deferred until the advisory checks prove out on real features — keep this first cut out of the CI-gated `bin/pk` logic.
+The fast-follow documented since v4.3.0 is built: this skill writes a sha-matched sentinel on PASS (`Logs/ProdReady/<date>/prodready-complete.md`, mirroring `/verify`'s `verify-complete.md`), and **`pk promote` refuses** to open the production PR — the final `Ship environments` hop only — when the project's `Prod-ready checks` file exists and no sentinel matches the source branch head. Escapes: `pk promote <env> --force` or `PK_PRODREADY_BYPASS=1` (both logged to `Logs/ProdReady/bypass.log`). Intermediate hops and projects without a checks file are unaffected — the same file that arms this skill arms the promote gate, so opting in is one file. **Known limitation:** single-tier projects (`Promote to main: false`) merge to `main` without `pk promote`, so the hard gate has no seam there — the skill stays advisory for them.
