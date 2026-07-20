@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.19.1"
+PK_VERSION="4.20.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1744,11 +1744,18 @@ cmd_ship() {
   # v2.7: --force bypasses the verify-complete.md gate (wired Day 3).
   # Parsed now so callers can adopt the flag before the gate lands.
   local force=false
+  # v4.20.0: --force waives ONLY the verify gate. Waiving an armed
+  # /security-gate sentinel is a separate keystroke (--force-secgate) —
+  # a skipped security review has a different blast radius than a
+  # stale-verify override, so it doesn't ride on the routine --force
+  # (pipekit-security.md: "flag granularity should match blast radius").
+  local force_secgate=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --env=*) env="${1#--env=}"; shift ;;
       --review) review=true; shift ;;
       --ready) ready=true; shift ;;
+      --force-secgate) force_secgate=true; shift ;;
       --force) force=true; shift ;;
       *) shift ;;
     esac
@@ -1806,8 +1813,10 @@ cmd_ship() {
   # same file that arms /security-gate itself, so un-opted projects see no
   # change. /security-gate writes secgate-complete.md on PASS only (a FAIL
   # or an indeterminate surface writes nothing), sha-stamped to the gated
-  # HEAD. Escapes: --force (Linear audit comment) or PK_SECGATE_BYPASS=1
-  # (emergency only, logs to Logs/SecurityGate/bypass.log).
+  # HEAD. Escapes: --force-secgate (Linear audit comment) or PK_SECGATE_BYPASS=1
+  # (emergency only, logs to Logs/SecurityGate/bypass.log). Note this reads
+  # force_secgate, NOT force — a plain --force (verify override) does not waive
+  # an armed security gate (v4.20.0).
   local _sec_file _sec_configured=0 _sec_found=0 _sg_head _sg_verdict
   _sec_file=$(pk_config "Security categories" "resources/security-categories.md")
   [ -n "$_sec_file" ] && [ -f "$_sec_file" ] && _sec_configured=1
@@ -1815,7 +1824,7 @@ cmd_ship() {
   if [ "$_sec_configured" = "1" ] && pk_secgate_sentinel_for_head "$issue" "$_sg_head" >/dev/null; then
     _sec_found=1
   fi
-  _sg_verdict=$(pk_gate_verdict "$_sec_configured" "$_sec_found" "$([ "$force" = "true" ] && echo 1 || echo 0)" "${PK_SECGATE_BYPASS:-0}")
+  _sg_verdict=$(pk_gate_verdict "$_sec_configured" "$_sec_found" "$([ "$force_secgate" = "true" ] && echo 1 || echo 0)" "${PK_SECGATE_BYPASS:-0}")
   case "$_sg_verdict" in
     bypass-env)
       echo "⚠ security-gate sentinel bypassed via PK_SECGATE_BYPASS=1" >&2
@@ -1823,15 +1832,16 @@ cmd_ship() {
       echo "$(date -u +%FT%TZ) ${issue}" >> Logs/SecurityGate/bypass.log 2>/dev/null || true
       ;;
     bypass-force)
-      echo "⚠ no secgate-complete.md matching HEAD ${_sg_head:0:8} — bypassed via --force." >&2
-      pk_linear_comment "$issue" "Shipped without a HEAD-matching secgate-complete.md (--force at $(date -u +%FT%TZ))" || true
+      echo "⚠ no secgate-complete.md matching HEAD ${_sg_head:0:8} — bypassed via --force-secgate." >&2
+      pk_linear_comment "$issue" "Shipped without a HEAD-matching secgate-complete.md (--force-secgate at $(date -u +%FT%TZ))" || true
       ;;
     block)
       echo "ERROR: no secgate-complete.md matching current HEAD (${_sg_head:0:8}) for ${issue}." >&2
       echo "       This project has a Security categories file (${_sec_file}), so the" >&2
       echo "       security gate is required before ship. /security-gate writes the" >&2
       echo "       sentinel on PASS; a FAIL must be closed and re-gated." >&2
-      echo "       Run /security-gate on this commit, or pass --force to bypass (logs a Linear comment)." >&2
+      echo "       Run /security-gate on this commit, or pass --force-secgate to bypass" >&2
+      echo "       (logs a Linear comment; --force alone does NOT waive this gate)." >&2
       return 1
       ;;
   esac
@@ -3258,7 +3268,7 @@ Subcommands:
   pk issue show <ID> [--fields a,b,c] [--comments] [--json]   Lean issue read via the GraphQL path — compact text (default: id,title,state,labels); comments OFF by default. The low-token alternative to MCP getIssueById, whose result drags the whole comment thread into the session as a sticky payload.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
-  pk ship [--env=<env>] [--review] [--ready]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/.
+  pk ship [--env=<env>] [--review] [--ready] [--force] [--force-secgate]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/. --force waives the verify gate only; --force-secgate separately waives an armed /security-gate (both log a Linear audit comment).
   pk ready [<ID>]                 Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch.
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate

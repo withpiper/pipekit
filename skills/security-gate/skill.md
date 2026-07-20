@@ -147,7 +147,7 @@ Headline status (a single read-only gate run can't iterate-to-fix, so the rubric
 - **WARNINGS** — only Medium/Low confirmed (or needs-info the user judged acceptable).
 - **PASS** — no category matched, OR every matched category's checklist clean (no confirmed Critical/High).
 
-**This gate is hard as of v4.17.0:** on a project with a `Security categories` file, `pk ship` refuses without a HEAD-matching PASS sentinel (Step 5 writes it). A FAIL writes **no sentinel** — close the findings and re-run the gate; the escape hatches are `pk ship --force` (logs a Linear audit comment) or `PK_SECGATE_BYPASS=1` (emergency; logs to `Logs/SecurityGate/bypass.log`).
+**This gate is hard as of v4.17.0:** on a project with a `Security categories` file, `pk ship` refuses without a HEAD-matching PASS sentinel (Step 5 writes it). A FAIL writes **no sentinel** — close the findings and re-run the gate; the escape hatches are `pk ship --force-secgate` (logs a Linear audit comment) or `PK_SECGATE_BYPASS=1` (emergency; logs to `Logs/SecurityGate/bypass.log`). A plain `pk ship --force` waives only the verify gate, **not** this one (v4.20.0).
 
 ## Step 5 — Generate the report + sentinel
 
@@ -241,4 +241,4 @@ Same word, different concern. Both run; neither subsumes the other. (Documented 
 
 ## The hard gate (shipped v4.17.0)
 
-The fast-follow documented since v4.4.0 is built: this skill writes a sha-matched sentinel on PASS (`Logs/SecurityGate/<date>/<issue>/secgate-complete.md`, mirroring `/verify`'s `verify-complete.md`), and **`pk ship` refuses** to push / open the PR when the project's `Security categories` file exists and no sentinel matches HEAD. Escapes: `pk ship --force` (logs a Linear audit comment) or `PK_SECGATE_BYPASS=1` (logs to `Logs/SecurityGate/bypass.log`). Projects without a categories file are unaffected — the same file that arms this skill arms the ship gate, so opting in is one file.
+The fast-follow documented since v4.4.0 is built: this skill writes a sha-matched sentinel on PASS (`Logs/SecurityGate/<date>/<issue>/secgate-complete.md`, mirroring `/verify`'s `verify-complete.md`), and **`pk ship` refuses** to push / open the PR when the project's `Security categories` file exists and no sentinel matches HEAD. Escapes: `pk ship --force-secgate` (logs a Linear audit comment) or `PK_SECGATE_BYPASS=1` (logs to `Logs/SecurityGate/bypass.log`); `pk ship --force` waives only the verify gate (v4.20.0). Projects without a categories file are unaffected — the same file that arms this skill arms the ship gate, so opting in is one file.
