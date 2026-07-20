@@ -37,7 +37,7 @@ A light spec is an **AI→AI contract**: Generator → Reviewer → Planner. You
 
 ### Phase 1 — Capture
 
-1. **If issue ID provided**: Fetch via `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`). Extract title, description, existing labels, project, and any sub-issues.
+1. **If issue ID provided**: Fetch via `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`) **once**. Extract title, description, existing labels, project, and any sub-issues, and carry those fields through the review cycle — don't re-fetch. `getIssueById` also drags the full comment thread, a sticky payload re-billed every turn (`.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky); the `linear_updateIssue`/`linear_createIssue` in Phase 5 likewise echo the whole spec body back, so keep the spec-time loop in the main thread lean.
 2. **If raw idea**: Ask the user for a 1-2 sentence description of what they want and why.
 
 ### Phase 2 — Technical Context

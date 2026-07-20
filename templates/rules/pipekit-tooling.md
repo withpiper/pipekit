@@ -124,3 +124,19 @@ Project-critical MCP servers must be declared in the version-controlled `.mcp.js
 `pk branch` creates a **git worktree** for each issue. A worktree checks out the repo's tracked files, so an MCP server in committed `.mcp.json` is visible inside it. An MCP server configured in the per-path block of `~/.claude.json` is keyed to the main repo path and is **invisible in every worktree** — which is exactly where `/work` runs. The failure mode is silent: the tool the work depends on simply isn't there, and the session may not notice the MCP is missing until mid-task.
 
 Rule: if a server is required to do the work (a data-grid helper, the project's Supabase/Linear integration, a domain API), put it in `.mcp.json`. Reserve the global per-project block for personal, non-load-bearing tools.
+
+## MCP Result Payloads Are Sticky
+
+<important>
+An MCP tool result is not a one-time cost. Every payload it returns stays in the conversation context and is re-sent as input tokens on *every subsequent turn*. Cost scales with **(payload size × remaining turns)**, not with the call — a few fat payloads early in a session tax the whole session. Nothing prunes them automatically; `/compact` is the only lever, and it is manual and disruptive.
+</important>
+
+This is server-agnostic — Linear, Supabase, Sentry, GitKraken all share the economics. A routine day's Linear work (create an initiative + a handful of projects + a dozen issues, then draft and agent-review a spec) has been observed to leave the `linear-server` MCP holding **~17%** of the session budget, matching the documented ~18% `supabase` pattern. The work was correct; the cost was the payloads persisting, not the calls.
+
+Three shapes make it acute — avoid each:
+
+1. **State reads that drag the whole record.** `linear_getIssueById` returns the full description **plus the entire comment thread** (postmortems, UAT rounds, review blocks — often a dozen comments). Called just to learn an issue's state / merge / PR status, it can spend several percent of the budget and stay resident for the rest of the session. **For state-only reads, use `pk next` / `pk status` / `pk portfolio` (compact, width-controlled text), `linear_searchIssues` (filtered, no bodies), or `git` / `gh` — never `getIssueById`.** Reserve `getIssueById` for a genuine full-content read.
+2. **Writes that echo their input back.** `linear_createIssue` / `linear_updateIssue` return the full issue description in their result — so a spec-length body is paid for twice (sent + echoed) and the echo persists. Doing many of these is the expensive case.
+3. **Doing either inline in the main thread.** The main thread is where a payload costs the most: it rides every remaining turn. An MCP-heavy read/write batch belongs in a subagent that returns a distilled summary — the fat payloads live and die in the subagent's context. See `pipekit-discipline.md` § Parallel work patterns.
+
+The fix is **behavioral — keep fat payloads out of the main thread** — not a blunt output-size cap. A hard truncation setting can silently drop needed data; instead scope the query, prefer the CLI or a filtered read for scalars, and delegate the batch.
