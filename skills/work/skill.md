@@ -92,7 +92,7 @@ Use the Linear MCP tool `mcp__linear-server__linear_getIssueById` with the issue
 - `state.name` (expected: `In Progress` or `Building`. `Approved` is also fine — Step 0's auto-branch will have transitioned it. If `Backlog`/`Todo` and Step 0 did not just auto-branch, refuse.)
 - `labels`
 
-> **Read once.** This is the one genuine full-content read `/work` needs — capture these fields and carry them. `getIssueById` also drags the entire comment thread, and that payload is sticky (re-billed every turn — `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky). Don't re-fetch the issue later just to check its state; use `pk status` / `git` / `gh` for that.
+> **Read once.** This is the one genuine full-content read `/work` needs — capture these fields and carry them. `getIssueById` also drags the entire comment thread, and that payload is sticky (re-billed every turn — `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky). Don't re-fetch the issue later just to check its state; use `pk issue show <ID>` (lean, field-scoped) / `pk status` / `git` / `gh` for that.
 
 Validate the description contains either `## Light Spec` or `## Acceptance Criteria`. If neither:
 
