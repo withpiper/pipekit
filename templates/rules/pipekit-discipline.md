@@ -149,7 +149,7 @@ Independent work goes parallel. Sequential blocking is the default failure mode 
 
 Two parallel surfaces are available:
 
-- **Subagents (Agent tool).** Fork research, multi-file searches, independent reviews, and read-only audits to subagents. Don't read output mid-flight; integrate when they return. The main session keeps working while the subagent runs.
+- **Subagents (Agent tool).** Fork research, multi-file searches, independent reviews, and read-only audits to subagents. Don't read output mid-flight; integrate when they return. The main session keeps working while the subagent runs. **MCP-heavy read/write batches also belong here** — an MCP result is sticky (re-billed as input every turn), so running the batch in a subagent keeps the fat payloads out of the main thread and returns only a distilled summary. See `pipekit-tooling.md` § MCP Result Payloads Are Sticky.
 - **cmux panes.** Long-running processes (dev server, test watcher, deploy, k6 run) belong in their own pane — visible, addressable, separately stoppable. Never `&`-background a process you'll want to inspect later. See `pipekit-cmux.md` for surface-and-pane discipline.
 
 Shared rule: **spawn parallel work, don't block on it.** The main session is the integration point, not the bottleneck.

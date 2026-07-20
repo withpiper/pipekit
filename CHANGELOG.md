@@ -47,6 +47,31 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.19.0 — 2026-07-20
+
+> **MCP result payloads are sticky — keep them out of the main thread.** An MCP tool result is not a one-time cost: every payload it returns stays in the conversation context and is re-sent as input tokens on *every subsequent turn*, so cost scales with (payload size × remaining turns), not with the call. A routine SiteLine day (2026-07-20) — create an initiative + a handful of projects + a dozen issues, then draft and agent-review a Light Spec, ~40 Linear MCP calls all inline — was observed leaving the `linear-server` MCP holding **~17%** of the session budget, matching the documented ~18% `supabase` pattern. The work was correct; the cost was the payloads persisting. A project spoke can't fix this — the offending calls come from pipekit-synced skills and the canonical rule lives here — so the fix is framework-level and server-agnostic (Linear, Supabase, Sentry, GitKraken share the economics).
+
+**R1 — new canonical rule section `pipekit-tooling.md § MCP Result Payloads Are Sticky`.** States the sticky/re-billed mechanism and the three acute shapes to avoid:
+- **State reads that drag the whole record** — `linear_getIssueById` returns the full description **plus the entire comment thread**; called only to learn an issue's state/merge/PR status it can spend several percent of the budget and stay resident for the rest of the session. Use `pk next`/`pk status`/`pk portfolio` (compact, width-controlled text), filtered `linear_searchIssues` (no bodies), or `git`/`gh` instead.
+- **Writes that echo their input** — `linear_createIssue`/`linear_updateIssue` return the full description in their result, so a spec-length body is paid for twice (sent + echoed) and the echo persists.
+- **Doing either inline in the main thread** — where a payload costs the most (it rides every remaining turn); an MCP-heavy batch belongs in a subagent that returns a distilled summary.
+
+The fix is explicitly **behavioral — keep fat payloads out of the main thread — not a hard output-size cap** (truncation silently drops needed data; declined for SiteLine).
+
+**R2 — `pipekit-discipline.md § Parallel work patterns` gains one line:** MCP-heavy read/write batches belong in a subagent so the fat payloads stay out of the main thread. Generalizes the already-proven "Payload watch-out" pattern in `/linear-hygiene` and `/00-roadmap-review`.
+
+**R3 — `sop/Linear_SOP.md`** gains a caveat under the MCP tool table: `getIssueById` is a full-content read, not for state-only reads.
+
+**R2 nudges** — `/01-light-spec` (Phase 1 fetch) and `/work` (Step 2 fetch) now say "read once, carry the fields, don't re-fetch for state." `/pk-bug` was deliberately **not** nudged — it makes no direct Linear MCP calls (it wraps `/work` + `pk ship`), so a nudge there would be performative; it inherits the rule and `/work`'s nudge.
+
+Canonical source is `templates/rules/`; consumers inherit R1/R2 on their next `sync-method.sh`. Rider: cleared pre-existing `VBW`→`/work` drift between this repo's gitignored `.claude/rules/pipekit-discipline.md` copy and its `templates/rules/` source.
+
+**R5 — `pk issue show`, the lean structured read (shipped, not deferred).** A new `bin/pk` verb: `pk issue show <ID> [--fields a,b,c] [--comments] [--json]` reads an issue over the daily-loop GraphQL path (`LINEAR_API_KEY`), **not** MCP `getIssueById` — so the fat fields never enter the session. Default fields `id,title,state,labels`; **the two fat fields are fetched only on demand** — `description` via `--fields description`, `comments` via `--comments` *or* `--fields …,comments` (symmetric, so a field request never renders a false "(0)"). Compact aligned text by default, `--json` for skills; unknown/trailing `--fields` entries are surfaced or skipped, never a silent-empty read; no key → a clear "set `LINEAR_API_KEY`" error (reads are unguarded, so a cross-workspace read still works). `pipekit-tooling.md § MCP Result Payloads Are Sticky` and `sop/Linear_SOP.md` now name `pk issue show` the **first-class state read**, ahead of `searchIssues`/`git`/`gh`. `bin/pk` gains `cmd_issue` + two pure helpers (`pk_linear_issue_full` fetch, `pk_issue_show_render` renderer — the renderer unit-tested); **smoke 121→131** (10 new cases: render/field-selection/edge cases + query-economics asserting the fat fields stay out unless asked). Live-verified against SiteLine `POC-426` — the exact closed-bug-with-11-comments the origin handoff cited as the worst offender, now a four-line ~200-byte read.
+
+This is the only piece touching the CI-gated `bin/pk`; it was scoped as a fast-follow and folded into this release once tested green. Spec/history in `resources/mcp-payload-hygiene-followup.md`.
+
+---
+
 ## v4.18.0 — 2026-07-16
 
 > **Migration safety Tiers 2+3 — gap #1 completes.** Tier 1 (the artifact rule: every schema change is a tracked migration with a Migration Plan, v4.0.0-rc5) constrained how migrations are born. This release ships the two explicitly-deferred tiers that catch what survives it — the drift classes where every *local* check passes and the failure only surfaces on merge or deploy. Both anchor to real incidents that motivated the original gap analysis ("migrations is the biggest single win").

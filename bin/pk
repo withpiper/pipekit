@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.18.0"
+PK_VERSION="4.19.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -303,6 +303,51 @@ pk_linear_issue() {
   local id="$1"
   local q='query($id: String!) { issue(id: $id) { id identifier title } }'
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -r '.data.issue // empty'
+}
+
+# Lean issue read backing `pk issue show`. Fetches ONLY the requested field set
+# over the daily-loop GraphQL path (LINEAR_API_KEY) — deliberately NOT the MCP
+# `getIssueById`, whose result drags the whole comment thread into the Claude
+# session as a sticky payload re-billed every turn (see
+# .claude/rules/pipekit-tooling.md § MCP Result Payloads Are Sticky). The two
+# fat fields — description and comments — are fetched only when asked for, so a
+# default read stays tiny. Prints the issue object as compact JSON (empty if not
+# found). Args: id  fields-csv  with_comments("1"|"").
+pk_linear_issue_full() {
+  local id="$1" fields="$2" with_comments="$3"
+  local extra=""
+  case ",$fields," in *,description,*) extra="$extra description" ;; esac
+  # Comments are fetched on either trigger — the --comments flag OR an explicit
+  # `comments` in --fields — so a field request never silently renders "(0)".
+  case ",$fields," in *,comments,*) with_comments=1 ;; esac
+  [ -n "$with_comments" ] && extra="$extra comments(orderBy: createdAt) { nodes { body createdAt user { displayName } } }"
+  local q="query(\$id: String!) { issue(id: \$id) { identifier title url priorityLabel state { name } assignee { displayName } project { name } labels { nodes { name } }$extra } }"
+  # No 2>/dev/null: this is a user-facing read with no fallback, so pk_linear_gql's
+  # "API key not set" / transport errors must surface rather than look like a
+  # not-found. Under `set -o pipefail` a gql failure exits the pipe non-zero.
+  pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -c '.data.issue // empty'
+}
+
+# Pure renderer (no I/O — unit-tested in tests/pk-smoke.sh): issue object JSON on
+# stdin, fields CSV as $1 → compact aligned text. Unknown fields are surfaced,
+# never silently dropped (a typo'd --fields shouldn't look like an empty issue).
+pk_issue_show_render() {
+  jq -r --arg fields "$1" '
+    . as $i
+    | [ ($fields | split(",")[] | gsub("^[ ]+|[ ]+$";"") | select(. != "")) as $k
+        | if   $k=="id" or $k=="identifier" then "id:        \($i.identifier // "")"
+          elif $k=="title"       then "title:     \($i.title // "")"
+          elif $k=="state"       then "state:     \($i.state.name // "")"
+          elif $k=="priority"    then "priority:  \($i.priorityLabel // "")"
+          elif $k=="assignee"    then "assignee:  \($i.assignee.displayName // "—")"
+          elif $k=="project"     then "project:   \($i.project.name // "—")"
+          elif $k=="url"         then "url:       \($i.url // "")"
+          elif $k=="labels"      then "labels:    \([$i.labels.nodes[]?.name] | join(", "))"
+          elif $k=="description" then "\n--- description ---\n\($i.description // "(none)")"
+          elif $k=="comments"    then "\n--- comments (\([$i.comments.nodes[]?] | length)) ---\n" + ([$i.comments.nodes[]? | "• \(.user.displayName // "?") \(.createdAt):\n\(.body)"] | join("\n\n"))
+          else "\($k): (unknown field)" end
+      ] | join("\n")
+  '
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3149,6 +3194,60 @@ cmd_install() {
   esac
 }
 
+PK_ISSUE_SHOW_DEFAULT_FIELDS="id,title,state,labels"
+
+# pk issue show <ID> — a lean, low-token structured issue read. The first-class
+# alternative to MCP getIssueById for skills that only need an issue's shape, not
+# its whole comment thread. Compact text by default; --json for machine callers.
+cmd_issue() {
+  local subverb="${1:-}"
+  shift || true
+  case "$subverb" in
+    show) ;;
+    ""|help|-h|--help)
+      echo "Usage: pk issue show <ID> [--fields a,b,c] [--comments] [--json]"
+      echo "  default fields: $PK_ISSUE_SHOW_DEFAULT_FIELDS"
+      echo "  known fields:   id title state labels priority assignee project url description comments"
+      echo "  comments are OFF by default (avoids the sticky full-thread payload)"
+      return 0 ;;
+    *) echo "Unknown 'pk issue' subcommand: $subverb (only 'show')" >&2; return 1 ;;
+  esac
+
+  local id="" fields="$PK_ISSUE_SHOW_DEFAULT_FIELDS" with_comments="" as_json=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --fields)   fields="${2:-}"; shift 2 ;;
+      --fields=*) fields="${1#--fields=}"; shift ;;
+      --comments) with_comments=1; shift ;;
+      --no-comments) with_comments=""; shift ;;
+      --json)     as_json=1; shift ;;
+      -*)         echo "Unknown flag: $1" >&2; return 1 ;;
+      *) if [ -z "$id" ]; then id="$1"; shift; else echo "Unexpected argument: $1" >&2; return 1; fi ;;
+    esac
+  done
+  [ -z "$fields" ] && fields="$PK_ISSUE_SHOW_DEFAULT_FIELDS"
+  if [ -z "$id" ]; then
+    echo "Usage: pk issue show <ID> [--fields a,b,c] [--comments] [--json]" >&2
+    return 1
+  fi
+  # --comments implies rendering the comments field.
+  if [ -n "$with_comments" ]; then
+    case ",$fields," in *,comments,*) ;; *) fields="$fields,comments" ;; esac
+  fi
+
+  local json
+  json=$(pk_linear_issue_full "$id" "$fields" "$with_comments") || return 1
+  if [ -z "$json" ]; then
+    echo "Issue not found (or no access / no LINEAR_API_KEY): $id" >&2
+    return 1
+  fi
+  if [ -n "$as_json" ]; then
+    printf '%s\n' "$json" | jq .
+  else
+    printf '%s\n' "$json" | pk_issue_show_render "$fields"
+  fi
+}
+
 cmd_help() {
   cat <<EOF
 pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
@@ -3156,6 +3255,7 @@ pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
 Subcommands:
   pk next                         What should I do now?
   pk status                       Quick triage of the Linear board + worktrees
+  pk issue show <ID> [--fields a,b,c] [--comments] [--json]   Lean issue read via the GraphQL path — compact text (default: id,title,state,labels); comments OFF by default. The low-token alternative to MCP getIssueById, whose result drags the whole comment thread into the session as a sticky payload.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
   pk ship [--env=<env>] [--review] [--ready]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/.
@@ -3442,6 +3542,7 @@ main() {
   case "$sub" in
     next)     cmd_next "$@" ;;
     status)   cmd_status "$@" ;;
+    issue)    cmd_issue "$@" ;;
     portfolio) cmd_portfolio "$@" ;;
     branch)   cmd_branch "$@" ;;
     ship)     cmd_ship "$@" ;;

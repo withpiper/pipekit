@@ -196,6 +196,74 @@ v=$(printf '%s' '[{"identifier":"X"},{"identifier":"Y","priority":2}]' | unit_pr
 v=$(printf '%s' '[]' | unit_prio_sort)
 [ "$v" = '[]' ] && ok "prio sort: empty array → empty (no crash)" || fail "prio sort: empty array" "got $v"
 
+# ── Unit tests: pk issue show — lean read (sourced) ──────────────────────────
+# pk_issue_show_render is a pure renderer (issue JSON on stdin, fields CSV arg).
+# pk_linear_issue_full builds a GraphQL query that fetches the FAT fields
+# (description, comments) ONLY when requested — the whole point of `pk issue
+# show`: a low-token read that avoids MCP getIssueById's sticky full-thread
+# payload (see .claude/rules/pipekit-tooling.md § MCP Result Payloads Are Sticky).
+
+echo "== pk issue show — lean read (sourced) =="
+
+unit_render() { ( cd "$REPO_ROOT" && source "$PK" && pk_issue_show_render "$1" ); }
+
+ISSUE_FIX='{"identifier":"RS-30","title":"Widget","url":"https://l/RS-30","priorityLabel":"High","state":{"name":"In Progress"},"assignee":{"displayName":"Ethan"},"project":{"name":"I1.P2. Editor"},"labels":{"nodes":[{"name":"Feature"},{"name":"tier:standard"}]},"description":"body","comments":{"nodes":[{"body":"c1","createdAt":"t","user":{"displayName":"Ann"}}]}}'
+
+v=$(printf '%s' "$ISSUE_FIX" | unit_render "id,title,state,labels")
+if printf '%s\n' "$v" | grep -q 'labels:    Feature, tier:standard' \
+   && printf '%s\n' "$v" | grep -q 'state:     In Progress'; then
+  ok "issue show: default fields render (labels joined, aligned)"
+else
+  fail "issue show: default fields render" "got: $v"
+fi
+
+# A scalar read must not print the description body.
+v=$(printf '%s' "$ISSUE_FIX" | unit_render "id,title,state,labels")
+printf '%s\n' "$v" | grep -q 'body' \
+  && fail "issue show: scalar render omits description" "leaked body: $v" \
+  || ok "issue show: scalar render omits description body"
+
+# Unknown field is surfaced, not silently dropped (a typo'd --fields must not
+# look like an empty issue).
+v=$(printf '%s' "$ISSUE_FIX" | unit_render "bogus")
+[ "$v" = "bogus: (unknown field)" ] \
+  && ok "issue show: unknown field surfaced" \
+  || fail "issue show: unknown field surfaced" "got '$v'"
+
+# Empty labels array → no crash, empty value.
+v=$(printf '%s' '{"identifier":"X-1","labels":{"nodes":[]}}' | unit_render "labels")
+[ "$v" = "labels:    " ] \
+  && ok "issue show: empty labels → no crash" \
+  || fail "issue show: empty labels" "got '$v'"
+
+# Query-building: stub the network chokepoint, capture the query it was handed,
+# and assert the fat fields are fetched only on demand.
+GQL_STUB='pk_linear_gql() { printf "%s" "$1" > "$QFILE"; echo "{\"data\":{\"issue\":{\"identifier\":\"RS-30\"}}}"; }'
+run_q() { QFILE="$1"; export QFILE; ( cd "$REPO_ROOT" && source "$PK" && eval "$GQL_STUB" && pk_linear_issue_full "RS-30" "$2" "$3" >/dev/null ); }
+QF=$(mktemp)
+
+run_q "$QF" "id,title,state,labels" ""
+grep -q 'description' "$QF" && fail "issue show: default query omits description" "leaked into query" || ok "issue show: default query omits description"
+grep -q 'comments'    "$QF" && fail "issue show: default query omits comments"    "leaked into query" || ok "issue show: default query omits comments"
+
+run_q "$QF" "id,description" ""
+grep -q 'description' "$QF" && ok "issue show: --fields description fetches it" || fail "issue show: --fields description fetches it" "not in query"
+
+run_q "$QF" "id" "1"
+grep -q 'comments' "$QF" && ok "issue show: --comments fetches comments" || fail "issue show: --comments fetches comments" "not in query"
+
+# `comments` in --fields (without the flag) must also fetch — else it renders (0).
+run_q "$QF" "id,comments" ""
+grep -q 'comments' "$QF" && ok "issue show: --fields comments also fetches (symmetry)" || fail "issue show: --fields comments also fetches" "not in query"
+
+rm -f "$QF"
+
+# Trailing/empty field name is skipped, not rendered as "(unknown field)".
+v=$(printf '%s' '{"identifier":"Z-9","title":"T"}' | unit_render "id,title,")
+printf '%s\n' "$v" | grep -q 'unknown field' \
+  && fail "issue show: trailing comma skipped" "rendered bogus line: $v" \
+  || ok "issue show: trailing comma → empty field skipped"
+
 # ── Unit tests: pk status project grouping (sourced) ─────────────────────────
 # pk_issues_group_render groups a JSON issue array by project for pk status:
 # project groups ordered by their highest-priority issue, issues priority-sorted
