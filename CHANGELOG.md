@@ -47,6 +47,20 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.20.0 — 2026-07-20
+
+> **`pk ship --force` no longer waives the security gate — split into `--force` (verify) and `--force-secgate` (security).** A SiteLine review of the v4.19.1 sync flagged that `cmd_ship` reused one `--force` variable to bypass **both** sentinel gates: the v2.7 `verify-complete.md` gate and the v4.17.0 `secgate-complete.md` gate. So the routine `pk ship --force` — muscle-memory for routing around a stale or midnight-rolled-over *verify* sentinel — silently also waived an armed `/security-gate` review in the same keystroke, on any project with a `Security categories` file (SiteLine included).
+
+- **The flag is now split.** `--force` waives **only** the verify gate. A new **`--force-secgate`** is the separate, explicit waiver for the security gate (still posts the Linear audit comment). To waive both, pass both.
+- **The safer default falls out.** A plain `pk ship --force` on a security-gated project with no HEAD-matching secgate sentinel now **blocks** — it no longer ships past an un-run security review. This mirrors the env layer, which was already decoupled (`PK_VERIFY_BYPASS` / `PK_SECGATE_BYPASS`), and honors `pipekit-security.md`'s "flag granularity should match blast radius."
+- **Twin gate checked, unchanged.** `pk promote --force` (prod-ready) is already single-duty — the UAT-state check has its own `--confirmed` — so no change was needed there.
+
+> **CI rider — script-injection hardening in the migration-drift workflow template.** `templates/ci/migration-drift.yml` interpolated `${{ github.base_ref }}` directly into a `run:` block (the GitHub Actions script-injection anti-pattern). It now binds `base_ref` via `env: BASE_REF` and references `"$BASE_REF"`. Consumers who copied the template into `.github/workflows/` must re-apply the edit locally — `sync-method.sh` doesn't rewrite workflow files.
+
+`bin/pk`: `+--force-secgate` parse + the secgate block reads `force_secgate`, not `force`; block/bypass messages and `pk ship` help updated. Docs: `Security_Gate_SOP.md` and `skills/security-gate/skill.md` escape-hatch prose corrected (v4.17.0 changelog lines left as history). Smoke **131→133** — two new assertions: `--force` does NOT waive an armed secgate (the regression guard for this fix) and `--force-secgate` does.
+
+---
+
 ## v4.19.1 — 2026-07-20
 
 > **`sync-method.sh` Config-drift check: compare key presence, not whole rows.** The Sync Changelog's `## Config` section (written into each consumer's `pipekit/.sync-changelog.md`) diffed full `| **Key** | value |` table rows between `method.config.template.md` and the project's `method.config.md`. That garbled the section two ways, both surfaced on RS-Vault (2026-07-20):

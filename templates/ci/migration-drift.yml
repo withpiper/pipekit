@@ -33,6 +33,12 @@ jobs:
           fetch-depth: 0   # full history: the check compares against the base branch tree
 
       - name: Check migration drift vs base branch
+        # base_ref is passed through env, never interpolated into the shell —
+        # ${{ github.* }} expanded directly into `run:` is the Actions
+        # script-injection anti-pattern. base_ref is branch-name-controlled;
+        # bind it once and reference "$BASE_REF".
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch -q origin "${{ github.base_ref }}"
-          ./scripts/check-migration-drift.sh --base "origin/${{ github.base_ref }}"
+          git fetch -q origin "$BASE_REF"
+          ./scripts/check-migration-drift.sh --base "origin/$BASE_REF"

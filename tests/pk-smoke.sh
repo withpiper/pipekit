@@ -868,6 +868,27 @@ else
   fail "secgate ship: armed + no sentinel aborts before push/gh" "rc=$RUN_CODE gate_msg=$g pushed=$p"
 fi
 
+# (a2) --force waives verify ONLY — it must NOT waive an armed secgate (v4.20.0).
+#      Verify sentinel is present, so --force here has nothing to do for verify;
+#      the split means the security gate still blocks with no secgate sentinel.
+: > "$GH_LOG"
+run_pk ship --force
+g=0; p=0
+case "$RUN_OUT" in *"no secgate-complete.md matching"*) g=1 ;; esac
+case "$RUN_OUT" in *Pushing*) p=1 ;; esac
+if [ $RUN_CODE -ne 0 ] && [ $g -eq 1 ] && [ $p -eq 0 ] && [ ! -s "$GH_LOG" ]; then
+  ok "secgate ship: --force does NOT waive the security gate (v4.20.0 split)"
+else
+  fail "secgate ship: --force does NOT waive the security gate" "rc=$RUN_CODE gate_msg=$g pushed=$p"
+fi
+
+# (a3) --force-secgate is the explicit, separate waiver → bypasses (logs, proceeds).
+run_pk ship --force-secgate
+case "$RUN_OUT" in
+  *"bypassed via --force-secgate"*) ok "secgate ship: --force-secgate waives the security gate" ;;
+  *) fail "secgate ship: --force-secgate waives the security gate" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+
 # (b) HEAD-matching secgate sentinel → passes both gates (reaches push).
 mkdir -p "$FIXTURE/Logs/SecurityGate/20260101/ABC-123"
 printf 'issue: ABC-123\nstatus: PASS\nsha: %s\n' "$SG_HEAD" \
