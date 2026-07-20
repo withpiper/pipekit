@@ -677,18 +677,32 @@ CHLOG
   echo "" >> "$CHANGELOG"
 
   echo "## Config" >> "$CHANGELOG"
-  # Check if template has fields not in project config
+  # Report template config KEYS the project hasn't set yet. Compare key PRESENCE,
+  # NOT whole rows. The old check diffed full `| **Key** | value |` rows between
+  # template and project, which garbled the section two ways (RS-Vault, 2026-07-20):
+  #   1. The template ships placeholder values, so every field a project actually
+  #      filled in differed from its placeholder → falsely reported as "new".
+  #   2. A project written in code-block form (`Key: value`) matched zero `| **Key** |`
+  #      rows, so the diff dumped the ENTIRE template as "new fields".
+  # Fix: take the template's declared keys (its bolded table-row keys) and treat each
+  # as present if the project names it in EITHER form — `**Key**` (table) or `Key:`
+  # (code-block). Erring toward "present" under-reports rather than dumps.
   if [ -f "$PROJECT_ROOT/method.config.md" ] && [ -f "$TEMP/method.config.template.md" ]; then
-    new_fields=$(diff <(grep '^\| \*\*' "$PROJECT_ROOT/method.config.md" 2>/dev/null | sort) \
-                      <(grep '^\| \*\*' "$TEMP/method.config.template.md" 2>/dev/null | sort) \
-                      2>/dev/null | grep '^>' | sed 's/^> //' || true)
+    proj="$PROJECT_ROOT/method.config.md"
+    new_fields=""
+    while IFS= read -r key; do
+      [ -z "$key" ] && continue
+      if grep -qiF -- "**$key**" "$proj" 2>/dev/null; then continue; fi
+      if grep -qiF -- "$key:"    "$proj" 2>/dev/null; then continue; fi
+      new_fields="$new_fields
+- **$key**"
+    done < <(grep -oE '^\| \*\*[^*]+\*\*' "$TEMP/method.config.template.md" 2>/dev/null \
+               | sed -E 's/^\| \*\*[[:space:]]*//; s/[[:space:]]*\*\*$//' | sort -u || true)
     if [ -n "$new_fields" ]; then
-      echo "New fields in template (may need adding to method.config.md):" >> "$CHANGELOG"
-      echo "$new_fields" | while read -r line; do
-        echo "- $line" >> "$CHANGELOG"
-      done
+      echo "Template keys not set in your method.config.md (add if the capability applies):" >> "$CHANGELOG"
+      printf '%s\n' "$new_fields" | sed '/^$/d' >> "$CHANGELOG"
     else
-      echo "No new config fields." >> "$CHANGELOG"
+      echo "No new config fields — method.config.md already has every template key." >> "$CHANGELOG"
     fi
   else
     echo "No config comparison available." >> "$CHANGELOG"

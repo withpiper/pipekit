@@ -47,6 +47,17 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.19.1 — 2026-07-20
+
+> **`sync-method.sh` Config-drift check: compare key presence, not whole rows.** The Sync Changelog's `## Config` section (written into each consumer's `pipekit/.sync-changelog.md`) diffed full `| **Key** | value |` table rows between `method.config.template.md` and the project's `method.config.md`. That garbled the section two ways, both surfaced on RS-Vault (2026-07-20):
+
+- **Filled-in values flagged as new.** The template ships placeholder values; a real project's values differ, so every customized field showed up as a "new field in template."
+- **Code-block configs dumped the whole template.** A `method.config.md` in code-block form (`Key: value` — a form `pk config` supports) matched *zero* `| **Key** |` rows, so the diff reported every template row as new — raw template lines, not a diff.
+
+The check now extracts the template's declared keys (its bolded table-row keys) and treats each as present if the project names it in **either** form — `**Key**` (table) or `Key:` (code-block). An aligned config reports "No new config fields — method.config.md already has every template key"; only genuinely-absent template keys are listed. Erring toward "present" under-reports rather than dumps. Validated against both bug shapes + a true-positive (missing key) + no self-dump on the real 46-key template; RS-Vault's proper reconcile independently confirmed 0 real drift. No `bin/pk` change (smoke 131). Unblocks clean SiteLine/Piper syncs.
+
+---
+
 ## v4.19.0 — 2026-07-20
 
 > **MCP result payloads are sticky — keep them out of the main thread.** An MCP tool result is not a one-time cost: every payload it returns stays in the conversation context and is re-sent as input tokens on *every subsequent turn*, so cost scales with (payload size × remaining turns), not with the call. A routine SiteLine day (2026-07-20) — create an initiative + a handful of projects + a dozen issues, then draft and agent-review a Light Spec, ~40 Linear MCP calls all inline — was observed leaving the `linear-server` MCP holding **~17%** of the session budget, matching the documented ~18% `supabase` pattern. The work was correct; the cost was the payloads persisting. A project spoke can't fix this — the offending calls come from pipekit-synced skills and the canonical rule lives here — so the fix is framework-level and server-agnostic (Linear, Supabase, Sentry, GitKraken share the economics).
