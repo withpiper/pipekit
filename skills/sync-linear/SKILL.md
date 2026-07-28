@@ -1,6 +1,6 @@
 ---
 name: sync-linear
-description: Reconcile strategy-doc / requirement drift against the Linear board's i{N}./I{N}.P{N}. initiative hierarchy. Use when issues are mis-placed across projects, or initiatives/projects drift from the naming convention (projects are named I{N}.P{N}.; bare P{N}. is legacy-valid). Linear is the source of truth; there is no PHASES.md/linear-map.json to sync.
+description: Reconcile strategy-doc drift against the Linear i{N}./I{N}.P{N}. initiative hierarchy. Use when issues are mis-placed across projects or naming has drifted. Linear is the source of truth.
 ---
 
 # Sync Linear Skill

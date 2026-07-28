@@ -178,7 +178,7 @@ Evaluate top-down; first match wins:
 
 ### Confirmation prompt
 
-Mirror the wording from `skills/work/skill.md` Step 1.5:
+Mirror the wording from `skills/work/SKILL.md` Step 1.5:
 
 ```
 Auto-detected entry mode: {mode}

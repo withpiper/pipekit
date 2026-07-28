@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.21.2"
+PK_VERSION="4.22.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -896,7 +896,7 @@ pk_linear_comment() {
 # Return the issue's tier (quick|standard|heavy) by scanning Linear labels for
 # the first `tier:*` match. Defaults to "standard" when no label is set or the
 # Linear lookup fails — keeps the v2.7 verify-complete.md gate operative even
-# when Linear is unreachable. Mirrors the label-scan logic in skills/work/skill.md.
+# when Linear is unreachable. Mirrors the label-scan logic in skills/work/SKILL.md.
 pk_linear_tier() {
   local id="$1"
   local q='query($id: String!) { issue(id: $id) { labels { nodes { name } } } }'

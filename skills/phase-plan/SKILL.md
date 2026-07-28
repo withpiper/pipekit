@@ -1,6 +1,6 @@
 ---
 name: phase-plan
-description: Confirm and advance the current execution initiative on the Linear-native surface — derive the active i{N}. initiative / P{N}. project, promote its issues to Needs Spec, and roll the initiative pointer forward by flipping Linear initiative/project state. Use when an initiative is closing and you need to open the next one.
+description: Advance the current initiative on the Linear-native surface — derive the active i{N}./P{N}., promote its issues to Needs Spec, roll the pointer forward. Use when an initiative is closing.
 ---
 
 # Phase Plan Skill

@@ -1,6 +1,6 @@
 ---
 name: pr-fix
-description: Pluggable-engine PR review (pr-review-toolkit agents by default, built-in fallback) with two-axis severity×confidence triage and interactive remediation. Use when a PR needs review + structured fix triage. Use when pk ship --review surfaced findings. Use to address an existing review via --from-review. Different from /pr-security-review (security-only).
+description: PR review with severity×confidence triage and interactive remediation. Use for structured fix triage on a PR, after pk ship --review, or via --from-review on an existing review. Not /pr-security-review (security-only).
 ---
 
 # PR Fix

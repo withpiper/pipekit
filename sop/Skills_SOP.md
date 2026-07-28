@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.16.0** — Last updated: 2026-07-16 07:32  *(**v4.16.0 — high-stakes body conventions enforced + extended.** § Body Conventions now requires **three** sections on ship/merge-gating skills — `When NOT to use` (redirects; explicitly *not* satisfied by a `What this skill does NOT do` scope fence), `Common Rationalizations` (user skip-excuse → rebuttal table), and **Never-do guardrails** where every line is an actually-corrected mistake with its anchor (WIT-451, POC-382 pattern) — plus a good/weak example-pair convention for output-producing skills. All five named skills (`/verify`, `/pr-fix`, `/pr-security-review`, `/work`, `/pk-bug`) brought into compliance this release; an audit found only 1 of 5 had `When NOT to use` and 0 of 5 had `Common Rationalizations`. Carries **v4.13.0 — Model Policy roles.** § "Pinning models on subagents" is now the canonical role table — grounding/lookup `haiku`/`low`, execution `sonnet`/`medium`, verification `sonnet`/`high`, plan-review/adversarial `opus`/`xhigh` — with `method.config.md § Model Policy` as the per-project override surface. Skills cite a role plus its default inline, never a bare model name: the same rule that keeps Linear IDs out of portable skills, applied to the time-varying axis. Carries v4.4.0: added `/security-gate` (Stage 3 feature-scoped security gate, gap #3) to the portable-skills table — advisory framework, project category signals in `resources/security-categories.md`. Carries v4.3.0: added `/prod-ready` (Stage 4 production-readiness gate) to the portable-skills table — advisory framework, project checks in `resources/prod-readiness-checks.md`. Carries v4.0.0: native-on-Workflow is the sole executor — execution framing points at the native executor; the legacy `.vbw-planning/` planning layer is retired (`bin/pk` read-only fallback for un-migrated projects). Carries v2.7.0: `/pr-fix` row updated for the pluggable engine + historical finders + two-axis triage; `/light-spec` and `/verify` rows updated for the configured `Spec ready state` and the migration self-review verdict)*
+**v4.22.0** — Last updated: 2026-07-28  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
 
 ---
 
@@ -87,7 +87,7 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk sh
 
 ## Skill Anatomy
 
-Every skill lives in `.claude/skills/{name}/skill.md` with frontmatter:
+Every skill lives in `.claude/skills/{name}/SKILL.md` with frontmatter:
 
 ```markdown
 ---
@@ -224,7 +224,7 @@ Any skill that invokes `Agent()` should **explicitly pass `model:`** rather than
 
 When a skill spawns a subagent, spell out the role and its default inline — e.g. *"execution tier per `method.config.md § Model Policy`, default `sonnet`"* — so the skill still works in a project whose config predates the section.
 
-Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents). A structural sibling worth knowing about (not yet adopted): escalate-on-failure — start a task on the cheapest plausible role and re-run one tier up after repeated verify failures.
+Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/SKILL.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents). A structural sibling worth knowing about (not yet adopted): escalate-on-failure — start a task on the cheapest plausible role and re-run one tier up after repeated verify failures.
 
 ---
 
@@ -281,7 +281,7 @@ Some files in a Pipekit project are **canonical** — they encode conventions th
 
 Protection is enforced by **hook**, not by skill prose. A `PreToolUse` hook on `Edit` and `Write` blocks the call when the target path matches the protected set; the agent receives `EditPermissionDenied` (or `HookFeedbackBlocked`, depending on the hook variant). This is intentional: hooks win over `bypassPermissions` mode because hook-level guards are the project's last line of defense, and orchestrator-spawned agents are not exempt from project policy.
 
-The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/skill.md` § Permission-denial protocol and the parallel block in `skills/work/skill.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
+The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/SKILL.md` § Permission-denial protocol and the parallel block in `skills/work/SKILL.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
 
 When you add a new skill that spawns file-editing agents, copy the permission-denial block verbatim. When you protect a new path with a hook, document the protection in `method.config.md` so future readers know which paths are agent-write-locked and why.
 
@@ -289,7 +289,7 @@ When you add a new skill that spawns file-editing agents, copy the permission-de
 
 If a project needs to change behavior of a synced skill, **do not edit the file in `.claude/skills/<name>/` directly** — it will be overwritten on the next sync. Use the override system instead:
 
-1. Copy the skill into `.claude/overrides/skills/<name>/skill.md`.
+1. Copy the skill into `.claude/overrides/skills/<name>/SKILL.md`.
 2. Make your project-specific edits there.
 3. Add a row to `.claude/overrides/MANIFEST.md` explaining what you changed and why.
 4. Re-run `scripts/sync-method.sh` — the override is applied on top of the upstream sync.

@@ -216,6 +216,6 @@ These are **starter rules** — test against your codebase before enabling in CI
 These flags ship alongside the CI templates:
 
 - **`/pr-fix --from-review`** — skip the local Phase 3 fresh review; ingest existing PR review comments (typically from `claude-review.yml`) and feed them into Phase 4 aggregation + Phase 5 discussion. Use after the GHA reviewer has run to "address what claude-review flagged" without re-reviewing.
-- **`/pr-fix --second-opinion=gemini`** — after Phase 4, invoke Gemini Flash for a parallel review. Opt-in only — counts against your Gemini quota. Requires `GEMINI_API_KEY`. See `skills/pr-fix/skill.md` § 4.6 for the full procedure and the thinking-tokens gotcha.
+- **`/pr-fix --second-opinion=gemini`** — after Phase 4, invoke Gemini Flash for a parallel review. Opt-in only — counts against your Gemini quota. Requires `GEMINI_API_KEY`. See `skills/pr-fix/SKILL.md` § 4.6 for the full procedure and the thinking-tokens gotcha.
 
 The flags compose: `/pr-fix --review --from-review --second-opinion=gemini` reviews-only, ingests GHA, adds Gemini.

@@ -1,6 +1,6 @@
 ---
 name: security-gate
-description: Feature-scoped security gate that runs at the Building → UAT seam (before pk ship). It classifies the change into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) and, on any match, runs the category-specific security checklist against the feature's diff — producing a PASS/FAIL report + a Linear comment, and on PASS the sha-matched sentinel pk ship hard-requires (v4.17.0) on any project with a categories file. It does not transition state. Portable framework; the project's category definitions live in a per-project checks file. Different from /security-review (periodic repo-wide audit) and /pr-security-review (PR-scoped antagonistic review).
+description: Feature-scoped security gate between /verify and pk ship — classifies the diff into sensitive categories, runs matched checklists, writes the PASS sentinel pk ship hard-requires on gated projects. Not /security-review (repo-wide) or /pr-security-review (PR-scoped).
 ---
 
 # /security-gate

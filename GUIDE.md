@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.21.2** — Last updated: 2026-07-28 10:16  *(**v4.21.2 — CI template action pinned by SHA.** `templates/ci/migration-drift.yml`'s `actions/checkout@v6` was a mutable tag — a supply-chain vector (tags can be silently repointed) that Piper's Semgrep policy blocks, caught on the v4.21.1 sync PR. Now pinned to the full commit SHA with the version in a comment. Consumers who already copied the workflow into `.github/workflows/` must re-apply the pin locally — sync never rewrites workflow files. No `bin/pk` behavior change — smoke 133.)*
+**v4.22.0** — Last updated: 2026-07-28 12:07  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
 
 ---
 

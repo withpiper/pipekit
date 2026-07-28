@@ -27,7 +27,7 @@
 #   method.config.md        <- Project configuration
 #
 # Overrides (sync-safe customization):
-#   .claude/overrides/skills/<name>/skill.md      <- full-file replacement
+#   .claude/overrides/skills/<name>/SKILL.md      <- full-file replacement
 #   .claude/overrides/sop/<file>.md               <- full-file replacement
 #   .claude/overrides/method.md.patch             <- unified diff applied to method.md
 #   .claude/overrides/.upstream-snapshot/         <- managed by sync; do not edit
@@ -481,6 +481,27 @@ for skill in $PORTABLE_SKILLS; do
 
   mkdir -p "$dst"
 
+  # Case migration (v4.22.0): upstream renamed skill.md → SKILL.md. A plain
+  # copy can't apply a case-only rename on case-insensitive filesystems (and
+  # git with core.ignorecase misses a disk-level rename entirely), so migrate
+  # explicitly — git mv when tracked, plain mv otherwise. `ls | grep -x` reads
+  # the true on-disk name; a stat-based [ -f ] test can't distinguish case.
+  if ls "$dst" 2>/dev/null | grep -qx 'skill.md'; then
+    if $DRY_RUN; then
+      echo "  WOULD RENAME skill: $skill (skill.md → SKILL.md)"
+      CHANGES=$((CHANGES + 1))
+    else
+      rel_dst="${dst#$PROJECT_ROOT/}"
+      if git -C "$PROJECT_ROOT" ls-files --error-unmatch "$rel_dst/skill.md" >/dev/null 2>&1; then
+        git -C "$PROJECT_ROOT" mv -f "$rel_dst/skill.md" "$rel_dst/SKILL.md" 2>/dev/null \
+          || mv "$dst/skill.md" "$dst/SKILL.md"
+      else
+        mv "$dst/skill.md" "$dst/SKILL.md"
+      fi
+      echo "  RENAMED skill: $skill (skill.md → SKILL.md)"
+    fi
+  fi
+
   if $DRY_RUN; then
     if [ -d "$dst" ]; then
       diff_count=$({ diff -rq "$src" "$dst" 2>/dev/null || true; } | wc -l | tr -d ' ')
@@ -511,7 +532,7 @@ done
 if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
   for existing_skill_dir in "$PROJECT_ROOT/.claude/skills"/*/; do
     existing_skill=$(basename "$existing_skill_dir")
-    if [ ! -d "$TEMP/skills/$existing_skill" ] && [ -f "$existing_skill_dir/skill.md" ]; then
+    if [ ! -d "$TEMP/skills/$existing_skill" ] && { [ -f "$existing_skill_dir/SKILL.md" ] || [ -f "$existing_skill_dir/skill.md" ]; }; then
       if [ -f "$LOCAL_MANIFEST" ] && grep -qx "$existing_skill" "$LOCAL_MANIFEST" 2>/dev/null; then
         LOCAL_SKILLS="$LOCAL_SKILLS $existing_skill"
       else
@@ -627,12 +648,15 @@ if [ -d "$OVERRIDES_DIR" ]; then
   echo ""
   echo "Overrides:"
 
-  # Skill overrides: .claude/overrides/skills/<name>/skill.md
+  # Skill overrides: .claude/overrides/skills/<name>/SKILL.md
   if [ -d "$OVERRIDES_DIR/skills" ]; then
     while IFS= read -r -d '' override_file; do
       skill_name=$(basename "$(dirname "$override_file")")
-      target="$PROJECT_ROOT/.claude/skills/$skill_name/$(basename "$override_file")"
-      apply_override "$override_file" "$target" "skills/$skill_name/$(basename "$override_file")"
+      override_base=$(basename "$override_file")
+      # Legacy lowercase override names keep targeting the renamed file.
+      [ "$override_base" = "skill.md" ] && override_base="SKILL.md"
+      target="$PROJECT_ROOT/.claude/skills/$skill_name/$override_base"
+      apply_override "$override_file" "$target" "skills/$skill_name/$override_base"
     done < <(find "$OVERRIDES_DIR/skills" -type f -name '*.md' -print0 2>/dev/null)
   fi
 
@@ -698,8 +722,10 @@ CHLOG
     echo "### New" >> "$CHANGELOG"
     for s in $NEW_SKILLS; do
       desc=""
-      if [ -f "$PROJECT_ROOT/.claude/skills/$s/skill.md" ]; then
-        desc=$(grep '^description:' "$PROJECT_ROOT/.claude/skills/$s/skill.md" 2>/dev/null | head -1 | sed 's/^description: *//')
+      sf="$PROJECT_ROOT/.claude/skills/$s/SKILL.md"
+      [ -f "$sf" ] || sf="$PROJECT_ROOT/.claude/skills/$s/skill.md"
+      if [ -f "$sf" ]; then
+        desc=$(grep '^description:' "$sf" 2>/dev/null | head -1 | sed 's/^description: *//')
       fi
       echo "- \`/$s\` — $desc" >> "$CHANGELOG"
     done

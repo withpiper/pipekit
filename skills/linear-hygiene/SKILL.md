@@ -1,6 +1,6 @@
 ---
 name: linear-hygiene
-description: Fast Linear placement janitor — finds orphaned / untriaged / unprioritized issues across all open states and batch-homes them. Use after pk done, before a phase, or whenever follow-ups have piled up. Propose-then-apply, importance-aware. Placement only (where does it belong?), not disposition (is it worth doing? — that's /brainstorm-review).
+description: Linear placement janitor — batch-homes orphaned/untriaged/unprioritized issues, propose-then-apply. Use after pk done or when follow-ups pile up. Placement only; disposition is /brainstorm-review.
 ---
 
 # Linear Hygiene Skill
