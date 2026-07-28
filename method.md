@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.21.1** — Last updated: 2026-07-28 09:51  *(**v4.21.1 — `/linear-hygiene` parent-ticket matching de-hardcoded.** The Phase 3 orphan-homing rule matched parent references against a hardcoded `POC-N` — SiteLine-specific leakage that left the highest-confidence signal dead in every other workspace (Piper's `WIT-N` bodies never matched). Now matches any Linear identifier `[A-Z]+-N`, covering all prefixes and prefix migrations with zero config. Surfaced by the v4.21.0 SiteLine sync clobbering SiteLine's in-place fix. No `bin/pk` behavior change — smoke 133.)*
+**v4.21.2** — Last updated: 2026-07-28 10:16  *(**v4.21.2 — CI template action pinned by SHA.** `templates/ci/migration-drift.yml`'s `actions/checkout@v6` was a mutable tag — a supply-chain vector (tags can be silently repointed) that Piper's Semgrep policy blocks, caught on the v4.21.1 sync PR. Now pinned to the full commit SHA with the version in a comment. Consumers who already copied the workflow into `.github/workflows/` must re-apply the pin locally — sync never rewrites workflow files. No `bin/pk` behavior change — smoke 133.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.21.1** — Last updated: 2026-07-28 09:51  *(**v4.21.1 — `/linear-hygiene` parent-ticket matching de-hardcoded.** The Phase 3 orphan-homing rule matched parent references against a hardcoded `POC-N` — SiteLine-specific leakage that left the highest-confidence signal dead in every other workspace (Piper's `WIT-N` bodies never matched). Now matches any Linear identifier `[A-Z]+-N`, covering all prefixes and prefix migrations with zero config. Surfaced by the v4.21.0 SiteLine sync clobbering SiteLine's in-place fix. No `bin/pk` behavior change — smoke 133.)*
+**v4.21.2** — Last updated: 2026-07-28 10:16  *(**v4.21.2 — CI template action pinned by SHA.** `templates/ci/migration-drift.yml`'s `actions/checkout@v6` was a mutable tag — a supply-chain vector (tags can be silently repointed) that Piper's Semgrep policy blocks, caught on the v4.21.1 sync PR. Now pinned to the full commit SHA with the version in a comment. Consumers who already copied the workflow into `.github/workflows/` must re-apply the pin locally — sync never rewrites workflow files. No `bin/pk` behavior change — smoke 133.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.21.1                (or latest tag)
+1. ./scripts/sync-method.sh v4.21.2                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

@@ -47,6 +47,10 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.21.2 — 2026-07-28
+
+> **CI template hardening: `actions/checkout` pinned to a full commit SHA.** `templates/ci/migration-drift.yml` used `actions/checkout@v6` — a mutable tag reference the action owner can silently repoint (the trivy-action / kics-github-action compromise class). Piper's Semgrep policy (`github-actions-mutable-action-tag`, blocking) caught it on the v4.21.1 sync PR — the second time a consumer's security gate has reviewed this template upstream (v4.20.0's `${{ github.base_ref }}` script-injection fix was the first). Now `actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6`. Consumers who already copied the template into `.github/workflows/` must re-apply the pin locally — sync never rewrites workflow files. No `bin/pk` change (version bump only); smoke 133.
+
 ## v4.21.1 — 2026-07-28
 
 > **`/linear-hygiene` parent-ticket matching de-hardcoded — the highest-confidence orphan-homing signal was dead in every non-POC workspace.** The Phase 3 rule matched parent references (`follow-up to/from`, `Source:`, `Related:`, `Split from`) against a hardcoded `POC-N` pattern: SiteLine-specific leakage into a portable skill, violating the no-hardcoded-values rule. In Piper (`WIT-N`) the signal never fired — bodies citing a parent fell silently through to the weaker keyword-match path. Surfaced when the v4.21.0 SiteLine sync clobbered SiteLine's in-place `(PIPER|POC)-N` fix (2026-07-26 prefix migration), promoted to a `.claude/overrides/` entry in SiteLine PR #731 — this release retires the need for that override: the rule now matches any Linear identifier (`[A-Z]+-N`), covering every workspace prefix and prefix migrations with zero config. The example-output block keeps its illustrative `POC-*` rows. No `bin/pk` behavior change (version bump only); smoke 133.
