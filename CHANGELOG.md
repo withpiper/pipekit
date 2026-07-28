@@ -40,12 +40,17 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `sop/Linear_SOP.md` | SOP — Linear model, states, labels |
 | `sop/Session_Management_SOP.md` | SOP — Claude Code session hygiene |
 | `sop/Skills_SOP.md` | SOP — skill anatomy, sync, overrides |
+| `sop/Completion_Claims_SOP.md` | SOP — the completion-claims loop (CLAIM → DOUBT → RECONCILE → STOP) |
 
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
 
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
 
 ---
+
+## v4.22.0 — 2026-07-28
+
+> **Context rightsizing, phase 2 (mechanical batch) + skill-file case fix.** Four changes. (1) **`skills/*/skill.md` → `SKILL.md`** across all 35 skills — Claude Code's canonical skill filename is uppercase; lowercase worked only on case-insensitive filesystems and drops skills from the model-facing listing (surfaced by SiteLine's 2026-07-28 `/doctor` pass). `sync-method.sh` gains an explicit case-migration step — `git mv` when the consumer's copy is tracked, plain `mv` otherwise, because a plain copy can't apply a case-only rename and git with `core.ignorecase` misses disk-level renames — plus basename normalization so legacy lowercase `.claude/overrides/skills/<name>/skill.md` files keep applying. (2) **CLAUDE.md Key Skills tables compressed** to current-behavior one-liners; version-history prose lives here, not in the always-loaded hub. Also corrects a stale escape claim: plain `--force` stopped waiving the security gate in v4.20.0 (`--force-secgate`). (3) **Completion Claims loop demand-loaded** — the ~58-line CLAIM/EXTRACT/DOUBT/RECONCILE/STOP machinery moves from always-on `pipekit-discipline.md` to new `sop/Completion_Claims_SOP.md`; the rule keeps a 9-line trigger + shape + pointer. (4) **10 oversized skill descriptions compressed** (701/682-char worst cases → 181–265) — description frontmatter is what every consumer session pays in the skill listing, measured at ~2.5× its routing budget in SiteLine. Batch 2 (tier-aware rule delivery, specs-as-code-references in `/light-spec`) is deferred to a follow-up release. No `bin/pk` behavior change (version bump + one comment); smoke 133.
 
 ## v4.21.2 — 2026-07-28
 

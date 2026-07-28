@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.21.0** — Last updated: 2026-07-28  *(**v4.21.0 — context rightsizing, phase 1.** This stamp returns to its spec'd one-line form — release history lives in `CHANGELOG.md`, not in an always-loaded preamble re-billed every turn (per Anthropic's Claude 5 context-engineering guidance, 2026-07-24: keep always-on files to repo purpose + non-obvious gotchas). Also: `pipekit-discipline.md § Comments and documentation` rewritten from prescriptive bullets to judgment form, and `sync-method.sh` gains a config-gated `Skip rules` opt-out so consumers stop auto-loading canonical rules that don't apply (cmux without cmux, migrations without a migration system). No `bin/pk` behavior change — smoke 133.)*
+**v4.22.0** — Last updated: 2026-07-28  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
