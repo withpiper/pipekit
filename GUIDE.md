@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.21.0** — Last updated: 2026-07-28 07:43  *(**v4.21.0 — context rightsizing, phase 1.** Version stamps return to their spec'd one-line form — release history lives in the Pipekit repo's `CHANGELOG.md`, not in always-loaded preambles (per Anthropic's Claude 5 context-engineering guidance, 2026-07-24). `pipekit-discipline.md § Comments and documentation` moves from prescriptive bullets to judgment form, and `sync-method.sh` gains a config-gated `Skip rules` opt-out so consumers stop syncing canonical rules that don't apply (cmux without cmux, migrations without a migration system). No `bin/pk` behavior change — smoke 133.)*
+**v4.21.1** — Last updated: 2026-07-28 09:51  *(**v4.21.1 — `/linear-hygiene` parent-ticket matching de-hardcoded.** The Phase 3 orphan-homing rule matched parent references against a hardcoded `POC-N` — SiteLine-specific leakage that left the highest-confidence signal dead in every other workspace (Piper's `WIT-N` bodies never matched). Now matches any Linear identifier `[A-Z]+-N`, covering all prefixes and prefix migrations with zero config. Surfaced by the v4.21.0 SiteLine sync clobbering SiteLine's in-place fix. No `bin/pk` behavior change — smoke 133.)*
 
 ---
 

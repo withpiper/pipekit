@@ -46,7 +46,7 @@ Pull `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`) *
 ### Phase 3 — Infer the fix per issue
 
 - **Project (for orphans):**
-  1. If the body names a parent issue (`follow-up to/from POC-N`, `Source: POC-N`, `Related: POC-N`, `Split from POC-N`) → `get_issue(parent)` → use the **parent's project** (highest-confidence signal).
+  1. If the body names a parent issue (`follow-up to/from <ID>`, `Source: <ID>`, `Related: <ID>`, `Split from <ID>`, where `<ID>` is any Linear identifier `[A-Z]+-N` — match every prefix, not just the workspace's current one: a prefix migration leaves older bodies citing the old prefix) → `get_issue(parent)` → use the **parent's project** (highest-confidence signal).
   2. Else keyword-match title/body against the cached project **names + descriptions** (derive candidates dynamically — never hardcode a keyword→project map; that's what keeps it portable).
   3. If still ambiguous → leave unhomed; present the **top-2 candidates** for a human pick in the manifest.
 - **Priority (importance ranking — the load-bearing part).** Map these label *roles* to your project's actual label names (defaults shown; override in `method.config.md` if your labels differ). Linear priority ints: Urgent 1, High 2, Normal 3, Low 4.
