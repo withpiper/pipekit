@@ -47,6 +47,19 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.21.0 — 2026-07-28
+
+> **Context rightsizing, phase 1.** Anthropic's Claude 5 context-engineering guidance (2026-07-24: ~80% of Claude Code's system prompt removed for Claude 5 models with no eval loss; keep always-loaded files to repo purpose + incident-anchored gotchas, move rigid rules to judgment form) audited against Pipekit's always-on prose layer. Three changes land; the deterministic enforcement layer (`bin/pk` sentinel gates, hooks, CI) is untouched — the guidance validates that split.
+
+- **Version stamps return to their spec'd one-line form.** `CLAUDE.md`'s stamp had grown to a ~15.7k-character release-history preamble — auto-loaded into every session turn in this repo, and pure duplication of this file (whose own format spec says "one-line release blurb"). `CLAUDE.md`, `method.md`, `RUNBOOK.md`, `GUIDE.md`, and `method.config.template.md` now carry single-release stamps; history lives here only. `CLAUDE.md` shrank ~54%.
+- **`pipekit-discipline.md § Comments and documentation` moves to judgment form.** The four prescriptive bullets ("Default to no comments… Never write multi-paragraph docstrings") were near-verbatim the *obsolete* example in the Claude 5 guidance — and the judgment-form replacement now ships inside Claude Code's own system prompt, making the old bullets redundant and stale at once. Now: match the surrounding code's comment density, naming, and idiom; comment only to state a constraint the code can't show; task/fix/PR context belongs in the commit message. `GUIDE.md`'s catalog line updated to match. The rest of the rules corpus keeps its incident-anchored content — exactly the guidance's "keep" category (v4.16.0's real-incident anchor rule was already this position).
+- **`Skip rules` — config-gated canonical-rule opt-out in `sync-method.sh`.** Two canonical rules self-declare "informational if the project doesn't use X" (`pipekit-cmux.md`, `pipekit-migrations.md`) yet auto-load into every session turn anyway. A `Skip rules` key in `method.config.md` (both config forms, e.g. `Skip rules: pipekit-cmux, pipekit-migrations`) stops the listed rules from syncing and **removes** previously-synced copies; clearing the key restores them on next sync. Absent key = all five sync — zero behavior change. `README.md` isn't skippable; unknown names warn, so a typo can't silently keep a rule the consumer meant to drop. New `config_value()` helper mirrors `pk_config`'s two-form parsing. The template ships the row commented out **and indented** — the parser anchors on column-0 `| **Key**` rows, so a verbatim template copy is inert (caught in pre-release testing: an unindented commented row would have armed the skip, deleting two rules on every verbatim copy).
+- **Rider:** pipekit's own `.claude/rules/` copies refreshed to canonical `templates/rules/` (local `pipekit-migrations.md` and `README.md` had drifted).
+
+Deferred to later phases (assessment 2026-07-28): tier-aware rule delivery (guard-rail content for smaller Model Policy tiers moves into subagent spawn prompts instead of the main session), demand-loading the Completion Claims loop, specs-as-code-references in `/light-spec`, `/doctor` audit of consumers.
+
+No `bin/pk` behavior change (version bump only); smoke 133.
+
 ## v4.20.0 — 2026-07-20
 
 > **`pk ship --force` no longer waives the security gate — split into `--force` (verify) and `--force-secgate` (security).** A SiteLine review of the v4.19.1 sync flagged that `cmd_ship` reused one `--force` variable to bypass **both** sentinel gates: the v2.7 `verify-complete.md` gate and the v4.17.0 `secgate-complete.md` gate. So the routine `pk ship --force` — muscle-memory for routing around a stale or midnight-rolled-over *verify* sentinel — silently also waived an armed `/security-gate` review in the same keystroke, on any project with a `Security categories` file (SiteLine included).

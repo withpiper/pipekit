@@ -227,6 +227,44 @@ sync_file() {
   fi
 }
 
+# Read a key's value from the consumer's method.config.md. Handles both config
+# forms (mirrors bin/pk's pk_config): `Key: value` inside a fenced code block,
+# and table rows `| **Key** | value | ... |`. Prints empty if absent.
+config_value() {
+  local label="$1"
+  local path="$PROJECT_ROOT/method.config.md"
+  [ -f "$path" ] || { echo ""; return 0; }
+  local value
+  value=$(awk -v label="$label" '
+    /^```/    { in_fence = !in_fence; next }
+    !in_fence { next }
+    {
+      sub(/^[[:space:]]+/, "")
+      pos = index($0, ":")
+      if (pos == 0) next
+      key = substr($0, 1, pos - 1)
+      if (key != label) next
+      val = substr($0, pos + 1)
+      sub(/^[[:space:]]+/, "", val)
+      sub(/[[:space:]]+$/, "", val)
+      gsub(/`/, "", val)
+      print val
+      exit
+    }
+  ' "$path" 2>/dev/null || true)
+  if [ -n "$value" ]; then
+    echo "$value"
+    return 0
+  fi
+  local line
+  line=$(grep -E "^\| \*\*${label}\*\*" "$path" 2>/dev/null | head -1 || true)
+  if [ -n "$line" ]; then
+    echo "$line" | awk -F'|' '{print $3}' | sed 's/`//g; s/\*\*//g; s/^ *//; s/ *$//'
+    return 0
+  fi
+  echo ""
+}
+
 # --- Sync method docs ---
 echo ""
 echo "Method docs:"
@@ -291,14 +329,52 @@ fi
 # Any OTHER file in .claude/rules/ is untouched (we use sync_file, not
 # sync_dir --delete, so project-specific rules like patterns.md, naming.md,
 # security.md (project-authored), or {library}-pitfalls.md persist).
+#
+# v4.21.0 — config-gated opt-out: a `Skip rules` key in method.config.md
+# (e.g. `Skip rules: pipekit-cmux, pipekit-migrations`) stops the listed
+# canonical rules from syncing and REMOVES them if previously synced. Rules
+# are auto-loaded into every session turn, so a rule that opens "if the
+# project doesn't use X, this rule is informational" still taxes every turn
+# it doesn't apply to. Absent key = all five sync (unchanged behavior).
+# README.md (the hub doc) is not skippable; unknown names warn and are
+# ignored so a typo can't silently keep a rule the consumer meant to drop.
 if [ -d "$TEMP/templates/rules" ]; then
   echo ""
   echo "Canonical rules (.claude/rules/):"
   mkdir -p "$PROJECT_ROOT/.claude/rules"
+  SKIP_RULES=$(config_value "Skip rules" | tr ',' ' ' | sed 's/\.md//g')
   for canonical in README.md pipekit-discipline.md pipekit-tooling.md pipekit-security.md pipekit-migrations.md pipekit-cmux.md; do
+    base="${canonical%.md}"
+    skipped=false
+    if [ "$canonical" != "README.md" ]; then
+      for s in $SKIP_RULES; do
+        [ "$s" = "$base" ] && skipped=true
+      done
+    fi
+    if $skipped; then
+      if [ -f "$PROJECT_ROOT/.claude/rules/$canonical" ]; then
+        if $DRY_RUN; then
+          echo "  WOULD REMOVE .claude/rules/$canonical (skip-listed in method.config.md)"
+        else
+          rm "$PROJECT_ROOT/.claude/rules/$canonical"
+          echo "  REMOVED .claude/rules/$canonical (skip-listed in method.config.md)"
+        fi
+        CHANGES=$((CHANGES + 1))
+      else
+        echo "  SKIP .claude/rules/$canonical (skip-listed in method.config.md)"
+      fi
+      continue
+    fi
     if [ -f "$TEMP/templates/rules/$canonical" ]; then
       sync_file "$TEMP/templates/rules/$canonical" "$PROJECT_ROOT/.claude/rules/$canonical" ".claude/rules/$canonical"
     fi
+  done
+  for s in $SKIP_RULES; do
+    case "$s" in
+      pipekit-discipline|pipekit-tooling|pipekit-security|pipekit-migrations|pipekit-cmux) ;;
+      README|readme|README.md) echo "  WARN: Skip rules cannot skip README.md (the hub doc) — ignored" ;;
+      *) [ -n "$s" ] && echo "  WARN: Skip rules entry '$s' is not a canonical rule — ignored (valid: pipekit-discipline, pipekit-tooling, pipekit-security, pipekit-migrations, pipekit-cmux)" ;;
+    esac
   done
 fi
 
