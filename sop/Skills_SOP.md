@@ -87,7 +87,7 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk sh
 
 ## Skill Anatomy
 
-Every skill lives in `.claude/skills/{name}/skill.md` with frontmatter:
+Every skill lives in `.claude/skills/{name}/SKILL.md` with frontmatter:
 
 ```markdown
 ---
@@ -224,7 +224,7 @@ Any skill that invokes `Agent()` should **explicitly pass `model:`** rather than
 
 When a skill spawns a subagent, spell out the role and its default inline — e.g. *"execution tier per `method.config.md § Model Policy`, default `sonnet`"* — so the skill still works in a project whose config predates the section.
 
-Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/skill.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents). A structural sibling worth knowing about (not yet adopted): escalate-on-failure — start a task on the cheapest plausible role and re-run one tier up after repeated verify failures.
+Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/SKILL.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents). A structural sibling worth knowing about (not yet adopted): escalate-on-failure — start a task on the cheapest plausible role and re-run one tier up after repeated verify failures.
 
 ---
 
@@ -281,7 +281,7 @@ Some files in a Pipekit project are **canonical** — they encode conventions th
 
 Protection is enforced by **hook**, not by skill prose. A `PreToolUse` hook on `Edit` and `Write` blocks the call when the target path matches the protected set; the agent receives `EditPermissionDenied` (or `HookFeedbackBlocked`, depending on the hook variant). This is intentional: hooks win over `bypassPermissions` mode because hook-level guards are the project's last line of defense, and orchestrator-spawned agents are not exempt from project policy.
 
-The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/skill.md` § Permission-denial protocol and the parallel block in `skills/work/skill.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
+The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/SKILL.md` § Permission-denial protocol and the parallel block in `skills/work/SKILL.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
 
 When you add a new skill that spawns file-editing agents, copy the permission-denial block verbatim. When you protect a new path with a hook, document the protection in `method.config.md` so future readers know which paths are agent-write-locked and why.
 
@@ -289,7 +289,7 @@ When you add a new skill that spawns file-editing agents, copy the permission-de
 
 If a project needs to change behavior of a synced skill, **do not edit the file in `.claude/skills/<name>/` directly** — it will be overwritten on the next sync. Use the override system instead:
 
-1. Copy the skill into `.claude/overrides/skills/<name>/skill.md`.
+1. Copy the skill into `.claude/overrides/skills/<name>/SKILL.md`.
 2. Make your project-specific edits there.
 3. Add a row to `.claude/overrides/MANIFEST.md` explaining what you changed and why.
 4. Re-run `scripts/sync-method.sh` — the override is applied on top of the upstream sync.

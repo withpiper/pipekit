@@ -406,8 +406,8 @@ Configure `allowed-tools: Read, Bash, Write`, on the **plan-review / adversarial
     Return only a one-line confirmation: "Migration review written: <verdict>".
 
   Apply the migration rubric from the /pr-security-review skill. Read it first — it lives at
-  `.claude/skills/pr-security-review/skill.md` (consuming projects) or
-  `skills/pr-security-review/skill.md` (Pipekit itself) — read § "Migration rubric (M1–M8)"
+  `.claude/skills/pr-security-review/SKILL.md` (consuming projects) or
+  `skills/pr-security-review/SKILL.md` (Pipekit itself) — read § "Migration rubric (M1–M8)"
   and apply every item. ALSO apply, only when the diff body contains the triggering pattern:
     - RLS rubric (R1–R6)            — diff contains CREATE POLICY / ALTER POLICY / ENABLE ROW LEVEL SECURITY
     - SECURITY DEFINER rubric (S1–S8) — diff contains SECURITY DEFINER
@@ -519,7 +519,7 @@ If `SECCATS` is empty (no categories file), **skip this check silently** — the
    ```
    If `CHANGED` is **still empty** after both committed-diff attempts, do **not** emit a clean pass — the surface is *indeterminate* (stale/missing `origin/$INTEGRATION`, detached HEAD). Surface `FLAG: security gate — could not determine changed surface; classify manually` and treat it as a flag (fail-safe, mirroring `/prod-ready`'s blank-build handling — a miss here would ship an unreviewed sensitive change).
 
-2. **Classify + review** by following the `/security-gate` skill (`skills/security-gate/skill.md`, or `.claude/skills/` in consuming projects) against `CHANGED`, using the project's `$SECCATS` definitions and the `sop/Security_Gate_SOP.md` per-category checklists. Spawn it as the gate's own read-only sub-agents (`general-purpose`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`). The verdict is `PASS` (no category matched, or all matched checklists clean) / `FAIL` (any confirmed Critical or High) / `WARNINGS` (Medium/Low only).
+2. **Classify + review** by following the `/security-gate` skill (`skills/security-gate/SKILL.md`, or `.claude/skills/` in consuming projects) against `CHANGED`, using the project's `$SECCATS` definitions and the `sop/Security_Gate_SOP.md` per-category checklists. Spawn it as the gate's own read-only sub-agents (`general-purpose`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`). The verdict is `PASS` (no category matched, or all matched checklists clean) / `FAIL` (any confirmed Critical or High) / `WARNINGS` (Medium/Low only).
 
 Surface the flag carrying the verdict — never a bare pointer (same discipline as the migration flag):
 

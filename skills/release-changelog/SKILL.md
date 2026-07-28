@@ -136,7 +136,7 @@ Section ordering: `What's New` → `Fix` → `Documentation` → `Migration` →
 For the auto-detect of new skill directories: run
 
 ```bash
-git diff --name-only --diff-filter=A <from>..<to> -- 'skills/*/skill.md'
+git diff --name-only --diff-filter=A <from>..<to> -- 'skills/*/SKILL.md' 'skills/*/skill.md'
 ```
 
 and list the resulting directory names (`skills/<name>/`) under the `sync-method.sh` bullet. If empty: `"no new skills"`.

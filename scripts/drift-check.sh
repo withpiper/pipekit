@@ -161,7 +161,7 @@ collect_docs() {
     [ -f "method.config.template.md" ] && docs+=("method.config.template.md")
 
     # Skills
-    while IFS= read -r f; do docs+=("$f"); done < <(find skills -name "skill.md" 2>/dev/null)
+    while IFS= read -r f; do docs+=("$f"); done < <(find skills \( -name "SKILL.md" -o -name "skill.md" \) 2>/dev/null)
 
     # SOPs
     while IFS= read -r f; do docs+=("$f"); done < <(find sop -name "*.md" 2>/dev/null)
@@ -181,7 +181,7 @@ collect_docs() {
     while IFS= read -r f; do docs+=("$f"); done < <(find method -name "*.md" 2>/dev/null)
 
     # Synced skills
-    while IFS= read -r f; do docs+=("$f"); done < <(find .claude/skills -name "skill.md" 2>/dev/null)
+    while IFS= read -r f; do docs+=("$f"); done < <(find .claude/skills \( -name "SKILL.md" -o -name "skill.md" \) 2>/dev/null)
   fi
 
   printf '%s\n' "${docs[@]}"
@@ -450,7 +450,7 @@ check_skill_refs() {
 
   # Collect files to scan — skill files AND all other docs
   local files_to_scan=()
-  while IFS= read -r f; do files_to_scan+=("$f"); done < <(find "$skills_dir" -name "skill.md" 2>/dev/null)
+  while IFS= read -r f; do files_to_scan+=("$f"); done < <(find "$skills_dir" \( -name "SKILL.md" -o -name "skill.md" \) 2>/dev/null)
   while IFS= read -r f; do files_to_scan+=("$f"); done < <(collect_docs)
 
   # Deduplicate

@@ -175,14 +175,14 @@ If `method.config.md` doesn't exist, warn: _"No method.config.md found. Run `/st
 The sync script writes a changelog to `pipekit/.sync-changelog.md` that captures what changed. **Read this file first** — it's the source of truth for what needs reconciliation.
 
 1. **Read `pipekit/.sync-changelog.md`** — it contains:
-   - New skills added (with descriptions from their `skill.md`)
+   - New skills added (with descriptions from their `SKILL.md`)
    - Updated skills (content changed)
    - Possibly removed/renamed skills
    - Updated method docs
    - New config fields in the template that aren't in the project's `method.config.md`
 
 2. **For updated skills, read the actual diffs** to understand *what* changed in behavior. For each updated skill:
-   - Read the new `skill.md`
+   - Read the new `SKILL.md`
    - Summarize the behavioral changes (not just "file changed" — what's *different* for the user)
 
 3. **Present a human-readable changelog to the user:**
@@ -230,7 +230,7 @@ _"Your `method.config.md` is missing these fields that were added in this update
 **4b. Skill onboarding**
 
 For each **new skill**:
-1. Read the skill's `skill.md` to understand its purpose and triggers
+1. Read the skill's `SKILL.md` to understand its purpose and triggers
 2. Explain to the user in 2-3 sentences: what it does, when to use it, and how it fits into the pipeline
 3. If the skill requires any setup (config values, MCP tools, etc.), walk through it now
 
