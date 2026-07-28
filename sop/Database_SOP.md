@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.18.0** — Last updated: 2026-07-16  *(**v4.18.0 — migration safety Tiers 2+3 ship.** § How this is enforced grows from three points to five: `scripts/check-migration-drift.sh` (Tier 2 — branch-collision vs base tail, duplicate versions, `--remote` disk-vs-history via `supabase db push --dry-run`; synced to consumers) and `templates/ci/migration-drift.yml` (Tier 3 — the git-only checks on every PR touching `Migration dir`). Carries v4.0.0: new SOP — the schema-change *artifact* rule: every schema change lands as a tracked, reversible migration; schema-touching specs must carry a Migration Plan. Companion to the immutability rule in `.claude/rules/pipekit-migrations.md`.)*
+**v4.24.0** — Last updated: 2026-07-28  *(**v4.24.0 — receives the demand-loaded migration narratives.** New sections: § Silent-Failure Patterns (full narratives — the three read-time footgun classes behind the invariants kept in `pipekit-migrations.md`) and § MCP-applied migrations: failure anatomy and recovery (the 4-step drift walkthrough + WIT-514 historical incident). Carries v4.18.0: migration safety Tiers 2+3 — `scripts/check-migration-drift.sh` and `templates/ci/migration-drift.yml`; and v4.0.0: the schema-change *artifact* rule + Migration Plan spec contract.)*
 
 **Source of truth:** Your project's CLAUDE.md and `method.config.md § Migration dir` define the migration tool and directory. This SOP provides the methodology that applies regardless of tool.
 
@@ -73,7 +73,52 @@ The artifact rule is enforced at five points in the pipeline, so a schema change
 4. **Drift detection (Tier 2, v4.18.0)** — `scripts/check-migration-drift.sh` (synced to consumers) catches the drift classes that pass every local check: a **branch collision** (a new migration not strictly later than the base branch's migration tail — the WIT-550 class, invisible in a worktree because only the merge compares both trees), **duplicate/malformed versions on disk**, and — with `--remote`, best-effort via `supabase db push --dry-run` — **disk vs remote-history drift** (the MCP wall-clock-stamp class, 2026-05-27, ~5h deploy lockup). No `Migration dir` configured → clean skip; an unresolvable base ref warns but never false-blocks.
 5. **Merge time (Tier 3, v4.18.0)** — `templates/ci/migration-drift.yml` runs check 4's git-only mode on any PR touching `Migration dir`, with the PR base as the collision baseline — the one point where a parallel-branch collision is actually visible. Copy it to `.github/workflows/`, adjust the `paths:` filter; setup in `templates/ci/README.md`.
 
-The **immutability** invariant (frozen-file, hardening-during-review, parallel-branch coordination, MCP disk-drift, the three silent-failure patterns) is enforced by `.claude/rules/pipekit-migrations.md`, which auto-loads into every session. This SOP and that rule are complementary: the SOP is the *birth* of a migration (author it, plan it, apply it through the tool); the rule is its *life after apply* (it's frozen — fix forward, never edit back).
+The **immutability** invariant (frozen-file, hardening-during-review, parallel-branch coordination, MCP disk-drift, the three silent-failure invariants) is enforced by `.claude/rules/pipekit-migrations.md`, which auto-loads into every session with the invariants and audit greps; the full failure narratives live in the two sections below (v4.24.0 — demand-loaded here so they stop riding every session turn). This SOP and that rule are complementary: the SOP is the *birth* of a migration (author it, plan it, apply it through the tool); the rule is its *life after apply* (it's frozen — fix forward, never edit back).
+
+---
+
+## Silent-Failure Patterns (full narratives)
+
+The rule (`pipekit-migrations.md § Silent-Failure Patterns`) carries the three invariants + audit greps. These are the failure narratives and discipline behind them. Each was surfaced by a real incident; all three share a root cause — a migration that "looks idempotent" (every command has `IF NOT EXISTS` / `OR REPLACE`) can still produce data-shape footguns that surface at read time, not write time.
+
+### Versioned descendants with nullable foreign keys
+
+The failure: a read RPC filters all child layers by the active version. A NULL on any layer means the row gets filtered out and the RPC returns an empty result — even when raw data exists. No error, no log, just empty.
+
+Fix: backfill all NULLs to the active version, then `ALTER COLUMN ... SET NOT NULL` in the same migration. Or add a CHECK constraint at the application boundary.
+
+### Auto-create triggers competing with manual inserts
+
+The failure: trigger fires on parent insert, seed inserts its own child row, two competing rows exist where the schema implied one. Read RPCs return whichever the planner picks first — often the empty one created by the trigger before the seed's content lands.
+
+Discipline:
+
+1. When writing a trigger that creates a default child row, document the retrieval helper (`ensure_<child>(p_parent_id)`) inline with the trigger definition.
+2. When writing fixtures/seeds, search for triggers on the parent table before inserting any child row directly.
+
+### Stale DEFAULTs vs newer CHECK constraints
+
+The failure: schema-dump-derived seeds reference column defaults that were valid at dump-time but were invalidated by a later CHECK constraint migration. The seed run hits `violates check constraint` despite no recent seed change.
+
+Two ways to prevent it:
+
+1. **Drop/update the DEFAULT in the same migration as the CHECK constraint** — guarantees the dumped state remains consistent.
+2. **Regenerate schema dumps from live state** (`pg_dump --schema-only` against the live DB), not from the historical baseline.
+
+---
+
+## MCP-applied migrations: failure anatomy and recovery
+
+The rule (`pipekit-migrations.md § MCP-applied migrations and disk drift`) carries the prohibition and the workaround. This is the full anatomy — asymmetric and load-bearing:
+
+1. Author writes `supabase/migrations/20260527150000_my_change.sql`.
+2. To "test it quickly" against a live env, they invoke `mcp.apply_migration` with the SQL body.
+3. The MCP server applies the SQL and records the version as e.g. `20260527160512` (wall-clock at apply time), not `20260527150000`. The history table now has a row the disk file does not match.
+4. The author then `git add`s the disk file and pushes the PR. CI's `supabase db push` step compares disk migrations to remote history, finds a remote version (`...160512`) that does not exist on disk and a disk version (`...150000`) that has not been applied, and fails with "Remote migration versions not found in local migrations directory" — blocking every subsequent migration PR until repaired.
+
+Recovery requires `supabase migration repair --status reverted <orphan-mcp-stamp> --status applied <disk-stamp>` against the env's history table. This is a shared-state mutation that needs human confirmation per `pipekit-security.md` and can block the entire team's deploys while it's being sorted out.
+
+**Historical incident:** Piper, 2026-05-27. The WIT-514 `reorder_line_items` RPC was applied to `piper-dev` via `mcp.apply_migration` during dev work; the MCP server stamped the remote history with `20260527105344` (wall-clock at apply). The disk file went into PR #387 with timestamp `20260527090000`. After two unrelated migration PRs (#388 `revoke_default_public_grants` and #392 WIT-522 `jurisdictional_zero_rates`) merged, CI's `db push` refused with "Remote migration versions not found in local migrations directory" — blocking both downstream PRs from actually applying to `piper-dev`. ~5h of downstream deploy lockup followed while every other in-flight migration PR was blocked. Reconciliation required PR #393 backfilling the disk file at the MCP-stamped version (`20260527105344`) so disk and remote history agreed.
 
 ---
 

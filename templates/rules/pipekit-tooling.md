@@ -34,11 +34,7 @@ Before calling any library API — especially for fast-moving libs (Next.js, Rea
 - Import paths are the same
 - Default behaviors haven't flipped
 
-**Worst-class failure mode: API takes a target arg but ignores it AND lies about success.**
-
-Case study (cmux, 2026-05-17): `cmux rpc surface.send_text --surface <ref> "..."` accepts a `surface` arg but routes the input to the currently-focused surface regardless, then echoes the focused surface's id back so the call looks successful. A load-test run fired into a different Claude Code session in another workspace; ~1 hour was wasted debugging "why is the wrong thing running" before the routing bug surfaced. The fix path was the surface-aware CLI command (`cmux send --surface <ref>`), which the docs documented but training-data examples hadn't been updated to reflect.
-
-Generalization: when an API has any function-shape that includes "target identifier + payload," verify by sending a payload to a known surface and checking it landed there — not by trusting the response. Doubly so for RPC/socket surfaces where the response often echoes server-side state rather than reflecting the requested operation.
+**Worst-class failure mode: API takes a target arg but ignores it AND lies about success.** Anchor: `cmux rpc surface.send_text`, 2026-05-17 — routed input to the focused surface regardless of its `--surface` arg, echoed success, ~1h lost to "why is the wrong thing running" (full anatomy: `pipekit-cmux.md` § Use the CLI, not the RPC). Generalization: when an API's shape is "target identifier + payload," verify by sending to a known target and checking it landed there — never by trusting the response, doubly so for RPC/socket surfaces that echo server-side state rather than the requested operation.
 
 Skip the verify step **only** for standard library calls, long-stable APIs (fetch, Promise, Array methods), or libs whose version you just verified in the same session.
 
@@ -70,7 +66,7 @@ Never collapse UNVERIFIED claims into confident prose. The flag is the load-bear
 
 The verify-installed-source rule has a sibling: when asked "what does the CI/CD do?" / "will X fire on Y?" / "is the migration applied?", **list the full surface first**, then read each entry. Reading only the first or expected file is partial verification masquerading as verified.
 
-Case study (Pipekit-the-repo, 2026-05-25): a session inside the WIT-461 worktree advised the user that "dev-merge doesn't auto-trigger supabase-production.yml — that fires on beta-merge per the 2026-05-24 schema-first sequencing." Technically correct about `supabase-production.yml`, but the session knew about ONE workflow and didn't `ls .github/workflows/`. There was a second workflow (`supabase-dev.yml`) that DID fire on dev-merge and applied the migration to piper-dev. The advisory caused the user to manually check whether the migration had landed — extra friction triggered by an incomplete-enumeration claim.
+Anchor: WIT-461 worktree, 2026-05-25 — a session advised "dev-merge doesn't auto-trigger the supabase workflow" knowing about ONE workflow, without `ls .github/workflows/`; a second workflow (`supabase-dev.yml`) DID fire on dev-merge and applied the migration. Correct about the file it knew, wrong about the surface.
 
 **Required sequence** for any claim about project infrastructure:
 

@@ -41,12 +41,17 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `sop/Session_Management_SOP.md` | SOP — Claude Code session hygiene |
 | `sop/Skills_SOP.md` | SOP — skill anatomy, sync, overrides |
 | `sop/Completion_Claims_SOP.md` | SOP — the completion-claims loop (CLAIM → DOUBT → RECONCILE → STOP) |
+| `sop/Cmux_Orchestration_SOP.md` | SOP — orchestrating other Claude sessions in cmux worker panes |
 
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
 
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
 
 ---
+
+## v4.24.0 — 2026-07-28
+
+> **Context rightsizing, phase 2 (rules-trim batch): 8.9kB moved off the always-on canonical rules.** Executes the redirect designed in `resources/item-c-premise-check.md` — the v4.23.0 probe proved the `.claude/rules/pipekit-*` block is injected into **every subagent spawn** and re-billed on every one of its turns, so each rule kB is the most-multiplied content in the system. Three moves, all move-don't-delete (a consumer main session on any model can still demand-load everything): (1) **`pipekit-cmux.md` −4.0kB** — § Orchestrating other Claude sessions (menu numeric-mapping trap, repaint waits, stale-ref fallback, turn-END detection, plus its four anti-pattern rows) → new **`sop/Cmux_Orchestration_SOP.md`**; the rule keeps a trigger pointer. Orchestration is a session *mode*, not an every-turn constraint — and non-cmux projects already have `Skip rules`. (2) **`pipekit-migrations.md` −4.2kB** — the three silent-failure narratives and the WIT-514 MCP-stamp forensic walkthrough → `sop/Database_SOP.md`; the rule keeps the three invariants + audit greps (table→bullets so grep pipes survive markdown) and 2-line incident anchors. Frozen-file core untouched. (3) **`pipekit-tooling.md` −0.7kB** — the cmux-rpc worst-class case study was told in full in *two* always-on files; deduped to anchor + pointer (full anatomy stays in `pipekit-cmux.md`), WIT-461 enumerate-surface case study compressed to anchor form; the list-command table (the enforceable core) stays. `pipekit-discipline.md` and `pipekit-security.md` untouched — the audited trim candidates there didn't clear the overhead bar. This closes the rightsizing program's planned phases; remaining always-on weight is either enforceable constraint or incident anchor, exactly the doctrine's "keep" categories. No `bin/pk` behavior change (version bump only); smoke 133.
 
 ## v4.23.0 — 2026-07-28
 

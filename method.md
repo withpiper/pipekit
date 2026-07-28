@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.23.0** — Last updated: 2026-07-28 13:36  *(**v4.23.0 — context rightsizing phase 2, design batch: specs-as-code-references.** Specs cite `path` + symbol — pastes only as contracts (exact diff, type signature, not-yet-existing content); Spec Review Agent v5.4 blocks ambiguous references; `/spec-preflight` resolves symbols empirically. Tier-aware rule delivery dropped: probe showed subagents inherit the full rules block; trim redirect deferred to `resources/item-c-premise-check.md`. No `bin/pk` behavior change — smoke 133.)*
+**v4.24.0** — Last updated: 2026-07-28 13:57  *(**v4.24.0 — context rightsizing phase 2, rules-trim batch.** 8.9kB off the always-on canonical rules (the v4.23.0 probe proved they re-bill into every subagent spawn): cmux orchestration → new `sop/Cmux_Orchestration_SOP.md`, migration silent-failure + MCP-drift narratives → `sop/Database_SOP.md` (invariants + audit greps stay in the rules), tooling case-study dedup. Move-don't-delete throughout. No `bin/pk` behavior change — smoke 133.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

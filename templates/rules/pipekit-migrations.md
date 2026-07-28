@@ -65,89 +65,20 @@ The `supabase migration repair` command is the one sanctioned exception — it e
 Never use `mcp.apply_migration` (Supabase MCP server's migration tool) for SQL that will also exist as a committed disk file under `supabase/migrations/`. The MCP tool auto-stamps the applied version with the server's wall-clock time, producing a timestamp that does not match the disk filename. The next `supabase db push` from CI or a human will detect drift between disk and remote history and refuse to apply any further migrations until reconciled.
 </important>
 
-The failure mode is asymmetric and load-bearing:
+The auto-stamp writes a wall-clock version into the remote history that doesn't match the disk filename; the next `supabase db push` (CI or human) detects the mismatch and refuses **all** further migrations until repaired — and the repair (`supabase migration repair`) is a shared-state mutation needing human confirmation per `pipekit-security.md`. Full failure anatomy + recovery walkthrough in `sop/Database_SOP.md` § MCP-applied migrations.
 
-1. Author writes `supabase/migrations/20260527150000_my_change.sql`.
-2. To "test it quickly" against a live env, they invoke `mcp.apply_migration` with the SQL body.
-3. The MCP server applies the SQL and records the version as e.g. `20260527160512` (wall-clock at apply time), not `20260527150000`. The history table now has a row the disk file does not match.
-4. The author then `git add`s the disk file and pushes the PR. CI's `supabase db push` step compares disk migrations to remote history, finds a remote version (`...160512`) that does not exist on disk and a disk version (`...150000`) that has not been applied, and fails with "Remote migration versions not found in local migrations directory" — blocking every subsequent migration PR until repaired.
+**Prescribed workaround for testing a migration against a live env before merge:** `supabase db push` against a per-PR branch DB or a throwaway local reset — the CLI uses the disk filename verbatim, no auto-stamping. One-off forensics that genuinely belong outside the migration chain: apply via `psql` or the SQL editor, then immediately backfill an idempotent disk migration per Manual Schema Changes above. The MCP tool stays fine for greenfield exploration (no disk file yet) and read-only operations; the rule is specifically about the write path colliding with the disk migration chain.
 
-Recovery requires `supabase migration repair --status reverted <orphan-mcp-stamp> --status applied <disk-stamp>` against the env's history table. This is a shared-state mutation that needs human confirmation per `pipekit-security.md` and can block the entire team's deploys while it's being sorted out.
+Anchor: Piper WIT-514, 2026-05-27 — an MCP-applied RPC stamped `piper-dev`'s history at wall-clock while the disk file shipped with a different timestamp; ~5h of deploy lockup across every in-flight migration PR; reconciled by PR #393 backfilling the disk file at the MCP-stamped version.
 
-**Prescribed workaround for testing a migration against a live env before merge:**
+## Silent-Failure Patterns (authoring-time checks)
 
-- For previewing schema changes against a fresh DB: use `supabase db push` against a per-PR branch DB (or a throwaway local Supabase reset). The CLI uses the disk filename verbatim; no auto-stamping.
-- For one-off forensics that genuinely belong outside the migration chain (incident recovery): treat the change like any other Manual Schema Change above — apply via `psql` or the Supabase SQL editor, then immediately follow up with an idempotent backfill migration on disk. Never via `mcp.apply_migration` for code that also lives on disk.
+The frozen-file invariant catches rename/edit-after-apply. These three incident-anchored invariants catch a different class: migrations that *apply cleanly* but produce silently-wrong runtime behavior (empty reads, duplicate child rows, seed-time constraint violations) — a "looks idempotent" migration can still ship a data-shape footgun that surfaces at read time. Check them when authoring; full failure narratives + discipline in `sop/Database_SOP.md` § Silent-Failure Patterns.
 
-The MCP tool is fine for greenfield exploration (schema doesn't exist on disk yet) and read-only operations (`list_tables`, `execute_sql` on SELECT statements). The rule is specifically about the write path colliding with the disk migration chain.
-
-**Historical incident:** Piper, 2026-05-27. The WIT-514 `reorder_line_items` RPC was applied to `piper-dev` via `mcp.apply_migration` during dev work; the MCP server stamped the remote history with `20260527105344` (wall-clock at apply). The disk file went into PR #387 with timestamp `20260527090000`. After two unrelated migration PRs (#388 `revoke_default_public_grants` and #392 WIT-522 `jurisdictional_zero_rates`) merged, CI's `db push` refused with "Remote migration versions not found in local migrations directory" — blocking both downstream PRs from actually applying to `piper-dev`. ~5h of downstream deploy lockup followed while every other in-flight migration PR was blocked. Reconciliation required PR #393 backfilling the disk file at the MCP-stamped version (`20260527105344`) so disk and remote history agreed. The pattern was previously informal team knowledge; this rule makes it explicit.
-
-## Silent-Failure Patterns to Watch For
-
-The frozen-file invariant prevents migration-history drift. These patterns prevent a different failure mode: migrations that *apply cleanly* but produce silently-wrong runtime behavior. Each one was surfaced by a real incident; check for them when authoring migrations that touch schema evolution.
-
-### Versioned descendants with nullable foreign keys
-
-<important>
-When a parent table gets a version column (snapshot_id, revision_id, draft_id, etc.), every descendant table referencing the parent MUST either (a) have a NOT NULL FK to the version, OR (b) have an explicit "global/unversioned" sentinel value. Nullable + filter-by-version is a silent-empty-read factory.
-</important>
-
-The failure: a read RPC filters all child layers by the active version. A NULL on any layer means the row gets filtered out and the RPC returns an empty result — even when raw data exists. No error, no log, just empty.
-
-Audit grep when adding a version column:
-
-```bash
-grep -r "snapshot_id\|version_id\|revision_id" supabase/migrations | grep -iE "null|nullable"
-```
-
-Fix: backfill all NULLs to the active version, then `ALTER COLUMN ... SET NOT NULL` in the same migration. Or add a CHECK constraint at the application boundary.
-
-### Auto-create triggers competing with manual inserts
-
-<important>
-Whenever a trigger creates a "default child row" on parent insert, every fixture/seed/migration MUST use the canonical retrieval helper to *fetch* the child rather than insert one. Otherwise a race-condition pattern emerges: trigger fires, seed inserts, two competing rows exist, retrieval returns one in undefined order.
-</important>
-
-The failure mode: a parent row gets two child rows where the schema implied one. Read RPCs return whichever the planner picks first — often the empty one created by the trigger before the seed's content lands.
-
-Discipline:
-
-1. When writing a trigger that creates a default child row, document the retrieval helper (`ensure_<child>(p_parent_id)`) inline with the trigger definition.
-2. When writing fixtures/seeds, search for triggers on the parent table before inserting any child row directly.
-3. Audit grep: `grep -rE "CREATE TRIGGER.*BEFORE INSERT|AFTER INSERT" supabase/migrations` — any trigger that does `INSERT INTO <child_table>` needs a paired retrieval helper.
-
-### Stale DEFAULTs vs newer CHECK constraints
-
-<important>
-When you add a CHECK constraint to an existing column, audit the column's DEFAULT in the same migration. If the existing DEFAULT value isn't in the allowed set, the next person dumping the schema will paste it into a seed and get a constraint violation — even though their migration applied cleanly.
-</important>
-
-The failure mode: schema-dump-derived seeds reference column defaults that were valid at dump-time but were invalidated by a later CHECK constraint migration. The seed run hits `violates check constraint` despite no recent seed change.
-
-Two ways to prevent it:
-
-1. **Drop/update the DEFAULT in the same migration as the CHECK constraint** — guarantees the dumped state remains consistent.
-2. **Regenerate schema dumps from live state** (`pg_dump --schema-only` against the live DB), not from the historical baseline.
-
-Audit when adding any CHECK constraint:
-
-```bash
-# Verify the column's DEFAULT against the constraint's allowed values
-psql -c "SELECT column_name, column_default FROM information_schema.columns WHERE table_name = '<table>' AND column_name = '<column>';"
-```
-
-### Why these belong in the migrations rule
-
-All three patterns share a root cause: a migration that "looks idempotent" (every command has `IF NOT EXISTS` / `OR REPLACE` / etc.) can still produce data-shape footguns that surface at read time, not write time. The frozen-file invariant catches one class (rename/edit after apply); these three catch the rest.
+- **Parent gains a version column** (`snapshot_id`, `revision_id`, …) ⇒ every descendant's FK to the version is NOT NULL **or** carries an explicit global sentinel — nullable + filter-by-version = silent-empty reads. Audit: `grep -r "snapshot_id\|version_id\|revision_id" supabase/migrations | grep -iE "null|nullable"`
+- **A trigger auto-creates a default child row** ⇒ fixtures/seeds must FETCH via the canonical helper (`ensure_<child>()`), never insert a competing row. Audit: `grep -rE "CREATE TRIGGER.*(BEFORE|AFTER) INSERT" supabase/migrations` — any trigger inserting into a child table needs a paired retrieval helper.
+- **Adding a CHECK constraint to an existing column** ⇒ audit the column's DEFAULT in the same migration — a stale DEFAULT outside the allowed set breaks schema-dump-derived seeds later. Audit: `SELECT column_default FROM information_schema.columns WHERE table_name='<t>' AND column_name='<c>';`
 
 ## What Goes Wrong When This Is Violated
 
-The forensic recovery path is non-trivial:
-
-1. `supabase db push` fails on merge or deploy with a history-table mismatch.
-2. The merge commit becomes the trigger, blocking UAT until repaired.
-3. Repair requires `supabase migration repair --status reverted <orphan> --status applied <new>` against the env's history table — a shared-state mutation.
-4. Multiple WITs queued behind the failed deploy block until repair completes.
-
-Cost grows with environment seniority: dev is cheap (greenfield-test, low blast radius), beta is moderate (shared with other devs), prod is expensive (real users, real data). The point of this rule is to keep all of those at zero.
+`db push` fails on merge/deploy with a history-table mismatch; the merge blocks UAT until a `supabase migration repair` (shared-state mutation, human-confirmed) reconciles disk and history; every WIT queued behind the deploy waits. Cost grows with environment seniority — dev cheap, beta moderate, prod expensive. The point of this rule is to keep all of it at zero.
