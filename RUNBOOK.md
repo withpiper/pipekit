@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.22.0** — Last updated: 2026-07-28 12:07  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
+**v4.23.0** — Last updated: 2026-07-28 13:36  *(**v4.23.0 — context rightsizing phase 2, design batch: specs-as-code-references.** Specs cite `path` + symbol — pastes only as contracts (exact diff, type signature, not-yet-existing content); Spec Review Agent v5.4 blocks ambiguous references; `/spec-preflight` resolves symbols empirically. Tier-aware rule delivery dropped: probe showed subagents inherit the full rules block; trim redirect deferred to `resources/item-c-premise-check.md`. No `bin/pk` behavior change — smoke 133.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.22.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.23.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -81,7 +81,7 @@ Run from the parent repo. No worktree needed — specs are Linear-side artifacts
   │ [S4] Pre-flight sanity   (recommended, not enforced)     │
   │     /spec-preflight <ID>                                 │
   │     • verifies file paths the spec cites exist           │
-  │     • flags stale line refs (commit drift since spec)    │
+  │     • flags stale symbol/line refs (drift since spec)    │
   │     • runs phase-detect baseline                         │
   │     • validates Linear status + dependency chain         │
   │     • read-only — flags issues, doesn't transition state │

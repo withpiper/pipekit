@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.22.0** — Last updated: 2026-07-28  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
+**v4.23.0** — Last updated: 2026-07-28  *(**v4.23.0 — context rightsizing phase 2, design batch: specs-as-code-references.** Specs cite `path` + symbol — pastes only as contracts; Spec Review Agent v5.4 blocks ambiguous references; `/spec-preflight` resolves symbols empirically. Tier-aware rule delivery dropped: probe showed subagents inherit the full rules block; trim redirect deferred to `resources/item-c-premise-check.md`. No `bin/pk` behavior change — smoke 133.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
