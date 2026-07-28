@@ -31,18 +31,6 @@ Per session (NOT part of the issue chain): /pk-exit — the last command of what
 
 Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a script. Three entry modes satisfy the contract: greenfield (full chain), brownfield (skip /concept and /define), inherited (verify and proceed). `/startup` auto-detects mode and confirms with the user. The v2 daily loop replaces v1's `/branch → /launch → /verify → /launch --close` chain — see `RUNBOOK.md` for the one-page flowchart. Full Entry Modes table in `method.md`.
 
-## Repo Structure
-
-- `method.md` — The full methodology (Stage 0 + 12-step pipeline, principles, tooling)
-- `method.config.template.md` — Template for project-specific config (Linear IDs, strategy docs, environments, pre-deploy gate)
-- `STARTUP.md` — Reference guide for project bootstrap (use `/startup` for the interactive flow)
-- `RUNBOOK.md` — Per-issue practical walkthrough (the loop you run most often)
-- `sop/` — Standard operating procedures (Code Quality, Git + Deployment, Hooks, Linear, Session Management, Skills)
-- `templates/` — Concept brief, project definition, strategy doc, and spec templates
-- `templates/strategy/` — Templates for each strategy doc type (conceptual overview, technical architecture, etc.)
-- `skills/` — Portable Claude Code skills (synced into consuming projects as `.claude/skills/`)
-- `scripts/sync-method.sh` — The sync script that pulls this repo's content into consuming projects
-
 ## How Consuming Projects Work
 
 Projects pull from this repo using `sync-method.sh`. The sync copies `skills/`, `sop/`, `templates/`, and `method.md` into the project. It never touches project-specific files (`method.config.md`, `.claude/rules/`, legacy `.vbw-planning/`, project-specific skills). Exception: the five `pipekit-*` canonical rule files in `.claude/rules/` are sync-owned; a `Skip rules` key in `method.config.md` opts a project out of canonical rules that don't apply to it (v4.21.0+).
