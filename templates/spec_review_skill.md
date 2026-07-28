@@ -1,4 +1,4 @@
-# Linear Agent Skill: Spec Review Agent (v5.3)
+# Linear Agent Skill: Spec Review Agent (v5.4)
 
 ## Context
 
@@ -132,6 +132,18 @@ Specs must NOT include:
 Specs MUST define:
 - outcomes
 - boundaries
+
+---
+
+## Code Reference Rule
+
+Specs cite existing code by reference — `path` + symbol/heading — not by pasted blocks.
+
+- Ambiguous reference (the planner cannot locate the target without guessing — "the helper in utils", a bare filename when the file holds many candidates) -> Blocking
+- Do NOT demand pasted code as the fix. The fix for an ambiguous reference is a sharper reference (path + symbol), never a paste.
+- Do NOT flag a spec for referencing instead of pasting — chasing a precise reference is the planner's job, and `/spec-preflight` verifies references empirically.
+- A pasted block is acceptable only as a contract: an exact expected diff, a small type signature the implementation must match, or content that does not exist yet.
+- A pasted block that merely mirrors current file contents -> Non-blocking (suggest converting to a reference; it will silently rot).
 
 ---
 

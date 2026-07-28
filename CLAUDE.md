@@ -87,7 +87,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | Skill | Purpose |
 |-------|---------|
 | `/light-spec`, `/light-spec-revise` | Structured specs as AI-to-AI contracts; revise applies review feedback surgically. |
-| `/spec-preflight` | Read-only empirical checks of a spec against reality (paths, line refs, deps). |
+| `/spec-preflight` | Read-only empirical checks of a spec against reality (paths, symbol/line refs, deps). |
 | `/pr-fix` | PR review with severity×confidence triage and targeted remediation. |
 | `/pr-security-review` | Antagonistic security review of a PR diff (migrations, RLS, auth). |
 | `/pk-bug` | Bug pipeline: reproduce → regression-test-first → fix → ship → postmortem. |
