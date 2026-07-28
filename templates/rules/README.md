@@ -40,6 +40,10 @@ Canonical files use a `pipekit-` prefix so they never collide with project-speci
 
 These are synced by `scripts/sync-method.sh` from Pipekit on every run. Changes must round-trip through pipekit — local edits to `pipekit-*.md` files will be overwritten on next sync. If you need to override a canonical rule, create a companion file (e.g., `security.md`) whose content takes precedence per your CLAUDE.md Routing Pointers ordering.
 
+### Opting out of inapplicable canonical rules (v4.21.0+)
+
+Two canonical rules open with "if the project doesn't use X, this rule is informational" (`pipekit-cmux.md` when not running in cmux, `pipekit-migrations.md` when there's no versioned migration system). A rule the session was told to ignore still costs input tokens on every turn. If a canonical rule doesn't apply to this project, stop syncing it: add a `Skip rules` key to `method.config.md`, e.g. `Skip rules: pipekit-cmux, pipekit-migrations`. The next sync removes the listed files and stops re-syncing them; clearing the key restores them. This is for rules that don't *apply* — a rule you want to *modify* still goes through the companion-file pattern above. `README.md` (this file) is not skippable.
+
 ## Adding project-specific rules
 
 Create new files directly in this directory — `sync-method.sh` won't touch anything outside the six canonical names above. Common project-specific patterns:

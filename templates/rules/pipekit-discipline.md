@@ -156,10 +156,7 @@ Shared rule: **spawn parallel work, don't block on it.** The main session is the
 
 ## Comments and documentation
 
-- **Default to no comments.** Only add one when the *why* is non-obvious.
-- **Never write multi-paragraph docstrings.** One short line, max.
-- **Don't reference the current task, fix, or PR.** That belongs in the commit message, not the code.
-- **Don't explain what the code does.** Well-named identifiers already do that.
+Write code that reads like the surrounding code — match its comment density, naming, and idiom. Comment only to state a constraint the code itself can't show; task, fix, and PR context belongs in the commit message, not the code.
 
 ## Commit discipline
 

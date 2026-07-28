@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.18.0** — Last updated: 2026-07-16  *(**v4.18.0** — `Migration dir` row: the key now also arms `scripts/check-migration-drift.sh` + `templates/ci/migration-drift.yml` (gap #1 Tier 2/3 drift detection; no value → clean skip). Carries **v4.14.0**  *(**v4.14.0** — new optional, commented-out `### Phase Label Layer` block under `## Initiative Surface`: the opt-in convention (phase/pool label names, `Order: Any`, one Manual-sorted saved view per label, `sortOrder` step) that `/roadmap-review` Phase 3.5 drift-checks and `/roadmap-create` Phase 3.5 scaffolds. Ships commented out — uncomment to opt in; skills no-op without an active section, so un-opted projects see zero behavior change. Carries **v4.13.0** — new optional `## Model Policy` section: role → model + effort table that portable skills reference instead of hardcoding model names; absent section = documented defaults, no behavior change. Carries **v4.12.0** — `Team ID` / `Workspace slug` now also pin `pk`'s **write guard**: `bin/pk` refuses a Linear mutation when the resolved token's workspace doesn't match these pins (fail-closed on a confirmed mismatch; skipped with a warning if neither is set). Carries v4.11.0: the `## Phase Surface` section is now **`## Initiative Surface`** and roadmap-phase prose reads *initiative* (Sub-phase still maps to a Linear **Project**, not "sub-initiative"). Carries v4.10.0: `Portfolio staleness days` key (default 14) documents the `pk portfolio` `⚠ Nd idle` momentum threshold (v4.10.0). Carries v4.6.0: `Deploy command` + per-env `Deploy command <env>` keys and a script-deploy example document the `pk deploy [<env>]` verb. Carries v4.5.0: § Phase Surface — projects now carry their initiative number: `I{N}.P{N}. label` (e.g. `I1.P2.`), so the phase reads at the project level (the navigable unit in Linear). `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.4.0: `Security categories` + `Security gate report path` keys for `/security-gate` (gap #3). Carries v4.3.0: `Prod-ready checks` + `Prod-ready report path` keys for `/prod-ready`. Carries v4.1.0: Linear-native phase surface replaces `PHASES.md`/`linear-map.json`)*
+**v4.21.0** — Last updated: 2026-07-28  *(**v4.21.0 — context rightsizing, phase 1.** New optional `Skip rules` key (ships commented out below the § V2 keys table): canonical `.claude/rules/pipekit-*.md` files that don't apply to this project (cmux without cmux, migrations without a migration system) can be skip-listed — `sync-method.sh` stops syncing them and removes previously-synced copies. Absent key = all five sync, zero behavior change. This stamp also returns to its spec'd one-line form — release history lives in Pipekit's `CHANGELOG.md`.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -256,6 +256,21 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Security categories** | path | `resources/security-categories.md` | `/security-gate` — project category-definitions file (per-category path globs, keywords, correct patterns for auth/payments/user-input/external-APIs/file-storage/PII). Scaffold from `pipekit/templates/security-categories.template.md`. The gate runs at the Building → UAT seam (before `pk ship`). |
 | **Security gate report path** | path | `Reports/` | `/security-gate` — where the gate report is written (`Security_Gate_<ID>_<date>.md`). |
 | **Portfolio staleness days** | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
+
+<!-- Optional (v4.21.0+) — uncomment the row below to stop syncing canonical
+     .claude/rules/ files that don't apply to this project. Rules are
+     auto-loaded into every session turn, so a rule that opens "if the project
+     doesn't use X, this rule is informational" still costs input tokens on
+     every turn it doesn't apply to. Skip-listed rules are not synced and are
+     removed from .claude/rules/ if previously synced; clearing the key
+     restores them on next sync. README.md is not skippable; unknown names
+     warn and are ignored. Ships commented out so a verbatim template copy
+     never accidentally drops a rule. NOTE: keep this row indented while
+     commented — the sync's key parser anchors on column-0 `| **Key**` rows,
+     so indentation is what keeps a verbatim copy inert. To opt in, copy the
+     row into the table above WITHOUT the leading spaces.
+     | **Skip rules** | `pipekit-cmux, pipekit-migrations` | (none — all five rules sync) | `scripts/sync-method.sh` (v4.21.0+) — canonical-rule opt-out; see `.claude/rules/README.md` § Opting out |
+-->
 
 ### Example (rs-vault)
 
