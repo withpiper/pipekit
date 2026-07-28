@@ -64,49 +64,38 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 
 ## Key Skills
 
-**Stage 0 (Foundation):**
-
-| Skill | Purpose |
-|-------|---------|
-| `/concept` | Project-level ideation — concept brief from ideas + existing docs |
-| `/define` | Distill concept into project definition (phases, roles, workflows) |
-| `/strategy-create` | Bootstrap strategy docs from project definition |
-| `/startup` | Full bootstrap orchestrator — chains all Stage 0 + setup steps |
-| `/roadmap-create` | Create ROADMAP.md and populate Linear |
-| `/phase-plan` | Select execution phases, track progress |
+**Stage 0 (Foundation):** `/concept` → `/define` → `/strategy-create` → `/startup` (orchestrates the chain, auto-detects entry mode) → `/roadmap-create` (authors the roadmap into Linear) → `/phase-plan` (selects the next execution phase).
 
 **Development Pipeline (v2 daily loop):**
 
 | Command | Purpose |
 |---------|---------|
-| `pk next` | Initiative-aware: derives the current initiative live from the Linear-native surface (`i{N}.` initiative → `I{N}.P{N}.` project, by numeric name prefix; bare `P{N}.` and legacy `PHASES.md`/`linear-map.json` fall back), queries Linear, groups by status (In Progress / Approved / Needs Spec) with per-group hints. Replaces v1's `cat NEXT.md`. |
+| `pk next` | What's next, read live from Linear — derives the current initiative, groups issues by status with per-group hints. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
-| `/work <ID>` | Plan + execute in-session. `/work` plans inline (parallel `Agent` grounding), then materializes a task DAG to `.pk-work/<ID>-PLAN.md` and executes on the **Workflow primitive** — atomic commit per task with verify-before-integrate. Native-on-Workflow is the **sole executor** as of v4.0.0; the pluggable `vbw` backend and `--backend=` flag were removed (a stale `Backend: vbw`/`--backend=vbw` now refuses with a migration message). |
+| `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, executes on the Workflow primitive — atomic commit per task, verify-before-integrate. |
 | `/verify` | Pre-deploy gate. |
-| `/security-gate [<ID>]` | **v4.4.0+** feature-scoped security gate (gap #3). Runs at the Building → UAT seam — after `/verify`, before `pk ship`. Classifies the feature diff into six sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); none matched → instant PASS, a match → category checklist vs the diff → PASS/FAIL report + Linear comment. **Hard gate v4.17.0** — PASS writes a sha-matched `secgate-complete.md`; `pk ship` refuses without one matching HEAD on any project with a categories file (`--force` / `PK_SECGATE_BYPASS=1` escape). Distinct from `/security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Portable framework, project signals in `resources/security-categories.md`. No-op without a categories file. |
-| `pk ship [--review] [--ready]` | Push, open PR as **Draft** (v2.6.0+; `--ready` opts to Ready), Linear → UAT. `--review` invokes the antagonistic reviewer. |
-| `pk ready [<ID>]` | Flip Draft PR to Ready (v2.6.0+). Fires `ready_for_review` → outside reviewers (Semgrep + claude-review per `templates/ci/`) run. No Linear state change. |
-| `pk done <ID> [--merge]` | Verify merged (or `--merge` runs `gh pr merge` first), cleanup worktree+branch, post commits to Linear, transition Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls integration branch; for un-migrated projects it writes a legacy `.vbw-planning/.../SUMMARY.md` + flips PLAN status (skipped silently otherwise — always, for native projects). |
-| `/prod-ready [<ID>]` | **v4.3.0+** production-readiness gate. Run **once** before the final `pk promote` (the last `Ship environments` entry; the merge to `main` on 1-tier). Verifies operational preconditions `/verify` doesn't — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. PASS/FAIL report + Linear comment. **Hard gate v4.17.0** — PASS writes a `prodready-complete.md` sentinel (source-branch sha); `pk promote <final-env>` refuses without it on any project with a checks file (`--force` / `PK_PRODREADY_BYPASS=1`; 1-tier projects have no promote seam — advisory there). Portable framework, project checks in `resources/prod-readiness-checks.md`. No-op without a checks file. |
-| `pk promote <env>` | **Phase 1** (v2.6.0+): opens promote PR along `Ship environments`. WITs stay in source state. Refuses if any bundled issue is in `UAT`; `--confirmed` bypasses after env-UAT signoff. |
-| `pk promote <env> --finish` | **Phase 2** (v2.6.0+): after the promote PR merges, transitions bundled WITs → `In <Env>` (intermediate) or → `Done` (final). |
-| `/pk-exit` | Narrative session log to `Logs/Sessions/<date>_<HHMM>.md`. **Run manually as the last command of every Claude Code session** — never auto-chained from `/work`, `/verify`, or any other skill. |
+| `/security-gate [<ID>]` | Feature-scoped security gate, between `/verify` and `pk ship`. Hard gate on projects with a categories file: `pk ship` refuses without a sha-matched PASS sentinel (`--force-secgate` / `PK_SECGATE_BYPASS=1` to waive; plain `--force` does NOT). |
+| `pk ship [--review] [--ready]` | Push, open Draft PR, Linear → UAT. |
+| `pk ready [<ID>]` | Flip Draft PR to Ready; outside reviewers run. No Linear state change. |
+| `pk done <ID> [--merge]` | Verify the merge happened, clean up worktree+branch, post commits to Linear, transition UAT → `In <FirstEnv>` (→ Done on 1-tier). |
+| `/prod-ready [<ID>]` | Production-readiness gate, run once before the final `pk promote`. Hard gate on projects with a checks file: the final promote refuses without its sentinel (`--force` / `PK_PRODREADY_BYPASS=1` to waive). |
+| `pk promote <env>` | Opens the promote PR along `Ship environments`; refuses if a bundled issue is still in UAT (`--confirmed` after env-UAT signoff). After it merges, `pk promote <env> --finish` transitions issues → `In <Env>` / Done. |
+| `/pk-exit` | Narrative session log to `Logs/Sessions/`. Run manually as the last command of every session — never auto-chained. |
 
-**Orthogonal skills (unchanged in v2):**
+**Orthogonal:**
 
 | Skill | Purpose |
 |-------|---------|
-| `/light-spec` | Generates structured specs as AI-to-AI contracts |
-| `/light-spec-revise` | Applies Spec Review Agent feedback surgically; detects stalemate loops |
-| `/spec-preflight` | Empirical pre-flight checks on a Linear issue's spec — verifies file paths, line refs, phase-detect baseline, Linear status, dependencies against reality. Read-only. |
-| `/pr-fix` | Pluggable-engine PR review (`pr-review-toolkit` agents by default, built-in fallback) with two-axis severity×confidence triage, interactive discussion, and targeted remediation. |
-| `/pr-security-review` | Security-focused antagonistic PR review for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, auth, and Server Actions on privileged tables. |
-| `/pk-bug` | Bug pipeline — intake, reproduce, regression-test-first, fix, ship, postmortem. Wraps `/work` and `pk ship` with discipline gates. |
-| `/pk-express` | Idea→Draft-PR autopilot for **simple** WITs — chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify+ship), stopping only at attention gates (not-Now, tier:heavy, spec stalemate, verify flags, Draft PR). Quick/Standard tier only. |
-| `/linear-hygiene` | Fast Linear placement janitor — batch-homes orphaned / untriaged / unprioritized issues across all open states (placement, not disposition). Propose-then-apply; `--check` is read-only and is what `/pk-exit` calls. |
-| `/pipekit-help` | Reads project state, recommends the next pipeline step. |
-| `/strategy-sync` | Updates Strategy docs post-ship to match what was actually built. |
-| `/release-changelog` | Generates draft CHANGELOG entry from git commits between tags. |
-| `/pipekit-update` | Pull latest Pipekit from GitHub into project (supports `--push`). |
+| `/light-spec`, `/light-spec-revise` | Structured specs as AI-to-AI contracts; revise applies review feedback surgically. |
+| `/spec-preflight` | Read-only empirical checks of a spec against reality (paths, line refs, deps). |
+| `/pr-fix` | PR review with severity×confidence triage and targeted remediation. |
+| `/pr-security-review` | Antagonistic security review of a PR diff (migrations, RLS, auth). |
+| `/pk-bug` | Bug pipeline: reproduce → regression-test-first → fix → ship → postmortem. |
+| `/pk-express` | Idea→Draft-PR autopilot for Quick/Standard-tier WITs; stops at attention gates. |
+| `/linear-hygiene` | Batch-homes orphaned/untriaged issues (placement, not disposition). |
+| `/pipekit-help` | Recommends the next pipeline step from project state. |
+| `/strategy-sync` | Updates Strategy docs post-ship to match what shipped. |
+| `/release-changelog` | Draft CHANGELOG entry from commits between tags. |
+| `/pipekit-update` | Pull latest Pipekit into a consuming project. |
 
-Full skill list in `sop/Skills_SOP.md`.
+Full skill list + authoring conventions in `sop/Skills_SOP.md`; daily-loop flowchart in `RUNBOOK.md`.
