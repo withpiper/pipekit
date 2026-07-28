@@ -47,6 +47,10 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.21.1 — 2026-07-28
+
+> **`/linear-hygiene` parent-ticket matching de-hardcoded — the highest-confidence orphan-homing signal was dead in every non-POC workspace.** The Phase 3 rule matched parent references (`follow-up to/from`, `Source:`, `Related:`, `Split from`) against a hardcoded `POC-N` pattern: SiteLine-specific leakage into a portable skill, violating the no-hardcoded-values rule. In Piper (`WIT-N`) the signal never fired — bodies citing a parent fell silently through to the weaker keyword-match path. Surfaced when the v4.21.0 SiteLine sync clobbered SiteLine's in-place `(PIPER|POC)-N` fix (2026-07-26 prefix migration), promoted to a `.claude/overrides/` entry in SiteLine PR #731 — this release retires the need for that override: the rule now matches any Linear identifier (`[A-Z]+-N`), covering every workspace prefix and prefix migrations with zero config. The example-output block keeps its illustrative `POC-*` rows. No `bin/pk` behavior change (version bump only); smoke 133.
+
 ## v4.21.0 — 2026-07-28
 
 > **Context rightsizing, phase 1.** Anthropic's Claude 5 context-engineering guidance (2026-07-24: ~80% of Claude Code's system prompt removed for Claude 5 models with no eval loss; keep always-loaded files to repo purpose + incident-anchored gotchas, move rigid rules to judgment form) audited against Pipekit's always-on prose layer. Three changes land; the deterministic enforcement layer (`bin/pk` sentinel gates, hooks, CI) is untouched — the guidance validates that split.
