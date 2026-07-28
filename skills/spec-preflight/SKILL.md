@@ -1,6 +1,6 @@
 ---
 name: spec-preflight
-description: Empirical pre-flight checks on a Linear issue's spec. Use right before /work consumes a spec. Use when a spec has been sitting in Approved for >1 week and reality may have drifted. Verifies file paths, line refs, deps. Read-only.
+description: Empirical pre-flight checks on a Linear issue's spec. Use right before /work consumes a spec. Use when a spec has been sitting in Approved for >1 week and reality may have drifted. Verifies file paths, symbol/line refs, deps. Read-only.
 ---
 
 # Spec Preflight Skill
@@ -39,6 +39,7 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 | Linear issue body | `mcp__linear-server__linear_getIssueById` with `includeRelations: true` | Spec body + status + blocked_by |
 | File paths from spec | `Read` or `Glob` | Confirm cited files exist |
 | Line ranges from spec | `Read` with `offset`/`limit` | Confirm line citations resolve to real content |
+| Symbol/heading refs from spec | `Grep` | Confirm cited symbols/headings exist in the cited files |
 | `phase-detect.sh` output | Bash via the legacy lookup chain (see Step 3) | Confirm stated phase baseline is current (legacy projects only) |
 | Linear status (re-fetched) | `mcp__linear-server__linear_getIssueById` | Compare current status against spec body's claim |
 | Each `blocked_by` issue | `mcp__linear-server__linear_getIssueById` | Confirm dependency claims of "Done" |
@@ -65,7 +66,7 @@ If the issue isn't found or has no description: stop and report `"PROJ-XXX has n
 Walk the spec body and bucket claims into five categories. Use these heuristics — when in doubt, prefer false-positive (treat ambiguous text as a claim and verify it) over false-negative (silently skipping a claim).
 
 1. **File paths.** Any backtick-quoted token containing `/` or a file extension (e.g., `` `supabase/config.toml` ``, `` `src/lib/auth.ts` ``). Treat absolute paths and project-relative paths the same way. Strip surrounding punctuation.
-2. **Line citations.** Match `line N of <file>`, `lines N-M of <file>`, `<file>:N`, `<file>:N-M`. Capture the file token and the line range.
+2. **Code citations (line + symbol).** Line forms: `line N of <file>`, `lines N-M of <file>`, `<file>:N`, `<file>:N-M` — capture the file token and line range. Symbol forms (the preferred citation style, v4.23.0+ — `/light-spec` now emits path + symbol because line numbers rot fastest): `` `<file>` → `<symbol>` ``, `<symbol>() in <file>`, a backticked symbol and backticked file named in the same sentence, and `<file> § <heading>` for markdown targets — capture the file token and the symbol/heading text.
 3. **Phase-detect baselines.** Phrases like `phase_count=N`, `next_phase_state=<value>`, `qa_status=<value>`, especially when they appear in §Acceptance Criteria after wording like *"currently returns"*, *"baseline is"*, *"expect"*. Capture the field name and stated value.
 4. **Linear status claim.** A line in the spec body of the form `Status: <name>` (typical Light Spec metadata). Capture the stated status.
 5. **Dependency claims.** Cross-references to other Linear issues (`PROJ-NN`) inside §Dependencies, §Blocked by, or in narrative prose like *"blocked by PROJ-42 (Done)"*. The blocker list also comes from `relations.blocked_by` in Step 1 — combine both sources, dedupe by identifier.
@@ -96,7 +97,7 @@ When an explicit-NEW marker is present, record the path as `🆕 expected-new` i
 
 Why: WIT-348 and WIT-451 (both Pipekit v2.4.x canary subjects) listed NEW components explicitly in their specs (`line-item-actions.tsx`, `line-item-edit-dialog.tsx`, `move-line-item-dialog.tsx`), each clearly annotated NEW in the Technical Context section. v2.4.0's preflight emitted `✗` for all of them, which over-stated the divergence and forced manual exception-noting in the verdict. v2.4.2 collapses that noise.
 
-#### 3b — Line citations
+#### 3b — Code citations (line + symbol)
 
 For each `<file>:N` or `<file>:N-M`, call `Read` with `offset: N` and `limit: M-N+1` (or `1` for a single line). Record:
 
@@ -104,6 +105,13 @@ For each `<file>:N` or `<file>:N-M`, call `Read` with `offset: N` and `limit: M-
 - Optionally capture the cited content for the verdict (helps the user see if the line still says what the spec claims)
 
 A line range past EOF is a divergence — record `resolves: false`.
+
+For each symbol/heading citation, `Grep` the cited file for the symbol's definition or the heading text (for a symbol, match declaration-shaped lines first — `function <sym>|const <sym>|def <sym>|class <sym>|export.*<sym>` — falling back to any occurrence; for a heading, match `^#+\s*<heading>`). Record:
+
+- `resolves` — the symbol/heading exists in the cited file
+- `moved_to` — if absent from the cited file, `Grep` the repo (excluding `node_modules/`) for the same declaration; a single hit elsewhere is a move — surface the new location, mirroring 3a's `renamed_to`
+
+A symbol found nowhere is a divergence (`✗`, REVISE). A moved symbol is `⚠` with the new location — the spec needs a path update, but the contract still exists. When a citation carries both a symbol and a line number, the symbol is authoritative: if the symbol resolves at a different line, record `⚠ drifted (symbol at line X, spec says Y)` rather than `✗`.
 
 #### 3c — phase-detect baseline (legacy fallback)
 
@@ -286,7 +294,7 @@ Pre-flight checks for PROJ-XXX ({tier} tier):
 
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: {n_pass}/{n_total} exist
-  ✓ Line refs: {n_pass}/{n_total} resolve
+  ✓ Code refs (line/symbol): {n_pass}/{n_total} resolve
   ⚠ phase-detect baseline: spec says {field}={stated}, actual={observed}
   ✓ Linear status: {state} (matches spec)
   ✓ Dependencies: {n_done}/{n_total} Done
@@ -341,7 +349,7 @@ Pre-flight checks for RS-87 (Standard tier):
 
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 4/4 exist
-  ✓ Line refs: 2/2 resolve
+  ✓ Code refs (line/symbol): 2/2 resolve
   ✓ phase-detect baseline: phase_count=1 (matches spec)
   ✓ Linear status: Approved (matches spec)
   ✓ Dependencies: 2/2 Done
@@ -362,7 +370,7 @@ Pre-flight checks for RS-51 (Standard tier):
 
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 5/5 exist
-  ✓ Line refs: 3/3 resolve
+  ✓ Code refs (line/symbol): 3/3 resolve
   ⚠ phase-detect baseline: spec says phase_count=0, actual=1
   ✓ Linear status: Approved (matches spec)
   ✓ Dependencies: 2/2 Done
@@ -385,7 +393,7 @@ Pre-flight checks for WIT-348 (Standard tier):
   ─ Empirical claims (Phase 1–3)
   ⚠ File paths: 4/6 exist (renamed: projects.js → database/projects.js,
                             budget-edit-main.js → pages/budget-edit-main.js)
-  ✓ Line refs: 2/2 resolve
+  ✓ Code refs (line/symbol): 2/2 resolve
   ✓ phase-detect baseline: matches spec
   ✓ Linear status: Specced (matches spec)
   ✓ Dependencies: 1/1 Done
@@ -421,7 +429,7 @@ Pre-flight checks for WIT-348 (Standard tier):
 
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 6/6 exist
-  ✓ Line refs: 2/2 resolve
+  ✓ Code refs (line/symbol): 2/2 resolve
   ✓ phase-detect baseline: matches spec
   ✓ Linear status: Specced (matches spec)
   ✓ Dependencies: 1/1 Done

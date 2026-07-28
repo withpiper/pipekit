@@ -215,6 +215,7 @@ For each **Unresolved** blocker:
 - Never rewrite sections the agent did not flag.
 - Never delete existing user commentary from the `## Agent Review` section.
 - Never merge multiple blockers into a single rewrite; each patch stays distinct for reviewability.
+- Never resolve a blocker by pasting code into the spec. If the agent's demand amounts to "show the code," satisfy it with a sharper reference — `path` + symbol/heading, per the template's code-reference discipline. Pasted blocks are only for contracts (exact expected diff, small type signature, content that doesn't exist yet).
 - If applying a patch would require changes beyond the flagged section (e.g. a blocker on AC that forces a Scope edit), surface the cross-section dependency to the user and get explicit approval before touching the second section.
 
 ### Phase 8 — Non-Blocking Improvements (opt-in)

@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.22.0** — Last updated: 2026-07-28 12:07  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
+**v4.23.0** — Last updated: 2026-07-28 13:36  *(**v4.23.0 — context rightsizing phase 2, design batch: specs-as-code-references.** Specs cite `path` + symbol — pastes only as contracts (exact diff, type signature, not-yet-existing content); Spec Review Agent v5.4 blocks ambiguous references; `/spec-preflight` resolves symbols empirically. Tier-aware rule delivery dropped: probe showed subagents inherit the full rules block; trim redirect deferred to `resources/item-c-premise-check.md`. No `bin/pk` behavior change — smoke 133.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -430,7 +430,7 @@ After a milestone ships, Strategy docs need to catch up to what was actually bui
 | `/light-spec` | Structured spec generation with auto-cycled agent review (invokes `pk spec-cycle` and `/light-spec-revise` internally, max 3 passes) |
 | `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detects stalemate loops. Usually invoked by `/light-spec` Phase 6, but can be run standalone. |
 | `pk spec-cycle <ID>` | Post the Spec Review Agent v5 trigger, poll Linear for the verdict, transition state to Approved on Pass. Owns the `@linear` trigger format and polling — Claude doesn't wait. |
-| `/spec-preflight {ISSUE}` | Empirical pre-flight on a specced issue — verifies file paths, line refs, phase-detect baseline, Linear status against reality. Read-only. Run between Spec Review Agent and `pk branch`. |
+| `/spec-preflight {ISSUE}` | Empirical pre-flight on a specced issue — verifies file paths, symbol/line refs, phase-detect baseline, Linear status against reality. Read-only. Run between Spec Review Agent and `pk branch`. |
 | `pk next` | Initiative-aware: derives the current initiative from the Linear-native surface (`i{N}.` initiative → `P{N}.` project; legacy `PHASES.md` falls back), groups Linear results by status with per-group hints |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent) |
 | `/work <ID>` | Plan + execute on native-on-Workflow (the sole executor as of v4.0.0). |

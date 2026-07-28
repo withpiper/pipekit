@@ -51,9 +51,9 @@
 - Any criterion without a concrete expected behavior
 
 ### Technical Context
-[What exists today that's relevant? Keep it brief — `/work`'s planner will do deep exploration during planning.]
+[What exists today that's relevant? Keep it brief — `/work`'s planner will do deep exploration during planning. **Reference code, don't paste it:** cite `path` + symbol/heading (e.g. `src/lib/format.ts` → `formatCurrency()`), preferring symbols over line numbers — line numbers rot fastest and `/spec-preflight` resolves symbols. Paste a block only when it IS the contract: an exact expected diff, a small type signature the implementation must match, or content that doesn't exist yet. An ambiguous reference ("the helper in utils") is a Blocking review finding.]
 
-- **Existing code:** [relevant paths or "greenfield"]
+- **Existing code:** [path + symbol references, or "greenfield"]
 - **Database:** [relevant tables or "new tables needed"]
 - **Dependencies:** [external libs, APIs, other features]
 - **Patterns to follow:** [existing patterns in the codebase to match]

@@ -67,6 +67,12 @@ Write the spec using the **Light Spec Template** below. Fill in every section.
 
 **Scope discipline:** Specs define WHAT, not HOW. Litmus test: if a statement can be rewritten as "change X line" or "use Y syntax," it is implementation detail — remove it. If a statement can be rewritten as "the system should [observable behavior]," it belongs in the spec. Do not include file paths to create, function signatures, or implementation patterns — `/work`'s planning step owns the HOW.
 
+**Code reference discipline (v4.23.0+):** Where the spec legitimately points at *existing* code (Technical Context, Decisions, AC anchors), **reference it — don't paste it**. Cite `path` + symbol or heading (e.g. `` `src/lib/format.ts` → `formatCurrency()` ``), preferring symbols over raw line numbers — line numbers rot fastest, a symbol survives edits above it, and `/spec-preflight` resolves symbols empirically. Use a line number only as a secondary qualifier when the symbol alone is ambiguous. Three reasons pastes lose: the paste asserts a stale reality the moment the file changes; Linear bills the body twice (`createIssue`/`updateIssue` echo it back — `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky) and every later `getIssueById` re-drags it; and preflight can *verify* a reference but can only *trust* a paste.
+
+Pasting IS right when the pasted content is itself the contract, not a description of code: an exact expected diff, a small type signature the implementation must match, an error string to assert on, or content that doesn't exist yet (nothing to reference). Keep pastes contract-sized, not context-sized.
+
+The litmus: *a reference the planner must chase is fine; a reference that's ambiguous at plan time is not.* "The helper in utils" makes the planner guess — Blocking, same as any spec gap. `` `formatCurrency()` in `src/lib/format.ts` `` is a contract.
+
 **Acceptance Criteria discipline (behavioral, not presence-only):** Every AC must verify *observable behavior*, not *element presence*. A spec that ships ACs like "component X exists" / "function Y is called" lets implementations pass tests without actually working — surfaced 2026-05-02 by RS-63/64 in rs-vault, where tests + 7-check gate + antagonistic review all passed but the running app was 60% broken (search bar non-functional, panel didn't animate, Notes save unwired, History tab placeholder, integration step skipped).
 
 Bad → Better examples:
@@ -320,6 +326,7 @@ Thoughts that mean "slow down and widen scope." Paired with `.claude/rules/pipek
 | "AC says `onSave callback fires`" | Mock-tests are not user-tests. Add an end-to-end AC: data persists, UI reflects, page reload shows it. |
 | "Integration into `<other-file>` is implied" | Implicit integration steps were the RS-64 miss. If the spec touches one component but requires updating another to use it, name the second update as an explicit AC. |
 | "Visual matches figma" (without measurable check) | Unmeasurable. Replace with: pixel-diff threshold (e.g. < 5% at 1440px), or computed-style assertions on key tokens, or both. |
+| "I'll paste the code so the planner has context" | Pasted code rots the day the file changes, and Linear bills it twice (echoed body + sticky payload). Reference `path` + symbol; paste only contracts — exact expected diff, small type signature, content that doesn't exist yet. |
 
 ---
 
@@ -332,6 +339,7 @@ When you encounter these situations, take the safer path:
 - **Vague acceptance criteria** → Apply the litmus test: can the planner verify each criterion without guessing what "works correctly" or "handles properly" means? Every criterion needs a concrete, observable outcome.
 - **Implicit decisions** → Put it in the Decisions section (defined or `[TBD]`). Context is not a contract — downstream agents can't read your mind.
 - **Assuming API behavior** → Check the installed version. Training data may not reflect the project's actual dependencies.
+- **Pasting code blocks as context** → Reference `path` + symbol instead. A paste is a snapshot that silently diverges from the file; a reference stays verifiable by `/spec-preflight`.
 
 ## Next-step output
 

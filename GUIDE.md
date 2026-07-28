@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.22.0** — Last updated: 2026-07-28 12:07  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
+**v4.23.0** — Last updated: 2026-07-28 13:36  *(**v4.23.0 — context rightsizing phase 2, design batch: specs-as-code-references.** Specs cite `path` + symbol — pastes only as contracts (exact diff, type signature, not-yet-existing content); Spec Review Agent v5.4 blocks ambiguous references; `/spec-preflight` resolves symbols empirically. Tier-aware rule delivery dropped: probe showed subagents inherit the full rules block; trim redirect deferred to `resources/item-c-premise-check.md`. No `bin/pk` behavior change — smoke 133.)*
 
 ---
 
@@ -1132,7 +1132,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Brainstorm | `/brainstorm` | Feature-level ideation (within an existing project) |
 | Light Spec | `/light-spec PROJ-1` | Create spec for an issue |
 | Light Spec Revise | `/light-spec-revise PROJ-1` | Apply Spec Review Agent feedback surgically |
-| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before `pk branch` (file paths, baselines, Linear status). Read-only. |
+| Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before `pk branch` (file paths, symbol/line refs, baselines, Linear status). Read-only. |
 | Spec Validator | `/spec-validator` | Validate spec completeness |
 
 ### Stage 2: Plan + Build (the v2 daily loop)
