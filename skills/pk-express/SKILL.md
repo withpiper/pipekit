@@ -1,6 +1,6 @@
 ---
 name: pk-express
-description: Idea→Draft-PR autopilot for simple WITs — chains /brainstorm → /light-spec (auto-cycle to Approved) → pk branch → /work (auto verify+ship), advancing on success and stopping only when something needs you. Quick/Standard tier only. Invoke with /pk-express "<idea>" or resume with /pk-express <ISSUE-ID>.
+description: Idea→Draft-PR autopilot for simple (Quick/Standard) WITs — chains /brainstorm → /light-spec → pk branch → /work, stopping only at attention gates. /pk-express "<idea>" or resume with <ISSUE-ID>.
 ---
 
 # /pk-express Skill

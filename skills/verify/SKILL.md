@@ -1,6 +1,6 @@
 ---
 name: verify
-description: verify — tier-aware evidence-gated pre-deploy gate. tier:standard|heavy write Logs/Verify/<date>/<id>/{evidence.txt,reality-check.md,verify-complete.md}; tier:quick writes only verify-complete.md on PASS. pk ship gates on a verify-complete.md whose sha matches HEAD. Use when a Linear issue is ready for verify (Stage 3). Use when /work finished and you need a Pass/Partial/Fail verdict per AC before pk ship.
+description: Tier-aware evidence-gated pre-deploy gate — Pass/Partial/Fail verdict per AC; writes the sha-matched verify-complete.md that pk ship requires. Use when /work is finished, before pk ship.
 ---
 
 # /verify

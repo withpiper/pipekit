@@ -1,6 +1,6 @@
 ---
 name: roadmap-create
-description: Build a staged roadmap from strategy docs and author it directly into Linear as the native initiative surface — Initiatives (i{N}. initiatives), Projects (P{N}. sub-phases), and Issues. Use as Stage 0 step 6 after /strategy-create, when bootstrapping the Linear hierarchy for a new project.
+description: Build a staged roadmap from strategy docs and author it into Linear as the native initiative surface (i{N}. initiatives → projects → issues). Stage 0 step 6, after /strategy-create.
 ---
 
 # Roadmap Create Skill

@@ -1,6 +1,6 @@
 ---
 name: prod-ready
-description: Production-readiness gate for a feature about to reach its production environment — verifies the operational preconditions (error monitoring wired, no secrets in the client bundle, rate limiting on new public endpoints, backups active, feature flag for risky paths, dashboard chart) that the pre-deploy gate (/verify) does not. Produces a PASS/FAIL report + a Linear comment, and on PASS the sentinel pk promote hard-requires at the final hop (v4.17.0) on any project with a checks file; it does not transition state. Portable framework; concrete checks live in a per-project checks file. Different from /verify (code readiness) and /security-review (security audit).
+description: Production-readiness gate — verifies operational preconditions /verify doesn't (monitoring, secrets, rate limits, backups, flags); writes the sentinel the final pk promote hard-requires on gated projects. Run once before the final promote.
 ---
 
 # /prod-ready

@@ -1,6 +1,6 @@
 ---
 name: financial-review
-description: Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ server calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable framework; concrete checks live in a per-project checks file. Different from /security-review (security) and /pr-security-review (PR-scoped).
+description: Periodic financial-accuracy review for calculation-heavy projects — cross-layer parity audit (DB ↔ server ↔ UI) with severity-ranked report. Concrete checks live in a per-project checks file.
 ---
 
 # Financial Review
