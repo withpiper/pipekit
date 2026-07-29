@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.24.0"
+PK_VERSION="4.25.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1199,6 +1199,45 @@ pk_gh_pr_create() {
   return 1
 }
 
+# Name the PR reviewers that will ACTUALLY fire on a Draft → Ready flip, by
+# probing .github/workflows/ for the `ready_for_review` trigger. Output: one
+# workflow name per line (the `name:` field, else the filename stem), or
+# nothing when no workflow listens for the event.
+#
+# Pipekit's CI templates (templates/ci/semgrep.yml, claude-review.yml) are
+# opt-in copy-ins — sync lands them under templates/, never in .github/. A
+# consumer that installed one or neither was still being told the full pair
+# "will now fire", which asserts a review that structurally cannot happen.
+# Anchor: SiteLine, 2026-07-29 — `pk ready` named Semgrep on a repo with no
+# Semgrep workflow and no commit that ever added one (tracked as PIPER-475).
+# Same class as pipekit-tooling.md § "Enumerate the Surface Before Claiming
+# Behavior": list .github/workflows/, don't assert from the template set.
+pk_ready_for_review_workflows() {
+  local root dir f name
+  root=$(pk_repo_root) || return 0
+  dir="$root/.github/workflows"
+  [ -d "$dir" ] || return 0
+  for f in "$dir"/*.yml "$dir"/*.yaml; do
+    [ -f "$f" ] || continue
+    # Skip commented-out triggers — a `# ready_for_review` line fires nothing.
+    grep -qE '^[^#]*ready_for_review' "$f" || continue
+    # sed, not `grep | sed`: pk runs under `set -euo pipefail`, so a grep that
+    # matches nothing (a workflow with no top-level `name:`) would fail the
+    # pipeline and abort pk mid-command. sed exits 0 whether or not it matched.
+    name=$(sed -n -E '/^name:[[:space:]]*[^[:space:]]/ {
+        s/^name:[[:space:]]*//; s/^["'"'"']//; s/["'"'"']$//; s/[[:space:]]+$//; p; q;
+      }' "$f")
+    [ -n "$name" ] || name=$(basename "$f" | sed -E 's/\.(yml|yaml)$//')
+    echo "$name"
+  done | sort -u
+}
+
+# Comma-joined form of the above, for a one-line message. Empty when none.
+pk_ready_for_review_list() {
+  pk_ready_for_review_workflows \
+    | awk 'NR>1 {printf ", "} {printf "%s", $0} END {if (NR) print ""}'
+}
+
 # Find the legacy .vbw-planning/ PLAN.md for an issue ID across all phase dirs.
 # Read-only fallback for un-migrated projects; native /work plans live in
 # .pk-work/<ID>-PLAN.md. Flat layout is .vbw-planning/phases/<phase>/<phase-num>-<id-num>-PLAN.md,
@@ -1735,9 +1774,11 @@ cmd_branch() {
 cmd_ship() {
   local env=""
   local review=false
-  # v2.6.0 #6: PRs open as Draft by default. Outside reviewers
-  # (Semgrep, claude-review) trigger on `[opened, ready_for_review]` —
-  # opening Draft means no reviews fire during iteration. Use
+  # v2.6.0 #6: PRs open as Draft by default. Pipekit's CI-template
+  # reviewers (semgrep.yml, claude-review.yml) trigger on
+  # `[opened, ready_for_review]` — opening Draft means no reviews fire
+  # during iteration. Whether a given repo installed either is probed at
+  # print time (pk_ready_for_review_workflows), not assumed. Use
   # `pk ready <ID>` (or `pk ship --ready`) to flip Draft → Ready and
   # fire the merge-time review.
   local ready=false
@@ -1885,8 +1926,14 @@ cmd_ship() {
     fi
     echo "PR: $pr_url"
     if ! $ready; then
+      local draft_reviewers
+      draft_reviewers=$(pk_ready_for_review_list)
       echo ""
-      echo "PR is Draft — outside reviewers (Semgrep, claude-review) will not fire yet."
+      if [ -n "$draft_reviewers" ]; then
+        echo "PR is Draft — PR reviewers ($draft_reviewers) will not fire yet."
+      else
+        echo "PR is Draft."
+      fi
       echo "When ready to merge: pk ready $issue"
     fi
   fi
@@ -2012,7 +2059,16 @@ cmd_ready() {
     echo "ERROR: gh pr ready failed. Check gh auth + PR permissions." >&2
     return 1
   fi
-  echo "Done. Outside reviewers (Semgrep, claude-review) will now fire."
+  local reviewers
+  reviewers=$(pk_ready_for_review_list)
+  if [ -n "$reviewers" ]; then
+    echo "Done. PR reviewers will now fire: $reviewers"
+  else
+    echo "Done. PR is Ready."
+    echo "  NOTE: no workflow in .github/workflows/ triggers on ready_for_review —"
+    echo "        no outside reviewer will fire on this PR. Pipekit ships opt-in"
+    echo "        templates (templates/ci/semgrep.yml, templates/ci/claude-review.yml)."
+  fi
   echo "  PR: $(echo "$pr_view" | jq -r '.url // empty')"
 }
 
@@ -3012,7 +3068,21 @@ pk_spec_cycle_latest_agent_body_since() {
       '
 }
 
+# Trigger prompt for the Linear-side Spec Review Agent. $1 = this review's
+# pass number (1-3), used to stamp the appended block.
+#
+# The description instruction is APPEND-ONLY and must stay that way. Through
+# v4.24.0 it read "replacing the existing ## Agent Review section with the new
+# review", so pass 2 destroyed pass 1's rationale and pass 3 destroyed both —
+# silently, on every project running spec-cycle. Two things were being lost:
+# the earlier passes' blocking-issue reasoning (which /02-light-spec-revise
+# reads to tell a resolved blocker from a re-raised one), and any human
+# commentary in that section — including the stalemate-override note that
+# /02 § Phase 6 option 3 writes there, the one record /02's own hard
+# constraints say must never be deleted. The verdict comments on the issue
+# survived; the consolidated in-description trail did not.
 pk_spec_cycle_trigger_body() {
+  local n="${1:-N}"
   cat <<'EOF'
 @linear review this spec using Spec Review Agent (v5).
 
@@ -3030,8 +3100,13 @@ Non-Blocking Improvements: <list or "None">
 Fast Path to Pass: <1-2 sentences or "N/A">
 Decomposition Readiness: Yes or No
 Final Recommendation: <1-2 sentences>
-
-Then update the issue description by replacing the existing ## Agent Review section with the new review.
+EOF
+  printf '\nThen record this review in the issue description **by appending, never replacing**:\n\n'
+  printf -- '- Append it as a new `### Review %s — <YYYY-MM-DD> — <Pass|Revise>` block at the END of the existing `## Agent Review` section.\n' "$n"
+  cat <<'EOF'
+- If no `## Agent Review` section exists yet, create it at the end of the description and add this block as its first entry.
+- Do NOT edit, condense, rewrite, replace, or delete any prior `### Review` block, and do NOT remove human commentary from that section. Prior passes are the audit trail: the revise skill reads them to tell a resolved blocker from a re-raised one, and the section may carry a human override of a stale verdict that has to survive this review.
+- Leave every other section of the description untouched.
 EOF
 }
 
@@ -3076,7 +3151,7 @@ cmd_spec_cycle() {
   local since
   since=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
   echo "→ posting Spec Review Agent v5 trigger on $id (review #$((prior_count + 1)) of 3)"
-  pk_linear_comment "$id" "$(pk_spec_cycle_trigger_body)" || return 2
+  pk_linear_comment "$id" "$(pk_spec_cycle_trigger_body "$((prior_count + 1))")" || return 2
 
   # 4. Poll: 30s × 10 = 5 min cap.
   local attempts=10 sleep_s=30 i=0 body=""

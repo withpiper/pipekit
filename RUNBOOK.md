@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.24.0** — Last updated: 2026-07-28 13:57  *(**v4.24.0 — context rightsizing phase 2, rules-trim batch.** 8.9kB off the always-on canonical rules (the v4.23.0 probe proved they re-bill into every subagent spawn): cmux orchestration → new `sop/Cmux_Orchestration_SOP.md`, migration silent-failure + MCP-drift narratives → `sop/Database_SOP.md` (invariants + audit greps stay in the rules), tooling case-study dedup. Move-don't-delete throughout. No `bin/pk` behavior change — smoke 133.)*
+**v4.25.0** — Last updated: 2026-07-29  *(**v4.25.0 — two false-claim fixes in `bin/pk`.** `pk ship`/`pk ready` now probe `.github/workflows/` for the `ready_for_review` trigger and name only the reviewers that will actually fire, instead of asserting the Semgrep + claude-review pair on every project. `pk spec-cycle`'s trigger prompt is append-only — it told the Spec Review Agent to *replace* the `## Agent Review` section, destroying prior passes' rationale and any human override note. Smoke 133 → 145.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.24.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.25.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -193,8 +193,8 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • gh pr create as DRAFT against integration branch   │
   │       (v2.6.0+: Draft is default; --ready opens Ready)   │
   │     • Linear → UAT (→ In Review for non-standard envs)   │
-  │     • Outside reviewers (Semgrep, claude-review) do NOT  │
-  │       fire on Draft — flip with pk ready when shipping   │
+  │     • Any reviewer workflow you installed does NOT fire  │
+  │       on Draft — flip with pk ready when shipping        │
   │     • on push/gh failure → STOP, surface error, no retry │
   └──────────────────────────────────────────────────────────┘
        │

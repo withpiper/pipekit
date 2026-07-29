@@ -83,7 +83,7 @@ Stage 0 is a *contract* — a set of artifacts the dev pipeline requires — not
 | 7 | **Verify** | `/verify` | Pre-deploy gate: types + lint + tests, checked against the spec's acceptance criteria |
 | 7a | Security gate | `/security-gate` | Classifies the diff into sensitive categories (auth, payments, user input, external APIs, file storage, PII); runs the matching checklist, or passes instantly if none match. *Advisory.* |
 | 8 | Ship | `pk ship [--review]` | Push, open a **Draft** PR, move the issue to UAT. `--review` adds an antagonistic review. |
-| 8a | Flip to Ready | `pk ready` | Flip the Draft PR to Ready; fires the outside reviewers (Semgrep, claude-review) |
+| 8a | Flip to Ready | `pk ready` | Flip the Draft PR to Ready; fires whichever reviewer workflows the repo installed (`templates/ci/` ships Semgrep + claude-review) |
 | 9 | UAT | Linear / browser | You test the built feature — on the PR preview before merge, on the first deploy environment after |
 | 10 | Done | `pk done <ID> [--merge]` | Confirms the merge (or merges with `--merge`), cleans up the worktree, posts commits to Linear, advances the issue's state |
 | 10a | Prod-ready | `/prod-ready` | Once per feature, before the final promote: monitoring, no secrets in the bundle, rate limits, backups, flags, dashboard. *Advisory.* |

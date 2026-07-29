@@ -703,6 +703,69 @@ fi
 cleanup
 FIXTURE=""
 
+# ── Unit tests: ready_for_review reviewer probe (sourced) ────────────────────
+# pk_ready_for_review_workflows names the reviewers that will ACTUALLY fire on
+# a Draft → Ready flip, by listing .github/workflows/ — replacing a hardcoded
+# "(Semgrep, claude-review)" that asserted both on every project. Anchor:
+# SiteLine 2026-07-29 — no Semgrep workflow, ever; pk claimed it would fire.
+
+echo "== ready_for_review reviewer probe (sourced) =="
+
+make_fixture
+unit_rfr() { ( cd "$FIXTURE" && source "$PK" && pk_ready_for_review_list ); }
+write_wf() { # $1 filename  $2 file content
+  mkdir -p "$FIXTURE/.github/workflows"
+  printf '%s\n' "$2" > "$FIXTURE/.github/workflows/$1"
+}
+
+out=$(unit_rfr)
+[ -z "$out" ] && ok "rfr: no .github/workflows dir → no reviewers claimed" || fail "rfr: no .github/workflows dir → no reviewers claimed" "out='$out'"
+
+write_wf lint.yml 'name: Lint
+on:
+  pull_request:
+    types: [opened, synchronize]'
+out=$(unit_rfr)
+[ -z "$out" ] && ok "rfr: non-reviewer workflow not counted" || fail "rfr: non-reviewer workflow not counted" "out='$out'"
+
+write_wf claude-code-review.yml 'name: Claude Code Review
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]'
+out=$(unit_rfr)
+[ "$out" = "Claude Code Review" ] && ok "rfr: single reviewer named from workflow name:" || fail "rfr: single reviewer named from workflow name:" "out='$out'"
+
+# The SiteLine case: claude-review installed, Semgrep never was. The old
+# hardcoded string named Semgrep here; the probe must not.
+case "$out" in *Semgrep*) fail "rfr: uninstalled Semgrep not claimed (SiteLine class)" "out='$out'" ;; *) ok "rfr: uninstalled Semgrep not claimed (SiteLine class)" ;; esac
+
+write_wf semgrep.yml 'name: Semgrep
+on:
+  pull_request:
+    types: [opened, ready_for_review]'
+out=$(unit_rfr)
+[ "$out" = "Claude Code Review, Semgrep" ] && ok "rfr: both reviewers joined, sorted" || fail "rfr: both reviewers joined, sorted" "out='$out'"
+
+# A commented-out trigger fires nothing — it must not be reported as a reviewer.
+rm -f "$FIXTURE/.github/workflows/semgrep.yml" "$FIXTURE/.github/workflows/claude-code-review.yml"
+write_wf disabled.yml 'name: Disabled Review
+on:
+  pull_request:
+    # types: [ready_for_review]
+    types: [opened]'
+out=$(unit_rfr)
+[ -z "$out" ] && ok "rfr: commented-out trigger not counted" || fail "rfr: commented-out trigger not counted" "out='$out'"
+
+# No `name:` field → fall back to the filename stem rather than printing blank.
+rm -f "$FIXTURE/.github/workflows/disabled.yml"
+write_wf nameless.yaml 'on:
+  pull_request:
+    types: [ready_for_review]'
+out=$(unit_rfr)
+[ "$out" = "nameless" ] && ok "rfr: unnamed workflow falls back to filename stem" || fail "rfr: unnamed workflow falls back to filename stem" "out='$out'"
+cleanup
+FIXTURE=""
+
 # ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
 # pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
 # `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the
@@ -1244,6 +1307,47 @@ out=$(cd "$FIXTURE" && "$DRIFT_SH" --base origin/nope 2>&1); rc=$?
   || fail "drift: unresolvable base warns, never false-blocks" "rc=$rc (want 0)"
 cleanup
 FIXTURE=""
+
+# ── Unit tests: spec-cycle trigger body is append-only (sourced) ─────────────
+# Through v4.24.0 the trigger told the Linear agent to REPLACE the existing
+# `## Agent Review` section, so pass 2 destroyed pass 1's rationale and pass 3
+# destroyed both — including the human stalemate-override note that
+# /02-light-spec-revise writes there and forbids deleting. Pure string
+# generation, so no fixture or Linear call needed.
+
+echo "== spec-cycle trigger body (sourced) =="
+
+body=$( source "$PK" && pk_spec_cycle_trigger_body 2 )
+
+case "$body" in
+  *"replacing the existing"*|*"replace the existing"*)
+    fail "spec-cycle: trigger never instructs a replace" "body still says replace" ;;
+  *) ok "spec-cycle: trigger never instructs a replace" ;;
+esac
+
+case "$body" in
+  *"by appending, never replacing"*) ok "spec-cycle: trigger instructs append" ;;
+  *) fail "spec-cycle: trigger instructs append" "append instruction missing" ;;
+esac
+
+case "$body" in
+  *"### Review 2 "*) ok "spec-cycle: trigger stamps the pass number" ;;
+  *) fail "spec-cycle: trigger stamps the pass number" "no '### Review 2' in body" ;;
+esac
+
+# The prior-block protection is the load-bearing clause — an append instruction
+# without it still lets an agent "tidy" earlier passes away.
+case "$body" in
+  *"do NOT remove human commentary"*) ok "spec-cycle: trigger protects prior blocks + human notes" ;;
+  *) fail "spec-cycle: trigger protects prior blocks + human notes" "protection clause missing" ;;
+esac
+
+# Unstamped call must not emit a literal placeholder as if it were a number.
+body=$( source "$PK" && pk_spec_cycle_trigger_body )
+case "$body" in
+  *"### Review N "*) ok "spec-cycle: unstamped call degrades to a readable placeholder" ;;
+  *) fail "spec-cycle: unstamped call degrades to a readable placeholder" "no placeholder in body" ;;
+esac
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
