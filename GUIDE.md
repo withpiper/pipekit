@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.24.0** — Last updated: 2026-07-28 13:57  *(**v4.24.0 — context rightsizing phase 2, rules-trim batch.** 8.9kB off the always-on canonical rules (the v4.23.0 probe proved they re-bill into every subagent spawn): cmux orchestration → new `sop/Cmux_Orchestration_SOP.md`, migration silent-failure + MCP-drift narratives → `sop/Database_SOP.md` (invariants + audit greps stay in the rules), tooling case-study dedup. Move-don't-delete throughout. No `bin/pk` behavior change — smoke 133.)*
+**v4.25.0** — Last updated: 2026-07-29  *(**v4.25.0 — two false-claim fixes in `bin/pk`.** `pk ship`/`pk ready` now probe `.github/workflows/` for the `ready_for_review` trigger and name only the reviewers that will actually fire, instead of asserting the Semgrep + claude-review pair on every project. `pk spec-cycle`'s trigger prompt is append-only — it told the Spec Review Agent to *replace* the `## Agent Review` section, destroying prior passes' rationale and any human override note. Smoke 133 → 145.)*
 
 ---
 
@@ -475,6 +475,8 @@ After the spec is written, the Spec Review Agent evaluates it for planning readi
 
 If the verdict is **Revise**, the spec goes back to `/light-spec` for iteration. This loop continues until the agent passes.
 
+**Review history accumulates (v4.25.0+).** Each pass appends a `### Review N — <date> — <verdict>` block to the issue description's `## Agent Review` section; nothing prior is rewritten. That trail is load-bearing: `/02-light-spec-revise` reads earlier passes to tell a resolved blocker from a re-raised one, and the same section holds the human stalemate-override note its Phase 6 writes. Through v4.24.0 the trigger prompt told the agent to *replace* the section, so pass 2 destroyed pass 1 and pass 3 destroyed both — silently. The per-pass verdict **comments** on the issue were never affected; only the consolidated in-description trail was.
+
 **Config note (v2.7.0+):** `/light-spec` publishes the spec to the configured **`Spec ready state`** in `method.config.md` — not a hardcoded `Specced`. `pk spec-cycle` requires that same state on entry, so the interlock holds on any board: a two-state workflow (e.g. `Needs Spec → Approved`, no `Specced` state) just sets `Spec ready state: Needs Spec`. If publishing fails because the configured state doesn't exist in Linear, that's a `method.config.md` ↔ workflow mismatch to fix, not a skill bug.
 
 ### Human Review
@@ -608,7 +610,7 @@ The merge-moment gesture. After iterating on a Draft PR (pushing fixes, addressi
 
 - Finds the PR for the feature branch (by branch name match)
 - Runs `gh pr ready <#>` — fires `ready_for_review` event
-- Outside reviewers (Semgrep, claude-review) configured in `templates/ci/` listen for this event and run once, at the merge moment, not on every push
+- Outside reviewers listen for this event and run once, at the merge moment, not on every push. `templates/ci/` ships two (Semgrep, claude-review) but they are **opt-in copy-ins** — sync lands them under `templates/`, never in `.github/workflows/`. `pk ready` probes your workflows for the `ready_for_review` trigger and names the ones that will actually fire; if it reports none installed, no outside review is happening on that PR (v4.25.0+)
 - No Linear state change (UAT stays UAT — the WIT was already In Review/UAT after `pk ship`)
 
 Idempotent: if the PR is already Ready, prints "No flip needed" and exits 0.

@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.24.0** — Last updated: 2026-07-28 13:57  *(**v4.24.0 — context rightsizing phase 2, rules-trim batch.** 8.9kB off the always-on canonical rules (the v4.23.0 probe proved they re-bill into every subagent spawn): cmux orchestration → new `sop/Cmux_Orchestration_SOP.md`, migration silent-failure + MCP-drift narratives → `sop/Database_SOP.md` (invariants + audit greps stay in the rules), tooling case-study dedup. Move-don't-delete throughout. No `bin/pk` behavior change — smoke 133.)*
+**v4.25.0** — Last updated: 2026-07-29  *(**v4.25.0 — two false-claim fixes in `bin/pk`.** `pk ship`/`pk ready` now probe `.github/workflows/` for the `ready_for_review` trigger and name only the reviewers that will actually fire, instead of asserting the Semgrep + claude-review pair on every project. `pk spec-cycle`'s trigger prompt is append-only — it told the Spec Review Agent to *replace* the `## Agent Review` section, destroying prior passes' rationale and any human override note. Smoke 133 → 145.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
