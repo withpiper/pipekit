@@ -170,6 +170,22 @@ If `GATE_RC == 0`, print:
 ✓ Pre-deploy gate PASSED (<command list>).
 ```
 
+### Step 3.5 — A green assertion is not coverage until something made it red (v4.26.0+)
+
+A passing gate proves the suite ran, not that any of it can fail. Before citing **any** test as evidence that this change works — in the Linear comment, the PR body, `evidence.txt`, or a security-gate report — mutate the thing it guards and confirm the test goes red **on its named assertion**, not on a crash.
+
+Only tests you actually cite need this. It is a claim-time obligation, not a whole-suite audit.
+
+Three vacuous shapes, each observed shipping:
+
+- **The tautology.** `expect(true).toBe(true)`, or an assertion decided by an early return before the guard is reached.
+- **The fixture that cannot violate.** A cross-tenant leak test seeded only with in-scope rows; a scope test whose `clients: []`. It passes identically against the unfixed code.
+- **The crash that reads as a failure.** The test reddens on an unread `TypeError` rather than the expectation, so it will keep "passing" once the crash is fixed and the real assertion is never exercised.
+
+The check is one question: **would this test still pass against the code before the fix?** If yes, it is not evidence. Re-point it, or say plainly that the change is unverified.
+
+**Anchor — SiteLine, 2026-07-29/30.** PIPER-491 cited two assertions as security evidence that could not fail (one fixture seeded only in-scope projects; one compared two identical computations through a seam the fix had deleted) — and then made the *same* vacuous-fixture mistake again on `clientInfo` in the very pass writing that lesson up. PIPER-497 shipped four separate vacuous assertions before mutation checks caught them. Where the discipline was applied first, it paid immediately: PIPER-164's guard, authored red-first, failed on exactly its 5 divergent sites and exposed a resolver hole that would have silently exempted a CORS-granting function.
+
 Continue to step 4 only if QA is enabled.
 
 ## Step 4 — QA review subagent (if QA enabled)
