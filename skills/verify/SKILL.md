@@ -370,6 +370,18 @@ After the subagent returns, read `$VERIFY_DIR/adversarial.md` and count findings
 
 Per the discipline rule: "2+ cycles with substantive findings, zero actionable classifications = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future multi-cycle iteration-loop skill. Day-4 deliverable surfaces the findings; user judgment closes the loop.
 
+### Scope-drift signals across repeated `/verify` runs (v4.26.0+)
+
+The check above governs review cycles **within one run**. The runaway this section covers is the other axis: the same issue re-verified round after round, each round fixing the last round's findings. Nothing counts those rounds — `VERIFY_DIR` is one directory per issue *per day* and re-runs overwrite, so `ls -d Logs/Verify/*/$ISSUE` tells you how many **days** an issue has been in verification, not how many rounds. Treat 3+ days as its own signal and read these three by hand:
+
+- **A fix commit contains a new High.** Once is noise. **Twice means the unit is too large to review as one** — the diff is big enough that fixing one part breaks a part already cleared. This is the specific trigger, not "another round happened."
+- **Object-count drift.** Compare the spec's Migration Plan "schema objects touched" against what the diff actually touches. A spec naming 3 objects against a diff touching 23 has outgrown its contract. Compare mid-flight, not at ship.
+- **Reductions review clean while additions do not.** Once that asymmetry appears, stop patching and start cutting.
+
+When two or more fire, the move is to **cut the branch, not to run another round** — ship the converged half and move the rest to a follow-up issue. `/01-light-spec` Phase 3.75 is the spec-time gate that prevents the common case (a schema change bundled with a rewrite of the client that consumes it).
+
+**Anchor — PIPER-486/487, 2026-07-30.** Two CRITICALs, a 1,816-line migration across 23 schema objects, and a rewrite of an admin tab inside an 8,000-line page on one branch. Rounds 1–5 each found a High **inside the previous round's fix commit**; the one clean round (6, zero findings, three reviewers) was the one that reviewed a *reduction*; round 7's additions produced 22 findings. The branch was cut at round 7 and shipped at round 8. Every signal above was present by round 2 and none was named until round 7.
+
 ## Step 6 — Human-decision flag enumeration
 
 After the gate, QA, and antagonistic review (if run), enumerate any **human-decision flags** present. A flag is anything that should pause the auto-ship chain even when the headline verdict is Pass. The principle: the auto-chain is a feature, but it must not bypass a human eye when there is any signal worth a human eye.
