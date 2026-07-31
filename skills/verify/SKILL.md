@@ -130,7 +130,13 @@ else
     printf '==> $ %s\n' "$cmd" >> "$VERIFY_DIR/evidence.txt"
     local start; start=$(date +%s)
     bash -c "$cmd" 2>&1 | tee -a "$VERIFY_DIR/evidence.txt"
-    local rc=${PIPESTATUS[0]}
+    # `$?` with the `set -o pipefail` above — NOT ${PIPESTATUS[0]}. zsh has no
+    # PIPESTATUS (it spells it `pipestatus`, and 1-indexed), so under the zsh that
+    # Claude Code's Bash tool runs, ${PIPESTATUS[0]} expanded to empty: every gate
+    # command recorded `exit: 0` and `return $rc` fell through to the printf's
+    # status. A red gate was indistinguishable from a green one, and the evidence
+    # file preserved the false 0. Observed on SiteLine PIPER-425, 2026-07-29.
+    local rc=$?
     printf 'exit: %d\nduration: %ds\n\n' "$rc" "$(($(date +%s) - start))" >> "$VERIFY_DIR/evidence.txt"
     return $rc
   }
