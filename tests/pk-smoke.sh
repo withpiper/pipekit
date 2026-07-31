@@ -824,6 +824,40 @@ out=$(unit_nosync)
 cleanup
 FIXTURE=""
 
+# ── Unit tests: conflicting-PR warning (sourced) ─────────────────────────────
+# A conflicting PR gets ZERO pull_request workflows — GitHub cannot build the
+# merge ref — so required checks never run and the board keeps its last state.
+# Anchor: SiteLine PIPER-174 merged with its sole required gate never having run.
+# Must warn on CONFLICTING and stay silent on every other value, including
+# UNKNOWN: asserting a state we did not observe is the bug class, not the fix.
+
+echo "== conflicting-PR warning (sourced) =="
+
+make_fixture
+# Override `gh` with a shell function after sourcing — functions beat PATH, so
+# this stubs the single call the helper makes without touching the shim.
+unit_conflict() { ( cd "$FIXTURE" && source "$PK" && eval "gh() { echo '$1'; }" && pk_warn_if_conflicting 42 ); }
+
+out=$(unit_conflict CONFLICTING)
+case "$out" in *CONFLICTS*) ok "conflict: CONFLICTING warns" ;; *) fail "conflict: CONFLICTING warns" "out='$out'" ;; esac
+case "$out" in *stale*) ok "conflict: warning says the green is stale" ;; *) fail "conflict: warning says the green is stale" "out='$out'" ;; esac
+
+out=$(unit_conflict MERGEABLE)
+[ -z "$out" ] && ok "conflict: MERGEABLE is silent" || fail "conflict: MERGEABLE is silent" "out='$out'"
+
+out=$(unit_conflict UNKNOWN)
+[ -z "$out" ] && ok "conflict: UNKNOWN is silent (never claims unobserved state)" || fail "conflict: UNKNOWN is silent (never claims unobserved state)" "out='$out'"
+
+# gh absent/failing → the shim echoes to its log, not stdout, so mergeable is
+# empty. Must stay silent AND exit 0 rather than aborting pk under set -e.
+out=$( cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" bash -c "source '$PK' && pk_warn_if_conflicting 42" 2>&1 )
+rc=$?
+[ -z "$out" ] && [ "$rc" = "0" ] \
+  && ok "conflict: unreadable mergeable stays silent, exits 0" \
+  || fail "conflict: unreadable mergeable stays silent, exits 0" "out='$out' rc=$rc"
+cleanup
+FIXTURE=""
+
 # ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
 # pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
 # `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the
