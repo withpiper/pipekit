@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.25.0** — Last updated: 2026-07-29  *(**v4.25.0 — two false-claim fixes in `bin/pk`.** `pk ship`/`pk ready` now probe `.github/workflows/` for the `ready_for_review` trigger and name only the reviewers that will actually fire, instead of asserting the Semgrep + claude-review pair on every project. `pk spec-cycle`'s trigger prompt is append-only — it told the Spec Review Agent to *replace* the `## Agent Review` section, destroying prior passes' rationale and any human override note. Smoke 133 → 145.)*
+**v4.26.0** — Last updated: 2026-07-31  *(**v4.26.0 — the split gate: a data-layer change and a rewrite of the client that consumes it are two issues, not one.** `/01-light-spec` Phase 3.75 fires whenever a spec touches schema and asks whether it also rewrites the consuming client — if so, spec two issues with an explicit dependency, keeping the client changes the migration *forces* on the migration's side. Spec Review Agent v5.5 Blocks the bundle at heavy tier and proposes the split below it. `/verify` gains three cross-round scope-drift signals, filling the multi-run hole its own doubt-theater note explicitly deferred. Anchor: PIPER-486, eight verify rounds. No `bin/pk` behavior change — smoke 145.)*
 
 ---
 
