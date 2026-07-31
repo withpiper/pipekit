@@ -1453,6 +1453,23 @@ case "$body" in
   *) fail "spec-cycle: unstamped call degrades to a readable placeholder" "no placeholder in body" ;;
 esac
 
+# ── Dogfood mirror freshness (local only) ────────────────────────────────────
+# .claude/skills|rules|agents are generated mirrors of tracked sources, used by
+# Claude Code sessions in THIS repo. They are gitignored, so they do not exist
+# on a CI checkout — skip there rather than fail. Locally, a stale mirror means
+# your own /verify, /work etc. are running old code: on 2026-07-31 the mirror
+# was 157 lines behind and still carried the ${PIPESTATUS[0]} gate bug that the
+# same release had just fixed.
+
+echo "== dogfood mirror freshness =="
+if [ ! -d "$REPO_ROOT/.claude/skills" ]; then
+  ok "dogfood: no local mirror (CI checkout) → skipped"
+elif bash "$REPO_ROOT/scripts/dogfood-sync.sh" --check >/dev/null 2>&1; then
+  ok "dogfood: .claude/ mirrors match their tracked sources"
+else
+  fail "dogfood: .claude/ mirrors are stale" "run scripts/dogfood-sync.sh"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
