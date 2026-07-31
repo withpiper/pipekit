@@ -858,6 +858,18 @@ rc=$?
 cleanup
 FIXTURE=""
 
+# Structural: bin/pk must never shell out to `pk`. Inside the script, `pk` is
+# whatever is on PATH — the installed copy, often a symlink into a DIFFERENT
+# repo's working tree — not this file. It also simply does not exist for anyone
+# who never ran `pk install`, so under `set -euo pipefail` the substitution
+# fails and aborts the caller. Internal reads go through pk_config /
+# pk_integration_branch. Caught in CI on v4.26.0: a `pk config` call passed
+# locally only because the author had pk on PATH, and failed on a clean runner.
+selfcall=$(grep -nE '\$\(pk [a-z]' "$PK" || true)
+[ -z "$selfcall" ] \
+  && ok "structure: bin/pk never shells out to \`pk\` (PATH-dependent)" \
+  || fail "structure: bin/pk never shells out to \`pk\` (PATH-dependent)" "$selfcall"
+
 # ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
 # pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
 # `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the

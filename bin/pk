@@ -1282,8 +1282,13 @@ pk_warn_if_conflicting() {
   local pr_number="$1" mergeable
   mergeable=$(gh pr view "$pr_number" --json mergeable -q '.mergeable' 2>/dev/null || echo "")
   [ "$mergeable" = "CONFLICTING" ] || return 0
+  # pk_integration_branch, NOT `pk config ...` — inside bin/pk, `pk` is whatever
+  # is on PATH, not this script. On a dev machine that resolves to the installed
+  # pk (possibly a symlink into another repo's working tree); in CI, or for any
+  # user who never ran `pk install`, it is not found at all and the command
+  # substitution fails under `set -euo pipefail`, aborting the warning entirely.
   local integration
-  integration=$(pk config "Integration branch" "dev")
+  integration=$(pk_integration_branch)
   echo ""
   echo "  ⚠ PR #$pr_number CONFLICTS with its base."
   echo "    GitHub cannot build the merge ref, so it dispatches NO pull_request"
