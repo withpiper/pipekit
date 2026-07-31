@@ -1,4 +1,4 @@
-# Linear Agent Skill: Spec Review Agent (v5.4)
+# Linear Agent Skill: Spec Review Agent (v5.5)
 
 ## Context
 
@@ -108,6 +108,19 @@ The plan must answer: schema objects touched, migration tool + dir, forward inte
 - New table/column with no stated RLS policy or GRANT -> Blocking (a data-access path with no auth is a leak)
 
 A spec that touches no schema omits the Migration Plan section entirely — do NOT demand it. See `sop/Database_SOP.md` for the artifact rule.
+
+---
+
+## Bundling Rule (data layer + its client)
+
+Applies ONLY when the spec both changes the database schema AND rewrites the application code that consumes what changed.
+
+The two halves review differently. Data-layer review converges — policies, grants and predicates are a finite, statically reviewable surface, falsifiable by mutation. Client-behaviour review does not — stale snapshots, commit boundaries, zero-row writes, ordering and scope-at-point-of-use surface one at a time, and each fix moves code the previous round already cleared. Bundled, the converged half is re-reviewed every round the other half moves.
+
+- Schema change + consuming-client rewrite, and Complexity is `High`, `Very High` or `Critical` -> **Blocking**. Name the split: issue A (migration + the client changes it *forces*) blocks issue B (the rest of the client work).
+- Schema change + consuming-client rewrite at any lower Complexity -> **Non-blocking**. Propose the split, do not require it.
+- The client changes the migration FORCES belong with the migration — an RPC call a narrowed policy makes mandatory, a call site for a dropped function. Do NOT propose a split that leaves the migration shipping against a client that cannot work with it. That is a worse spec, not a better one.
+- An ordinary feature that adds a column and the form field to populate it is NOT a bundling finding. The trigger is a *rewrite* of consuming code, not any client change at all.
 
 ---
 

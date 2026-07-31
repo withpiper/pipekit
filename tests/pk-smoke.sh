@@ -766,6 +766,110 @@ out=$(unit_rfr)
 cleanup
 FIXTURE=""
 
+# ── Unit tests: fires-once-only reviewer probe (sourced) ─────────────────────
+# pk_review_workflows_without_sync names ready_for_review reviewers that omit
+# `synchronize`, i.e. that review the Ready flip and nothing you push after it.
+# Anchor: SiteLine PIPER-345 `879748e5` and PIPER-499 `778edbec` both merged
+# with their final head unreviewed, recorded in three separate session logs.
+
+echo "== fires-once-only reviewer probe (sourced) =="
+
+make_fixture
+unit_nosync() { ( cd "$FIXTURE" && source "$PK" && pk_review_without_sync_list ); }
+write_wf() { mkdir -p "$FIXTURE/.github/workflows"; printf '%s\n' "$2" > "$FIXTURE/.github/workflows/$1"; }
+
+out=$(unit_nosync)
+[ -z "$out" ] && ok "nosync: no workflows dir → nothing claimed" || fail "nosync: no workflows dir → nothing claimed" "out='$out'"
+
+# Reviewer WITH synchronize: reviews every push, so it must NOT be flagged.
+write_wf claude-code-review.yml 'name: Claude Code Review
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]'
+out=$(unit_nosync)
+[ -z "$out" ] && ok "nosync: reviewer carrying synchronize is not flagged" || fail "nosync: reviewer carrying synchronize is not flagged" "out='$out'"
+
+# The real SiteLine shape: ready_for_review, no synchronize.
+write_wf claude-code-review.yml 'name: Claude Code Review
+on:
+  pull_request:
+    types: [opened, ready_for_review]'
+out=$(unit_nosync)
+[ "$out" = "Claude Code Review" ] && ok "nosync: fires-once reviewer flagged (SiteLine class)" || fail "nosync: fires-once reviewer flagged (SiteLine class)" "out='$out'"
+
+# A commented-out synchronize triggers nothing — must still count as no-sync.
+write_wf claude-code-review.yml 'name: Claude Code Review
+on:
+  pull_request:
+    # types: [ready_for_review, synchronize]
+    types: [ready_for_review]'
+out=$(unit_nosync)
+[ "$out" = "Claude Code Review" ] && ok "nosync: commented-out synchronize does not exempt" || fail "nosync: commented-out synchronize does not exempt" "out='$out'"
+
+# A non-reviewer workflow that has synchronize but no ready_for_review is out of
+# scope entirely — it is not a Ready-flip reviewer, so it must not be named.
+rm -f "$FIXTURE/.github/workflows/claude-code-review.yml"
+write_wf lint.yml 'name: Lint
+on:
+  pull_request:
+    types: [opened, synchronize]'
+out=$(unit_nosync)
+[ -z "$out" ] && ok "nosync: non-reviewer workflow never named" || fail "nosync: non-reviewer workflow never named" "out='$out'"
+
+# Guard the set -euo pipefail abort class: the helper must exit 0 and print
+# nothing when no workflow matches, not kill pk after the Draft flip landed.
+( cd "$FIXTURE" && source "$PK" && pk_review_without_sync_list >/dev/null ) \
+  && ok "nosync: exits 0 on no match (no set -e abort)" \
+  || fail "nosync: exits 0 on no match (no set -e abort)" "non-zero exit"
+cleanup
+FIXTURE=""
+
+# ── Unit tests: conflicting-PR warning (sourced) ─────────────────────────────
+# A conflicting PR gets ZERO pull_request workflows — GitHub cannot build the
+# merge ref — so required checks never run and the board keeps its last state.
+# Anchor: SiteLine PIPER-174 merged with its sole required gate never having run.
+# Must warn on CONFLICTING and stay silent on every other value, including
+# UNKNOWN: asserting a state we did not observe is the bug class, not the fix.
+
+echo "== conflicting-PR warning (sourced) =="
+
+make_fixture
+# Override `gh` with a shell function after sourcing — functions beat PATH, so
+# this stubs the single call the helper makes without touching the shim.
+unit_conflict() { ( cd "$FIXTURE" && source "$PK" && eval "gh() { echo '$1'; }" && pk_warn_if_conflicting 42 ); }
+
+out=$(unit_conflict CONFLICTING)
+case "$out" in *CONFLICTS*) ok "conflict: CONFLICTING warns" ;; *) fail "conflict: CONFLICTING warns" "out='$out'" ;; esac
+case "$out" in *stale*) ok "conflict: warning says the green is stale" ;; *) fail "conflict: warning says the green is stale" "out='$out'" ;; esac
+
+out=$(unit_conflict MERGEABLE)
+[ -z "$out" ] && ok "conflict: MERGEABLE is silent" || fail "conflict: MERGEABLE is silent" "out='$out'"
+
+out=$(unit_conflict UNKNOWN)
+[ -z "$out" ] && ok "conflict: UNKNOWN is silent (never claims unobserved state)" || fail "conflict: UNKNOWN is silent (never claims unobserved state)" "out='$out'"
+
+# gh absent/failing → the shim echoes to its log, not stdout, so mergeable is
+# empty. Must stay silent AND exit 0 rather than aborting pk under set -e.
+out=$( cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" bash -c "source '$PK' && pk_warn_if_conflicting 42" 2>&1 )
+rc=$?
+[ -z "$out" ] && [ "$rc" = "0" ] \
+  && ok "conflict: unreadable mergeable stays silent, exits 0" \
+  || fail "conflict: unreadable mergeable stays silent, exits 0" "out='$out' rc=$rc"
+cleanup
+FIXTURE=""
+
+# Structural: bin/pk must never shell out to `pk`. Inside the script, `pk` is
+# whatever is on PATH — the installed copy, often a symlink into a DIFFERENT
+# repo's working tree — not this file. It also simply does not exist for anyone
+# who never ran `pk install`, so under `set -euo pipefail` the substitution
+# fails and aborts the caller. Internal reads go through pk_config /
+# pk_integration_branch. Caught in CI on v4.26.0: a `pk config` call passed
+# locally only because the author had pk on PATH, and failed on a clean runner.
+selfcall=$(grep -nE '\$\(pk [a-z]' "$PK" || true)
+[ -z "$selfcall" ] \
+  && ok "structure: bin/pk never shells out to \`pk\` (PATH-dependent)" \
+  || fail "structure: bin/pk never shells out to \`pk\` (PATH-dependent)" "$selfcall"
+
 # ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
 # pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
 # `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the

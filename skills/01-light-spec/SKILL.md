@@ -142,6 +142,27 @@ If this spec changes the **database schema**, it is not planning-ready until it 
 
 This is the spec-time half of gap #1's artifact rule. The Spec Review Agent (`templates/spec_review_skill.md` § Migration Rule) independently blocks a schema-touching spec that reaches review without a concrete plan, and `/verify` runs a migration-review subagent on the diff — but catching it here, before publish, saves a review round-trip.
 
+### Phase 3.75 — Split gate: data layer vs. the client that consumes it (v4.26.0+)
+
+Only runs when Phase 3.7 detected a schema change. One question:
+
+> **Does this spec also rewrite the application code that consumes what the migration changes?**
+
+If yes, spec **two issues with an explicit dependency**, not one issue with two halves.
+
+**Why — the two halves review differently, and this is a property of the work, not the team:**
+
+- **Data-layer review converges.** Policies, grants, and predicates are a finite, statically reviewable surface, falsifiable by mutation — re-add a policy leg, watch the specific test fail, restore. A clean pass carries real information and stays true.
+- **Client-behavior review does not converge.** Stale in-memory snapshots, transaction boundaries between separate writes, zero-row writes the API reports as success, ordering, scope-resolved-at-load-versus-at-use. These surface one at a time, and each fix moves code the previous round already cleared. A clean pass carries much less.
+
+Bundled, every review round must hold both — so the converged half is dragged back through review every time the other half moves.
+
+**The split is not 50/50 — getting the line wrong is the failure mode of adopting this carelessly.** Client changes the migration *forces* travel **with** the migration: an RPC call a narrowed policy makes mandatory, a call site for a function the migration drops. Reverting those ships a broken UI. Only the hardening and UX work layered *on top* moves to the second issue.
+
+Draft the split as: issue A (migration + the client changes it forces) → blocks → issue B (the client rewrite). Present both in Phase 4 and let the user collapse them back if they disagree.
+
+**Anchor — PIPER-486/487, 2026-07-30.** Two CRITICAL security fixes, a 1,816-line migration across 23 schema objects, and a rewrite of an admin tab inside an 8,000-line page, all on one branch: **eight `/verify` rounds over two days.** The migration reviewed clean from round 6 onward under three independent reviewers; essentially every defect across all eight rounds lived in the client half. The branch was cut at round 7 and shipped at round 8. Split at spec time, plausibly a three-round issue.
+
 ### Phase 4 — Present and Iterate
 
 1. Show the draft spec to the user.
@@ -327,6 +348,7 @@ Thoughts that mean "slow down and widen scope." Paired with `.claude/rules/pipek
 | "Integration into `<other-file>` is implied" | Implicit integration steps were the RS-64 miss. If the spec touches one component but requires updating another to use it, name the second update as an explicit AC. |
 | "Visual matches figma" (without measurable check) | Unmeasurable. Replace with: pixel-diff threshold (e.g. < 5% at 1440px), or computed-style assertions on key tokens, or both. |
 | "I'll paste the code so the planner has context" | Pasted code rots the day the file changes, and Linear bills it twice (echoed body + sticky payload). Reference `path` + symbol; paste only contracts — exact expected diff, small type signature, content that doesn't exist yet. |
+| "The migration and the UI rewrite are one feature — splitting them is artificial" | Shipping them together is one thing; *reviewing* them together is another. The data layer converges under review and the client doesn't, so bundled, the converged half is re-reviewed every round the other half moves. Split per Phase 3.75, keeping the client changes the migration forces on the migration's side. |
 
 ---
 

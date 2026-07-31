@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.25.0"
+PK_VERSION="4.26.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1238,6 +1238,67 @@ pk_ready_for_review_list() {
     | awk 'NR>1 {printf ", "} {printf "%s", $0} END {if (NR) print ""}'
 }
 
+# Of the ready_for_review workflows, the ones that do NOT also list `synchronize`.
+# Those fire exactly once — on the Draft→Ready flip — so every commit pushed
+# afterwards is unreviewed, and nothing on the PR says so. Observed repeatedly on
+# SiteLine (PIPER-345 `879748e5`, PIPER-499 `778edbec` both merged unreviewed).
+# `if grep` rather than `grep && continue`: pk runs under `set -euo pipefail`, and
+# a bare `cmd && continue` whose left side fails returns non-zero as a complete
+# command — which would abort pk mid-`ready`, after the Draft flip already landed.
+pk_review_workflows_without_sync() {
+  local root dir f name
+  root=$(pk_repo_root) || return 0
+  dir="$root/.github/workflows"
+  [ -d "$dir" ] || return 0
+  for f in "$dir"/*.yml "$dir"/*.yaml; do
+    [ -f "$f" ] || continue
+    grep -qE '^[^#]*ready_for_review' "$f" || continue
+    if grep -qE '^[^#]*synchronize' "$f"; then continue; fi
+    name=$(sed -n -E '/^name:[[:space:]]*[^[:space:]]/ {
+        s/^name:[[:space:]]*//; s/^["'"'"']//; s/["'"'"']$//; s/[[:space:]]+$//; p; q;
+      }' "$f")
+    [ -n "$name" ] || name=$(basename "$f" | sed -E 's/\.(yml|yaml)$//')
+    echo "$name"
+  done | sort -u
+}
+
+pk_review_without_sync_list() {
+  pk_review_workflows_without_sync \
+    | awk 'NR>1 {printf ", "} {printf "%s", $0} END {if (NR) print ""}'
+}
+
+# Warn when a PR conflicts with its base. GitHub cannot build refs/pull/N/merge
+# for a conflicting PR, so it dispatches ZERO `pull_request` workflows — no
+# failure, no message, and the check board keeps whatever it last showed. On
+# SiteLine PIPER-174 the sole required gate never ran and nothing on the PR said
+# so; the board looked settled because only a `pull_request_target` workflow had
+# reported. Warn, never block: resolving the conflict is the user's call, and a
+# conflicting PR is a legitimate intermediate state.
+#
+# Silent on MERGEABLE and on UNKNOWN — GitHub computes mergeability async, and
+# claiming a state we did not observe is the exact failure this whole surface
+# exists to avoid. Silence is not a claim; a false "looks fine" would be.
+pk_warn_if_conflicting() {
+  local pr_number="$1" mergeable
+  mergeable=$(gh pr view "$pr_number" --json mergeable -q '.mergeable' 2>/dev/null || echo "")
+  [ "$mergeable" = "CONFLICTING" ] || return 0
+  # pk_integration_branch, NOT `pk config ...` — inside bin/pk, `pk` is whatever
+  # is on PATH, not this script. On a dev machine that resolves to the installed
+  # pk (possibly a symlink into another repo's working tree); in CI, or for any
+  # user who never ran `pk install`, it is not found at all and the command
+  # substitution fails under `set -euo pipefail`, aborting the warning entirely.
+  local integration
+  integration=$(pk_integration_branch)
+  echo ""
+  echo "  ⚠ PR #$pr_number CONFLICTS with its base."
+  echo "    GitHub cannot build the merge ref, so it dispatches NO pull_request"
+  echo "    workflows — required checks are not running and will not report."
+  echo "    Any green on this PR is stale, not current."
+  echo "    Fix: git merge origin/$integration (or rebase), resolve, push, then"
+  echo "         confirm CI genuinely re-ran before trusting the board."
+  echo ""
+}
+
 # Find the legacy .vbw-planning/ PLAN.md for an issue ID across all phase dirs.
 # Read-only fallback for un-migrated projects; native /work plans live in
 # .pk-work/<ID>-PLAN.md. Flat layout is .vbw-planning/phases/<phase>/<phase-num>-<id-num>-PLAN.md,
@@ -2045,6 +2106,11 @@ cmd_ready() {
     return 1
   fi
 
+  # Conflict check runs BEFORE the already-Ready early return below: the PR that
+  # motivated this (SiteLine PIPER-174) was already Ready *and* conflicting, so a
+  # check placed after the return would have missed exactly that case.
+  pk_warn_if_conflicting "$pr_number"
+
   # Check current Draft state. `gh pr ready` is idempotent for Ready PRs
   # (no-op exit 0) but we want a clear message when there's nothing to do.
   local is_draft
@@ -2059,10 +2125,18 @@ cmd_ready() {
     echo "ERROR: gh pr ready failed. Check gh auth + PR permissions." >&2
     return 1
   fi
-  local reviewers
+  local reviewers no_sync
   reviewers=$(pk_ready_for_review_list)
+  no_sync=$(pk_review_without_sync_list)
   if [ -n "$reviewers" ]; then
     echo "Done. PR reviewers will now fire: $reviewers"
+    if [ -n "$no_sync" ]; then
+      echo "  NOTE: $no_sync fires on this flip ONLY — no 'synchronize' trigger,"
+      echo "        so every commit you push after this is unreviewed and nothing"
+      echo "        on the PR will say so. To re-review the final head:"
+      echo "          gh pr ready --undo $pr_number && gh pr ready $pr_number"
+      echo "        Or add 'synchronize' to the workflow's pull_request types."
+    fi
   else
     echo "Done. PR is Ready."
     echo "  NOTE: no workflow in .github/workflows/ triggers on ready_for_review —"

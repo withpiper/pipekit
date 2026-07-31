@@ -130,7 +130,13 @@ else
     printf '==> $ %s\n' "$cmd" >> "$VERIFY_DIR/evidence.txt"
     local start; start=$(date +%s)
     bash -c "$cmd" 2>&1 | tee -a "$VERIFY_DIR/evidence.txt"
-    local rc=${PIPESTATUS[0]}
+    # `$?` with the `set -o pipefail` above — NOT ${PIPESTATUS[0]}. zsh has no
+    # PIPESTATUS (it spells it `pipestatus`, and 1-indexed), so under the zsh that
+    # Claude Code's Bash tool runs, ${PIPESTATUS[0]} expanded to empty: every gate
+    # command recorded `exit: 0` and `return $rc` fell through to the printf's
+    # status. A red gate was indistinguishable from a green one, and the evidence
+    # file preserved the false 0. Observed on SiteLine PIPER-425, 2026-07-29.
+    local rc=$?
     printf 'exit: %d\nduration: %ds\n\n' "$rc" "$(($(date +%s) - start))" >> "$VERIFY_DIR/evidence.txt"
     return $rc
   }
@@ -163,6 +169,22 @@ If `GATE_RC == 0`, print:
 ```
 ✓ Pre-deploy gate PASSED (<command list>).
 ```
+
+### Step 3.5 — A green assertion is not coverage until something made it red (v4.26.0+)
+
+A passing gate proves the suite ran, not that any of it can fail. Before citing **any** test as evidence that this change works — in the Linear comment, the PR body, `evidence.txt`, or a security-gate report — mutate the thing it guards and confirm the test goes red **on its named assertion**, not on a crash.
+
+Only tests you actually cite need this. It is a claim-time obligation, not a whole-suite audit.
+
+Three vacuous shapes, each observed shipping:
+
+- **The tautology.** `expect(true).toBe(true)`, or an assertion decided by an early return before the guard is reached.
+- **The fixture that cannot violate.** A cross-tenant leak test seeded only with in-scope rows; a scope test whose `clients: []`. It passes identically against the unfixed code.
+- **The crash that reads as a failure.** The test reddens on an unread `TypeError` rather than the expectation, so it will keep "passing" once the crash is fixed and the real assertion is never exercised.
+
+The check is one question: **would this test still pass against the code before the fix?** If yes, it is not evidence. Re-point it, or say plainly that the change is unverified.
+
+**Anchor — SiteLine, 2026-07-29/30.** PIPER-491 cited two assertions as security evidence that could not fail (one fixture seeded only in-scope projects; one compared two identical computations through a seam the fix had deleted) — and then made the *same* vacuous-fixture mistake again on `clientInfo` in the very pass writing that lesson up. PIPER-497 shipped four separate vacuous assertions before mutation checks caught them. Where the discipline was applied first, it paid immediately: PIPER-164's guard, authored red-first, failed on exactly its 5 divergent sites and exposed a resolver hole that would have silently exempted a CORS-granting function.
 
 Continue to step 4 only if QA is enabled.
 
@@ -369,6 +391,18 @@ After the subagent returns, read `$VERIFY_DIR/adversarial.md` and count findings
 ### Doubt theater check
 
 Per the discipline rule: "2+ cycles with substantive findings, zero actionable classifications = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future multi-cycle iteration-loop skill. Day-4 deliverable surfaces the findings; user judgment closes the loop.
+
+### Scope-drift signals across repeated `/verify` runs (v4.26.0+)
+
+The check above governs review cycles **within one run**. The runaway this section covers is the other axis: the same issue re-verified round after round, each round fixing the last round's findings. Nothing counts those rounds — `VERIFY_DIR` is one directory per issue *per day* and re-runs overwrite, so `ls -d Logs/Verify/*/$ISSUE` tells you how many **days** an issue has been in verification, not how many rounds. Treat 3+ days as its own signal and read these three by hand:
+
+- **A fix commit contains a new High.** Once is noise. **Twice means the unit is too large to review as one** — the diff is big enough that fixing one part breaks a part already cleared. This is the specific trigger, not "another round happened."
+- **Object-count drift.** Compare the spec's Migration Plan "schema objects touched" against what the diff actually touches. A spec naming 3 objects against a diff touching 23 has outgrown its contract. Compare mid-flight, not at ship.
+- **Reductions review clean while additions do not.** Once that asymmetry appears, stop patching and start cutting.
+
+When two or more fire, the move is to **cut the branch, not to run another round** — ship the converged half and move the rest to a follow-up issue. `/01-light-spec` Phase 3.75 is the spec-time gate that prevents the common case (a schema change bundled with a rewrite of the client that consumes it).
+
+**Anchor — PIPER-486/487, 2026-07-30.** Two CRITICALs, a 1,816-line migration across 23 schema objects, and a rewrite of an admin tab inside an 8,000-line page on one branch. Rounds 1–5 each found a High **inside the previous round's fix commit**; the one clean round (6, zero findings, three reviewers) was the one that reviewed a *reduction*; round 7's additions produced 22 findings. The branch was cut at round 7 and shipped at round 8. Every signal above was present by round 2 and none was named until round 7.
 
 ## Step 6 — Human-decision flag enumeration
 

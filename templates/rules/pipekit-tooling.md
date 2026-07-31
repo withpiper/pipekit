@@ -87,6 +87,15 @@ Anchor: WIT-461 worktree, 2026-05-25 — a session advised "dev-merge doesn't au
 
 **Why this lives in tooling, not discipline:** the failure is structural to how AI sessions browse the filesystem — they grep for a known string and stop. Discipline rules ask the session to verify what it knows; this rule asks the session to discover what it didn't know existed.
 
+### The Verification Method Must Be Able to See the Failure
+
+Sibling to the above: a check that structurally cannot observe the thing it claims to check reports clean and means nothing.
+
+- **Line-based `grep` cannot match a claim that wraps a line.** Anchor: PIPER-486, 2026-07-31 — two facts restated across several files survived multiple "fixed everywhere" commits because the pattern only matched the single-line instances. When a fact is restated in prose across files, scan with whitespace normalized and comment markers stripped, not with a line-anchored pattern.
+- **Measure a regression against the integration branch, never against your own worktree.** A regression measured against your own half-finished tree reads as a no-op, and a no-op does not get flagged.
+
+Before trusting a clean result, ask what a failure would have to look like for this check to miss it. If that shape is plausible, the check is not evidence.
+
 ## Package Manager
 
 Read the project's package manager from `method.config.md` or infer from lockfile:
