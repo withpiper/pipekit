@@ -50,6 +50,8 @@ Full initiative model in `method.md` (§ Initiative Surface Ownership).
 
 ## Editing Skills
 
+**Edit the source, then run `scripts/dogfood-sync.sh`.** Claude Code loads skills and rules from `.claude/`, but in this repo those are *generated mirrors* of `skills/`, `templates/rules/`, and `agents/` — gitignored, and refreshed only by that script (consuming projects get theirs from `sync-method.sh`). Editing `.claude/` directly changes nothing that ships and is silently reverted on the next refresh. A stale mirror means your own `/verify`, `/work`, etc. are running old code: measured 2026-07-31, every mirrored skill had drifted, six were missing, and `.claude/skills/verify/SKILL.md` still carried a gate bug the same release had fixed. `tests/pk-smoke.sh` fails on drift locally and skips on CI, where the mirrors don't exist.
+
 Skills live in `skills/{name}/SKILL.md` with YAML frontmatter (`name`, `description`). Portable skills must read `method.config.md` for project-specific values — never hardcode Linear IDs, team names, paths, or **model names**: subagent model + effort comes from the `method.config.md § Model Policy` roles (v4.13.0+), cited as "role per § Model Policy, default `X`" so the skill still works when the section is absent. Skills that reference `skill.json` use it for metadata only.
 
 ## Three-Layer Enforcement Model

@@ -3,7 +3,25 @@
 *.swp
 *~
 DISCORD_POST.md
-.claude/
+# .claude/ — pipekit's own Claude Code workspace. NOT ignored wholesale: it
+# holds three different kinds of thing and only two of them should be untracked.
+#
+#   tracked   settings.json  — wires the commit-format hook this repo documents
+#                              as enforcement. Untracked, a fresh clone had the
+#                              hook documented but not wired.
+#   tracked   hooks/         — one small file; tracking it means enforcement
+#                              exists on clone rather than after a setup step.
+#   ignored   settings.local.json — personal, per-machine.
+#   ignored   skills/ rules/ agents/ — GENERATED mirrors of tracked sources
+#                              (skills/, templates/rules/, agents/). Consuming
+#                              projects get these written by sync-method.sh;
+#                              pipekit refreshes its own with
+#                              scripts/dogfood-sync.sh. Never edit in place —
+#                              edit the source and re-run the script.
+.claude/settings.local.json
+.claude/skills/
+.claude/rules/
+.claude/agents/
 temp/
 archive/scratch/
 
