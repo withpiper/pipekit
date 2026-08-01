@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.26.1** — Last updated: 2026-08-01  *(**v4.26.1 — four log-sweep fixes, no new capability.** `/verify` Step 5's sensitive-content grep now scoped to added lines only — was matching whole-diff context/removed lines too, so a file merely *listing* `CREATE POLICY` etc. tripped the antagonistic-review auto-trigger. `pk_linear_tier` no longer silently folds "no `tier:` label" into the same default as "Linear unreachable" — returns empty on either, and `/verify` Step 0 visibly warns when it's guessing the tier rather than reading an explicit label. Documented a verified Supabase CLI `--agent auto` output-format gotcha in `pipekit-tooling.md` (anchor: SiteLine PIPER-533). Closed PIPER-494's "sensitive" divergence as intentional-and-documented — Step 5's classifier, `/security-gate`'s six categories, and a project's own CI check are three separate mechanisms by design, not meant to converge. Also closed the TDD Red Flag's "or concurrently" hedge, surfaced by a periodic competitive scan (obra/superpowers, Spec Kit, BMAD-METHOD, GSD) that otherwise found nothing worth adopting. Smoke 158 → 161.)*
+**v4.26.2** — Last updated: 2026-08-01  *(**v4.26.2 — /strategy-sync timing corrected for tier:heavy, doc-only.** Three docs told a heavy-tier session to run `/strategy-sync` at three contradictory points: `templates/tier-heavy.md` described a hard pre-`pk ship` gate `bin/pk` never implements; `skills/work/SKILL.md`'s heavy-tier reminder said "before `pk done`," right after the Draft PR opens and before anything's reviewed. Only the `pending-strategy-sync` marker — set by `/phase-plan --next`'s post-archive hook — reflects the live mechanism: initiative-level, post-merge. Reworded `skills/work/SKILL.md` ×2, `templates/tier-heavy.md`, `method.md`, and `GUIDE.md` to match: run it from `main` after merge, at the initiative boundary, never as a per-issue `pk ship`/`pk done` gate. Smoke 161, unchanged.)*
 
 ---
 
@@ -527,7 +527,7 @@ After branching, `cd .worktrees/<ID>-<slug>` and start a fresh Claude Code sessi
 - `revise: <feedback>` — plan needs adjustment
 - `abort` — issue isn't ready / scope was wrong
 
-Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
+Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before the initiative closes (post-merge, not a per-issue `pk ship`/`pk done` gate).
 
 **Execution** is native-on-Workflow — the sole executor as of v4.0.0:
 
