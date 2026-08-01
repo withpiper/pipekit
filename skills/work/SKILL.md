@@ -153,7 +153,7 @@ If `TIER == heavy`, surface upcoming requirements so the user can plan:
 ```
 tier:heavy — extended gates. This run will require:
   - Security review (forced at Step 6, regardless of --deep)
-  - /strategy-sync before close
+  - /strategy-sync before the initiative closes (post-merge, not before this issue's pk done)
 Plan accordingly.
 ```
 
@@ -529,7 +529,7 @@ Nothing else skips. Not "the user might want to inspect." Not "implementation de
 3. Surface `/verify`'s verdict block to the user verbatim.
 4. After `/verify` returns:
    - **Pass:** `pk ship` will already have run inside `/verify`'s rollover. Print: _"Run `/pk-exit` at the end of the session to write `Logs/Sessions/<date>_<HHMM>.md`."_
-     - **If `TIER == heavy`**, append: _"Heavy tier: `/strategy-sync` is required before this issue can close. Run it before `pk done` / `pk promote`."_
+     - **If `TIER == heavy`**, append: _"Heavy tier: `/strategy-sync` is required before this initiative closes. Run it after this issue merges — from `main`/the integration branch, not this Draft PR — typically at the initiative boundary (`/phase-plan --next`), not before every individual `pk done`."_
    - **Partial / Fail:** STOP. The verdict block already showed the per-AC table; do not invoke `pk ship`. Tell the user: _"Address the failures and re-run `/verify` when ready (or `/work --resume` if execution gaps remain)."_
 
 ### When the rollover IS skipped (one of the two mechanical conditions)

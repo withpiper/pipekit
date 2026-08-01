@@ -1,6 +1,6 @@
 # Tier: Heavy
 
-> Extended pipeline for security-sensitive, multi-phase, or cross-strategy-doc work. Adds a security review gate and requires `/strategy-sync` before the issue can close.
+> Extended pipeline for security-sensitive, multi-phase, or cross-strategy-doc work. Adds a security review gate and requires `/strategy-sync` before the initiative closes.
 
 ## When to use
 
@@ -23,7 +23,7 @@ Heavy = Standard + the additions below. Every Standard gate is also required.
 | Added gate | When | Owner |
 |------------|------|-------|
 | **Security review** | After QA passes, before `--close` | `/security-review` skill (or human security review for projects without it) |
-| **Strategy sync (mandatory)** | Before `--close` | `/strategy-sync` must run and produce no unapplied diffs |
+| **Strategy sync (mandatory)** | After merge, before the initiative closes — not a `pk ship`/`pk done` gate | `/strategy-sync` must run and produce no unapplied diffs |
 | **Pre-deploy compliance check** | Before merge to production | Project-defined (e.g., SOC2 evidence capture) |
 
 ## Routing
@@ -45,7 +45,7 @@ Heavy tier adds extra checks before `pk ship` opens the PR:
 
 1. QA report present and passing
 2. Security review report present (`/pr-security-review` is the canonical mechanism for migrations / RLS / SECURITY DEFINER / auth surface)
-3. `/strategy-sync` last-run timestamp is after this issue's last build commit
-4. No `pending-strategy-sync` marker in Pipekit's state dir (`bash scripts/pipekit-state-dir.sh`)
 
 If any check fails, `pk ship` is refused with a list of missing artifacts. Linear status only transitions to UAT once all checks pass. Post-merge: `pk done PROJ-XXX` does worktree cleanup + Linear UAT → `In <FirstEnv>`. `pk promote <env>` walks the chain — → `In <Env>` for intermediate hops, → Done for the final hop.
+
+**`/strategy-sync` is not a `pk ship` or `pk done` gate.** It runs after merge — from `main`/the integration branch, against code that's actually shipped — typically at the initiative boundary (`/phase-plan --next` archiving a completed initiative), tracked by the `pending-strategy-sync` marker that `/pipekit-help` and `pk doctor` surface. Nothing in `bin/pk` blocks shipping or closing an individual issue on it; running it per-issue right after `pk ship` diffs docs against a Draft PR nobody's reviewed yet.

@@ -527,7 +527,7 @@ After branching, `cd .worktrees/<ID>-<slug>` and start a fresh Claude Code sessi
 - `revise: <feedback>` — plan needs adjustment
 - `abort` — issue isn't ready / scope was wrong
 
-Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before close.
+Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **always confirmed with the human** before the verdict step — automatic tier escalation/de-escalation is disallowed by design. See `method.md` § Tiers and `templates/tier-{quick,standard,heavy}.md` for per-tier gate tables. Quick skips spec review, milestone-readiness, plan review, and QA; Heavy adds security review + mandatory `/strategy-sync` before the initiative closes (post-merge, not a per-issue `pk ship`/`pk done` gate).
 
 **Execution** is native-on-Workflow — the sole executor as of v4.0.0:
 

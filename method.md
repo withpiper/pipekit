@@ -506,7 +506,7 @@ Detailed standard operating procedures for each discipline:
 |------|---------|------------------|
 | **Quick** | 1–3 stories, single PR, AC-as-plan | Skips spec review, milestone-readiness, plan review, QA agent. Routes to batch runner. |
 | **Standard** (default) | Normal feature work | Full pipeline. Complexity routes execution path. |
-| **Heavy** | Security-sensitive, multi-phase, cross-strategy-doc | Adds security review + mandatory `/strategy-sync` before close. Always full `/work` planning + `/review-plan`. |
+| **Heavy** | Security-sensitive, multi-phase, cross-strategy-doc | Adds security review + mandatory `/strategy-sync` before the initiative closes (post-merge, not a per-issue `pk ship`/`pk done` gate). Always full `/work` planning + `/review-plan`. |
 
 Tier inference (label, flag, heuristic) is **always confirmed with the human** before any gate runs — automatic tier escalation/de-escalation is disallowed by design. Per-tier templates live at `templates/tier-{quick,standard,heavy}.md`. Per-project tier configuration lives in `method.config.md` § Tiers.
 
