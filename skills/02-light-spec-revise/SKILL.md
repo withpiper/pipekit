@@ -41,9 +41,12 @@ Apply **only** the fixes the agent asked for, preserving everything else. Detect
 
 1. Fetch the issue via `mcp__linear-server__linear_getIssueById` (`id: "PROJ-123"`, `includeRelations: true`). Extract `description` and `title`.
 2. Fetch comments via `mcp__linear-server__linear_getComments` (`issueId: "PROJ-123"`). `linear_getIssueById` does **not** return comments — they must be fetched separately.
+
+   The agent's review arrives as a **threaded child comment** — a reply inside the trigger comment's thread, not a new top-level comment. Fetch the full comment list (thread replies included) and filter per step 3. Never read "the newest comment" from a top-level-only view: a `comments(last: 1)`-style read returns the `pk spec-cycle` trigger itself, not the verdict.
+
 3. Filter to Spec Review Agent comments. Identify by **either**:
    - `author.name` contains `Linear` or `Agent` (case-insensitive), **or**
-   - `body` starts with `### Verdict` (regex: `^###\s+Verdict`).
+   - `body` starts with a verdict line (regex: `^(?:Verdict:|###\s+Verdict)`, case-insensitive) — bare `Verdict:` is what the `pk spec-cycle` trigger demands and what the agent returns on cycle-triggered reviews (Format C below); the `### Verdict` heading form appears on older reviews.
 
    Body-matching is the safer signal — author names vary across workspaces.
 
@@ -55,9 +58,24 @@ Apply **only** the fixes the agent asked for, preserving everything else. Detect
 
 Extract structured fields from the newest comment's `body`:
 
-The agent emits two formats in the wild. Both must be handled:
+The agent emits three formats in the wild. All must be handled:
 
-**Format A — heading-based** (common for Revise verdicts, Score ≤ 8):
+**Format C — plain-line** (current; the shape the `pk spec-cycle` trigger explicitly demands, and what the agent returns on cycle-triggered reviews):
+```
+Verdict: Revise
+Recommended Flag: Spec: Revise
+Readiness Score: 7/10
+Blocking Issues:
+- <blocker text>
+Non-Blocking Improvements: None
+Fast Path to Pass: <1-2 sentences>
+Decomposition Readiness: Yes
+Final Recommendation: <1-2 sentences>
+```
+
+The verdict is the **first line** of the body — bare, no heading, no bold. `bin/pk` parses it with `^Verdict:` (case-insensitive) and this skill must accept the same. `pk spec-cycle` only reads the Verdict line; every other field is parsed by this skill alone.
+
+**Format A — heading-based** (legacy; still possible on nudge-path re-reviews, where no trigger restates the format and the agent falls back to its configured rubric, `templates/spec_review_skill.md` § Output Format):
 ```
 ### Verdict
 
@@ -75,7 +93,7 @@ Revise
 ...
 ```
 
-**Format B — inline-bullet** (observed on Pass verdicts, Score ≥ 9, minimal content):
+**Format B — inline-bullet** (legacy; observed on Pass verdicts, Score ≥ 9, minimal content):
 ```
 * **Verdict:** Pass
 * **Recommended Flag:** Ready
@@ -84,24 +102,24 @@ Revise
 * **Final Recommendation:** Proceed to planning.
 ```
 
-Field locators must match **either** format:
+Field locators must match **any** of the three formats:
 
-| Field | Locator (alternation covers both formats) |
+| Field | Locator (alternation covers all formats) |
 |-------|-------------------------------------------|
-| Verdict | `(?:###\s+Verdict\s*\n+\|\*\s+\*\*Verdict:\*\*\s*)(Pass\|Revise)` |
-| Readiness Score | `(?:###\s+Readiness Score\s*\n+\|\*\s+\*\*Readiness Score:\*\*\s*)(\d+)/10` |
-| Decomposition Readiness | `(?:###\s+Decomposition Readiness\s*\n+\|\*\s+\*\*Decomposition Readiness:\*\*\s*)(Yes\|No)` |
-| Blocking Issues | Format A: content between `### Blocking Issues` and the next `###` heading. Format B: absent (treat as empty list). |
-| Non-Blocking Improvements | Format A: content between `### Non-Blocking Improvements` and the next `###` heading. Format B: scan for `### Non-Blocking Improvements` anywhere in body; if absent, treat as empty list. |
-| Fast Path to Pass | Format A: content between `### Fast Path to Pass` and the next `###` heading. Format B: often absent — treat as optional. |
+| Verdict | `(?:^Verdict:\s*\|###\s+Verdict\s*\n+\|\*\s+\*\*Verdict:\*\*\s*)(Pass\|Revise)` |
+| Readiness Score | `(?:^Readiness Score:\s*\|###\s+Readiness Score\s*\n+\|\*\s+\*\*Readiness Score:\*\*\s*)(\d+)/10` |
+| Decomposition Readiness | `(?:^Decomposition Readiness:\s*\|###\s+Decomposition Readiness\s*\n+\|\*\s+\*\*Decomposition Readiness:\*\*\s*)(Yes\|No)` |
+| Blocking Issues | Format C: content after the `Blocking Issues:` label line, up to the next `Field:` label line (`None` → empty list). Format A: content between `### Blocking Issues` and the next `###` heading. Format B: absent (treat as empty list). |
+| Non-Blocking Improvements | Format C: content after `Non-Blocking Improvements:` up to the next label line (`None` → empty list). Format A: content between `### Non-Blocking Improvements` and the next `###` heading. Format B: scan for `### Non-Blocking Improvements` anywhere in body; if absent, treat as empty list. |
+| Fast Path to Pass | Format C: content after `Fast Path to Pass:` up to the next label line (`N/A` → absent). Format A: content between `### Fast Path to Pass` and the next `###` heading. Format B: often absent — treat as optional. |
 
 Parse bulleted lists (`*` or `-` prefix) into per-item strings.
 
 **Robustness rules:**
 
-- Always detect format first: if `### Verdict` heading exists anywhere in the body → Format A; else if `* **Verdict:**` inline bullet exists → Format B; else → unrecognised, abort and report the raw body to the user.
+- Always detect format first: if the body's first line matches `^Verdict:\s*(Pass|Revise)` → Format C; else if `### Verdict` heading exists anywhere in the body → Format A; else if `* **Verdict:**` inline bullet exists → Format B; else → unrecognised, abort and report the raw body to the user.
 - Format B is valid only when `Verdict` is `Pass`. A Format B body with `Verdict: Revise` is malformed — report to user, ask whether to abort or treat as manual-analysis input.
-- Missing Blocking Issues in Format B is expected (Pass verdicts have none); missing Blocking Issues in Format A is a parse failure.
+- Missing Blocking Issues in Format B is expected (Pass verdicts have none); `Blocking Issues: None` in Format C is expected on Pass. A `Revise` verdict with no Blocking Issues content — any format — is a parse failure.
 - If a required field (Verdict, Readiness Score) is missing under either format → abort and report the raw body.
 
 ### Phase 3 — Verdict-gated branching
