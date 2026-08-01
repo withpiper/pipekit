@@ -305,6 +305,7 @@ if [ "$TIER" = "standard" ] && [ "$RUN_ADVERSARIAL" = "false" ]; then
     | grep -E '(supabase/migrations/|/auth/|/middleware\.|/rls\.|/policies\.)' || true)
   SENSITIVE_CONTENT=""
   if git diff "origin/$INTEGRATION...HEAD" 2>/dev/null \
+    | grep '^+' \
     | grep -qE 'SECURITY DEFINER|GRANT EXECUTE|REVOKE EXECUTE|CREATE POLICY|ALTER POLICY'; then
     SENSITIVE_CONTENT="yes"
   fi
@@ -328,9 +329,11 @@ If `RUN_ADVERSARIAL=false`, skip to Step 6.
 
 **Sensitive-path patterns** mirror `/pr-fix`'s plan (which lands Week 4). Defaults:
 - **Paths:** `supabase/migrations/`, `/auth/`, `/middleware\.`, `/rls\.`, `/policies\.`
-- **Content (diff body grep):** `SECURITY DEFINER`, `GRANT EXECUTE`, `REVOKE EXECUTE`, `CREATE POLICY`, `ALTER POLICY`
+- **Content (added lines only — `^+`, never context or removed lines):** `SECURITY DEFINER`, `GRANT EXECUTE`, `REVOKE EXECUTE`, `CREATE POLICY`, `ALTER POLICY`. A file that merely *lists* one of these terms in an unchanged context line doesn't trigger — only a line the diff actually adds does (PIPER-494).
 
 The reasoning: these are the exact surfaces where shipping without adversarial review historically caused incidents — RLS bypasses, missing `search_path` on SECURITY DEFINER functions, GRANT scope creep. Trivial-but-not-quick standard issues that don't touch these surfaces stay opt-in (no token blowup on `tier:standard` typo fixes). Project-specific path/content overrides can be added to `method.config.md` in a future `[verify.sensitive_paths]` block (deferred to v2.7.1+).
+
+**This "sensitive" definition is not, and isn't meant to be, the same one `/security-gate`'s six categories use or the same one a project's own CI enforces.** Three separate classifiers can legitimately disagree, because they do different jobs: this one decides whether to spawn an *adversarial review subagent*; `/security-gate`'s decides which *checklist* to run against a feature diff; a project's own CI check (e.g. a doc-update requirement keyed on its own path/keyword tiers) enforces something specific to that project's process. Raised as a gap by PIPER-494 and left out of scope there — it isn't one; each classifier is scoped to what it gates, and a project is free to define a narrower or broader one in its own CI without pipekit needing to match it.
 
 ### Step 5a — Spawn the adversarial subagent
 
