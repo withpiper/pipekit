@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.26.1** — Last updated: 2026-08-01  *(**v4.26.1 — four log-sweep fixes, no new capability.** `/verify` Step 5's sensitive-content grep now scoped to added lines only — was matching whole-diff context/removed lines too, so a file merely *listing* `CREATE POLICY` etc. tripped the antagonistic-review auto-trigger. `pk_linear_tier` no longer silently folds "no `tier:` label" into the same default as "Linear unreachable" — returns empty on either, and `/verify` Step 0 visibly warns when it's guessing the tier rather than reading an explicit label. Documented a verified Supabase CLI `--agent auto` output-format gotcha in `pipekit-tooling.md` (anchor: SiteLine PIPER-533). Closed PIPER-494's "sensitive" divergence as intentional-and-documented — Step 5's classifier, `/security-gate`'s six categories, and a project's own CI check are three separate mechanisms by design, not meant to converge. Also closed the TDD Red Flag's "or concurrently" hedge, surfaced by a periodic competitive scan (obra/superpowers, Spec Kit, BMAD-METHOD, GSD) that otherwise found nothing worth adopting. Smoke 158 → 161.)*
+**v4.26.2** — Last updated: 2026-08-01  *(**v4.26.2 — /strategy-sync timing corrected for tier:heavy, doc-only.** Three docs told a heavy-tier session to run `/strategy-sync` at three contradictory points: `templates/tier-heavy.md` described a hard pre-`pk ship` gate `bin/pk` never implements; `skills/work/SKILL.md`'s heavy-tier reminder said "before `pk done`," right after the Draft PR opens and before anything's reviewed. Only the `pending-strategy-sync` marker — set by `/phase-plan --next`'s post-archive hook — reflects the live mechanism: initiative-level, post-merge. Reworded `skills/work/SKILL.md` ×2, `templates/tier-heavy.md`, `method.md`, and `GUIDE.md` to match: run it from `main` after merge, at the initiative boundary, never as a per-issue `pk ship`/`pk done` gate. Smoke 161, unchanged.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.26.1                (or latest tag)
+1. ./scripts/sync-method.sh v4.26.2                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.26.1"
+PK_VERSION="4.26.2"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
