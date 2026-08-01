@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.26.3** — Last updated: 2026-08-01  *(**v4.26.3 — closed the one spot v4.26.2's cleanup missed.** SiteLine's `claude-review` on the v4.26.2 sync PR caught it: `templates/tier-heavy.md`'s "Required artifacts" section still listed the `/strategy-sync` diff log unqualified, alongside genuinely pre-ship items (QA report, security review report) — contradicting the sentence v4.26.2 added 11 lines below in the same file. Qualified the bullet: produced at the initiative boundary, not required to close the individual issue. Doc-only. Smoke 161, unchanged.)*
+**v4.26.4** — Last updated: 2026-08-01  *(**v4.26.4 — `/02-light-spec-revise`'s documented agent-reply format caught up with reality.** The skill documented heading/bullet verdict formats while `pk spec-cycle`'s trigger demands — and the agent returns — a bare first-line `Verdict: Pass|Revise` with plain `Field: value` lines; Phase 1 even identified agent comments by a regex matching nothing the agent now sends. Added the plain-line format as primary, demoted headings/bullets to legacy, fixed the identification regex, and documented that the review arrives as a threaded child comment — a `comments(last:1)` read returns the trigger, not the verdict. `bin/pk` was always immune; doc-only. Smoke 161, unchanged.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.26.3                (or latest tag)
+1. ./scripts/sync-method.sh v4.26.4                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
