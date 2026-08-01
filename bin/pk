@@ -894,9 +894,10 @@ pk_linear_comment() {
 }
 
 # Return the issue's tier (quick|standard|heavy) by scanning Linear labels for
-# the first `tier:*` match. Defaults to "standard" when no label is set or the
-# Linear lookup fails — keeps the v2.7 verify-complete.md gate operative even
-# when Linear is unreachable. Mirrors the label-scan logic in skills/work/SKILL.md.
+# the first `tier:*` match. Echoes empty — never a default — when no label is
+# set or the Linear lookup fails; the caller (skills/verify/SKILL.md Step 0)
+# decides the fallback and, unlike this function, can tell the user it's
+# guessing. Mirrors the label-scan logic in skills/work/SKILL.md.
 pk_linear_tier() {
   local id="$1"
   local q='query($id: String!) { issue(id: $id) { labels { nodes { name } } } }'
@@ -904,7 +905,7 @@ pk_linear_tier() {
   tier=$(pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" 2>/dev/null \
     | jq -r '.data.issue.labels.nodes[]?.name // empty' 2>/dev/null \
     | grep -oE '^tier:(quick|standard|heavy)$' | head -1 | sed 's/^tier://')
-  echo "${tier:-standard}"
+  echo "$tier"
 }
 
 # Echo the path of a verify-complete.md — under ANY Logs/Verify/<date>/<issue>/ —

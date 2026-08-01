@@ -44,8 +44,14 @@ INTEGRATION=$(pk config "Integration branch" "dev")
 COMMITS_AHEAD=$(git rev-list --count "origin/$INTEGRATION..HEAD" 2>/dev/null || echo 0)
 [ "$COMMITS_AHEAD" = "0" ] && { echo "ERROR: no commits ahead of $INTEGRATION — nothing to verify." >&2; exit 1; }
 
-# Tier resolution — v2.7. Falls back to "standard" when Linear is unreachable.
-TIER=$(pk_linear_tier "$ISSUE" 2>/dev/null || echo "standard")
+# Tier resolution — v2.7. pk_linear_tier returns empty (never a silent default)
+# when there's no tier: label or Linear is unreachable — visibly warn here so
+# a guessed tier can't pass as an explicit one.
+TIER=$(pk_linear_tier "$ISSUE" 2>/dev/null)
+if [ -z "$TIER" ]; then
+  TIER="standard"
+  echo "⚠ No tier: label resolved for $ISSUE (missing label, or Linear unreachable) — defaulting to tier:standard. /verify is guessing; confirm this matches the change's actual risk."
+fi
 
 # Stable per-run stamp; one directory per issue per day. Re-runs overwrite.
 STAMP=$(date -u +%Y%m%dT%H%MZ)
@@ -779,7 +785,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | QA subagent type unavailable | Warn and skip QA rather than blocking the gate. |
 | Spec has no AC | QA subagent should report "AC missing" as Fail; user gets clear next-action. |
 | `$VERIFY_DIR` unwritable (perms, disk full) | Print error, fall through to stdout-only mode for this run (tier downgraded to virtual). Day 3 gate will block ship in this case since `verify-complete.md` cannot be written. |
-| Linear unreachable for tier lookup | `pk_linear_tier` returns "standard" — evidence layer still written. |
+| No `tier:` label, or Linear unreachable | Step 0 defaults to `tier:standard` and prints a visible warning that it's guessing — evidence layer still written. |
 
 ## When NOT to use
 
