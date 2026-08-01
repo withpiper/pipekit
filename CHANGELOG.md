@@ -49,6 +49,10 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.26.3 — 2026-08-01
+
+> **Closed the one spot v4.26.2's cleanup pass missed.** SiteLine's `claude-review` on the v4.26.2 sync PR caught it: `templates/tier-heavy.md`'s "Required artifacts" section still listed the `/strategy-sync` diff log unqualified, sitting alongside genuinely pre-ship items (QA report, security review report) — a reader skimming just that section would still walk away thinking strategy-sync gates per-issue close, directly contradicting the sentence v4.26.2 added 11 lines below in the same file. Qualified the bullet: produced at the initiative boundary, not required to close the individual issue. Doc-only. Smoke 161, unchanged.
+
 ## v4.26.2 — 2026-08-01
 
 > **`/strategy-sync` timing was told three different, contradictory ways for tier:heavy — fixed to match what's actually mechanized.** `templates/tier-heavy.md` described a hard gate refusing `pk ship` until strategy-sync's "last-run timestamp is after this issue's last build commit" — `bin/pk` has no such check; it was never built. `skills/work/SKILL.md`'s heavy-tier reminder, printed right after `pk ship` opens the Draft PR, said it was "required before this issue can close... before `pk done`" — diffing docs against code nobody's reviewed yet. Only `method.md`/`GUIDE.md`'s Stage 5 section and the `pending-strategy-sync` marker (set by a **post-archive hook** — `/phase-plan --next` archiving a *completed initiative*, per `skills/pipekit-help/SKILL.md:29`) reflect the live mechanism: initiative-level, post-merge, convention-tracked, never a per-issue `pk ship`/`pk done` block. Reworded four docs (`skills/work/SKILL.md` ×2, `templates/tier-heavy.md`, `method.md`, `GUIDE.md`) to say what's true: run `/strategy-sync` from `main` after the issue merges, typically at the initiative boundary — not per-issue, not pre-merge. Surfaced by a user question during the v4.26.1 promote. Doc-only; no `bin/pk` behavior change. Smoke 161 (unchanged).
