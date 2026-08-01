@@ -37,7 +37,7 @@ Heavy tier always requires a full plan and explicit plan review, regardless of c
 - Plan-review report
 - QA verification report
 - Security review report (artifact path defined per-project in `method.config.md`)
-- `/strategy-sync` diff log showing docs match shipped reality
+- `/strategy-sync` diff log showing docs match shipped reality (produced at the initiative boundary, not required to close this individual issue — see Gates table)
 
 ## Close path
 
