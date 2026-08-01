@@ -870,6 +870,29 @@ selfcall=$(grep -nE '\$\(pk [a-z]' "$PK" || true)
   && ok "structure: bin/pk never shells out to \`pk\` (PATH-dependent)" \
   || fail "structure: bin/pk never shells out to \`pk\` (PATH-dependent)" "$selfcall"
 
+# ── Unit tests: pk_linear_tier no-silent-default (v4.26.1) ───────────────────
+# pk_linear_tier must return empty on a miss (no tier: label, or the query
+# failing) — never "standard". A silent default is indistinguishable from an
+# issue that was actually tier:standard; the caller (skills/verify/SKILL.md
+# Step 0) owns the fallback and is the one that can warn it's guessing.
+
+echo "== pk_linear_tier no-silent-default (sourced) =="
+
+TIER_STUB='pk_linear_gql() { echo "{\"data\":{\"issue\":{\"labels\":{\"nodes\":${TIER_LABELS}}}}}"; }'
+unit_tier() { ( cd "$REPO_ROOT" && source "$PK" && eval "$TIER_STUB" && pk_linear_tier "ANY-1" ); }
+
+export TIER_LABELS='[{"name":"Feature"},{"name":"tier:heavy"}]'
+v=$(unit_tier)
+[ "$v" = "heavy" ] && ok "pk_linear_tier: explicit tier:heavy resolved" || fail "pk_linear_tier: explicit tier:heavy resolved" "got '$v'"
+
+export TIER_LABELS='[{"name":"Feature"},{"name":"Bug"}]'
+v=$(unit_tier)
+[ -z "$v" ] && ok "pk_linear_tier: no tier label -> empty, not a silent standard default" || fail "pk_linear_tier: no tier label -> empty, not a silent standard default" "got '$v'"
+
+export TIER_LABELS='[]'
+v=$(unit_tier)
+[ -z "$v" ] && ok "pk_linear_tier: empty label set -> empty" || fail "pk_linear_tier: empty label set -> empty" "got '$v'"
+
 # ── Unit tests: verify-complete gate matcher (sourced) ───────────────────────
 # pk_verify_sentinel_for_head finds a verify-complete.md (any date dir) whose
 # `sha:` matches HEAD. This is the core of the v4 ship gate that replaced the
