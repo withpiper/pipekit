@@ -10,7 +10,7 @@ If you catch yourself thinking one of these, follow the full workflow *more* str
 |------|------------------------|
 | "This is simple, I don't need a plan" | You definitely need a plan. Simple-feeling changes are where silent regressions live. |
 | "I know this API" | Training data lies on fast-moving libs. Read installed source first (see `tooling.md`). |
-| "I'll write tests after" | Write them first, or at minimum concurrently. After-the-fact tests test the bug, not the spec. |
+| "I'll write tests after" | Write them first. No exception for "concurrently" — after-the-fact tests test the bug, not the spec. |
 | "The user said to just do it" | They still need to see what changed before you commit. One-sentence confirmation is not a blocker. |
 | "This error is probably fine to catch and ignore" | You're about to create a silent failure. Fail loudly or fix the cause. |
 | "The existing code does X so I'll mirror it" | The existing code may be wrong. Verify X is correct before replicating. |
