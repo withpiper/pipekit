@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — the lanes board model.** § Initiative Surface now defines both board shapes: **lanes** (default — initiative = completable release phase, project = completable lane of 3–8 issues, uncut work = no project + an `Area:` label) and the phase-spans-projects shape the opt-in Phase Label Layer serves. New `### Area Labels` keys (`Area label group`, `Area labels`, `Lane size`). `Roadmap source` moved OUT of the Phase Label Layer's commented block into its own subsection — `/roadmap-review` Phase 2.5 reads it and is not gated on that section, so the documented retirement path was previously impossible to execute. Retirement path for the label layer documented.)*
+**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -107,6 +107,9 @@ The naming contract above is identical for both shapes; they differ in what a *p
 Pick one. Running both means two ordering mirrors encoding the same order and drifting independently —
 which is the failure the lanes model exists to remove.
 
+> **Canonical explanation: `sop/Linear_SOP.md § Board shapes`** (that file is synced to every project;
+> this one is not, so skills cite the SOP). The summary here is for filling in the config below.
+
 ### Area Labels (recommended on the lanes model)
 
 Uncut backlog work carries **no project**, so it needs one classification axis to stay navigable. Use a
@@ -176,7 +179,8 @@ key lives outside the commented block: a project can have a checkboxed roadmap w
 the layer, and retiring the layer must not silently repoint the reconciliation. Blank → skills fall
 back to the root `ROADMAP.md`.
 
-**Retirement path** (migrating an opted-in board to the lanes model — order matters):
+**Retirement path** (migrating an opted-in board to the lanes model — order matters; canonical copy in
+`sop/Linear_SOP.md § Board shapes`):
 
 1. **Comment out the Phase Label Layer table first.** `/roadmap-review` Phase 3.5 gates on the
    filled-in values, so while they are live it will re-scaffold whatever you delete next.

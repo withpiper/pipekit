@@ -43,7 +43,7 @@ file to drift.
 | Requirement | **Issue** | (Linear identifier) | priority / state |
 | Work Package (optional) | **Milestone** | (free) | orthogonal grouping inside a project |
 
-**Author the lanes shape by default.** Phases map **1:1 to initiatives**, and each project is a *completable* lane of ~3–8 issues — not a bucket to file things into. Requirements you can't yet cut into a coherent lane get **no project plus an `Area:` label**; a human cuts them later via `/phase-plan --cut`. The alternative shape (a phase genuinely spanning several projects, ordered by the opt-in Phase Label Layer) is Phase 3.5 below — pick one, never both. Both shapes are documented in `method.config.md § Initiative Surface → Board shapes`.
+**Author the lanes shape by default.** Phases map **1:1 to initiatives**, and each project is a *completable* lane of ~3–8 issues — not a bucket to file things into. Requirements you can't yet cut into a coherent lane get **no project plus an `Area:` label**; a human cuts them later via `/phase-plan --cut`. The alternative shape (a phase genuinely spanning several projects, ordered by the opt-in Phase Label Layer) is Phase 3.5 below — pick one, never both. Both shapes are documented in `sop/Linear_SOP.md § Board shapes`; which one *this* project uses is recorded in its `method.config.md` (a filled-in `§ Area Labels` means lanes).
 
 > **Why completability is the rule.** The `i{N}.`→`P{N}.` walk cannot see inside a project. A project that keeps accepting work becomes a pool, and everything in it goes invisible to `pk next`/`pk status`. Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues sat in three pool projects while `pk status` pointed at a lane idle for two weeks. Authoring lanes at roadmap time is what prevents it.
 

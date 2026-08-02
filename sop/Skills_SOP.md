@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.22.0** — Last updated: 2026-07-28  *(**v4.22.0 — context rightsizing, phase 2 (mechanical batch).** `skills/*/skill.md` → `SKILL.md` (canonical case; sync gains an explicit case-migration step), CLAUDE.md Key Skills tables compressed to current-behavior one-liners, Completion Claims loop demand-loaded to `sop/Completion_Claims_SOP.md`, and 10 oversized skill descriptions compressed. No `bin/pk` behavior change — smoke 133.)*
+**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — new authoring rule: cite `method.config.md` for values, never for prose.** That file is project-owned and never synced, so a section added to the template reaches new projects and no existing consumer — a skill citing one is a live pointer into a file the reader's repo does not contain, and it fails silently. Anchored on v4.28.0 shipping exactly that defect. Guarded by a new smoke check. Carries v4.22.0 — context rightsizing.)*
 
 ---
 
@@ -208,6 +208,23 @@ Recent Claude models follow instructions more literally than older generations. 
 When a skill's behavior depends on tool calls or subagents, give explicit guidance on when to use them (see also: subagent guidance in individual skills).
 
 ---
+
+### Cite `method.config.md` for values, never for prose
+
+<important>
+A skill may point at `method.config.md` for a **project-specific value** it must read. It must never point there for **explanation** a reader is expected to go and study.
+</important>
+
+`method.config.md` is **project-owned and never synced** — `sync-method.sh` deliberately does not touch it. So a conceptual section added to `method.config.template.md` reaches *new* projects (which copy the template) and **no existing consumer, ever**. A skill citing that section is a live pointer into a file the reader's repo does not contain, and the failure is silent: the session goes looking, finds nothing, and proceeds on whatever it already believed.
+
+The tell is what the pointer promises. "Read `method.config.md § X` for your team ID / label names / lane size" is a value lookup — correct. "Both shapes are documented in `method.config.md § X`" is documentation — wrong, because the consumer's file has no such section.
+
+**Explanatory content belongs in a synced file** — `sop/*.md`, `method.md`, or the skill itself. Cite the config only for the value that says *which* case this project is in:
+
+> ✅ Both shapes are documented in `sop/Linear_SOP.md § Board shapes`; which one this project uses is recorded in its `method.config.md` (a filled-in `§ Area Labels` means lanes).
+> ❌ Both shapes are documented in `method.config.md § Initiative Surface → Board shapes`.
+
+*(Anchor: v4.28.0 shipped exactly this defect — `/roadmap-create` pointed at a `§ Board shapes` subsection that existed only in the template, so it was dangling on both consumers the day it shipped. Caught in review of the sync PR, fixed in v4.28.1, and now guarded: `tests/pk-smoke.sh` fails when a skill cites a `method.config.md` section that carries no `| **Key** |` row.)*
 
 ### Pinning models on subagents — the Model Policy roles
 
