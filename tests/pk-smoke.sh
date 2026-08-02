@@ -1048,6 +1048,21 @@ dc() { ( cd "$FIXTURE" && source "$PK" && pk_verify_drift_class "$@" ); }
 [ "$(printf 'db/migrate/001.rb\n'                     | dc 'db/migrate')"    = "migrations" ] && ok "drift class: configured non-Supabase migration dir" || fail "drift class: configured non-Supabase migration dir" "got $(printf 'db/migrate/001.rb\n' | dc 'db/migrate')"
 [ "$(printf 'supabase/migrations/a.sql\n'             | dc 'supabase/migrations')" = "migrations" ] && ok "drift class: migration dir without trailing slash" || fail "drift class: migration dir without trailing slash" "got $(printf 'supabase/migrations/a.sql\n' | dc 'supabase/migrations')"
 
+echo "== verify drift: block/allow contract (pure, v4.27.0) =="
+
+db() { ( cd "$FIXTURE" && source "$PK" && pk_verify_drift_blocks "$@" ); }
+
+[ "$(db source)" = "block" ]      && ok "drift blocks: source → block"          || fail "drift blocks: source → block" "got $(db source)"
+[ "$(db migrations)" = "block" ]  && ok "drift blocks: migrations → block"      || fail "drift blocks: migrations → block" "got $(db migrations)"
+# unreachable must BLOCK. pk ship's gate needs an exact sha match, so a rebased
+# branch cannot ship at all — allowing the Ready flip would make this gate looser
+# than the one it reinforces, and a pre-review rebase would defeat it entirely.
+[ "$(db unreachable)" = "block" ] && ok "drift blocks: unreachable → block (fails closed)" || fail "drift blocks: unreachable → block (fails closed)" "got $(db unreachable)"
+[ "$(db docs)" = "allow" ]        && ok "drift blocks: docs → allow"            || fail "drift blocks: docs → allow" "got $(db docs)"
+[ "$(db fresh)" = "allow" ]       && ok "drift blocks: fresh → allow"           || fail "drift blocks: fresh → allow" "got $(db fresh)"
+[ "$(db none)" = "allow" ]        && ok "drift blocks: none → allow (ship gates it)" || fail "drift blocks: none → allow" "got $(db none)"
+[ "$(db)" = "allow" ]             && ok "drift blocks: empty arg → allow"       || fail "drift blocks: empty arg → allow" "got $(db)"
+
 echo "== verify drift: evidence lookup + fallback (v4.27.0) =="
 
 sl() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_latest "$@" ); }

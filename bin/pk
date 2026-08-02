@@ -1007,6 +1007,16 @@ pk_verify_drift_class() {
   echo "docs"
 }
 
+# Pure — which drift classes refuse a Ready flip. Echoes block | allow.
+# Extracted so the contract is unit-testable instead of buried in cmd_ready's
+# case arm; `unreachable` belongs here for the reason argued at that call site.
+pk_verify_drift_blocks() {
+  case "${1:-}" in
+    source|migrations|unreachable) echo "block" ;;
+    *)                             echo "allow" ;;
+  esac
+}
+
 # Compare the latest verify sentinel against <head> and report. Echoes one of:
 #   none | fresh | unreachable | docs | source | migrations
 # Human-readable detail goes to stderr so the echoed token stays parseable.
@@ -2263,34 +2273,57 @@ cmd_ready() {
     _drift=$(pk_verify_drift_report "$id" "$_rhead")
   fi
 
-  case "$_drift" in
-    source|migrations)
-      if [ "$_drift" = "migrations" ]; then
-        echo "" >&2
+  # `unreachable` blocks alongside real drift. It is the UNKNOWN case, not a clean
+  # one, and the decisive argument is consistency: pk ship's own gate
+  # (pk_verify_sentinel_for_head) demands an EXACT sha match, so a rebased branch
+  # cannot ship at all. Waving it through here would make this gate strictly more
+  # permissive than the gate it exists to reinforce, and a rebase immediately
+  # before requesting review would defeat the whole feature. Nor is it crying wolf
+  # on ordinary rebases: a rebase pulls in new base commits, so the tree that was
+  # verified genuinely is not the tree at HEAD. (SiteLine review of PR #790.)
+  if [ "$(pk_verify_drift_blocks "$_drift")" = "block" ]; then
+    echo "" >&2
+    case "$_drift" in
+      migrations)
         echo "✗ A MIGRATION changed after the verify that exercised it." >&2
         echo "  That is the frozen-file invariant (pipekit-migrations.md): the freeze" >&2
         echo "  begins at first application to ANY database, local included. Confirm the" >&2
         echo "  migration was not edited in place — if it was, the fix is a NEW migration." >&2
-      else
-        echo "" >&2
+        echo "  The PASS artifact above describes code that is no longer HEAD, and a" >&2
+        echo "  reviewer reading it cannot tell. Re-run /verify on this commit." >&2 ;;
+      source)
         echo "✗ Source changed after the verify that vouches for this branch." >&2
-      fi
-      echo "  The PASS artifact above describes code that is no longer HEAD, and a" >&2
-      echo "  reviewer reading it cannot tell. Re-run /verify on this commit." >&2
-      if $force; then
-        echo "  → --force: flipping anyway, logging a Linear audit comment." >&2
-        pk_linear_comment "$id" \
-          "pk ready --force with stale verify evidence: sentinel does not cover HEAD ${_rhead:0:8} (${_drift} drift, $(date -u +%FT%TZ))" || true
-      else
-        echo "  → Re-run /verify, or pass --force to flip anyway (logs a Linear comment)." >&2
-        return 1
-      fi
-      ;;
-    docs)
-      echo "  ℹ Only evidence/prose changed since the verify — treating as benign." >&2
-      ;;
-    unreachable|none) : ;;   # already reported to stderr, or nothing to compare
-  esac
+        echo "  The PASS artifact above describes code that is no longer HEAD, and a" >&2
+        echo "  reviewer reading it cannot tell. Re-run /verify on this commit." >&2 ;;
+      unreachable)
+        echo "✗ The verify evidence points at a commit that no longer exists." >&2
+        echo "  Drift cannot be computed, so whether the PASS still covers HEAD is" >&2
+        echo "  UNKNOWN — which is not the same as clean. pk ship would refuse this" >&2
+        echo "  branch outright (its gate needs an exact sha match), so flipping to" >&2
+        echo "  Ready on it would be the looser gate. Re-run /verify on this commit." >&2 ;;
+    esac
+    if $force; then
+      echo "  → --force: flipping anyway, logging a Linear audit comment." >&2
+      pk_linear_comment "$id" \
+        "pk ready --force with stale verify evidence: sentinel does not cover HEAD ${_rhead:0:8} (${_drift} drift, $(date -u +%FT%TZ))" || true
+    else
+      echo "  → Re-run /verify, or pass --force to flip anyway (logs a Linear comment)." >&2
+      return 1
+    fi
+  else
+    case "$_drift" in
+      docs)
+        echo "  ℹ Only evidence/prose changed since the verify — treating as benign." >&2
+        ;;
+      none)
+        # Not blocking: an issue may legitimately never have run /verify (ad-hoc PR),
+        # and pk ship already gates on a missing sentinel. But silence here is how a
+        # forced ship becomes invisible downstream, so say it out loud.
+        echo "  ℹ No /verify evidence found for ${id} — nothing to check drift against." >&2
+        echo "    (pk ship gates on this; seeing it here means ship was forced or skipped.)" >&2
+        ;;
+    esac
+  fi
   # ------------------------------------------------------------------------
 
   if [ "$is_draft" != "true" ]; then
