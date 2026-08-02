@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.23.0** — Last updated: 2026-07-28  *(**v4.23.0 — context rightsizing phase 2, design batch: specs-as-code-references.** Specs cite `path` + symbol — pastes only as contracts; Spec Review Agent v5.4 blocks ambiguous references; `/spec-preflight` resolves symbols empirically. Tier-aware rule delivery dropped: probe showed subagents inherit the full rules block; trim redirect deferred to `resources/item-c-premise-check.md`. No `bin/pk` behavior change — smoke 133.)*
+**v4.27.0** — Last updated: 2026-08-02  *(**v4.27.0 — the ship→merge window is gated.** `pk ready` refuses when source or a migration changed after the `/verify` that vouches for the branch — `pk ship`'s sentinel gate is point-in-time, and commits landing during PR review went unchecked (anchor: SiteLine PIPER-490, a migration's authorization predicate rewritten 33 min after ship, merged 7h later). `pk done` reports the same drift to Linear post-merge. `pipekit-tooling.md` gains the converse of "can this check see the failure?" — **can it cheat?** Smoke 161 → 179.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -78,7 +78,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/verify` | Pre-deploy gate. |
 | `/security-gate [<ID>]` | Feature-scoped security gate, between `/verify` and `pk ship`. Hard gate on projects with a categories file: `pk ship` refuses without a sha-matched PASS sentinel (`--force-secgate` / `PK_SECGATE_BYPASS=1` to waive; plain `--force` does NOT). |
 | `pk ship [--review] [--ready]` | Push, open Draft PR, Linear → UAT. |
-| `pk ready [<ID>]` | Flip Draft PR to Ready; outside reviewers run. No Linear state change. |
+| `pk ready [<ID>] [--force]` | Flip Draft PR to Ready; outside reviewers run. No Linear state change. Refuses if source or a migration changed after the `/verify` that vouches for the branch (`pk ship`'s gate is point-in-time; post-ship commits went unchecked). `--force` flips anyway and logs a Linear comment. |
 | `pk done <ID> [--merge]` | Verify the merge happened, clean up worktree+branch, post commits to Linear, transition UAT → `In <FirstEnv>` (→ Done on 1-tier). |
 | `/prod-ready [<ID>]` | Production-readiness gate, run once before the final `pk promote`. Hard gate on projects with a checks file: the final promote refuses without its sentinel (`--force` / `PK_PRODREADY_BYPASS=1` to waive). |
 | `pk promote <env>` | Opens the promote PR along `Ship environments`; refuses if a bundled issue is still in UAT (`--confirmed` after env-UAT signoff). After it merges, `pk promote <env> --finish` transitions issues → `In <Env>` / Done. |
