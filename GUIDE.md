@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.27.2** — Last updated: 2026-08-02  *(**v4.27.2 — `/verify` Step 7 now writes `reality-check.md`'s header with a heredoc, not prose.** Its `sha:` line is what the v4.27.1 drift gate falls back to when `verify-complete.md` is absent, and prose rendering dropped it ~14% of the time and rising (SiteLine, 2026-08-02: heredoc-written `verify-complete.md` 191/192 vs prose-rendered `reality-check.md` 167/195). Also assigns `$STATUS`, which Step 8's sentinel-write consumed but nothing assigned. Four smoke guards keep Step 7 from drifting back. No `bin/pk` change. Smoke 194 → 198.)*
+**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — the lanes board model.** A Linear project is a *completable lane* of 3–8 issues, an initiative is a *completable release phase*, and "no project" + an `Area:` label is the correct home for uncut work — because the `i{N}.`→`P{N}.` walk cannot see inside a project, so a standing pool makes its contents invisible to `pk next`/`pk status` (SiteLine, 2026-08-02: 98 of 162 open issues hidden in three pools). `/linear-hygiene` stops homing orphans into projects and gains four detect-only board-shape checks; `/phase-plan --cut` is the new lane-cutting operation. The naming contract is unchanged and `bin/pk` needed no code change. Smoke 198, unchanged.)*
 
 ---
 
@@ -347,12 +347,15 @@ This is where strategy becomes work items. The skill reads your strategy docs an
 **What it produces:**
 
 1. **Linear Initiatives** named `i{N}. label` — one per roadmap initiative, ordered by the numeric prefix (`i1.`, `i2.`, …). This is the initiative surface `pk next`/`pk status` read live.
-2. **Linear Projects** named `I{N}.P{N}. label` — ordered sub-phases (execution batches) within a phase; the issues live here. The project carries its initiative number (e.g. `I1.P2.`) so the phase reads at the project level — the unit you navigate in Linear. (`bin/pk` accepts legacy bare `P{N}.` too; the `P{N}` number sets order either way.)
+2. **Linear Projects** named `I{N}.P{N}. label` — ordered **lanes**: completable execution batches of ~3–8 issues within a phase; the issues live here. The project carries its initiative number (e.g. `I1.P2.`) so the phase reads at the project level — the unit you navigate in Linear. (`bin/pk` accepts legacy bare `P{N}.` too; the `P{N}` number sets order either way.)
 3. **Linear Issues** — one issue per requirement, with:
    - Correct status (On Deck for Stage 1, Future Phases for Stage 2+, Ideas for parking lot)
    - Dependency relations (`blocked_by`)
-   - Type and domain labels
+   - Type and domain labels, plus an `Area:` label
+   - A lane — **or no project at all**, if the requirement isn't part of a coherent batch yet
    - Milestone (Work Package) assignment
+
+> **Both levels are completable, and that's the point (v4.28.0).** The `i{N}.`→`P{N}.` walk reads *into* a project but never *inside* one — it names the lowest live project and stops. So a project that keeps accepting work becomes a pool whose contents are invisible to `pk next`/`pk status`. Keep initiatives and lanes finishable; park uncut work with **no project plus an `Area:` label** and cut it into a lane later via `/phase-plan --cut`. Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues sat in three pool projects while `pk status` pointed at a lane idle for two weeks. Full model in `method.config.md § Initiative Surface`.
 
 A narrative `ROADMAP.md` may still be written as an optional legacy/handoff artifact, but it is no longer a required output or a state file the pipeline reads.
 
@@ -1125,6 +1128,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Roadmap Create | `/roadmap-create` | Strategy → Linear `i{N}.`/`P{N}.` hierarchy (authored directly in Linear) |
 | Roadmap Verify | `/roadmap-create --verify` | Check Linear matches roadmap |
 | Initiative Plan | `/phase-plan` | Select first/next initiative |
+| Cut a Lane | `/phase-plan --cut` | Batch 3–8 backlog issues into a new `I{N}.P{M}.` lane |
 | Initiative Status | `/phase-plan --status` | Current initiative progress |
 | Initiative Next | `/phase-plan --next` | Archive + plan next initiative |
 | Initiative Rebalance | `/phase-plan --rebalance` | Adjust current initiative |

@@ -34,8 +34,8 @@ Take a rough idea from the user, explore the codebase to understand feasibility,
    - `title`: concise feature title
    - `description`: full brainstorm analysis (feasibility, complexity, approach, requirements)
    - `priority`: 0 (None) — triage sets real priority later
-   - Ask user which project to assign (or leave unassigned)
-   - `state`: Triage
+   - **`project`: none** — a newly filed idea is uncut work, and no project is its correct home. Apply an `Area:` label instead (per `method.config.md § Initiative Surface → Area Labels`); `/linear-hygiene` fills it in later if you can't infer one. File into a lane **only** when the idea is explicitly part of that lane's completable scope — filing for the sake of filing is what grows pools. On a board with no `§ Area Labels` config, keep the old behavior: ask which project to assign, or leave unassigned.
+   - `state`: Triage — but note a Triage-state issue is **invisible in project views and excluded from project scope counts**, so if you do file it into a lane it won't render there until it's triaged out.
 6. **Output**: issue identifier and Linear URL
 
 ### Phase 2 — HOLD (Disposition)

@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.21.0** — Last updated: 2026-07-28  *(**v4.21.0 — context rightsizing, phase 1.** New optional `Skip rules` key (ships commented out below the § V2 keys table): canonical `.claude/rules/pipekit-*.md` files that don't apply to this project (cmux without cmux, migrations without a migration system) can be skip-listed — `sync-method.sh` stops syncing them and removes previously-synced copies. Absent key = all five sync, zero behavior change. This stamp also returns to its spec'd one-line form — release history lives in Pipekit's `CHANGELOG.md`.)*
+**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — the lanes board model.** § Initiative Surface now defines both board shapes: **lanes** (default — initiative = completable release phase, project = completable lane of 3–8 issues, uncut work = no project + an `Area:` label) and the phase-spans-projects shape the opt-in Phase Label Layer serves. New `### Area Labels` keys (`Area label group`, `Area labels`, `Lane size`). `Roadmap source` moved OUT of the Phase Label Layer's commented block into its own subsection — `/roadmap-review` Phase 2.5 reads it and is not gated on that section, so the documented retirement path was previously impossible to execute. Retirement path for the label layer documented.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -62,8 +62,10 @@ derive the current initiative live from the Linear hierarchy; `/roadmap-create` 
 
 | Level | Linear construct | Naming | Meaning |
 |-------|-----------------|--------|---------|
-| Initiative | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | An ordered roadmap initiative. `pk next` walks these by `{N}`. |
-| Sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Budget Editor`) | An ordered batch within an initiative. Issues live here. |
+| Initiative | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | An ordered, **completable** release phase. `pk next` walks these by `{N}`. |
+| Lane / sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Budget Editor`) | A **completable batch of ~3–8 issues** cut from the backlog. Issues live here. |
+| Theme | **Initiative**, unprefixed | `label` (no `i{N}.`) | A long-running strand allowed to never complete. Ignored by `pk next`/`pk status`. |
+| Backlog | **Issue**, no project | (Linear identifier) | The default for **uncut** work, classified by an `Area:` label (below). |
 | Work item | **Issue** | (Linear identifier) | The unit `/work` builds. |
 
 - **Project names carry their initiative number** (v4.5.0+): a project under `i1.` is `I1.P2. label`, not bare `P2.` — initiatives sit above projects in Linear and get buried, so the initiative reads at the project level (the unit you navigate). `bin/pk` accepts **both** `I{N}.P{N}.` and legacy bare `P{N}.`; the `P{N}` number sets sub-phase order either way. Author the `I{N}.P{N}.` form.
@@ -74,18 +76,71 @@ derive the current initiative live from the Linear hierarchy; `/roadmap-create` 
   by `pk next`/`pk status` — no config list needed.
 - **Milestones** (Work Packages) remain an optional intra-project grouping, orthogonal to phases.
 
+**Completability is the load-bearing property.** A project holding 60 open issues is a *pool*, not a
+lane — and the `i{N}.`→`P{N}.` walk structurally cannot see into a pool, so `pk status` will point at
+some idle lane while all the live work sits invisible. (Anchor: SiteLine, 2026-08-02 — 98 of 162 open
+issues sat in three pool projects; `In Progress` read 0 and the real execution order had migrated into
+a gitignored notes file.) The rule that prevents it: **completability lives at the project level,
+eternity lives at the theme/label level.** A project is created only for work that has been *cut* into
+a lane — never as a standing bucket to file things into.
+
+- **Placeholder lanes are deliberate, not clutter.** An initiative whose projects are all completed
+  reads as "done" to the walk and gets skipped prematurely. A downstream initiative with no live work
+  yet needs one empty `I{N}.P1.` project whose **description contains the literal word `placeholder`**.
+  Skills exempt those from empty-project nagging by that convention — there is no config list to keep
+  in sync.
+- **`Parked` is a label, not a workflow state** — a Parked *state* hides work from every state-based
+  query. Move such issues to `Backlog` and label them.
+- **A parallel strand that never gates the arc gets the *highest* number**, not no number: `i8.` rather
+  than unprefixed. It stays inside the walk (so its work is visible) while being guaranteed never to
+  become "current" ahead of the real arc.
+
+### Board shapes
+
+The naming contract above is identical for both shapes; they differ in what a *phase* maps to.
+
+| Shape | Phase ≡ | Ordering lives in | Use when |
+|---|---|---|---|
+| Lanes **(default)** | one initiative, 1:1 | the `i{N}.`/`P{N}.` prefixes + `blockedBy` relations | Almost always. `/roadmap-create` authors this. |
+| Phase-spans-projects | several projects | the prefixes **plus** the opt-in Phase Label Layer below | A phase genuinely spans multiple projects, so no single project *is* a phase. |
+
+Pick one. Running both means two ordering mirrors encoding the same order and drifting independently —
+which is the failure the lanes model exists to remove.
+
+### Area Labels (recommended on the lanes model)
+
+Uncut backlog work carries **no project**, so it needs one classification axis to stay navigable. Use a
+real Linear **label group** whose children name your domains. Fill in your own; the values below are
+illustrative.
+
+| Key | Value |
+|-----|-------|
+| **Area label group** | `Area` |
+| **Area labels** | `Area: Security`, `Area: Budget Editor`, `Area: Platform` |
+| **Lane size** | `3-8` _(advisory; `/linear-hygiene` flags a project over the upper bound as pool smell)_ |
+
+- **Area classification persists through lane moves.** An issue keeps its `Area:` label when it is cut
+  into a lane — the label says *what domain this is*, the project says *which batch it's in*.
+- **Never infer Area from a lane** — a lane can legitimately mix areas.
+- One `Area: * — backlog` saved view per label renders the uncut work.
+- Leave this section blank to skip the convention; skills that read it no-op when it's empty.
+
 > **Legacy fallback:** projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the
 > legacy `.vbw-planning/PHASES.md` + `linear-map.json` automatically — `bin/pk` reads them read-only.
 > Rename your delivery initiatives with `i{N}.` prefixes to switch a project to the native surface,
 > then the files can be deleted. New projects are native from `/roadmap-create`.
 
-### Phase Label Layer (optional)
+### Phase Label Layer (optional — the phase-spans-projects shape only)
 
 An **opt-in visualization mirror** of `ROADMAP.md`'s build order onto the Linear board, for projects
 whose roadmap **phases span multiple `I{N}.P{N}.` projects** (so no single Linear project *is* a phase,
 and a plain project filter can't render "this phase, in order"). It answers *"what order do I run these
 in, what's parallel?"* — a question the `i{N}.`/`I{N}.P{N}.` surface above does **not** answer.
 `/roadmap-review` Phase 3.5 drift-checks it against `ROADMAP.md`; `/roadmap-create` Phase 3.5 scaffolds it.
+
+**A board on the lanes model must not adopt this layer.** There, phases ≡ initiatives and the prefixes
+already carry the order, so the labels would be a second mirror of it — the two-mirror drift the lanes
+model exists to remove.
 
 **The config table below ships commented out — that's the opt-out.** The skills gate on the *filled-in
 values*, not this heading: with the table commented (or its cells blank) there's no active config, so
@@ -102,13 +157,32 @@ map 1:1 to projects, you don't need this layer — the initiative surface alread
 | **Order label** | `Order: Any` |
 | **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over MCP) |
 | **`sortOrder` step** | `1000` (gap between adjacent issues; leaves slack to insert without a renumber) |
-| **Roadmap source** | `ROADMAP.md` (the file whose per-phase issue lists this layer mirrors) |
 
 - **Phase labels come from your own `ROADMAP.md` phase names** — the values above are SiteLine-shaped examples, not a contract.
 - **Continuous is named-items-only:** only issues `ROADMAP.md` names by identifier get the pool label — never every open issue in the pool's projects.
 - **Order = real `blockedBy` relations**, never description prose. `Order: Any` marks issues with no intra-phase dependency (safe to run anytime / in parallel).
 - One issue carries **at most one** `Roadmap: Phase *` label (or the pool label) — never two, and never both `Order: Any` and an unresolved `blockedBy`.
 -->
+
+### Roadmap source (independent of the layer above)
+
+| Key | Value |
+|-----|-------|
+| **Roadmap source** | `ROADMAP.md` |
+
+The file whose per-phase issue lists the label layer mirrors — *and* the file `/roadmap-review`
+Phase 2.5 reconciles checkboxes against. **Phase 2.5 is not gated on the Phase Label Layer**, so this
+key lives outside the commented block: a project can have a checkboxed roadmap without ever adopting
+the layer, and retiring the layer must not silently repoint the reconciliation. Blank → skills fall
+back to the root `ROADMAP.md`.
+
+**Retirement path** (migrating an opted-in board to the lanes model — order matters):
+
+1. **Comment out the Phase Label Layer table first.** `/roadmap-review` Phase 3.5 gates on the
+   filled-in values, so while they are live it will re-scaffold whatever you delete next.
+2. Then delete the `Roadmap: *` / `Order: *` labels and their saved views.
+3. **Leave `Roadmap source` above untouched** — Phase 2.5 reads it independently and still works.
+4. Real `blockedBy` relations stay — on the lanes model they carry all intra-lane ordering.
 
 ## Slack (optional)
 

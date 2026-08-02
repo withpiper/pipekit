@@ -17,9 +17,13 @@ Per `method.config.md` § Initiative Surface:
 
 | Linear object | Role | Order |
 |---------------|------|-------|
-| **Initiative** `i{N}. label` | ordered **INITIATIVE** | integer `{N}` in the name prefix |
-| **Project** `I{N}.P{N}. label` | ordered **SUB-PHASE** | the `P{N}` integer in the name prefix |
+| **Initiative** `i{N}. label` | ordered, **completable RELEASE PHASE** | integer `{N}` in the name prefix |
+| **Project** `I{N}.P{N}. label` | a completable **LANE** of ~3–8 issues | the `P{N}` integer in the name prefix |
+| **Initiative**, unprefixed | long-running **THEME**; may never complete | outside the walk |
+| **Issue**, no project | uncut **BACKLOG**, classified by an `Area:` label | — |
 | **Issue** | individual requirement/task | lives inside the right `I{N}.P{N}.` project |
+
+**The contract is unchanged; what the levels *mean* is what shifted (v4.28.0).** Both initiatives and projects are completable — a project that keeps accepting work is a pool the `i{N}.`→`P{N}.` walk cannot see into. "No project" is therefore a legitimate, intended state for uncut work, not placement drift on its own; see Placement drift below.
 
 Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / the `P{N}` number). Linear's `sortOrder` is **never** used to determine initiative order — always parse the name prefix. **Projects carry their initiative number** (v4.5.0+: `I1.P2. label`) so the initiative reads at the project level; legacy bare `P{N}.` is still valid (`bin/pk` accepts both) — treat a bare `P{N}.` as a rename candidate, not an error.
 
@@ -43,7 +47,7 @@ This skill is invoked when the user says:
 It detects and proposes fixes for **drift between the project's strategy docs / requirements and the Linear board's initiative hierarchy**:
 
 1. **Naming-convention drift** — initiatives not named `i{N}. label`, projects not named `I{N}.P{N}. label` (a bare `P{N}.` is legacy-valid but a rename candidate; flag it as such, not as an error), duplicate or gapped prefixes (`i1, i3` with no `i2`), an `I{N}.` prefix that disagrees with the project's parent initiative, or out-of-order numbering.
-2. **Placement drift** — issues sitting in the wrong `I{N}.P{N}.` project (or no project at all) given what the strategy docs say belongs in that sub-phase.
+2. **Placement drift** — issues sitting in the wrong `I{N}.P{N}.` project given what the strategy docs say belongs in that lane. **"No project" is not drift by itself** on the lanes model: uncut work belongs in the `Area:`-labelled backlog until a human cuts it into a lane (`/phase-plan --cut`). Flag a project-less issue only when it carries no `Area:` label, or when the strategy docs place it in a lane that already exists. Never propose creating a project to absorb loose issues — that manufactures a pool.
 3. **Coverage drift** — strategy-doc requirements with no corresponding Linear issue, or Linear issues that no longer map to any documented requirement.
 
 It does **not** reconcile a planning-file mirror — there is none. All reconciliation targets are live Linear objects.
