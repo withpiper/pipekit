@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.26.4"
+PK_VERSION="4.27.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -923,6 +923,127 @@ pk_verify_sentinel_for_head() {
     fi
   done
   return 1
+}
+
+# v4.27.0 — the ship→merge window.
+#
+# `pk ship`'s gate above is point-in-time: it proves a sentinel matched HEAD at
+# ship. Commits that land *after* ship — review fixes, UAT fixes — move HEAD past
+# the sentinel and nothing re-checks, so a PR can merge carrying verify evidence
+# that describes code no longer in the diff.
+#
+# Anchor: SiteLine PIPER-490 (PR #774, 2026-07-31). /verify PASS at eca992bb;
+# `pk ship` gated correctly at 21:55Z; then 4f47b160 rewrote 72 lines of the RLS
+# migration's authorization predicate at 22:28Z. Merged 05:41Z with a PASS artifact
+# covering a predicate that no longer existed — and the PR review that read that
+# artifact quoted its sha verbatim without noticing HEAD had moved past it. A
+# reviewer reading the evidence is exactly who this staleness fools.
+
+# Echo "<path>\t<sha>" for the most recent verify artifact for this issue under ANY
+# date dir, whatever sha it records. Complement to pk_verify_sentinel_for_head:
+# staleness detection needs the artifact we did NOT match. Date dirs are YYYYMMDD
+# so each glob is already in chronological order — last hit wins.
+#
+# It deliberately falls back past verify-complete.md to evidence.txt /
+# reality-check.md. The incident that motivated this gate had NO verify-complete.md
+# at all — SiteLine PIPER-490 shipped past that gate via --force, and its verified
+# sha survived only in `# sha:` inside evidence.txt and `- sha:` in
+# reality-check.md. Keying solely on the sentinel would make this check structurally
+# unable to see the failure it exists to catch (pipekit-tooling.md § The
+# Verification Method Must Be Able to See the Failure). Hence the tolerant
+# leading-marker pattern below, and short shas are accepted — the caller resolves.
+pk_verify_sentinel_latest() {
+  local issue="$1" f newest="" sha base
+  [ -n "$issue" ] || return 1
+  for base in verify-complete.md evidence.txt reality-check.md; do
+    newest=""
+    for f in Logs/Verify/*/"${issue}"/"${base}"; do
+      [ -f "$f" ] || continue
+      newest="$f"
+    done
+    [ -n "$newest" ] || continue
+    # Tolerates "sha:", "# sha:", "- sha:" — the three forms /verify has written.
+    sha=$(grep -aiE '^[[:space:]]*[#-]?[[:space:]]*sha:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$newest" 2>/dev/null \
+      | head -1 | sed -E 's/.*[Ss][Hh][Aa]:[[:space:]]*//' | tr -d '[:space:]')
+    if [ -n "$sha" ]; then
+      printf '%s\t%s\n' "$newest" "$sha"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Pure classifier — same house pattern as pk_gate_verdict: all inputs are args or
+# stdin, no I/O, fully unit-testable. Reads a newline-separated changed-file list
+# on stdin, echoes one of: fresh | docs | source | migrations.
+#   $1 migration dir (e.g. "supabase/migrations/"); caller supplies it from
+#      method.config.md so this stays portable across migration tools.
+#
+# Migrations outrank source deliberately. A migration edited after the verify that
+# exercised it is not merely stale evidence — it violates the frozen-file invariant
+# (pipekit-migrations.md), whose freeze begins at first application to ANY database
+# including a local one. That deserves its own callout, not a generic "re-verify".
+pk_verify_drift_class() {
+  local mdir="${1:-supabase/migrations/}"
+  local line has_source=0 has_migration=0 any=0
+  # Tolerate a config value written with or without the trailing slash.
+  mdir="${mdir%/}/"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    any=1
+    case "$line" in
+      "${mdir}"*|*"/${mdir}"*)
+        has_migration=1 ;;
+      # Evidence and prose can move without changing behavior. Note the /verify
+      # artifacts themselves land in this class, so a verify-docs commit correctly
+      # reads as benign rather than as behavior drift.
+      Logs/*|docs/*|*.md) : ;;
+      *) has_source=1 ;;
+    esac
+  done
+  if [ "$any" = "0" ]; then echo "fresh"; return 0; fi
+  if [ "$has_migration" = "1" ]; then echo "migrations"; return 0; fi
+  if [ "$has_source" = "1" ]; then echo "source"; return 0; fi
+  echo "docs"
+}
+
+# Compare the latest verify sentinel against <head> and report. Echoes one of:
+#   none | fresh | unreachable | docs | source | migrations
+# Human-readable detail goes to stderr so the echoed token stays parseable.
+# Always returns 0 — the caller decides which classes block.
+pk_verify_drift_report() {
+  local issue="$1" head="$2"
+  local latest path sha class files count
+  latest=$(pk_verify_sentinel_latest "$issue" 2>/dev/null) || { echo "none"; return 0; }
+  path="${latest%%$'\t'*}"
+  sha="${latest##*$'\t'}"
+
+  # A rebase or squash can orphan the recorded sha. Drift is then uncomputable —
+  # say so rather than guessing, per the UNVERIFIED discipline in pipekit-tooling.
+  # Resolve BEFORE the equality test: reality-check.md records a short sha, so a
+  # raw string compare would call a fresh sentinel stale and block a clean branch.
+  local full
+  if ! full=$(git rev-parse --verify --quiet "${sha}^{commit}" 2>/dev/null) || [ -z "$full" ]; then
+    echo "unreachable"
+    printf '⚠ verify evidence %s records sha %s, which is not reachable\n' "$path" "${sha:0:8}" >&2
+    printf '  (rebased or squashed?). Drift cannot be computed — re-run /verify.\n' >&2
+    return 0
+  fi
+  sha="$full"
+
+  if [ "$sha" = "$head" ]; then echo "fresh"; return 0; fi
+
+  files=$(git diff --name-only "${sha}..${head}" 2>/dev/null)
+  class=$(printf '%s\n' "$files" | pk_verify_drift_class "$(pk_config "Migration dir" "supabase/migrations/")")
+  count=$(printf '%s\n' "$files" | grep -c . 2>/dev/null || echo 0)
+
+  printf 'Verify evidence: %s\n' "$path" >&2
+  printf '  verified sha %s  →  HEAD %s   (%s file(s) changed since)\n' \
+    "${sha:0:8}" "${head:0:8}" "$count" >&2
+  printf '%s\n' "$files" | grep . | sed 's/^/    /' | head -20 >&2
+  [ "$count" -gt 20 ] && printf '    … and %s more\n' "$((count - 20))" >&2
+
+  echo "$class"
 }
 
 # v4.17.0 — /security-gate sentinel matcher (same shape as the verify matcher).
@@ -2070,7 +2191,14 @@ Reviewer subagent invocation printed in pk output. Findings will land as a PR re
 # iterating, run the outside reviewer now" gesture. No Linear state change
 # (UAT stays UAT — the WIT was already In Review/UAT after pk ship).
 cmd_ready() {
-  local id="${1:-}"
+  local id="" force=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force=true; shift ;;
+      -*) echo "ERROR: unknown flag for pk ready: $1" >&2; return 1 ;;
+      *) [ -z "$id" ] && id="$1"; shift ;;
+    esac
+  done
   local current pr_number pr_state
   if [ -n "$id" ]; then
     # Explicit ID — find the feature branch locally so we can look up its PR.
@@ -2116,6 +2244,55 @@ cmd_ready() {
   # (no-op exit 0) but we want a clear message when there's nothing to do.
   local is_draft
   is_draft=$(gh pr view "$pr_number" --json isDraft -q '.isDraft' 2>/dev/null || echo "false")
+
+  # --- v4.27.0 verify-drift gate ------------------------------------------
+  # Computed BEFORE the already-Ready early return, for the same reason as the
+  # conflict check above: the PIPER-490 case was a PR that had ALREADY been
+  # flipped when the migration changed under it, so a check placed after the
+  # return would have missed exactly the incident that motivated it.
+  #
+  # This is the seam where evidence meets reviewers. `pk ship` proved the
+  # sentinel matched at ship time; this asks whether it still describes HEAD
+  # now that you are about to spend human and bot review on it.
+  local _rhead _drift
+  _rhead=$(git rev-parse HEAD 2>/dev/null || echo "")
+  if [ "${PK_VERIFY_BYPASS:-0}" = "1" ]; then
+    echo "⚠ verify-drift gate bypassed via PK_VERIFY_BYPASS=1" >&2
+    _drift="fresh"
+  else
+    _drift=$(pk_verify_drift_report "$id" "$_rhead")
+  fi
+
+  case "$_drift" in
+    source|migrations)
+      if [ "$_drift" = "migrations" ]; then
+        echo "" >&2
+        echo "✗ A MIGRATION changed after the verify that exercised it." >&2
+        echo "  That is the frozen-file invariant (pipekit-migrations.md): the freeze" >&2
+        echo "  begins at first application to ANY database, local included. Confirm the" >&2
+        echo "  migration was not edited in place — if it was, the fix is a NEW migration." >&2
+      else
+        echo "" >&2
+        echo "✗ Source changed after the verify that vouches for this branch." >&2
+      fi
+      echo "  The PASS artifact above describes code that is no longer HEAD, and a" >&2
+      echo "  reviewer reading it cannot tell. Re-run /verify on this commit." >&2
+      if $force; then
+        echo "  → --force: flipping anyway, logging a Linear audit comment." >&2
+        pk_linear_comment "$id" \
+          "pk ready --force with stale verify evidence: sentinel does not cover HEAD ${_rhead:0:8} (${_drift} drift, $(date -u +%FT%TZ))" || true
+      else
+        echo "  → Re-run /verify, or pass --force to flip anyway (logs a Linear comment)." >&2
+        return 1
+      fi
+      ;;
+    docs)
+      echo "  ℹ Only evidence/prose changed since the verify — treating as benign." >&2
+      ;;
+    unreachable|none) : ;;   # already reported to stderr, or nothing to compare
+  esac
+  # ------------------------------------------------------------------------
+
   if [ "$is_draft" != "true" ]; then
     echo "PR #$pr_number is already Ready. No flip needed."
     return 0
@@ -2248,6 +2425,23 @@ cmd_done() {
     echo "    - Or: pk done ${id:-} --merge  (lets pk run gh pr merge for you)." >&2
     return 1
   fi
+
+  # --- v4.27.0 verify-drift report (post-merge, non-blocking) --------------
+  # Blocking here would be theatre — the merge already happened. The point is the
+  # record: if the verify evidence never covered the head that merged, that fact
+  # belongs on the Linear issue where a postmortem or an auditor will find it,
+  # not only in a terminal someone already closed.
+  local _dhead _ddrift
+  _dhead=$(git rev-parse "$current" 2>/dev/null || echo "")
+  _ddrift=$(pk_verify_drift_report "$issue" "$_dhead")
+  case "$_ddrift" in
+    source|migrations)
+      echo "⚠ verify evidence did not cover the merged head (${_ddrift} drift)." >&2
+      pk_linear_comment "$issue" \
+        "⚠ Merged with stale verify evidence — the verify-complete sentinel does not cover the merged head \`${_dhead:0:8}\` (${_ddrift} drift). The recorded PASS describes an earlier commit." || true
+      ;;
+  esac
+  # ------------------------------------------------------------------------
 
   # Build the Linear close comment from git directly (v2.1.2+).
   # Per-branch journals were retired — git log is the source of truth.
@@ -3419,7 +3613,7 @@ Subcommands:
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
   pk ship [--env=<env>] [--review] [--ready] [--force] [--force-secgate]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/. --force waives the verify gate only; --force-secgate separately waives an armed /security-gate (both log a Linear audit comment).
-  pk ready [<ID>]                 Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch.
+  pk ready [<ID>] [--force]       Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch. Refuses if source or a migration changed after the /verify that vouches for the branch — re-run /verify, or --force to flip anyway (logs a Linear comment).
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
   pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
