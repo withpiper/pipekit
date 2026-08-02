@@ -602,17 +602,35 @@ Flags: <count>  ·  Auto-ship: <will-fire | paused>
 
 ## Step 7 — Write reality-check.md (skip for tier:quick)
 
-For `TIER != quick`, render `$VERIFY_DIR/reality-check.md` with this structure:
+For `TIER != quick`, write `$VERIFY_DIR/reality-check.md`.
+
+**Write the header block with the heredoc below, not by rendering it as markdown.** The `sha:` line is load-bearing beyond this file: when `verify-complete.md` is absent — it is written only on PASS, and is sometimes never committed — `reality-check.md` is what `pk ready` / `pk done` fall back to when deciding whether the recorded verification still covers HEAD (`pk_verify_sentinel_latest`, v4.27.1+). A missing `sha:` line silently downgrades that gate to "no evidence found".
+
+Model-rendered markdown drifts; a heredoc does not. Measured on SiteLine, 2026-08-02: `verify-complete.md`, written by the Step 8 heredoc, carried a `sha:` line in **191 of 192** committed files, while `reality-check.md`, previously rendered as prose, carried one in only **167 of 195** — and the miss rate was *rising* (8% in June, 24% in July, 33% in August), because nothing in a prose template fails when a line goes missing.
+
+```bash
+# STATUS is the verdict from the status-logic table in Step 8 (gate red → NEEDS
+# WORK; QA ran and Verdict == Fail → NEEDS WORK; otherwise PASS). Decide it now
+# and assign it as a shell variable — Step 8 consumes this same `$STATUS` to
+# decide whether to write the sentinel, and nothing in this skill assigns it for
+# you. Flags do NOT change it; they pause auto-ship in Step 9.
+STATUS="PASS"          # or: STATUS="NEEDS WORK"
+SHA=$(git rev-parse HEAD)
+cat > "$VERIFY_DIR/reality-check.md" <<EOF
+# reality-check — $ISSUE
+
+- stamp: $STAMP
+- tier: $TIER
+- integration: $INTEGRATION
+- commits-ahead: $COMMITS_AHEAD
+- sha: $SHA
+- status: $STATUS
+EOF
+```
+
+Then **append** the sections below to that file (these are yours to render — they are prose, and no gate parses them):
 
 ```markdown
-# reality-check — <ISSUE>
-
-- stamp: <STAMP>
-- tier: <TIER>
-- integration: <INTEGRATION>
-- commits-ahead: <COMMITS_AHEAD>
-- sha: <git rev-parse HEAD>
-- status: <PASS | NEEDS WORK>
 
 ## Gate results
 
