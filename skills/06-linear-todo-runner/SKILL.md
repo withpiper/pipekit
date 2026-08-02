@@ -52,6 +52,7 @@ Read all state IDs from your project's `method.config.md` under "Workflow State 
    - **Filter out archived issues**: skip any issue where `archivedAt` is non-null
 2. **Sort** by priority (P1 Urgent first → P4 Low last), then by cycle assignment (current cycle first)
 3. **Build dependency graph** — for each issue, check `blocked_by` relations via `mcp__linear-server__linear_getIssueById`
+   - **Read the lane's serialization notes first.** On the lanes model, a project (`I{N}.P{N}.`) is a completable lane whose `content` body records which of its issues must run in sequence and why — usually shared files or migration ordering — and which are parallel-safe. `blocked_by` relations remain the machine-readable truth and the filter below still governs, but the notes catch function-level collisions that no relation encodes: two issues with no dependency between them that nonetheless edit the same file. Two workers on those will produce blended diffs even in separate worktrees. Fetch the lane's `content` (not `description` — it caps at 255 chars and won't hold the notes) before scheduling siblings from the same lane concurrently.
 4. **Filter to ready issues** — only issues whose blockers are ALL in "Done" state
 5. **Apply `--limit`** if provided
 6. **Output** the ordered queue:

@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.19.0** — Last updated: 2026-07-20 12:51  *(**v4.19.0 — MCP payload hygiene.** New note under the Linear MCP tool table: `getIssueById` is a full-content read (description **+ entire comment thread**) whose payload is sticky — re-billed as input every turn; for an issue's state/merge/PR status use the new `pk issue show <ID>` lean read (this release), `pk next`/`pk status`, filtered `searchIssues`, or `git`/`gh`, and run batches of many reads/writes in a subagent so the payloads stay out of the main thread. Mirrors the new `.claude/rules/pipekit-tooling.md § MCP Result Payloads Are Sticky` canonical rule + ships `pk issue show` as the first-class low-token read. Carries **v4.15.1** — document the optional `Roadmap: Phase *` / `Order: Any` phase-label family (v4.14.0+) in § Standard Labels, pointing to `method.config.md § Phase Label Layer` + the `/linear-hygiene` guardrail. Carries v4.5.0: Initiative surface — projects carry their initiative number: Project `I{N}.P{N}.` = sub-phase (e.g. `I1.P2. label`), so the initiative reads at the project level (the navigable unit in Linear); `bin/pk` accepts both `I{N}.P{N}.` and legacy bare `P{N}.`. Carries v4.1.0's Linear-native Initiative surface — Initiative `i{N}.` = initiative, ordered by name prefix. The roadmap's initiative order lives in Linear, not a committed file; `pk next`/`pk status` derive the current initiative live. The legacy `.vbw-planning/PHASES.md` and `linear-map.json` are retired (`bin/pk` reads them only as a read-only fallback for un-migrated projects). Carries the **Linear MCP Server** section — pipekit's interactive Linear skills target `@tacticlaunch/mcp-linear`'s camelCase tools; the `tier:quick`/`tier:standard`/`tier:heavy` labels — including `/pk-express`'s tier:heavy refusal — the config-driven `Spec ready state`, and v2.6.0's two-phase `pk promote` + Draft-by-default model)*
+**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — lanes semantics + an API-gotchas section.** The Linear Model now states that initiatives *and* projects are completable — a project holding 60 open issues is a pool the `i{N}.`→`P{N}.` walk cannot see into. New `Area` label-group family (the lanes model's backlog axis, orthogonal to lane membership in both directions) and the `Parked`-is-a-label rule. New § API gotchas, sorted by failure mode: the silent-data-loss class first (255-char `description` cap, state changes re-ranking `sortOrder`, cycle-add moving issues out of Backlog, Triage-state issues invisible in project views, view preferences accepting unknown keys), then MCP gaps needing GraphQL (`archiveInitiative`, label delete), then the 10k query-complexity cap and the sanity-gate-before-batch pattern. All verified live during the SiteLine reorg, 2026-08-02.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -34,6 +34,32 @@ Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create
 
 **Note on the daily loop:** `pk ship` / `pk done` / `pk promote` do **not** use MCP — they hit Linear's REST API directly via `LINEAR_API_KEY`. Only the interactive skills above use `mcp__linear-server__*`.
 
+### API gotchas (incident-anchored; read before any batch board mutation)
+
+All verified live during the SiteLine board reorg, 2026-08-02.
+
+**Silent-data-loss class — these accept your write and quietly do something else:**
+
+- **Project / initiative `description` hard-caps at 255 characters.** Longer text is not an error. Put long-form content (lane serialization notes, scope rationale) in the markdown **`content`** body and keep `description` a trimmed summary.
+- **A workflow-state change re-ranks the issue's `sortOrder`** — Linear moves it to the top of its new column. Any deliberate run-order stamp is destroyed by ordinary pipeline motion (`pk branch` → In Progress, `pk ship` → UAT are both state changes). Consequences: set `cycleId` **and** `sortOrder` in one `issueUpdate` and verify the echo; re-assert order after any state fix; and treat a stamp as authoritative for **queued issues only** — once an issue is in flight, its position is its state.
+- **Adding a Backlog issue to a cycle auto-moves it out of Backlog** (observed landing in `Needs Spec`), which then triggers the re-rank above.
+- **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** An issue "added to a project" while in Triage won't render, and the project reads short. Triage it out first. (Anchor: SiteLine PIPER-559.)
+- **View preferences accept unknown keys silently.** `viewPreferencesCreate(input: {type: organization, viewType: project|customView, projectId|customViewId, preferences: {"issueGrouping": "none", "viewOrdering": "manual"}})` does work — keys come from the typed `ViewPreferencesValues` type but values are free-form strings, so a wrong one stores fine and does nothing. Verify by reading back the resolved `CustomView.viewPreferencesValues` oracle; **project-scoped rows have no API read surface** — check one in the browser. Org-scoped rows act as the shared default and personal in-app tweaks overlay them.
+
+**MCP gaps — fall back to GraphQL:**
+
+- **`archiveInitiative` returns "Entity not found"** for a valid initiative. GraphQL `initiativeArchive` succeeds.
+- **There is no MCP label-delete tool.** Deletion is GraphQL `issueLabelDelete(id:)` only.
+- **`updateProject` to any paused/backlog-type status 500s** on plan-tier workspaces. `started` / `planned` / `completed` are safe.
+- Label **groups** create fine via MCP (a parent group plus children works).
+- `linear_createSavedView` uses the undocumented internal **`filterData` DSL** — read an existing view first and copy its shape.
+
+**Query complexity:** Linear rejects queries scoring over **10k**. A nested all-projects × all-issues read (~100 × 50) scores ~11k and fails outright. Filter server-side — e.g. the wrong-closure sweep is `projects(filter:{status:{type:{in:["completed","canceled"]}}})` each with `issues(filter:{state:{type:{nin:["completed","canceled"]}}})`, never the unfiltered cross-product.
+
+**Sanity-gate before the first write of any batch mutation:** enumerate the target set, then re-survey fresh and compare counts (tolerance ±5) before mutating. A batch that starts from a stale survey is very hard to unwind.
+
+*(Cosmetic, harmless: Linear auto-links bare `table.column` tokens in `content` markdown.)*
+
 ---
 
 ## Linear Model
@@ -41,18 +67,24 @@ Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create
 **The Linear hierarchy is the Initiative surface — the source of truth for roadmap order.** There is no committed phase file; `pk next`/`pk status` derive the current initiative live from this hierarchy. `/roadmap-create` authors it; `/phase-plan` advances it.
 
 ```
-Initiative "i{N}. label" = ordered roadmap INITIATIVE       <- "Which initiative ships this?"
-  +-- Project "I{N}.P{N}. label" = ordered SUB-PHASE   <- "Which sub-phase within the phase?"
-       +-- Issue = work item                           <- "What work needs to happen?"
-            +-- Milestone = Work Package (optional)     <- "What intra-project batch?"
+Initiative "i{N}. label" = ordered, COMPLETABLE release phase  <- "Which phase ships this?"
+  +-- Project "I{N}.P{N}. label" = a LANE of 3-8 issues    <- "Which completable batch?"
+       +-- Issue = work item                              <- "What work needs to happen?"
+            +-- Milestone = Work Package (optional)        <- "What intra-project batch?"
+
+Initiative "label" (unprefixed) = long-running THEME        <- allowed never to complete
+Issue with no project           = uncut BACKLOG             <- classified by an Area: label
 
 Labels = Cross-cutting metadata        <- Filterable on everything
+  Area:     [domain classification for uncut backlog work]
   Domain:   [project-specific domain labels]
   Tier:     [stage-numbered tier labels]
   Type:     Feature, Bug, Improvement, Research, Tech Debt, Chore
   Flag:     Quick Win, Blocked, Hotfix, Breaking Change
   Audience: Client Request
 ```
+
+**Completability is the load-bearing property, and it lives at the project level.** A project holding 60 open issues is a *pool*, and the `i{N}.`→`P{N}.` walk structurally cannot see into a pool — so `pk status` points at some idle lane while the live work hides. Eternity belongs at the theme/label level: a long-running strand is an unprefixed initiative or an `Area:` label, never a standing project. A project is created only for work that has been **cut** into a lane. (Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues sat in three pool projects, `In Progress` read 0, and the real execution order had migrated into a gitignored notes file. Full reorg rationale in `method.config.md § Initiative Surface`.)
 
 ### Ordering is the numeric name prefix — never Linear `sortOrder`
 
@@ -68,11 +100,14 @@ Initiative and sub-phase order is read from the **integer in the name prefix**, 
 
 | Layer | Audience | Question | Lifespan |
 |---|---|---|---|
-| **Initiative** (`i{N}.`) | Partner | "Which roadmap initiative?" | Permanent (one per initiative) |
-| **Project** (`I{N}.P{N}.`) | Partner + You | "Which sub-phase?" | Permanent within phase |
+| **Initiative** (`i{N}.`) | Partner | "Which release phase?" | **Completable** — closes when its last lane does |
+| **Initiative** (unprefixed) | Partner | "Which long-running theme?" | Eternal by design; outside the walk |
+| **Project** (`I{N}.P{N}.`) | Partner + You | "Which lane?" | **Completable** — 3–8 issues, then done |
 | **Milestone** (optional) | You | "What intra-project batch?" | Per-project |
 | **Issue** | You | "What work item?" | Permanent (work item) |
-| **Labels** | Everyone | Domain? Tier? Type? | Permanent (taxonomy) |
+| **Labels** | Everyone | Area? Domain? Tier? Type? | Permanent (taxonomy) |
+
+Read the two *completable* rows as the rule: if a layer can never finish, it's the wrong layer for that content.
 
 The **Milestone = Work Package** layer is an optional intra-project grouping, orthogonal to the Initiative surface — use it to batch issues within a single project when useful, or skip it entirely.
 
@@ -246,6 +281,18 @@ The issue prefix is defined in your project's `method.config.md`.
 | Label | Purpose |
 |---|---|
 | Client Request | Client/prospect asked for this |
+
+### Area (a label *group*; project-named — the lanes model's backlog axis)
+
+On the lanes model, uncut work carries **no project**, so `Area:` is the one axis that keeps it navigable. Configure the group and its children in `method.config.md § Initiative Surface → Area Labels`; the names below are illustrative, not a contract.
+
+| Label | Purpose |
+|---|---|
+| `Area: <domain>` | What domain this issue belongs to, independent of which batch it's in |
+
+- **Area and lane membership are orthogonal, and inference in *either* direction is a bug.** An issue keeps its Area label when it's cut into a lane (that's what keeps the `Area: * — backlog` views honest), and a lane may legitimately mix areas — so never derive one from the other. `/linear-hygiene` applies Area labels; it must never rewrite one because a project changed.
+- One `Area: * — backlog` saved view per label renders the uncut work per domain.
+- **`Parked` is a label, not a workflow state.** A Parked *state* hides work from every state-based query, including the hygiene sweep's own fetch. Park by moving to `Backlog` and applying the label.
 
 ### Tier (3 labels)
 

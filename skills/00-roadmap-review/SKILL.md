@@ -94,7 +94,7 @@ Output: Completeness table per initiative (`i{N}.`).
 
 ### Phase 2.5 — Roadmap Progress Reconciliation (checkbox ↔ Linear `Done`)
 
-**Skip this phase unless the roadmap source uses checkboxes.** Some projects track build progress with markdown checkboxes in their roadmap file — the `Roadmap source` key (default `ROADMAP.md`; see `method.config.md § Phase Label Layer`, else the root `ROADMAP.md`). If that file has no `- [ ]` / `- [x]` items, no-op and proceed to Phase 3. This check is **independent of the phase-label layer** — a project can have a checkboxed roadmap without opting into the label layer, so it is *not* gated behind the `### Phase Label Layer` config.
+**Skip this phase unless the roadmap source uses checkboxes.** Some projects track build progress with markdown checkboxes in their roadmap file — the `Roadmap source` key (`method.config.md § Initiative Surface → Roadmap source`; blank → the root `ROADMAP.md`). If that file has no `- [ ]` / `- [x]` items, no-op and proceed to Phase 3. This check is **independent of the phase-label layer** — a project can have a checkboxed roadmap without opting into the label layer, so it is *not* gated behind the `### Phase Label Layer` config, and the key deliberately lives outside that section's commented block (v4.28.0) so retiring the layer can't silently repoint this reconciliation.
 
 When the roadmap source has checkboxes, reconcile both directions against Linear (using the issue states already fetched in Phase 1). This catches a roadmap file drifting from Linear reality — the two are edited by different hands at different times:
 
@@ -136,7 +136,17 @@ This is the core Linear-native validation. The initiative surface (per `method.c
 
 9. For issues in the current and upcoming phases, verify labels are consistent (Tier label matches phase intent, Domain label matches the `P{N}.` project cluster) and flag misassignments.
 
-Output: an Initiative Surface section listing any naming/order/placement/lifecycle violations, each with the exact rename or re-parent to apply.
+**Lanes-model health** *(skip these when `method.config.md § Area Labels` is blank — the board isn't on the lanes model)*:
+
+10. **Pool smell.** Any `I{N}.P{N}.` project holding more than the `Lane size` upper bound (default 8) open issues. A lane is a completable batch; a project that keeps accepting work is a pool, and the walk cannot see inside it — so `pk status` will name an idle lane while the live work is invisible. Report the count and the gap. *(Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues in three pool projects, `In Progress` at 0.)*
+11. **Spent lanes.** A project with 0 open issues whose state isn't `completed`/`canceled` — it stays "current" forever. **Exempt** any project whose `description` contains the literal word `placeholder`.
+12. **Walk-skip hazard.** A non-`Completed` initiative whose projects are *all* completed/canceled and which has **no placeholder project**. The walk steps past it as though it were finished. This is the single highest-consequence lanes-model defect: an entire release phase silently disappears from `pk next`.
+13. **Status drift.** Lanes holding shipped or in-flight issues while still `planned`/`backlog`; idle lanes marked `started`. Initiatives: phases before the current one `Completed`, the current one `Active`, later ones `Planned` — with the honest exception of a genuinely in-flight parallel strand, which may be `Active` alongside the arc.
+    - Objective wrong-closure sweep: `projects(filter:{status:{type:{in:["completed","canceled"]}}})` each with `issues(filter:{state:{type:{nin:["completed","canceled"]}}})`. Any hit other than a `Duplicate`-state issue is rot. **Filter server-side** — an unfiltered all-projects × all-issues read exceeds Linear's 10k query-complexity cap and is rejected (`sop/Linear_SOP.md` § API gotchas → Query complexity).
+14. **Unclassified backlog.** Project-less issues carrying no `Area:` label — invisible to both the walk *and* the backlog views. Route to `/linear-hygiene`.
+15. **Lane serialization notes present.** Each active lane's `content` body should say what runs in sequence and what's parallel-safe. Absent notes aren't an error, but a lane with real `blockedBy` chains and no explanation is a lane only its author can run. (Notes belong in `content` — `description` caps at 255 chars.)
+
+Output: an Initiative Surface section listing any naming/order/placement/lifecycle violations, each with the exact rename or re-parent to apply. Lanes-model findings route to `/phase-plan --cut` (pools, tails) or `/linear-hygiene` (classification) — this skill reports, it doesn't restructure.
 
 ### Phase 3.5 — Phase-Label Layer (optional; config-gated)
 
@@ -152,8 +162,10 @@ This layer is **additive**, not a replacement. It sits beside the two surfaces t
 
 The label layer **owns no state `ROADMAP.md` doesn't already assert** — so this phase is a drift check *of the mirror against the file*, nothing more.
 
+**A board on the lanes model must not adopt this layer, and must not be offered the bootstrap below.** The layer exists for boards whose phases span multiple projects. On the lanes model phases ≡ initiatives, so the `i{N}.`/`P{N}.` prefixes already carry the order and these labels would encode it a second time — two mirrors of one ordering, drifting apart. That is the exact failure the lanes model removes. Detect the shape from config: `§ Area Labels` filled in → lanes model → no-op this phase regardless of anything else. (Retiring an existing layer has an order-sensitive path — comment the config table *first*, or this phase re-scaffolds what you delete; see `method.config.md § Phase Label Layer → Retirement path`.)
+
 **Read the convention from config — hardcode nothing.** The `### Phase Label Layer` section names, per project:
-- the **roadmap source file** — the `Roadmap source` key (default `ROADMAP.md`). Read *that* file's per-phase issue lists as the source of truth; never hardcode the path. A project still on the legacy `.vbw-planning/ROADMAP.md` sets the key to it — this is the same file the Stage-0 check and Phase 1 locate, so the layer and the audit stay on one roadmap.
+- the **roadmap source file** — the `Roadmap source` key (`§ Initiative Surface → Roadmap source`; blank → the root `ROADMAP.md`). Read *that* file's per-phase issue lists as the source of truth; never hardcode the path. A project still on the legacy `.vbw-planning/ROADMAP.md` sets the key to it — this is the same file the Stage-0 check and Phase 1 locate, so the layer and the audit stay on one roadmap. **The key lives outside this section's commented block on purpose** (v4.28.0) — Phase 2.5 reads it independently, so retiring the layer must not repoint the reconciliation.
 - the **phase/pool label set** — e.g. `Roadmap: Phase A`, `Roadmap: Phase B`, `Roadmap: Continuous`. Derive the actual phase names from the roadmap source file's own headings (a project may letter phases, number milestones, use quarters — never assume "Phase A/B/C"). Config marks which labels are **sequenced phases** vs the standing **Continuous pool**.
 - the **order label** — e.g. `Order: Any` — marking an issue with no intra-phase dependency (safe to run anytime / in parallel).
 - the **saved-view convention** — one ungrouped, Manual-sorted saved view per label. *(Views are **created** at scaffold time — by `/roadmap-create` at authoring, or by this phase's **bootstrap** on an existing board — but are **not drift-checked** once they exist: this phase verifies label membership, `sortOrder`, and relations against the roadmap, not the ongoing state of a view. A later deleted/renamed view won't flag.)*
@@ -275,6 +287,23 @@ Present a summary dashboard:
 **Violations:**
 - Initiative "Onboarding" has delivery issues but no `i{N}.` prefix → rename to `i4. Onboarding` or confirm it is a strategic theme
 - PROJ-176: attached to initiative `i2.` with no project → re-parent into a `P{N}.` project
+
+### Lanes Health  *(only if `§ Area Labels` is filled in — otherwise omit this block)*
+
+| Check | Result |
+|---|---|
+| Lanes within `Lane size` (3–8 open) | X/Y — **N pools** |
+| Spent lanes (0 open, not completed) | X (placeholders exempt) |
+| Initiatives at walk-skip risk (all projects done, no placeholder) | X |
+| Project status mirrors reality | OK / N drifting |
+| Project-less issues carrying an `Area:` label | X/Y |
+| Active lanes with serialization notes in `content` | X/Y |
+
+**Findings:**
+- `I3.P4. DB hygiene batch` — 23 open (bound 8) → **pool**; `/phase-plan --cut` into 3 lanes
+- `i5. Produce Ledger` — every project completed, no placeholder → **the walk will skip this entire phase**
+- `I3.P2. Access truth` — 3 issues shipped, project still `planned` → set `started`
+- 11 project-less issues with no `Area:` label → `/linear-hygiene`
 
 ### Phase-Label Layer  *(only if the `### Phase Label Layer` config is filled in — otherwise omit this block)*
 

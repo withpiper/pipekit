@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.27.2** — Last updated: 2026-08-02  *(**v4.27.2 — `/verify` Step 7 now writes `reality-check.md`'s header with a heredoc, not prose.** Its `sha:` line is what the v4.27.1 drift gate falls back to when `verify-complete.md` is absent, and prose rendering dropped it ~14% of the time and rising (SiteLine, 2026-08-02: heredoc-written `verify-complete.md` 191/192 vs prose-rendered `reality-check.md` 167/195). Also assigns `$STATUS`, which Step 8's sentinel-write consumed but nothing assigned. Four smoke guards keep Step 7 from drifting back. No `bin/pk` change. Smoke 194 → 198.)*
+**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — the lanes board model.** A Linear project is a *completable lane* of 3–8 issues, an initiative is a *completable release phase*, and "no project" + an `Area:` label is the correct home for uncut work — because the `i{N}.`→`P{N}.` walk cannot see inside a project, so a standing pool makes its contents invisible to `pk next`/`pk status` (SiteLine, 2026-08-02: 98 of 162 open issues hidden in three pools). `/linear-hygiene` stops homing orphans into projects and gains four detect-only board-shape checks; `/phase-plan --cut` is the new lane-cutting operation. The naming contract is unchanged and `bin/pk` needed no code change. Smoke 198, unchanged.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.27.2                (or latest tag)
+1. ./scripts/sync-method.sh v4.28.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

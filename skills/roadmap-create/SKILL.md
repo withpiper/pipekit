@@ -36,10 +36,16 @@ file to drift.
 
 | Roadmap concept | Linear construct | Naming | Ordering |
 |-----------------|-----------------|--------|----------|
-| Stage / initiative | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | by `{N}`, numeric |
-| Feature cluster / sub-phase | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Search`) | by the `P{N}` number, numeric, within its initiative |
+| Release phase | **Initiative** | `i{N}. label` (e.g. `i1. Foundation`) | by `{N}`, numeric |
+| Lane (completable batch) | **Project** | `I{N}.P{N}. label` (e.g. `I1.P2. Search`) | by the `P{N}` number, numeric, within its initiative |
+| Long-running theme | **Initiative**, unprefixed | `label` | outside the walk |
+| Uncut backlog | **Issue**, no project | (Linear identifier) | classified by `Area:` label |
 | Requirement | **Issue** | (Linear identifier) | priority / state |
 | Work Package (optional) | **Milestone** | (free) | orthogonal grouping inside a project |
+
+**Author the lanes shape by default.** Phases map **1:1 to initiatives**, and each project is a *completable* lane of ~3–8 issues — not a bucket to file things into. Requirements you can't yet cut into a coherent lane get **no project plus an `Area:` label**; a human cuts them later via `/phase-plan --cut`. The alternative shape (a phase genuinely spanning several projects, ordered by the opt-in Phase Label Layer) is Phase 3.5 below — pick one, never both. Both shapes are documented in `method.config.md § Initiative Surface → Board shapes`.
+
+> **Why completability is the rule.** The `i{N}.`→`P{N}.` walk cannot see inside a project. A project that keeps accepting work becomes a pool, and everything in it goes invisible to `pk next`/`pk status`. Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues sat in three pool projects while `pk status` pointed at a lane idle for two weeks. Authoring lanes at roadmap time is what prevents it.
 
 - **The `i{N}.` / `I{N}.P{N}.` prefixes are mandatory** — they carry order *and* mark which initiatives are
   delivery phases. Linear's `sortOrder` is NOT used (it's an unreliable drag-rank).
@@ -50,6 +56,14 @@ file to drift.
 - Number phases and sub-phases by execution order. Leave gaps if useful (`i1, i2, i3`).
 - Strategic / north-star initiatives that aren't delivery initiatives: **do not** give them an `i{N}.`
   prefix — they'll be correctly ignored by the roadmap walk.
+- **A parallel strand that never gates the arc gets the *highest* number, not no number.** A real delivery
+  strand that runs alongside the main arc (a port, a platform-health track) belongs at `i8.`, not
+  unprefixed: high keeps its work inside the walk and visible, while guaranteeing it can never become
+  "current" ahead of the real arc. Reserve unprefixed for themes that genuinely never complete.
+- **Downstream initiatives need one empty placeholder lane each.** An initiative with no live projects
+  reads as "all projects done" to the walk and gets skipped prematurely. Give each future initiative an
+  `I{N}.P1.` project whose **description contains the literal word `placeholder`** — that's the convention
+  skills use to exempt it from empty-project nagging. Do not treat these as clutter to clean up later.
 
 ## Execution Steps
 
@@ -106,21 +120,33 @@ On approval, create top-down. Apply the naming convention exactly.
      `Planned`.
    - **Verify the tool name against your installed MCP** — initiative create/update support varies by
      server. Naming carries the order regardless, so manual UI creation is always a valid fallback.
-2. **Projects** (sub-phases) — within each initiative, named `I{N}.P{N}. label` (the initiative number then
+2. **Projects** (lanes) — within each initiative, named `I{N}.P{N}. label` (the initiative number then
    the project number, e.g. `I1.P2. Search`), via `linear_createProject` (set its `initiativeId`/parent
    initiative, and `state`: current → `started`, else `planned`/`backlog`).
+   - **~3–8 issues each.** If a cluster is bigger, cut it into two lanes rather than one large project.
+   - Serialization / parallel-safety notes go in the project's **`content`** body — `description` hard-caps
+     at 255 chars and silently truncates. Keep `description` a one-line summary.
+   - Every downstream initiative gets its placeholder lane here (see above).
 3. **Issues** — for each requirement, via `mcp__linear-server__linear_createIssue`:
-   - `team`: from `method.config.md`; `project`: the `I{N}.P{N}.` project it belongs to
+   - `team`: from `method.config.md`
+   - `project`: the `I{N}.P{N}.` lane it belongs to — **or none**, if the requirement isn't part of a
+     coherent, completable lane yet. Project-less is a valid, intended resting state.
    - `title`, `description` (+ strategy doc reference)
    - `state`: Stage 1 → `On Deck` | later stages → `Future Phases`
    - `priority`: 0 (None) — triage sets real priority
-4. **Dependency relations** — `linear_createIssueRelation` for each `blocked_by`.
-5. **Labels** — type label (Feature/Improvement/Research) + domain label per feature cluster.
+4. **Dependency relations** — `linear_createIssueRelation` for each `blocked_by`. These carry all intra-lane
+   ordering; never encode order as description prose.
+5. **Labels** — type label (Feature/Improvement/Research) + domain label per feature cluster, **plus an
+   `Area:` label on every issue** (create the `Area` label group per `method.config.md § Area Labels`).
+   Area is what keeps project-less backlog work navigable, and it persists when an issue is later cut into
+   a lane — so apply it to lane members too, not only to the backlog.
 6. **Milestones (optional)** — only for a project with >6 issues that benefits from intra-project gating.
 
 ### Phase 3.5 — Phase-Label Layer scaffold (optional; config-gated)
 
-**Skip unless the project wants the phase-label layer** — either `method.config.md` has a *filled-in* `### Phase Label Layer` section (the template ships it commented out; gate on active label values, not the bare heading), or the human opts in when offered. The layer is a *visualization mirror* of the roadmap's build order onto the Linear board — worth scaffolding here only when the roadmap's **phases span multiple `I{N}.P{N}.` projects**, so no single Linear project *is* a phase. For a project whose phases map 1:1 to projects, skip it (the initiative surface already answers "what order"). See `/roadmap-review` Phase 3.5 and `method.config.md § Phase Label Layer`. If the human opts in here but the config section is still commented, offer to fill it in as part of the scaffold.
+**Skip unless the project wants the phase-label layer** — either `method.config.md` has a *filled-in* `### Phase Label Layer` section (the template ships it commented out; gate on active label values, not the bare heading), or the human opts in when offered. The layer is a *visualization mirror* of the roadmap's build order onto the Linear board — worth scaffolding here only when the roadmap's **phases span multiple `I{N}.P{N}.` projects**, so no single Linear project *is* a phase. See `/roadmap-review` Phase 3.5 and `method.config.md § Phase Label Layer`. If the human opts in here but the config section is still commented, offer to fill it in as part of the scaffold.
+
+**If you authored the lanes shape above, skip this phase — it is the other board shape, not an add-on.** On the lanes model phases ≡ initiatives, so the prefixes already carry the order and these labels would be a second mirror of it: two orderings of the same work, drifting independently. That two-mirror drift is the specific failure the lanes model removes; don't reintroduce it here.
 
 When opted in, offer to scaffold (all read the label/view convention from config — hardcode nothing):
 
@@ -138,10 +164,15 @@ Confirm the native initiative surface is well-formed (this is what `pk next` wil
 
 1. Every delivery initiative is named `i{N}.` with a unique, ordered `{N}`.
 2. Every project is named `I{N}.P{N}.` — its initiative number, then a unique `P{N}` within that initiative (e.g. `I1.P1.`, `I1.P2.`).
-3. Every requirement has an issue, placed in the right `P{N}.` project.
-4. The earliest non-`Completed` initiative is `Active`; its earliest live project is `started`.
-5. Run `pk status` — the **Roadmap** section should list your `i{N}.` initiatives in order with the
-   current `P{N}.` project for each. If it's empty, a prefix is missing or malformed.
+3. Every requirement has an issue. Each issue is either in the right `I{N}.P{N}.` lane **or** deliberately
+   project-less with an `Area:` label — never accidentally unclassified.
+4. **No lane exceeds the `Lane size` bound** (default 8 open issues). One that does is a pool at birth.
+5. **Every initiative has at least one live or placeholder project.** An initiative whose projects are all
+   completed — or which has none — is skipped by the walk.
+6. The earliest non-`Completed` initiative is `Active`; its earliest live project is `started`.
+7. Run `pk status` — the **Roadmap** section should list your `i{N}.` initiatives in order with the
+   current `P{N}.` project for each. If it's empty, a prefix is missing or malformed. Cross-check that the
+   lane it names is where the live work actually is; if it points somewhere idle, you have a pool.
 
 ### Phase 5 — Summary
 

@@ -1,6 +1,6 @@
 ---
 name: phase-plan
-description: Advance the current initiative on the Linear-native surface — derive the active i{N}./P{N}., promote its issues to Needs Spec, roll the pointer forward. Use when an initiative is closing.
+description: Advance the current initiative on the Linear-native surface — derive the active i{N}./P{N}., cut new lanes from the backlog, promote issues to Needs Spec, roll the pointer forward. Use when a lane is spent or an initiative is closing.
 ---
 
 # Phase Plan Skill
@@ -21,6 +21,7 @@ naming-convention contract. **Initiative state lives in Linear, not a file** —
 | Argument | What it does |
 |----------|--------------|
 | (none) | Confirm the current initiative; promote its issues to Needs Spec |
+| `--cut` | **Cut a new lane** — batch 3–8 issues out of the Area backlog into a fresh `I{N}.P{M}.` project |
 | `--next` | Advance the phase pointer: close the current sub-phase, open the next |
 | `--status` | Current-phase progress dashboard (derived live from Linear) |
 | `--rebalance` | Move issues between projects (re-scope the current sub-phase) |
@@ -35,8 +36,10 @@ naming-convention contract. **Initiative state lives in Linear, not a file** —
 
 | Concept | Linear construct | Naming | Role |
 |---------|-----------------|--------|------|
-| **Initiative** | Initiative | `i{N}. label` | Ordered roadmap initiative. Status `Active`/`Planned`/`Completed`. |
-| **Sub-phase / execution batch** | Project | `I{N}.P{N}. label` (v4.5.0+; legacy bare `P{N}.` still parses) | The batch you're building now. State `started`/`planned`/`completed`. Issues live here. |
+| **Initiative / release phase** | Initiative | `i{N}. label` | Ordered and **completable**. Status `Active`/`Planned`/`Completed`. |
+| **Lane / execution batch** | Project | `I{N}.P{N}. label` (v4.5.0+; legacy bare `P{N}.` still parses) | A **completable batch of 3–8 issues**. State `started`/`planned`/`completed`. |
+| **Theme** | Initiative, unprefixed | `label` | A long-running strand; allowed to never complete. Ignored by the walk. |
+| **Uncut backlog** | Issue, no project | identifier | The default resting state, classified by an `Area:` label. |
 | **Work item** | Issue | identifier | Moves On Deck → Needs Spec → … → Done. |
 | **Milestone** (optional) | Milestone | free | Intra-project gating, orthogonal to phases. |
 
@@ -97,6 +100,34 @@ Next steps:
   - /light-spec PROJ-3 — start the first issue
   - pk next            — same view, anytime
 ```
+
+---
+
+### `--cut`: Cut a new lane out of the backlog
+
+**This is the operation that keeps the board walkable.** Uncut work sits project-less with an `Area:` label; the `i{N}.`→`P{N}.` walk cannot see it. Cutting turns a slice of that backlog into a completable lane the walk *can* see. It is a deliberate planning act — always propose the full lane and get confirmation before writing.
+
+1. **Pick the target initiative** — normally the current one. Read `method.config.md § Initiative Surface → Area Labels` for the Area label set and `Lane size` (default `3-8`).
+2. **Survey the candidates.** Fetch open project-less issues, filtered to one `Area:` label, minimal fields only. Propose a slice that is **coherent** (one theme a human would call a batch) and **completable** (the lane can be called done when these are done). If a natural batch exceeds the `Lane size` upper bound, cut two lanes rather than one big one — an oversized lane is a pool with a lane's name.
+3. **Name it `I{N}.P{M}.`** where `{N}` is the initiative number and `{M}` is the next free project number in that initiative. Numbers are never reused within an initiative, and gaps are fine.
+4. **Write the serialization notes into `content`, not `description`.** Linear's project `description` **hard-caps at 255 characters**; long notes silently belong in the markdown `content` body. Keep `description` a trimmed one-line summary. Record which issues must run in sequence (and why — usually shared files or migration ordering) and which are parallel-safe. Real intra-lane ordering is `blockedBy` relations; the notes explain them, they don't replace them.
+5. **Stamp the run order** on each issue's `sortOrder`, ascending in intended execution order, stepped (`-2,000,000` upward in `1000` steps leaves room to insert). The project view under *Manual* ordering then reads top-to-bottom as the run sequence.
+   - **Display settings are settable via the API** — `viewPreferencesCreate(input: {type: organization, viewType: project, projectId: …, preferences: {"issueGrouping": "none", "viewOrdering": "manual"}})`. A wrong key or value **stores fine and silently does nothing**, and project-scoped rows have no API read surface, so verify one in the browser after the first use. See `sop/Linear_SOP.md` § API gotchas.
+   - **The stamp is authoritative for queued issues only.** A workflow-state change re-ranks `sortOrder`, so once an issue enters the pipeline its position is its state, not its stamp. Don't re-stamp in-flight work to "fix" the order.
+6. **Create and populate.** `linear_createProject` (with `initiativeId`, and `state`: `started` if this is the lane you're starting now, else `planned`), then one `linear_updateIssue` per member setting `projectId` **and** `sortOrder` together, and verify the echo.
+   - **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** Triage them out first, or the lane will render short and read as half-empty. (Anchor: SiteLine PIPER-559.)
+   - **Leave `Area:` labels alone** — they persist through the cut. That's what keeps the backlog views honest.
+7. **Sanity-gate before the first write.** Count the candidate set, then re-survey it fresh and compare (tolerance ±5). A batch board mutation that starts from a stale survey is very hard to unwind.
+
+Report the lane, its members in run order, and the serialization notes. Then offer the default flow to promote its issues.
+
+**Closing an initiative.** When the last lane in an initiative completes, set the initiative `Completed` and deal with the tail explicitly — never let it vanish:
+
+- Issues already **spec-approved** but unbuilt → a named close-out lane at the head of the *next* initiative (`I{N+1}.P0. <Prev> close-out`).
+- **Unspecced** leftovers → back to project-less + their `Area:` label. They rejoin the backlog and get cut again later.
+- If the next initiative has no live work yet, it needs a **placeholder** lane (description containing the literal word `placeholder`), or the walk reads it as finished and skips it.
+
+**Number reuse at the boundary.** The current initiative must be the *lowest* non-`Completed` `i{N}`. If a long-running strand is squatting on a low number, de-prefix it to a theme (freeing the integer) or renumber it **highest** — a parallel strand that never gates the arc belongs at `i8.`, not unprefixed: high keeps it inside the walk (so its work stays visible) while guaranteeing it never becomes "current" ahead of the real arc. Completed initiatives keep their prefixes as history.
 
 ---
 
@@ -164,8 +195,14 @@ Move issues between projects in Linear (the membership *is* the batch):
 - **The current initiative is derived, never declared.** Don't write a "Current Initiative" anywhere — read it
   from Linear initiative/project state.
 - **Order is the prefix number.** `P2` before `P10`; `i1` before `i2`. Never Linear `sortOrder`.
-- **A project is the execution batch.** Roadmap-create sets membership; phase-plan promotes and advances.
-  Keep projects to ~3–8 issues; if a `P{N}.` is too big, split it into `P{N}a`/renumber in `/roadmap-create`.
+- **A project is a completable lane, never a standing pool.** Keep it to `Lane size` (default 3–8) issues.
+  A project that keeps accepting work is invisible to the walk — `pk status` will point at some idle lane
+  while the real work hides inside the pool. If a lane outgrows the bound, cut a second lane (`--cut`);
+  don't let it grow. `/linear-hygiene` Phase 2b flags the overflow as pool smell.
+- **Lanes are supposed to finish.** Complete a lane the moment its last issue is Done — an open lane with
+  zero open issues stays "current" forever.
+- **Empty placeholder lanes are load-bearing**, not clutter. An initiative whose projects are all completed
+  reads as done to the walk and gets skipped. Never clean these up.
 - **Dependencies within the sub-phase should be satisfiable** (blocker Done, or in the same project).
 - **Advance deliberately.** `--next` only closes a sub-phase the human confirms is done.
 - **No files.** Initiative state is Linear state. Never write `PHASES.md` / `linear-map.json`.
@@ -176,7 +213,12 @@ Move issues between projects in Linear (the membership *is* the batch):
   malformed or a Linear state is stale — fix the Linear state, don't add a pointer file.
 - **Advancing with issues unfinished** → only `--next` past a sub-phase whose issues are Done. Planning
   on hope leaves stalled phases.
-- **Over-stuffing a project** → keep ~3–8 issues. Re-scope via `--rebalance` or split in `/roadmap-create`.
+- **Over-stuffing a project** → keep ~3–8 issues. Re-scope via `--rebalance`, or cut a second lane (`--cut`).
+- **Creating a project to hold "everything about X"** → that's a pool, and the walk can't see into it. The
+  home for uncut work is *no project* plus an `Area:` label. (Anchor: SiteLine, 2026-08-02 — 98 of 162 open
+  issues sat in three pool projects; `pk status` pointed at a lane idle since 07-17 while 100% of live work
+  was invisible, and the real execution order had migrated into a gitignored notes file.)
+- **Deleting an empty placeholder lane** → it's the thing stopping the walk from skipping that initiative.
 
 ## Next-step output
 

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.27.2** — Last updated: 2026-08-02  *(**v4.27.2 — `/verify` Step 7 now writes `reality-check.md`'s header with a heredoc, not prose.** Its `sha:` line is what the v4.27.1 drift gate falls back to when `verify-complete.md` is absent, and prose rendering dropped it ~14% of the time and rising (SiteLine, 2026-08-02: heredoc-written `verify-complete.md` 191/192 vs prose-rendered `reality-check.md` 167/195). Also assigns `$STATUS`, which Step 8's sentinel-write consumed but nothing assigned. Four smoke guards keep Step 7 from drifting back. No `bin/pk` change. Smoke 194 → 198.)*
+**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — the lanes board model.** A Linear project is a *completable lane* of 3–8 issues, an initiative is a *completable release phase*, and "no project" + an `Area:` label is the correct home for uncut work — because the `i{N}.`→`P{N}.` walk cannot see inside a project, so a standing pool makes its contents invisible to `pk next`/`pk status` (SiteLine, 2026-08-02: 98 of 162 open issues hidden in three pools). `/linear-hygiene` stops homing orphans into projects and gains four detect-only board-shape checks; `/phase-plan --cut` is the new lane-cutting operation. The naming contract is unchanged and `bin/pk` needed no code change. Smoke 198, unchanged.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -43,6 +43,7 @@ VBW is fully retired: the executor went in v4.0.0 (native-on-Workflow is the sol
 
 - **Pipekit owns** Linear issues, the **initiative surface** (Linear Initiatives `i{N}.` → Projects `I{N}.P{N}.` → Issues; v4.1.0, project `I{N}.` prefix added v4.5.0), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current initiative from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
 - **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`I{N}.P{N}.` hierarchy *is* the roadmap.
+- **Both levels are completable** (v4.28.0, the lanes model): an initiative is a release phase, a project is a **lane of ~3–8 issues**, and uncut work rests with **no project plus an `Area:` label**. The walk reads *into* a project but never *inside* one, so a project that keeps accepting work hides its contents from `pk next`/`pk status`. Completability lives at the project level; eternity lives at the theme/label level.
 - **`/work` is the only executor entry point.** It plans inline (parallel `Agent` grounding) and executes on the native-on-Workflow backend, keeping Linear and the `pk *` state in sync. There is no backend selection.
 - **Legacy read-only fallback:** `bin/pk` still reads a legacy `.vbw-planning/PHASES.md`/`linear-map.json` (and legacy `PLAN.md` finalize) *only* for un-migrated projects that haven't moved to the Linear-native surface. Never the normal path.
 
@@ -66,7 +67,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 
 ## Key Skills
 
-**Stage 0 (Foundation):** `/concept` → `/define` → `/strategy-create` → `/startup` (orchestrates the chain, auto-detects entry mode) → `/roadmap-create` (authors the roadmap into Linear) → `/phase-plan` (selects the next execution phase).
+**Stage 0 (Foundation):** `/concept` → `/define` → `/strategy-create` → `/startup` (orchestrates the chain, auto-detects entry mode) → `/roadmap-create` (authors the roadmap into Linear) → `/phase-plan` (selects the next execution phase; `--cut` batches backlog issues into a new lane).
 
 **Development Pipeline (v2 daily loop):**
 
@@ -94,7 +95,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/pr-security-review` | Antagonistic security review of a PR diff (migrations, RLS, auth). |
 | `/pk-bug` | Bug pipeline: reproduce → regression-test-first → fix → ship → postmortem. |
 | `/pk-express` | Idea→Draft-PR autopilot for Quick/Standard-tier WITs; stops at attention gates. |
-| `/linear-hygiene` | Batch-homes orphaned/untriaged issues (placement, not disposition). |
+| `/linear-hygiene` | Classifies unclassified/untriaged issues (placement, not disposition) and flags board-shape drift — pool smell, spent lanes, walk-skip hazards. Never creates a project. |
 | `/pipekit-help` | Recommends the next pipeline step from project state. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what shipped. |
 | `/release-changelog` | Draft CHANGELOG entry from commits between tags. |
