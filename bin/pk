@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.27.0"
+PK_VERSION="4.27.1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -952,22 +952,61 @@ pk_verify_sentinel_for_head() {
 # unable to see the failure it exists to catch (pipekit-tooling.md § The
 # Verification Method Must Be Able to See the Failure). Hence the tolerant
 # leading-marker pattern below, and short shas are accepted — the caller resolves.
+# Extract the recorded sha from verify-evidence content on stdin. Tolerates
+# "sha:", "# sha:", "- sha:" — the three forms /verify has actually written.
+# Split out so the same parse serves a working-tree file and a `git show` stream.
+pk_verify_sha_from() {
+  grep -aiE '^[[:space:]]*[#-]?[[:space:]]*sha:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' 2>/dev/null \
+    | head -1 | sed -E 's/.*[Ss][Hh][Aa]:[[:space:]]*//' | tr -d '[:space:]'
+}
+
+# $2 (optional) — a branch/ref whose tree is ALSO searched.
+#
+# v4.27.1: both sources are required, and each covers a case the other misses.
+#   - Working tree only: `pk ready <ID>` run from the parent repo sees the parent's
+#     checkout, not the feature branch, so a branch-only artifact is invisible.
+#     `pk done` runs from the parent BY DESIGN, so it was blind every time.
+#     (Reproduced on SiteLine: feature/PIPER-553 carries
+#     Logs/Verify/20260801/PIPER-553/verify-complete.md; `main`'s tree has none.)
+#   - Ref only: the sentinel is frequently never committed. SiteLine PIPER-490
+#     reached PASS and `pk ship` passed on a sentinel that existed on disk in the
+#     worktree, but the commit staged only evidence.txt + reality-check.md — then
+#     `pk done` removed the worktree and the file with it. A git-only read would
+#     have missed it exactly when it mattered.
+# Preference order is per-artifact, not per-source: verify-complete.md from EITHER
+# source outranks evidence.txt from either, so the authoritative sentinel always
+# wins over a weaker fallback that merely happens to be closer to hand.
 pk_verify_sentinel_latest() {
-  local issue="$1" f newest="" sha base
+  local issue="$1" ref="${2:-}" f newest="" sha base p rref=""
   [ -n "$issue" ] || return 1
+
+  # Resolve the ref once; tolerate a branch that only exists on the remote.
+  if [ -n "$ref" ]; then
+    if git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null 2>&1; then rref="$ref"
+    elif git rev-parse --verify --quiet "origin/${ref}^{commit}" >/dev/null 2>&1; then rref="origin/${ref}"
+    fi
+  fi
+
   for base in verify-complete.md evidence.txt reality-check.md; do
+    # 1. Working tree (date dirs are YYYYMMDD, so the glob is chronological).
     newest=""
     for f in Logs/Verify/*/"${issue}"/"${base}"; do
       [ -f "$f" ] || continue
       newest="$f"
     done
-    [ -n "$newest" ] || continue
-    # Tolerates "sha:", "# sha:", "- sha:" — the three forms /verify has written.
-    sha=$(grep -aiE '^[[:space:]]*[#-]?[[:space:]]*sha:[[:space:]]*[0-9a-f]{7,40}[[:space:]]*$' "$newest" 2>/dev/null \
-      | head -1 | sed -E 's/.*[Ss][Hh][Aa]:[[:space:]]*//' | tr -d '[:space:]')
-    if [ -n "$sha" ]; then
-      printf '%s\t%s\n' "$newest" "$sha"
-      return 0
+    if [ -n "$newest" ]; then
+      sha=$(pk_verify_sha_from < "$newest")
+      if [ -n "$sha" ]; then printf '%s\t%s\n' "$newest" "$sha"; return 0; fi
+    fi
+
+    # 2. The branch's tree.
+    if [ -n "$rref" ]; then
+      p=$(git ls-tree -r --name-only "$rref" 2>/dev/null \
+        | grep -E "^Logs/Verify/[^/]+/${issue}/${base}$" | sort | tail -1)
+      if [ -n "$p" ]; then
+        sha=$(git show "${rref}:${p}" 2>/dev/null | pk_verify_sha_from)
+        if [ -n "$sha" ]; then printf '%s\t%s\n' "${rref}:${p}" "$sha"; return 0; fi
+      fi
     fi
   done
   return 1
@@ -1022,9 +1061,9 @@ pk_verify_drift_blocks() {
 # Human-readable detail goes to stderr so the echoed token stays parseable.
 # Always returns 0 — the caller decides which classes block.
 pk_verify_drift_report() {
-  local issue="$1" head="$2"
+  local issue="$1" head="$2" ref="${3:-}"
   local latest path sha class files count
-  latest=$(pk_verify_sentinel_latest "$issue" 2>/dev/null) || { echo "none"; return 0; }
+  latest=$(pk_verify_sentinel_latest "$issue" "$ref" 2>/dev/null) || { echo "none"; return 0; }
   path="${latest%%$'\t'*}"
   sha="${latest##*$'\t'}"
 
@@ -2270,7 +2309,9 @@ cmd_ready() {
     echo "⚠ verify-drift gate bypassed via PK_VERIFY_BYPASS=1" >&2
     _drift="fresh"
   else
-    _drift=$(pk_verify_drift_report "$id" "$_rhead")
+    # Pass the feature branch: pk ready is documented as runnable from the parent
+    # repo, whose checkout does not carry the branch's verify artifacts.
+    _drift=$(pk_verify_drift_report "$id" "$_rhead" "$current")
   fi
 
   # `unreachable` blocks alongside real drift. It is the UNKNOWN case, not a clean
@@ -2466,14 +2507,16 @@ cmd_done() {
   # not only in a terminal someone already closed.
   local _dhead _ddrift
   _dhead=$(git rev-parse "$current" 2>/dev/null || echo "")
-  _ddrift=$(pk_verify_drift_report "$issue" "$_dhead")
-  case "$_ddrift" in
-    source|migrations)
-      echo "⚠ verify evidence did not cover the merged head (${_ddrift} drift)." >&2
-      pk_linear_comment "$issue" \
-        "⚠ Merged with stale verify evidence — the verify-complete sentinel does not cover the merged head \`${_dhead:0:8}\` (${_ddrift} drift). The recorded PASS describes an earlier commit." || true
-      ;;
-  esac
+  # pk done ALWAYS runs from the parent repo, so the branch ref is not optional
+  # here — without it this report could never fire. And the class list comes from
+  # pk_verify_drift_blocks rather than being restated: duplicating it is what let
+  # `unreachable` fall through here after cmd_ready started blocking on it.
+  _ddrift=$(pk_verify_drift_report "$issue" "$_dhead" "$current")
+  if [ "$(pk_verify_drift_blocks "$_ddrift")" = "block" ]; then
+    echo "⚠ verify evidence did not cover the merged head (${_ddrift} drift)." >&2
+    pk_linear_comment "$issue" \
+      "⚠ Merged with stale verify evidence — the verify-complete sentinel does not cover the merged head \`${_dhead:0:8}\` (${_ddrift} drift). The recorded PASS describes an earlier commit." || true
+  fi
   # ------------------------------------------------------------------------
 
   # Build the Linear close comment from git directly (v2.1.2+).

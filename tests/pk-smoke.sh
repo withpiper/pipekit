@@ -1090,6 +1090,58 @@ out=$(sl ABC-490)
 cleanup
 FIXTURE=""
 
+echo "== verify drift: branch-ref lookup (v4.27.1) =="
+# pk ready is documented as runnable from the parent repo, and pk done runs from
+# it BY DESIGN — where the feature branch's verify artifacts are not in the
+# checkout at all. Working-tree-only lookup made pk done blind every time.
+
+make_fixture
+gitf() { git -C "$FIXTURE" -c user.email=t@t -c user.name=t "$@"; }
+sl2() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_latest "$@" ); }
+
+BRANCH_SHA="1111111111111111111111111111111111111111"
+gitf checkout -q -b feature/ABC-7-thing
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-7"
+printf 'sha: %s\n' "$BRANCH_SHA" > "$FIXTURE/Logs/Verify/20260101/ABC-7/verify-complete.md"
+gitf add -A >/dev/null 2>&1; gitf commit -q -m "verify artifacts"
+gitf checkout -q main   # parent-repo state: branch artifacts NOT in the checkout
+
+[ ! -e "$FIXTURE/Logs/Verify/20260101/ABC-7" ] && ok "branch ref: artifacts absent from parent checkout (precondition)" || fail "branch ref: artifacts absent from parent checkout (precondition)" "still present"
+
+out=$(sl2 ABC-7); rc=$?
+[ $rc -ne 0 ] && ok "branch ref: without a ref, parent-repo lookup finds nothing (the bug)" || fail "branch ref: without a ref, parent-repo lookup finds nothing" "rc=$rc out='$out'"
+
+out=$(sl2 ABC-7 feature/ABC-7-thing)
+[ "${out##*$'\t'}" = "$BRANCH_SHA" ] && ok "branch ref: with a ref, branch-only sentinel is found" || fail "branch ref: with a ref, branch-only sentinel is found" "got '$out'"
+
+# Preference is per-artifact, not per-source: the authoritative sentinel on the
+# branch must beat a weaker fallback that merely happens to be in the checkout.
+WT_SHA="2222222222222222222222222222222222222222"
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-7"
+printf '# sha: %s\n' "$WT_SHA" > "$FIXTURE/Logs/Verify/20260101/ABC-7/evidence.txt"
+out=$(sl2 ABC-7 feature/ABC-7-thing)
+[ "${out##*$'\t'}" = "$BRANCH_SHA" ] && ok "branch ref: branch verify-complete.md outranks working-tree evidence.txt" || fail "branch ref: branch verify-complete.md outranks working-tree evidence.txt" "got '$out'"
+
+# An uncommitted sentinel in the worktree is the PIPER-490 case — it must still win.
+WT_SENT="3333333333333333333333333333333333333333"
+printf 'sha: %s\n' "$WT_SENT" > "$FIXTURE/Logs/Verify/20260101/ABC-7/verify-complete.md"
+out=$(sl2 ABC-7 feature/ABC-7-thing)
+[ "${out##*$'\t'}" = "$WT_SENT" ] && ok "branch ref: uncommitted worktree sentinel still wins (PIPER-490 case)" || fail "branch ref: uncommitted worktree sentinel still wins" "got '$out'"
+
+out=$(sl2 ABC-7 no/such/branch); rc=$?
+[ $rc -eq 0 ] && ok "branch ref: unresolvable ref degrades to working tree, no crash" || fail "branch ref: unresolvable ref degrades to working tree" "rc=$rc"
+cleanup
+FIXTURE=""
+
+echo "== verify drift: class list not duplicated (v4.27.1 regression guard) =="
+# cmd_done restated `source|migrations` inline and so never matched `unreachable`
+# once cmd_ready started blocking on it. pk_verify_drift_blocks is the single
+# source of truth; both gate call sites must go through it.
+BLOCKS_CALLS=$(grep -c 'pk_verify_drift_blocks "' "$PK")
+[ "$BLOCKS_CALLS" -ge 2 ] && ok "class list: both gate sites call pk_verify_drift_blocks ($BLOCKS_CALLS)" || fail "class list: both gate sites call pk_verify_drift_blocks" "only $BLOCKS_CALLS call(s)"
+DUPES=$(grep -n 'source|migrations' "$PK" | grep -v 'pk_verify_drift_blocks()' | grep -vc 'source|migrations|unreachable' || true)
+[ "$DUPES" -eq 0 ] && ok "class list: no partial re-statement of the blocking classes" || fail "class list: no partial re-statement of the blocking classes" "$DUPES site(s) list source|migrations without unreachable"
+
 echo "== verify drift: report against real commits (v4.27.0) =="
 
 make_fixture
