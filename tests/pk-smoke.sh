@@ -1028,6 +1028,107 @@ out=$(pr "$OTHER_SHA"); rc=$?
 cleanup
 FIXTURE=""
 
+# ── Unit tests: verify-drift (ship→merge window, v4.27.0) ────────────────────
+# `pk ship` proves the sentinel matched at ship time; commits landing during PR
+# review move HEAD past it and nothing re-checks. Anchor: SiteLine PIPER-490
+# (PR #774) merged with a PASS artifact describing an RLS predicate that a
+# post-ship commit had rewritten.
+
+echo "== verify drift: classifier (pure, v4.27.0) =="
+
+make_fixture
+dc() { ( cd "$FIXTURE" && source "$PK" && pk_verify_drift_class "$@" ); }
+
+[ "$(printf ''                                        | dc)" = "fresh" ]      && ok "drift class: no files → fresh"            || fail "drift class: no files → fresh" "got $(printf '' | dc)"
+[ "$(printf 'Logs/Verify/x/e.txt\nREADME.md\n'        | dc)" = "docs" ]       && ok "drift class: evidence+prose → docs"       || fail "drift class: evidence+prose → docs" "got $(printf 'Logs/Verify/x/e.txt\nREADME.md\n' | dc)"
+[ "$(printf 'src/app/js/auth.js\n'                    | dc)" = "source" ]     && ok "drift class: source → source"             || fail "drift class: source → source" "got $(printf 'src/app/js/auth.js\n' | dc)"
+[ "$(printf 'tests/rls/a.test.js\n'                   | dc)" = "source" ]     && ok "drift class: tests count as source"       || fail "drift class: tests count as source" "got $(printf 'tests/rls/a.test.js\n' | dc)"
+[ "$(printf 'supabase/migrations/a.sql\nsrc/b.js\n'   | dc)" = "migrations" ] && ok "drift class: migration outranks source"   || fail "drift class: migration outranks source" "got $(printf 'supabase/migrations/a.sql\nsrc/b.js\n' | dc)"
+[ "$(printf 'apps/api/supabase/migrations/a.sql\n'    | dc)" = "migrations" ] && ok "drift class: nested monorepo migration"   || fail "drift class: nested monorepo migration" "got $(printf 'apps/api/supabase/migrations/a.sql\n' | dc)"
+[ "$(printf 'db/migrate/001.rb\n'                     | dc 'db/migrate')"    = "migrations" ] && ok "drift class: configured non-Supabase migration dir" || fail "drift class: configured non-Supabase migration dir" "got $(printf 'db/migrate/001.rb\n' | dc 'db/migrate')"
+[ "$(printf 'supabase/migrations/a.sql\n'             | dc 'supabase/migrations')" = "migrations" ] && ok "drift class: migration dir without trailing slash" || fail "drift class: migration dir without trailing slash" "got $(printf 'supabase/migrations/a.sql\n' | dc 'supabase/migrations')"
+
+echo "== verify drift: block/allow contract (pure, v4.27.0) =="
+
+db() { ( cd "$FIXTURE" && source "$PK" && pk_verify_drift_blocks "$@" ); }
+
+[ "$(db source)" = "block" ]      && ok "drift blocks: source → block"          || fail "drift blocks: source → block" "got $(db source)"
+[ "$(db migrations)" = "block" ]  && ok "drift blocks: migrations → block"      || fail "drift blocks: migrations → block" "got $(db migrations)"
+# unreachable must BLOCK. pk ship's gate needs an exact sha match, so a rebased
+# branch cannot ship at all — allowing the Ready flip would make this gate looser
+# than the one it reinforces, and a pre-review rebase would defeat it entirely.
+[ "$(db unreachable)" = "block" ] && ok "drift blocks: unreachable → block (fails closed)" || fail "drift blocks: unreachable → block (fails closed)" "got $(db unreachable)"
+[ "$(db docs)" = "allow" ]        && ok "drift blocks: docs → allow"            || fail "drift blocks: docs → allow" "got $(db docs)"
+[ "$(db fresh)" = "allow" ]       && ok "drift blocks: fresh → allow"           || fail "drift blocks: fresh → allow" "got $(db fresh)"
+[ "$(db none)" = "allow" ]        && ok "drift blocks: none → allow (ship gates it)" || fail "drift blocks: none → allow" "got $(db none)"
+[ "$(db)" = "allow" ]             && ok "drift blocks: empty arg → allow"       || fail "drift blocks: empty arg → allow" "got $(db)"
+
+echo "== verify drift: evidence lookup + fallback (v4.27.0) =="
+
+sl() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_latest "$@" ); }
+
+out=$(sl NOPE-1); rc=$?
+[ $rc -ne 0 ] && ok "sentinel latest: no artifacts → rc!=0" || fail "sentinel latest: no artifacts → rc!=0" "rc=$rc out='$out'"
+
+# The PIPER-490 shape: no verify-complete.md, sha only in evidence.txt as "# sha:".
+# Keying solely on the sentinel would make this gate blind to its own anchor case.
+mkdir -p "$FIXTURE/Logs/Verify/20260731/ABC-490"
+printf '# sha: %s\n# tier: heavy\n' "$HEAD_SHA" > "$FIXTURE/Logs/Verify/20260731/ABC-490/evidence.txt"
+out=$(sl ABC-490)
+[ "${out##*$'\t'}" = "$HEAD_SHA" ] && ok "sentinel latest: falls back to evidence.txt '# sha:'" || fail "sentinel latest: falls back to evidence.txt '# sha:'" "got '$out'"
+
+# reality-check.md records a SHORT sha with a "- sha:" marker.
+mkdir -p "$FIXTURE/Logs/Verify/20260731/ABC-491"
+printf -- '- sha: %s\n' "${HEAD_SHA:0:8}" > "$FIXTURE/Logs/Verify/20260731/ABC-491/reality-check.md"
+out=$(sl ABC-491)
+[ "${out##*$'\t'}" = "${HEAD_SHA:0:8}" ] && ok "sentinel latest: falls back to reality-check '- sha:' (short)" || fail "sentinel latest: falls back to reality-check '- sha:' (short)" "got '$out'"
+
+# verify-complete.md is authoritative and must win over the weaker fallbacks.
+printf 'sha: %s\n' "$OTHER_SHA" > "$FIXTURE/Logs/Verify/20260731/ABC-490/verify-complete.md"
+out=$(sl ABC-490)
+[ "${out##*$'\t'}" = "$OTHER_SHA" ] && ok "sentinel latest: verify-complete.md outranks evidence.txt" || fail "sentinel latest: verify-complete.md outranks evidence.txt" "got '$out'"
+cleanup
+FIXTURE=""
+
+echo "== verify drift: report against real commits (v4.27.0) =="
+
+make_fixture
+gitf() { git -C "$FIXTURE" -c user.email=t@t -c user.name=t "$@"; }
+dr() { ( cd "$FIXTURE" && source "$PK" && pk_verify_drift_report "$@" ); }
+
+mkdir -p "$FIXTURE/supabase/migrations" "$FIXTURE/src" "$FIXTURE/Logs/Verify/20260101/ABC-1"
+printf 'x\n' > "$FIXTURE/src/a.js"
+gitf add -A >/dev/null 2>&1; gitf commit -q -m base
+BASE=$(gitf rev-parse HEAD)
+printf 'sha: %s\n' "$BASE" > "$FIXTURE/Logs/Verify/20260101/ABC-1/verify-complete.md"
+
+[ "$(dr ABC-1 "$BASE" 2>/dev/null)" = "fresh" ] && ok "drift report: sentinel == HEAD → fresh" || fail "drift report: sentinel == HEAD → fresh" "got $(dr ABC-1 "$BASE" 2>/dev/null)"
+
+# Docs-only drift: the /verify artifacts themselves moving must stay benign, or
+# the gate would fire on every normal verify-docs commit.
+printf 'note\n' > "$FIXTURE/Logs/Verify/20260101/ABC-1/reality-check.md"
+gitf add -A >/dev/null 2>&1; gitf commit -q -m docs
+H=$(gitf rev-parse HEAD)
+[ "$(dr ABC-1 "$H" 2>/dev/null)" = "docs" ] && ok "drift report: evidence-only drift → docs (benign)" || fail "drift report: evidence-only drift → docs (benign)" "got $(dr ABC-1 "$H" 2>/dev/null)"
+
+printf 'y\n' > "$FIXTURE/src/a.js"
+gitf add -A >/dev/null 2>&1; gitf commit -q -m src
+H=$(gitf rev-parse HEAD)
+[ "$(dr ABC-1 "$H" 2>/dev/null)" = "source" ] && ok "drift report: post-verify source change → source" || fail "drift report: post-verify source change → source" "got $(dr ABC-1 "$H" 2>/dev/null)"
+
+# The PIPER-490 shape: a migration rewritten after the verify that exercised it.
+printf 'select 1;\n' > "$FIXTURE/supabase/migrations/20260101_a.sql"
+gitf add -A >/dev/null 2>&1; gitf commit -q -m mig
+H=$(gitf rev-parse HEAD)
+[ "$(dr ABC-1 "$H" 2>/dev/null)" = "migrations" ] && ok "drift report: post-verify migration change → migrations" || fail "drift report: post-verify migration change → migrations" "got $(dr ABC-1 "$H" 2>/dev/null)"
+
+printf 'sha: %s\n' "$OTHER_SHA" > "$FIXTURE/Logs/Verify/20260101/ABC-1/verify-complete.md"
+[ "$(dr ABC-1 "$H" 2>/dev/null)" = "unreachable" ] && ok "drift report: orphaned sha (rebase) → unreachable" || fail "drift report: orphaned sha (rebase) → unreachable" "got $(dr ABC-1 "$H" 2>/dev/null)"
+
+[ "$(dr NOPE-9 "$H" 2>/dev/null)" = "none" ] && ok "drift report: no evidence at all → none" || fail "drift report: no evidence at all → none" "got $(dr NOPE-9 "$H" 2>/dev/null)"
+cleanup
+FIXTURE=""
+
 # ── CLI tests: security-gate ship gate (E2E, v4.17.0) ────────────────────────
 # Armed only when the `Security categories` file exists. A verify sentinel is
 # planted at HEAD throughout so only the NEW gate varies.

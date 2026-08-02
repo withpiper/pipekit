@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.26.4** — Last updated: 2026-08-01  *(**v4.26.4 — `/02-light-spec-revise`'s documented agent-reply format caught up with reality.** The skill documented heading/bullet verdict formats while `pk spec-cycle`'s trigger demands — and the agent returns — a bare first-line `Verdict: Pass|Revise` with plain `Field: value` lines; Phase 1 even identified agent comments by a regex matching nothing the agent now sends. Added the plain-line format as primary, demoted headings/bullets to legacy, fixed the identification regex, and documented that the review arrives as a threaded child comment — a `comments(last:1)` read returns the trigger, not the verdict. `bin/pk` was always immune; doc-only. Smoke 161, unchanged.)*
+**v4.27.0** — Last updated: 2026-08-02  *(**v4.27.0 — the ship→merge window is now gated.** `pk ship` proved the verify sentinel matched at ship time; nothing re-checked it while the PR stayed open, so commits landing during review could carry a PR to merge with a PASS artifact describing code no longer in the diff. Anchor: SiteLine PIPER-490 — a migration's authorization predicate rewritten 33 minutes after ship, merged 7 hours later, with the review quoting the stale sha. `pk ready` now refuses on source/migration drift (`--force` flips anyway and logs a Linear comment); `pk done` reports it post-merge. Evidence lookup falls back past `verify-complete.md` to `evidence.txt`/`reality-check.md`, because the anchor case had no sentinel at all. Smoke 161 → 186.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.26.4                (or latest tag)
+1. ./scripts/sync-method.sh v4.27.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -439,7 +439,7 @@ If `method.config.md § Phase Label Layer` is configured, the board mirrors `ROA
 | 5 | Ship | `pk ship` | `./bin/pk ship` | worktree | push + gh pr create as **Draft** (v2.6.0+) + writes Linear (UAT) |
 | 5 | (Variant) | `pk ship --env=<env>` | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
 | 5 | (Variant) | `pk ship --ready` | `./bin/pk ship --ready` | worktree | open Ready instead of Draft (v2.6.0+; for one-shot tiny WITs) |
-| **5a** | **Flip Draft → Ready** | **`pk ready [<ID>]`** | **`./bin/pk ready [<ID>]`** | **worktree or parent** | **fires `ready_for_review` GH event → outside reviewers run (v2.6.0+)** |
+| **5a** | **Flip Draft → Ready** | **`pk ready [<ID>]`** | **`./bin/pk ready [<ID>]`** | **worktree or parent** | **fires `ready_for_review` GH event → outside reviewers run (v2.6.0+). Refuses if source/a migration changed since `/verify`, or the verified sha is unreachable after a rebase (v4.27.0+) — re-verify or `--force`** |
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |

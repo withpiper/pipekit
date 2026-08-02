@@ -97,6 +97,14 @@ Sibling to the above: a check that structurally cannot observe the thing it clai
 
 Before trusting a clean result, ask what a failure would have to look like for this check to miss it. If that shape is plausible, the check is not evidence.
 
+### And ask the converse: can this check *cheat*?
+
+A check can also fail by seeing **more** than it should. The result looks clean — or looks like a brilliant catch — because the method had access to the answer, not because it derived it.
+
+- **A `git worktree` does not hide the future.** It shares the parent repo's object database and refs, so a worktree detached at an old commit can still read every later commit — including the ones that fixed the bug you are asking about. Anchor: Pipekit, 2026-08-02 — a blind-review trial checked out two PRs at their head commits in worktrees; the reviewer read the follow-up fix PRs and cited them ("the later PIPER-554 migration confirms both defects") at confidence 100. Real isolation needs a separate clone with all refs deleted except the pinned commits, reflogs expired, and `gc --prune=now`.
+- **The artifact under review may already encode the answer.** Reviewing a PR at its *head* means reviewing a version that already absorbed earlier review rounds — documented residuals, updated prose, added tests. A reviewer "finding" those is reading, not discovering. When measuring a reviewer, pin the commit it would actually have seen.
+- **Generalization:** whenever a check is supposed to be blind — a benchmark, an A/B, a held-out evaluation, a "fresh eyes" reviewer — name the channel through which the answer could reach it, and close that channel explicitly. A suspiciously confident result is the tell: a genuine derivation carries hedges, a leaked one does not.
+
 ## Package Manager
 
 Read the project's package manager from `method.config.md` or infer from lockfile:
