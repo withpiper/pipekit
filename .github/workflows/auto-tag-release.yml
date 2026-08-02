@@ -32,9 +32,18 @@ jobs:
 
       - name: Extract version from PR title
         id: version
+        # PR_TITLE arrives via env, never as a `${{ }}` expansion inside the
+        # script. GitHub substitutes `${{ }}` textually BEFORE bash sees the
+        # line, so interpolating it into a quoted assignment means the title's
+        # own characters become shell syntax. An apostrophe closes the quote and
+        # breaks the run (v4.27.2's title did exactly that, and the release went
+        # untagged); a crafted title could inject arbitrary commands into CI,
+        # which is the documented GitHub Actions script-injection class. An env
+        # var is passed to the process, not pasted into the source.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          title='${{ github.event.pull_request.title }}'
-          if [[ "$title" =~ v([0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?) ]]; then
+          if [[ "$PR_TITLE" =~ v([0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?) ]]; then
             version="v${BASH_REMATCH[1]}"
             echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "found=true" >> "$GITHUB_OUTPUT"
@@ -47,14 +56,18 @@ jobs:
       - name: Check if tag already exists
         if: steps.version.outputs.found == 'true'
         id: tag_exists
+        # Same treatment for consistency. This value is regex-constrained by the
+        # step above so it cannot carry a quote today, but the safe form costs
+        # nothing and removes the need for anyone to re-derive that argument.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          version='${{ steps.version.outputs.version }}'
-          if git rev-parse --verify --quiet "refs/tags/$version" >/dev/null; then
+          if git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $version already exists locally — skipping create."
-          elif git ls-remote --exit-code --tags origin "$version" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists locally — skipping create."
+          elif git ls-remote --exit-code --tags origin "$VERSION" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $version already exists on origin — skipping create."
+            echo "Tag $VERSION already exists on origin — skipping create."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
