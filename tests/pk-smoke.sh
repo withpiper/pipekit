@@ -1595,6 +1595,43 @@ FIXTURE=""
 # /02-light-spec-revise writes there and forbids deleting. Pure string
 # generation, so no fixture or Linear call needed.
 
+# ── /verify Step 7 writes the sha deterministically (v4.27.2) ────────────────
+# reality-check.md is the fallback pk_verify_sentinel_latest reads when
+# verify-complete.md is absent, so a missing `sha:` line silently downgrades the
+# drift gate to "no evidence". Prose-rendered markdown drifts: measured on
+# SiteLine 2026-08-02, the heredoc-written verify-complete.md carried a sha in
+# 191/192 files while the prose-rendered reality-check.md managed 167/195, with
+# the miss rate rising month over month. Step 7 must stay a heredoc.
+
+echo "== /verify Step 7 sha determinism (v4.27.2) =="
+
+VERIFY_SKILL="$REPO_ROOT/skills/verify/SKILL.md"
+if [ ! -f "$VERIFY_SKILL" ]; then
+  fail "verify step7: skill present" "missing $VERIFY_SKILL"
+else
+  step7=$(awk '/^## Step 7 /{f=1} /^## Step 8 /{f=0} f' "$VERIFY_SKILL")
+  case "$step7" in
+    *'cat > "$VERIFY_DIR/reality-check.md" <<EOF'*)
+      ok "verify step7: reality-check.md written via heredoc" ;;
+    *)
+      fail "verify step7: reality-check.md written via heredoc" "no heredoc in Step 7 — prose rendering will drop the sha" ;;
+  esac
+  case "$step7" in
+    *'- sha: $SHA'*) ok "verify step7: sha line interpolates a shell var" ;;
+    *)              fail "verify step7: sha line interpolates a shell var" "sha line is a placeholder, not \$SHA" ;;
+  esac
+  case "$step7" in
+    *'SHA=$(git rev-parse HEAD)'*) ok "verify step7: SHA assigned from git rev-parse HEAD" ;;
+    *)                             fail "verify step7: SHA assigned from git rev-parse HEAD" "SHA never assigned" ;;
+  esac
+  # Step 8 consumes $STATUS but nothing used to assign it — a latent version of
+  # the same drift, since an unset STATUS silently skips the sentinel write.
+  case "$step7" in
+    *'STATUS="PASS"'*) ok "verify step7: STATUS explicitly assigned for Step 8" ;;
+    *)                 fail "verify step7: STATUS explicitly assigned for Step 8" "STATUS left implicit" ;;
+  esac
+fi
+
 echo "== spec-cycle trigger body (sourced) =="
 
 body=$( source "$PK" && pk_spec_cycle_trigger_body 2 )

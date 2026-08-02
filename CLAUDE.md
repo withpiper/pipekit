@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.27.1** — Last updated: 2026-08-02  *(**v4.27.1 — v4.27.0's gate was looking in the wrong place.** The evidence lookup globbed the working tree only, but `pk ready` is documented as runnable from the parent repo and `pk done` runs from it **by design** — where the feature branch's `Logs/Verify/` artifacts are not in the checkout at all, so `pk done`'s post-merge report was blind on every invocation. The lookup now takes a branch ref and searches both trees, preferring the authoritative artifact over the merely closer one. Also: `cmd_done` restated the blocking class list inline and so never matched `unreachable`; it now calls `pk_verify_drift_blocks`, with a smoke guard against restating it. Smoke 186 → 194.)*
+**v4.27.2** — Last updated: 2026-08-02  *(**v4.27.2 — `/verify` Step 7 now writes `reality-check.md`'s header with a heredoc, not prose.** Its `sha:` line is what the v4.27.1 drift gate falls back to when `verify-complete.md` is absent, and prose rendering dropped it ~14% of the time and rising (SiteLine, 2026-08-02: heredoc-written `verify-complete.md` 191/192 vs prose-rendered `reality-check.md` 167/195). Also assigns `$STATUS`, which Step 8's sentinel-write consumed but nothing assigned. Four smoke guards keep Step 7 from drifting back. No `bin/pk` change. Smoke 194 → 198.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
