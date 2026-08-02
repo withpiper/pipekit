@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.27.0** — Last updated: 2026-08-02  *(**v4.27.0 — the ship→merge window is gated.** `pk ready` refuses when source or a migration changed after the `/verify` that vouches for the branch — `pk ship`'s sentinel gate is point-in-time, and commits landing during PR review went unchecked (anchor: SiteLine PIPER-490, a migration's authorization predicate rewritten 33 min after ship, merged 7h later). `pk done` reports the same drift to Linear post-merge. `pipekit-tooling.md` gains the converse of "can this check see the failure?" — **can it cheat?** Smoke 161 → 186.)*
+**v4.27.1** — Last updated: 2026-08-02  *(**v4.27.1 — v4.27.0's gate was looking in the wrong place.** The evidence lookup globbed the working tree only, but `pk ready` is documented as runnable from the parent repo and `pk done` runs from it **by design** — where the feature branch's `Logs/Verify/` artifacts are not in the checkout at all, so `pk done`'s post-merge report was blind on every invocation. The lookup now takes a branch ref and searches both trees, preferring the authoritative artifact over the merely closer one. Also: `cmd_done` restated the blocking class list inline and so never matched `unreachable`; it now calls `pk_verify_drift_blocks`, with a smoke guard against restating it. Smoke 186 → 194.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

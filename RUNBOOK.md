@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.27.0** — Last updated: 2026-08-02  *(**v4.27.0 — the ship→merge window is now gated.** `pk ship` proved the verify sentinel matched at ship time; nothing re-checked it while the PR stayed open, so commits landing during review could carry a PR to merge with a PASS artifact describing code no longer in the diff. Anchor: SiteLine PIPER-490 — a migration's authorization predicate rewritten 33 minutes after ship, merged 7 hours later, with the review quoting the stale sha. `pk ready` now refuses on source/migration drift (`--force` flips anyway and logs a Linear comment); `pk done` reports it post-merge. Evidence lookup falls back past `verify-complete.md` to `evidence.txt`/`reality-check.md`, because the anchor case had no sentinel at all. Smoke 161 → 186.)*
+**v4.27.1** — Last updated: 2026-08-02  *(**v4.27.1 — v4.27.0's gate was looking in the wrong place.** The evidence lookup globbed the working tree only, but `pk ready` is documented as runnable from the parent repo and `pk done` runs from it **by design** — where the feature branch's `Logs/Verify/` artifacts are not in the checkout at all, so `pk done`'s post-merge report was blind on every invocation. The lookup now takes a branch ref and searches both trees, preferring the authoritative artifact over the merely closer one. Also: `cmd_done` restated the blocking class list inline and so never matched `unreachable`; it now calls `pk_verify_drift_blocks`, with a smoke guard against restating it. Smoke 186 → 194.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.27.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.27.1                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
