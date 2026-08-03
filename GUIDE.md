@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
+**v4.29.0** — Last updated: 2026-08-03  *(**v4.29.0 — a third skill-sync mode: scaffold-once.** Portable skills are overwritten every sync; local skills (`.local-skills`) never receive upstream fixes at all. Scaffold-once splits the difference: seeded from the method repo's `.scaffold-once-skills` manifest once, when `.claude/skills/<name>/` is absent, then never touched again — paired with a normally-synced SOP so conventions still propagate while curation stays local. `/lane-map` is the worked example: `sop/Lane_Map_SOP.md` (new) + the scaffolded `skills/lane-map/SKILL.md`, plus a new `Lane map URL` config key. Verified against a real sync run, not just reviewed. Smoke 199 → 200.)*
 
 ---
 
