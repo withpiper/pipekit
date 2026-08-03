@@ -1666,6 +1666,57 @@ case "$body" in
   *) fail "spec-cycle: unstamped call degrades to a readable placeholder" "no placeholder in body" ;;
 esac
 
+# ── Skills cite method.config.md for values, not prose (v4.28.1) ─────────────
+# method.config.md is project-owned and NEVER synced, so a section that exists
+# only in method.config.template.md reaches new projects and no existing
+# consumer. A skill citing one is a live pointer into a file the reader's repo
+# does not contain, and it fails silently — the session looks, finds nothing,
+# and proceeds on what it already believed. v4.28.0 shipped exactly this:
+# /roadmap-create pointed at a `§ Board shapes` subsection that was dangling on
+# both consumers the day it shipped. A pointer is legitimate only when its leaf
+# resolves to a template section carrying a `| **Key** |` row, or to such a key
+# itself. Rule: sop/Skills_SOP.md § Cite method.config.md for values.
+
+echo "== skills cite method.config.md for values, not prose =="
+if ! command -v python3 >/dev/null 2>&1; then
+  ok "config pointers: python3 unavailable → skipped"
+else
+  cfg_out=$(python3 - "$REPO_ROOT" <<'PYEOF'
+import re, sys, glob, os
+root = sys.argv[1]
+tmpl = open(os.path.join(root, 'method.config.template.md')).read()
+KEY_ROW = r'\|\s*\*\*[^*]+\*\*\s*\|'
+parts = re.split(r'^(#{2,4}) (.+)$', tmpl, flags=re.M)
+secs = {}
+for i in range(1, len(parts), 3):
+    title = re.split(r'\s+\(', parts[i + 1].strip())[0].strip().lower()
+    secs.setdefault(title, []).append(parts[i + 2])
+keys = {k.strip().lower() for k in re.findall(r'\|\s*\*\*([^*]+)\*\*\s*\|', tmpl)}
+bad = []
+for f in sorted(glob.glob(os.path.join(root, 'skills', '*', 'SKILL.md'))):
+    seen = set()
+    for ref in re.findall(r'`method\.config\.md § ([^`]+)`', open(f).read()):
+        leaf = ref.split('→')[-1].strip()
+        if leaf in seen:
+            continue
+        seen.add(leaf)
+        low = leaf.lower()
+        if low in keys:
+            continue
+        if low not in secs:
+            bad.append(f"{os.path.basename(os.path.dirname(f))} § {ref} (no such section or key)")
+        elif not any(re.search(KEY_ROW, b) for b in secs[low]):
+            bad.append(f"{os.path.basename(os.path.dirname(f))} § {ref} (prose-only section)")
+print('; '.join(bad))
+PYEOF
+)
+  if [ -z "$cfg_out" ]; then
+    ok "config pointers: every skill § cite resolves to a config value"
+  else
+    fail "config pointers: skill cites prose a consumer's config won't have" "$cfg_out"
+  fi
+fi
+
 # ── Dogfood mirror freshness (local only) ────────────────────────────────────
 # .claude/skills|rules|agents are generated mirrors of tracked sources, used by
 # Claude Code sessions in THIS repo. They are gitignored, so they do not exist

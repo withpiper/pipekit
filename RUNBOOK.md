@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — the lanes board model.** A Linear project is a *completable lane* of 3–8 issues, an initiative is a *completable release phase*, and "no project" + an `Area:` label is the correct home for uncut work — because the `i{N}.`→`P{N}.` walk cannot see inside a project, so a standing pool makes its contents invisible to `pk next`/`pk status` (SiteLine, 2026-08-02: 98 of 162 open issues hidden in three pools). `/linear-hygiene` stops homing orphans into projects and gains four detect-only board-shape checks; `/phase-plan --cut` is the new lane-cutting operation. The naming contract is unchanged and `bin/pk` needed no code change. Smoke 198, unchanged.)*
+**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.28.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.28.1                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

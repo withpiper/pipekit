@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.28.0** — Last updated: 2026-08-02  *(**v4.28.0 — lanes semantics + an API-gotchas section.** The Linear Model now states that initiatives *and* projects are completable — a project holding 60 open issues is a pool the `i{N}.`→`P{N}.` walk cannot see into. New `Area` label-group family (the lanes model's backlog axis, orthogonal to lane membership in both directions) and the `Parked`-is-a-label rule. New § API gotchas, sorted by failure mode: the silent-data-loss class first (255-char `description` cap, state changes re-ranking `sortOrder`, cycle-add moving issues out of Backlog, Triage-state issues invisible in project views, view preferences accepting unknown keys), then MCP gaps needing GraphQL (`archiveInitiative`, label delete), then the 10k query-complexity cap and the sanity-gate-before-batch pattern. All verified live during the SiteLine reorg, 2026-08-02.)*
+**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -95,6 +95,26 @@ Initiative and sub-phase order is read from the **integer in the name prefix**, 
 - **Issue** = a work item.
 
 **Current initiative** = the lowest `i{N}` initiative whose status is not `Completed`. **Current sub-phase** = the lowest `P{N}` project whose state is not `completed` or `canceled`.
+
+### Board shapes
+
+Two shapes are supported. The `i{N}.`/`I{N}.P{N}.` naming contract is **identical** in both; they differ only in what a *phase* maps to. A project picks one — its `method.config.md` records which.
+
+| Shape | Phase ≡ | Ordering lives in | Use when |
+|---|---|---|---|
+| Lanes **(default)** | one initiative, 1:1 | the `i{N}.`/`P{N}.` prefixes + `blockedBy` relations | Almost always. `/roadmap-create` authors this. |
+| Phase-spans-projects | several projects | the prefixes **plus** the opt-in phase-label layer | A phase genuinely spans multiple projects, so no single project *is* a phase. |
+
+**Never run both.** Two ordering mirrors of the same work drift independently — that is the failure the lanes model exists to remove, and it is why a lanes-model board must not adopt the phase-label layer.
+
+How a skill tells them apart: the project's `method.config.md` has a filled-in `§ Area Labels` section (lanes) or a filled-in `§ Phase Label Layer` table (phase-spans-projects). Neither → treat as lanes and no-op the shape-specific checks.
+
+**Retiring the phase-label layer** (moving an opted-in board to lanes) is order-sensitive:
+
+1. **Comment out the `### Phase Label Layer` config table first.** `/roadmap-review` Phase 3.5 gates on the filled-in values, so while they are live it re-scaffolds whatever you delete next.
+2. Then delete the `Roadmap: *` / `Order: *` labels and their saved views.
+3. **Keep the `Roadmap source` key live** — Phase 2.5's checkbox↔`Done` reconciliation reads it independently of the layer, so it belongs *outside* the commented block.
+4. Real `blockedBy` relations stay; on the lanes model they carry all intra-lane ordering.
 
 ### Each Layer's Job
 
