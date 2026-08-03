@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — new authoring rule: cite `method.config.md` for values, never for prose.** That file is project-owned and never synced, so a section added to the template reaches new projects and no existing consumer — a skill citing one is a live pointer into a file the reader's repo does not contain, and it fails silently. Anchored on v4.28.0 shipping exactly that defect. Guarded by a new smoke check. Carries v4.22.0 — context rightsizing.)*
+**v4.29.0** — Last updated: 2026-08-03  *(**v4.29.0 — a third skill-sync mode: scaffold-once.** New `§ Syncing Portable Skills → Scaffold-once skills` subsection documents the mechanism generally; `/lane-map` (new, scaffolded) is the worked example, listed in the portable-skills table above. Declared in the method repo's own `.scaffold-once-skills` — a consuming project has nothing of its own to configure. Carries v4.28.1 — cite `method.config.md` for values, never for prose.)*
 
 ---
 
@@ -70,6 +70,7 @@ These skills work across any project that follows the method. They read `method.
 | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) | Anytime |
 | `/financial-review` | Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable **framework**; concrete checks live in a per-project checks file (`resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`). No-op on projects without a checks file. | Anytime (domain: finance) |
 | `/skill-index` | Sync skill index after changes | Anytime |
+| `/lane-map` | Renders the current initiative's board as a private web artifact — frontier of run-order heads, one row per lane, optional collision register. **Scaffold-once**: seeded into `.claude/skills/lane-map/` on first sync if absent, never touched again — curation (groupings, collision notes, artifact URL) is project-owned from there. Conventions in `sop/Lane_Map_SOP.md`. | Anytime (board visualization) |
 | `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
@@ -262,6 +263,16 @@ reset-user
 ```
 
 Declared skills are listed under "Project-local" in the sync changelog; undeclared ones are flagged "Not in upstream (undeclared)" with the exact command to declare them. If a flagged skill *isn't* yours, upstream removed or renamed it — check the method repo's CHANGELOG and `archive/` before deleting.
+
+### Scaffold-once skills (`.scaffold-once-skills`, method-repo-side)
+
+A few portable skills carry conventions that must propagate on every sync, paired with curation that is genuinely per-project and can't be derived from upstream — a rendered artifact that reads project-specific groupings, chip notes, or brand tokens, for example. Fully portable would overwrite that curation on the next sync; fully local (`pipekit/.local-skills`) would mean no upstream fix ever reaches the project. Scaffold-once is the third mode: seeded from the upstream template **once**, on the first sync where `.claude/skills/<name>/` is absent, then never touched again.
+
+The method repo declares which skills get this treatment in its own `.scaffold-once-skills` (one name per line, same format as `.local-skills`) — this is method-repo state, not project state; a consuming project has no manifest of its own to edit. On first scaffold, the sync auto-declares the skill in the project's own `pipekit/.local-skills`, so the "possibly upstream-removed" check above treats it as project-owned from that point on.
+
+**The pattern requires a split file**, so a fix still reaches every project even though the instance file doesn't resync: the portable half (conventions, patterns, gotchas) lives in a normally-synced SOP; the scaffolded skill cites that SOP instead of restating it. `/lane-map` is the worked example — conventions in `sop/Lane_Map_SOP.md`, curation in the scaffolded `.claude/skills/lane-map/SKILL.md`.
+
+Use this sparingly. Most skills should stay normally portable — reach for scaffold-once only when a skill's value is genuinely per-project curation that a normal resync would destroy.
 
 ---
 

@@ -17,7 +17,11 @@
 #   pipekit/RUNBOOK.md  <- The one-page operational doc (v2.3.1+)
 #   pipekit/GUIDE.md    <- The full instruction manual
 #   pipekit/STARTUP.md  <- The bootstrap reference
-#   .claude/skills/    <- Portable skills (won't touch project-specific ones)
+#   .claude/skills/    <- Portable skills (won't touch project-specific ones).
+#                         A skill listed in the method repo's own
+#                         .scaffold-once-skills is seeded once (if absent),
+#                         then never touched again — see sop/Skills_SOP.md
+#                         § Syncing Portable Skills.
 #
 # What it does NOT touch:
 #   pipekit/decisions/       <- Project-specific ADRs
@@ -464,11 +468,45 @@ echo "Portable skills:"
 # Get list of portable skills from method repo
 PORTABLE_SKILLS=$(ls -d "$TEMP/skills/"*/ 2>/dev/null | xargs -I{} basename {})
 
+# Scaffold-once skills: declared by the METHOD repo (not the consuming
+# project — contrast with $LOCAL_MANIFEST below), in the freshly-cloned
+# $TEMP, one name per line. Seeded into the project once, if absent; never
+# touched again once present. See sop/Skills_SOP.md § Syncing Portable
+# Skills and sop/Lane_Map_SOP.md for the worked example (/lane-map).
+SCAFFOLD_ONCE_MANIFEST="$TEMP/.scaffold-once-skills"
+is_scaffold_once() {
+  [ -f "$SCAFFOLD_ONCE_MANIFEST" ] && grep -qx "$1" "$SCAFFOLD_ONCE_MANIFEST" 2>/dev/null
+}
+
 for skill in $PORTABLE_SKILLS; do
   src="$TEMP/skills/$skill"
   dst="$PROJECT_ROOT/.claude/skills/$skill"
 
   if [ ! -d "$src" ]; then
+    continue
+  fi
+
+  if is_scaffold_once "$skill"; then
+    if [ -d "$dst" ]; then
+      echo "  OK skill: $skill (scaffold-once, local — not touched)"
+    elif $DRY_RUN; then
+      echo "  WOULD SCAFFOLD skill: $skill (once, then local)"
+      CHANGES=$((CHANGES + 1))
+    else
+      mkdir -p "$dst"
+      rsync -av "$src/" "$dst/" >/dev/null 2>&1
+      echo "  SCAFFOLDED skill: $skill (once, then local)"
+      NEW_SKILLS="$NEW_SKILLS $skill"
+      CHANGES=$((CHANGES + 1))
+    fi
+    # Declare it local from here on, so future syncs' "possibly
+    # upstream-removed" check (below) treats it as project-owned and the
+    # sync changelog reports it under "Project-local".
+    if ! $DRY_RUN && [ -d "$dst" ]; then
+      mkdir -p "$(dirname "$LOCAL_MANIFEST")" 2>/dev/null || true
+      touch "$LOCAL_MANIFEST" 2>/dev/null || true
+      grep -qx "$skill" "$LOCAL_MANIFEST" 2>/dev/null || echo "$skill" >> "$LOCAL_MANIFEST"
+    fi
     continue
   fi
 

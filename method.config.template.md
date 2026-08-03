@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
+**v4.29.0** — Last updated: 2026-08-03  *(**v4.29.0 — a third skill-sync mode: scaffold-once.** Portable skills are overwritten every sync; local skills (`.local-skills`) never receive upstream fixes at all. Scaffold-once splits the difference: seeded from the method repo's `.scaffold-once-skills` manifest once, when `.claude/skills/<name>/` is absent, then never touched again — paired with a normally-synced SOP so conventions still propagate while curation stays local. `/lane-map` is the worked example: `sop/Lane_Map_SOP.md` (new) + the scaffolded `skills/lane-map/SKILL.md`, plus this file's new `Lane map URL` key. Verified against a real sync run, not just reviewed. Smoke 199 → 200.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -334,6 +334,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Security categories** | path | `resources/security-categories.md` | `/security-gate` — project category-definitions file (per-category path globs, keywords, correct patterns for auth/payments/user-input/external-APIs/file-storage/PII). Scaffold from `pipekit/templates/security-categories.template.md`. The gate runs at the Building → UAT seam (before `pk ship`). |
 | **Security gate report path** | path | `Reports/` | `/security-gate` — where the gate report is written (`Security_Gate_<ID>_<date>.md`). |
 | **Portfolio staleness days** | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
+| **Lane map URL** | artifact URL | (none) | `/lane-map` — published board-map artifact; blank until the project runs `/lane-map` once and publishes it (see `sop/Lane_Map_SOP.md`). One map can serve multiple repos sharing a Linear board — set the same URL in each. |
 
 <!-- Optional (v4.21.0+) — uncomment the row below to stop syncing canonical
      .claude/rules/ files that don't apply to this project. Rules are

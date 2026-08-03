@@ -1,0 +1,17 @@
+# .scaffold-once-skills — portable skill TEMPLATES that seed a consuming
+# project's .claude/skills/<name>/ once, on the first sync where that
+# directory is absent, then are never overwritten again. The consuming
+# project owns the file from that point on.
+#
+# This is a third mode, distinct from both:
+#   - a normal portable skill (always resynced from skills/<name>/)
+#   - pipekit/.local-skills (a CONSUMING project's manifest; never touched
+#     by sync at all, declared by the project, not by pipekit)
+#
+# Add a name here only when the skill's value is project-specific curation
+# that a normal resync would destroy — see sop/Lane_Map_SOP.md for the
+# worked example and sop/Skills_SOP.md § Syncing Portable Skills for the
+# mechanism. Most skills should stay normally portable; this list should
+# stay short.
+
+lane-map
