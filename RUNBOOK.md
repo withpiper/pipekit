@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
+**v4.29.0** — Last updated: 2026-08-03  *(**v4.29.0 — a third skill-sync mode: scaffold-once.** Portable skills are overwritten every sync; local skills (`.local-skills`) never receive upstream fixes at all. Scaffold-once splits the difference: seeded from the method repo's `.scaffold-once-skills` manifest once, when `.claude/skills/<name>/` is absent, then never touched again — paired with a normally-synced SOP so conventions still propagate while curation stays local. `/lane-map` is the worked example: `sop/Lane_Map_SOP.md` (new) + the scaffolded `skills/lane-map/SKILL.md`, plus a new `Lane map URL` config key. Verified against a real sync run, not just reviewed. Smoke 199 → 200.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.28.1                (or latest tag)
+1. ./scripts/sync-method.sh v4.29.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

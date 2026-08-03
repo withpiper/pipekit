@@ -1717,6 +1717,29 @@ PYEOF
   fi
 fi
 
+# ── Scaffold-once manifest is well-formed (v4.29.0) ──────────────────────────
+# .scaffold-once-skills declares which portable skills a consumer's sync
+# seeds once and then never touches again (sop/Skills_SOP.md § Syncing
+# Portable Skills). A stale entry — a name with no matching skills/<name>/ —
+# would silently no-op in sync-method.sh's loop rather than fail, so check it
+# here instead.
+
+echo "== scaffold-once manifest =="
+if [ ! -f "$REPO_ROOT/.scaffold-once-skills" ]; then
+  ok "scaffold-once: no manifest present → skipped"
+else
+  missing=""
+  while IFS= read -r name; do
+    case "$name" in ""|\#*) continue ;; esac
+    [ -f "$REPO_ROOT/skills/$name/SKILL.md" ] || missing="$missing $name"
+  done < "$REPO_ROOT/.scaffold-once-skills"
+  if [ -z "$missing" ]; then
+    ok "scaffold-once: every declared skill has a matching skills/<name>/SKILL.md"
+  else
+    fail "scaffold-once: manifest names a skill with no source" "$missing"
+  fi
+fi
+
 # ── Dogfood mirror freshness (local only) ────────────────────────────────────
 # .claude/skills|rules|agents are generated mirrors of tracked sources, used by
 # Claude Code sessions in THIS repo. They are gitignored, so they do not exist
