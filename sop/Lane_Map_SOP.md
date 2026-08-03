@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.29.0** — Last updated: 2026-08-03  *(New: canonical conventions for `/lane-map`, the first scaffold-once skill — seeded from an upstream template once, then owned by the project. This file is the portable half of that split; the scaffolded `.claude/skills/lane-map/SKILL.md` is the instance half. Sourced from SiteLine's `Pipekit_Handover_LaneMap_2026.08.03_v1.md`.)*
+**v4.29.1** — Last updated: 2026-08-03  *(Snapshot-vs-live softened from a binary choice to a decision with a documented hybrid option: curation stays authored, a live overlay can reconcile onto it loudly (append+flag uncurated-active, fold uncurated-done, mark curated-but-gone stale) instead of the map picking a side — this is also the staleness signal for free, no timestamp check needed. Plus an artifact gotcha: declaring `mcp` on a publicly-shared artifact 422s; un-share first via the claude.ai UI, no tool-level path. Sourced from SiteLine's `Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md`.)*
 
 ---
 
@@ -39,9 +39,23 @@ A map read touches every lane in the current initiative, which makes it exactly 
 
 The published page cannot call Linear directly: the CSP blocks external hosts, and no credential may ever be embedded in it. The only supported live path is the `mcp` runtime capability against a claude.ai connector, viewer-credentialed — load the `artifact-capabilities` skill before declaring that capability. Publish to a stable URL (redeploy the same file path on updates, don't mint a new one) and keep the favicon identical across republishes, so the map stays the same tab for a returning viewer.
 
+**Gotcha: declaring `mcp` on a publicly-shared artifact fails (422).** There's no tool-level way to un-share from here — un-sharing is a claude.ai UI action on the artifact's own page. If a lane map was ever shared publicly (even before it needed a live capability), un-share it first, then declare `mcp`.
+
 ## Snapshot vs. live is a decision, not a TODO
 
-A curated snapshot — rendered on demand, not continuously refreshed — is the deliberate default. A live feed buys freshness and spends the curation that justifies the map in the first place: parallel-safe groupings and collision notes are judgment calls a live re-render can't reconstruct from the board alone. Don't read "not yet live" in a project's lane-map skill as an unfinished feature unless that project's own notes say otherwise.
+A curated snapshot — rendered on demand, not continuously refreshed — is the deliberate default. Curation (parallel-safe groupings, collision notes, which lanes count toward the frontier) is a judgment call a live re-render can't reconstruct from the board alone, and that fact doesn't change. Don't read "not yet live" in a project's lane-map skill as an unfinished feature unless that project's own notes say otherwise.
+
+That said, "curated vs. live" is not strictly a fork in the road. A project can keep curation authored while merging live board state on top of it at render time — see § Reconciling live against curated below. Treat that as a documented option a project can opt into deliberately, not a more-finished successor to the snapshot default; most projects should still start with the snapshot.
+
+### Reconciling live against curated (optional)
+
+If a project's lane map does merge live Linear state onto authored curation (keyed on issue identifier), don't let the two silently diverge — reconcile loudly instead of picking one side as truth. Three cases:
+
+- **Live issue not in the curated lane's flow, still active** → render it appended and visibly marked *uncurated*, and count it toward the frontier regardless of the flag. An issue that's already in flight can't be allowed to go invisible just because no one curated it yet — that's the specific failure mode the old uncurated pools had.
+- **Live issue not in the curated flow, already done/duplicate/canceled** → fold it silently into the done-stack. Shipped-and-forgotten curation isn't a safety issue.
+- **Curated flow entry no longer found live** → render a *stale* marker instead of silently dropping or silently keeping it.
+
+This reconciliation is also the staleness signal a separate "is the lane map older than the board" check would otherwise need to compute by timestamp comparison — it falls out for free once live and curated data sit side by side and get diffed on every render, so don't build that check separately if a project already reconciles this way.
 
 ## Render conventions (loose, not a template)
 
