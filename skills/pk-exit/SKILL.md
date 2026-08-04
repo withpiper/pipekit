@@ -26,9 +26,7 @@ If you forget, you forget — no auto-trigger. The user accepted that tradeoff f
 
 2. **Write the narrative.** Use the template below. Fill from session memory + git state. Never fabricate — if a section has nothing to say, write "—" or omit it.
 
-3. **Hygiene check (non-mutating).** Run `/linear-hygiene --check`. If it reports drift (orphaned / untriaged / unprioritized follow-ups), record them under "Outstanding / next session" in the log and tell the user: *"N follow-ups are drifting — run `/linear-hygiene` to home them."* **Detect only — never mutate Linear from `/pk-exit`** (same no-writes rule as the rest of this skill). If `/linear-hygiene` isn't installed, or the Linear MCP is unavailable/unauthed, **skip this step silently** — it must never block or error the session close.
-
-4. **Confirm to the user** with the absolute path. Tell them to type `/exit` next.
+3. **Confirm to the user** with the absolute path. Tell them to type `/exit` next.
 
 ## Template
 
@@ -62,7 +60,6 @@ If the session was pure execution with no decisions, write "—".>
 <Bulleted list of what's left. Loose ends, deferred work, follow-ups. Be specific (issue IDs, file paths) so future-you can pick up cold.
 
 When `pk done` for this session's issue is among them, check the PR state first (`gh pr view --json state`) and write the step that matches reality: PR **merged** → `pk done <ID>` plain — never suggest `--merge` for an already-merged PR (the flag is redundant there and reads as an instruction). PR **still open** → "merge the PR once green, then `pk done <ID>`" (or `pk done <ID> --merge` to let pk run the merge). Run from the parent repo either way.>
-- Board hygiene: <N orphaned/untriaged follow-ups from /linear-hygiene --check, or "—">
 
 ## QA / verification trail
 
