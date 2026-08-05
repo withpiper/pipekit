@@ -27,11 +27,7 @@ Per `method.config.md` § Initiative Surface:
 
 Order is the **numeric prefix** in the object name (`i1.`, `i2.`, … / the `P{N}` number). Linear's `sortOrder` is **never** used to determine initiative order — always parse the name prefix. **Projects carry their initiative number** (v4.5.0+: `I1.P2. label`) so the initiative reads at the project level; legacy bare `P{N}.` is still valid (`bin/pk` accepts both) — treat a bare `P{N}.` as a rename candidate, not an error.
 
-**Retired surfaces** — this skill never reads or writes them; they exist only as a `bin/pk` fallback for un-migrated projects:
-- `.vbw-planning/PHASES.md`
-- `.vbw-planning/linear-map.json`
-
-`.vbw-planning/ROADMAP.md` may still exist as **optional legacy narrative**. It is not synced state — treat it as a human-readable reference only, never as a source or target of reconciliation.
+A narrative `ROADMAP.md` may exist at the project root. It is not synced state — treat it as a human-readable reference only, never as a source or target of reconciliation.
 
 ## Triggers
 

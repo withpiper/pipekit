@@ -15,7 +15,6 @@ This skill is Pipekit's plan-review gate — an independent stress-test between 
 
 - `/review-plan PROJ-XXX` — review the plan `/work` filed at `.pk-work/PROJ-XXX-PLAN.md`
 - `/review-plan` — auto-detect the most recent plan
-- `/review-plan {phase-slug}` — legacy fallback: review a named phase under `.vbw-planning/phases/` (un-migrated projects)
 - "review the plan", "run plan-reviewer"
 
 ## Purpose
@@ -34,7 +33,7 @@ The `plan-reviewer` agent fills that gap. This skill orchestrates the call.
 
 ## Prerequisites
 
-- A `PLAN.md` to review. With native `/work` the plan is filed at `.pk-work/<ID>-PLAN.md` — point this skill at that path. (Legacy VBW-planned phases keep `PLAN.md` under `.vbw-planning/phases/{phase-slug}/`; this skill still reviews those.)
+- A `PLAN.md` to review. `/work` files it at `.pk-work/<ID>-PLAN.md` — point this skill at that path.
 - The approved Light Spec is available — either as the description of a Linear issue tied to the current branch, or readable from a known location
 - `.claude/agents/plan-reviewer.md` is installed (Pipekit ships this; if missing, run `bash scripts/sync-method.sh`)
 
@@ -44,23 +43,14 @@ The `plan-reviewer` agent fills that gap. This skill orchestrates the call.
 
 Determine which plan(s) to review:
 
-1. **Linear issue ID** (`/review-plan PROJ-123`) — native `/work` files the plan at `.pk-work/<ID>-PLAN.md`; point this skill there. Resolve the ID from the current git branch (`feature/proj-123-*`) when not passed explicitly.
-2. **Explicit phase slug** (`/review-plan phase-1-data-foundation`) — legacy fallback for un-migrated projects whose plans still live under `.vbw-planning/phases/{phase-slug}/`; use directly.
-3. **No argument** — auto-detect: look for a recent `.pk-work/<ID>-PLAN.md`; if none and a legacy `.vbw-planning/STATE.md` exists, read it for the active phase. If ambiguous, list plans with no review and ask the user to pick.
+1. **Linear issue ID** (`/review-plan PROJ-123`) — `/work` files the plan at `.pk-work/<ID>-PLAN.md`; point this skill there. Resolve the ID from the current git branch (`feature/proj-123-*`) when not passed explicitly.
+2. **No argument** — auto-detect: look for the most recent `.pk-work/<ID>-PLAN.md`. If ambiguous, list plans with no review and ask the user to pick.
 
-For the native path, the plan is a single file:
+The plan is a single file:
 
 ```bash
 ls .pk-work/<ISSUE-ID>-PLAN.md
 ```
-
-For the legacy-fallback path, find every `*-PLAN.md` in the phase dir:
-
-```bash
-ls .vbw-planning/phases/{phase-slug}/*-PLAN.md
-```
-
-If a legacy phase dir uses a non-flat layout (e.g., nested `rs-N-slug/PLAN.md`), still find every `PLAN.md` in the dir tree and pass the list to the agent — the agent reviews plan content, not filename structure.
 
 ### Step 2 — Resolve the approved spec
 
@@ -98,11 +88,11 @@ Use the Agent tool with `subagent_type: "plan-reviewer"`. Pin the **plan-review 
 Agent(
   subagent_type: "plan-reviewer",
   model: "{plan-review tier — default opus}",
-  description: "Review {phase-slug} plan",
-  prompt: "Independent review of the plan(s) for {phase-slug} before execution.
+  description: "Review {PROJ-XXX} plan",
+  prompt: "Independent review of the plan for {PROJ-XXX} before execution.
 
-  Plan path(s):
-    {list of *-PLAN.md absolute paths}
+  Plan path:
+    {absolute path to .pk-work/<ID>-PLAN.md}
 
   Approved spec (verbatim from {Linear PROJ-XXX | local spec file}):
   <<<SPEC
@@ -112,8 +102,6 @@ Agent(
   Project context:
   - CLAUDE.md at repo root
   - method.config.md at repo root
-  - .vbw-planning/PHASES.md (legacy fallback, if present)
-  - .vbw-planning/codebase/CONCERNS.md (legacy fallback, if present)
 
   Follow the Review Protocol in your agent definition. Return the
   structured markdown output (Verdict / Readiness Score / Blocking Issues
@@ -162,7 +150,7 @@ Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "wh
 
 ### Step 8 — Pipeline state file
 
-After the verdict is delivered, resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR/pipeline-state"`, and write `$STATE_DIR/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution; if no Linear ID, use the phase slug. The path is out-of-repo so no hook block; write should always succeed.
+After the verdict is delivered, resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`, `mkdir -p "$STATE_DIR/pipeline-state"`, and write `$STATE_DIR/pipeline-state/<issue-id>.json` per the SOP schema (`stage: "review-plan"`, verdict, cwd, timestamp). Issue ID resolution mirrors Step 2's spec resolution. The path is out-of-repo so no hook block; write should always succeed.
 
 ---
 

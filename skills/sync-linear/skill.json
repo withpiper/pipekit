@@ -1,5 +1,5 @@
 {
   "name": "sync-linear",
-  "description": "Bidirectional sync between VBW planning files and Linear workspace",
+  "description": "Reconcile strategy-doc drift against the Linear initiative hierarchy",
   "invocable": true
 }

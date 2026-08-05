@@ -5,7 +5,7 @@ description: Audit roadmap health — issues, dependency order, spec coverage, d
 
 # Roadmap Review Skill
 
-**v4.15.0** — Last updated: 2026-07-14 *(add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file. Carries v4.14.0: the optional, config-gated **Phase-Label Layer** check — new **Phase 3.5** — mirroring `ROADMAP.md`'s per-phase build order + parallelism onto the Linear board via labels + saved views + `sortOrder` + `blockedBy`, drift-checked against `ROADMAP.md`. No-op unless that section is *filled in* (the template ships it commented out — gate on active values, not the bare heading), so it's fully portable. Carries v4.1.0: validate the Linear-native initiative surface — order lives in `i{N}.`/`I{N}.P{N}.` names per `method.config.md` § Initiative Surface, not in `.vbw-planning/PHASES.md` or `linear-map.json`)*
+**v4.15.0** — Last updated: 2026-07-14 *(add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file. Carries v4.14.0: the optional, config-gated **Phase-Label Layer** check — new **Phase 3.5** — mirroring `ROADMAP.md`'s per-phase build order + parallelism onto the Linear board via labels + saved views + `sortOrder` + `blockedBy`, drift-checked against `ROADMAP.md`. No-op unless that section is *filled in* (the template ships it commented out — gate on active values, not the bare heading), so it's fully portable. Carries v4.1.0: validate the Linear-native initiative surface — order lives in `i{N}.`/`I{N}.P{N}.` names per `method.config.md` § Initiative Surface, not in a committed phase file)*
 
 You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context — including the **§ Initiative Surface** contract that defines the Linear-native initiative model this skill validates. Run this before speccing a new initiative to ensure the roadmap is coherent and complete.
 
@@ -42,12 +42,12 @@ Validate that pre-pipeline outputs exist. If any are missing, report which skill
 | Concept brief | `concept-brief.md` | Run `/concept` |
 | Project definition | `project-definition.md` | Run `/define` |
 | Strategy docs | `Strategy/` matching `method.config.md` manifest | Run `/strategy-create` |
-| Roadmap source | `.vbw-planning/ROADMAP.md` with content (optional legacy — strategy docs are the live source) | Run `/roadmap-create` |
+| Roadmap source | the `Roadmap source` file with content (optional — strategy docs are the live source) | Run `/roadmap-create` |
 | Phase initiatives | At least one Linear delivery initiative named `i{N}.` exists | Run `/roadmap-create` |
 | Phase projects | The current initiative has at least one `I{N}.P{N}.` project (legacy bare `P{N}.` also counts) | Run `/roadmap-create` |
 | Linear board | Issues exist, placed in `I{N}.P{N}.` projects | Run `/roadmap-create` |
 
-The initiative surface lives in **Linear**, not in a file: an initiative named `i{N}. label` is an ordered INITIATIVE; a project named `I{N}.P{N}. label` is an ordered SUB-PHASE (it carries its initiative number; legacy bare `P{N}.` still parses); issues live in projects. `.vbw-planning/PHASES.md` and `linear-map.json` are **retired** — do not assert they exist or are consistent (a stale copy may linger as a `bin/pk` fallback, but no skill writes them).
+The initiative surface lives in **Linear**, not in a file: an initiative named `i{N}. label` is an ordered INITIATIVE; a project named `I{N}.P{N}. label` is an ordered SUB-PHASE (it carries its initiative number; legacy bare `P{N}.` still parses); issues live in projects. There is no committed phase-file mirror — do not assert one exists.
 
 If any Stage 0 check fails, report it prominently at the top of the health report:
 
@@ -65,9 +65,9 @@ If all Stage 0 checks pass, continue to the next check.
 
 ### Phase 1 — Gather State
 
-Linear is the source of truth for the initiative surface. Read it live; the retired `.vbw-planning/PHASES.md` and `linear-map.json` are not consulted.
+Linear is the source of truth for the initiative surface. Read it live; there is no committed phase-file mirror to consult.
 
-1. (Optional legacy) Read `.vbw-planning/ROADMAP.md` for the strategy-derived requirements list, if present. Strategy docs are the live requirement source; ROADMAP.md is a legacy mirror.
+1. (Optional) Read the `Roadmap source` file for the strategy-derived requirements list, if present. Strategy docs are the live requirement source.
 2. Fetch all initiatives via `mcp__linear-server__linear_getInitiatives`. Partition them:
    - **Delivery initiatives** = names matching `^i(\d+)\.` — these are the ordered INITIATIVES.
    - **Strategic initiatives** = unprefixed names — themes, not initiatives; carried into Phase 2's strategic-initiative check.
@@ -80,7 +80,7 @@ Throughout: order comes from the integer in the `i{N}.` / `P{N}.` name prefix (n
 
 ### Phase 2 — Completeness Check
 
-Source the requirements list from the strategy docs (the live source) or, if present, the legacy `.vbw-planning/ROADMAP.md`. For each initiative (`i{N}.` initiative):
+Source the requirements list from the strategy docs (the live source) or, if present, the `Roadmap source` file. For each initiative (`i{N}.` initiative):
 
 1. Extract the requirements that map to this initiative
 2. Match each requirement to Linear issues by:
@@ -165,7 +165,7 @@ The label layer **owns no state `ROADMAP.md` doesn't already assert** — so thi
 **A board on the lanes model must not adopt this layer, and must not be offered the bootstrap below.** The layer exists for boards whose phases span multiple projects. On the lanes model phases ≡ initiatives, so the `i{N}.`/`P{N}.` prefixes already carry the order and these labels would encode it a second time — two mirrors of one ordering, drifting apart. That is the exact failure the lanes model removes. Detect the shape from config: `§ Area Labels` filled in → lanes model → no-op this phase regardless of anything else. (Retiring an existing layer has an order-sensitive path — comment the config table *first*, or this phase re-scaffolds what you delete; see `sop/Linear_SOP.md § Board shapes`.)
 
 **Read the convention from config — hardcode nothing.** The `### Phase Label Layer` section names, per project:
-- the **roadmap source file** — the `Roadmap source` key (`§ Initiative Surface → Roadmap source`; blank → the root `ROADMAP.md`). Read *that* file's per-phase issue lists as the source of truth; never hardcode the path. A project still on the legacy `.vbw-planning/ROADMAP.md` sets the key to it — this is the same file the Stage-0 check and Phase 1 locate, so the layer and the audit stay on one roadmap. **The key lives outside this section's commented block on purpose** (v4.28.0) — Phase 2.5 reads it independently, so retiring the layer must not repoint the reconciliation.
+- the **roadmap source file** — the `Roadmap source` key (`§ Initiative Surface → Roadmap source`; blank → the root `ROADMAP.md`). Read *that* file's per-phase issue lists as the source of truth; never hardcode the path. This is the same file the Stage-0 check and Phase 1 locate, so the layer and the audit stay on one roadmap. **The key lives outside this section's commented block on purpose** (v4.28.0) — Phase 2.5 reads it independently, so retiring the layer must not repoint the reconciliation.
 - the **phase/pool label set** — e.g. `Roadmap: Phase A`, `Roadmap: Phase B`, `Roadmap: Continuous`. Derive the actual phase names from the roadmap source file's own headings (a project may letter phases, number milestones, use quarters — never assume "Phase A/B/C"). Config marks which labels are **sequenced phases** vs the standing **Continuous pool**.
 - the **order label** — e.g. `Order: Any` — marking an issue with no intra-phase dependency (safe to run anytime / in parallel).
 - the **saved-view convention** — one ungrouped, Manual-sorted saved view per label. *(Views are **created** at scaffold time — by `/roadmap-create` at authoring, or by this phase's **bootstrap** on an existing board — but are **not drift-checked** once they exist: this phase verifies label membership, `sortOrder`, and relations against the roadmap, not the ongoing state of a view. A later deleted/renamed view won't flag.)*

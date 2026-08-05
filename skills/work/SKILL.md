@@ -1,6 +1,6 @@
 ---
 name: work
-description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Native-on-Workflow is the sole executor (v4.0.0 removed the pluggable vbw backend).
+description: V2 daily-loop skill — plan + execute a Linear issue from inside its worktree. Use after pk branch opens a worktree. Use when an Approved Linear issue is ready for implementation. Native-on-Workflow is the sole executor.
 ---
 
 # /work
@@ -344,7 +344,7 @@ Rules for the DAG:
 - One logical change per task → one atomic commit. If a task can't be described in one `change:` line, split it.
 - `deps` encodes ordering. `files` encodes conflict: two tasks may run concurrently **only** if their `files` sets are disjoint.
 - Every task has a `verify` that can run in isolation. A task with no meaningful verify is a smell — fold it into a sibling or add a real check.
-- **Author the tests the spec/PLAN calls for — don't just run the existing suite.** If an AC or a task's `done` implies coverage (a new RLS/authz path, a calculation, a state transition), the task's `change` MUST include *writing* that test, and `verify` runs it. Running the pre-existing suite green is necessary but never sufficient: a security- or correctness-critical path that ships with no *new* test is an incomplete task, not a passing one. Prefer test-first — author the failing test, then the code that makes it pass. (This is the gap a native-vs-VBW pilot surfaced: native built a correct security guard but shipped it *unverified* because it ran existing tests instead of authoring the one that proved the guard.)
+- **Author the tests the spec/PLAN calls for — don't just run the existing suite.** If an AC or a task's `done` implies coverage (a new RLS/authz path, a calculation, a state transition), the task's `change` MUST include *writing* that test, and `verify` runs it. Running the pre-existing suite green is necessary but never sufficient: a security- or correctness-critical path that ships with no *new* test is an incomplete task, not a passing one. Prefer test-first — author the failing test, then the code that makes it pass. (This is the gap an executor pilot surfaced: it built a correct security guard but shipped it *unverified* because it ran existing tests instead of authoring the one that proved the guard.)
 
 #### Step 5n.1 — Choose execution mode
 
@@ -559,8 +559,7 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
 | Plan revised >3 times | Refuse. Recommend `pk delegate`. |
 | `--backend=` with any value | Refuse: `Backend selection was removed in v4.0.0 — native is the sole executor. Drop the --backend flag.` |
-| `Backend: vbw` / `Backend: auto` in `method.config.md` | Refuse: `'Backend: <value>' was removed in v4.0.0. Set 'Backend: native' or delete the row.` |
-| `pk` (or `bin/pk`) binary absent | Warn: `pk not found — cannot read Backend from config. Defaulting to native. Run /pipekit-update to fix.` |
+| `pk` (or `bin/pk`) binary absent | Warn: `pk not found — run /pipekit-update to fix.` |
 | Subagent returns permission denial | Stop. Print the denial. Do not retry. |
 | Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
 | Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |
@@ -599,6 +598,5 @@ Before printing the hand-off, ask yourself: "Did the last shell command exit 0?"
 | Lines of skill prose | 765 | ~330 |
 | Tier system | Quick/Standard/Heavy (label-driven) | Quick/Standard/Heavy (Linear `tier:*` labels, opt-in; restored in v2.6.0) |
 | Verdict loop | 3 rounds + stalemate detection | 1 screen, 3 options, 3-revision hard limit |
-| Backend | VBW only | native — sole executor (vbw removed v4.0.0) |
 | Auto-chain | Yes (4 hidden agent invocations) | No (user paces) |
-| State writes | Linear (twice), VBW STATE.md, pipeline-state JSON | None (read-only) |
+| State writes | Linear (twice), plus a pipeline-state JSON | None (read-only) |
