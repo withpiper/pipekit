@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.29.1"
+PK_VERSION="4.30.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -50,13 +50,13 @@ pk_config_path() {
 #      method.config.template.md):
 #
 #        ```
-#        Backend: native
+#        Integration branch: dev
 #        Ship environments: dev,beta,main
 #        ```
 #
 #   2) Legacy markdown-table rows (still rendered for documentation):
 #
-#        | **Backend** | `native` | ... |
+#        | **Integration branch** | `dev` | ... |
 #
 # Code-block form is tried first since that is what consumers actually set.
 # Falls back to the table form, then to the supplied default.
@@ -351,7 +351,7 @@ pk_issue_show_render() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase context — Linear-native (Initiatives → Projects), file fallback
+# Phase context — Linear-native (Initiatives → Projects)
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # Phase order lives in Linear, not a committed file. Initiatives named with an
@@ -367,8 +367,8 @@ pk_issue_show_render() {
 #   current phase   = lowest i<N> initiative whose status != "Completed"
 #   current project = lowest P<N> project whose state ∉ {completed, canceled}
 # Unprefixed initiatives (strategic themes) are ignored, so no config list is
-# needed. When no i<N>. initiatives exist (un-migrated project, or no Linear
-# key), this falls back to the legacy .vbw-planning/ files.
+# needed. When no i<N>. initiatives exist (or there's no Linear key), callers
+# degrade to a global "next Approved anywhere" read.
 
 # Raw initiatives query. Empty on no-key / error (so callers fall back cleanly).
 pk_linear_initiatives_json() {
@@ -418,54 +418,10 @@ pk_native_roadmap_summary() {
   ' 2>/dev/null
 }
 
-# Legacy file-based phase name — .vbw-planning/PHASES.md "## Current Phase:".
-pk_file_current_phase_name() {
-  local root phases
-  root=$(pk_repo_root)
-  phases="$root/.vbw-planning/PHASES.md"
-  [ -f "$phases" ] || return 0
-  grep -m1 -E '^## Current Phase:' "$phases" 2>/dev/null \
-    | sed -E 's/^## Current Phase:[[:space:]]*//; s/[[:space:]]+$//'
-}
-
-# Legacy file-based phase → Linear project UUID via .vbw-planning/linear-map.json.
-# Fuzzy match: PHASES.md and the map may differ on separators ("Phase 2.5 — Foo"
-# vs "Phase 2.5: Foo"); fall back to the leading "Phase X.Y" token.
-pk_file_current_phase_project_id() {
-  local root map name
-  root=$(pk_repo_root)
-  map="$root/.vbw-planning/linear-map.json"
-  [ -f "$map" ] || return 0
-  name=$(pk_file_current_phase_name)
-  [ -z "$name" ] && return 0
-  local phase_token
-  phase_token=$(echo "$name" | grep -oE '^Phase [0-9]+(\.[0-9]+)?' | head -1)
-  jq -r --arg name "$name" --arg token "$phase_token" '
-    .projects // {} | to_entries | map(.value)
-    | map(select(
-        .name == $name
-        or ($token != "" and (.name | startswith($token)))
-      ))
-    | .[0].id // empty
-  ' "$map" 2>/dev/null
-}
-
-# Unified phase context. Emits "<name>\t<project-id>\t<source>" (source =
-# native|file) or nothing. Native (Linear initiatives) wins; falls back to the
-# legacy .vbw-planning/ files during the migration window.
+# Unified phase context. Emits "<name>\t<project-id>" or nothing when the board
+# carries no live i<N>. initiative (callers then degrade to a global read).
 pk_phase_context() {
-  local native
-  native=$(pk_native_phase_context "$(pk_linear_initiatives_json)")
-  if [ -n "$native" ]; then
-    printf '%s\tnative\n' "$native"
-    return 0
-  fi
-  local fname fproj
-  fname=$(pk_file_current_phase_name)
-  fproj=$(pk_file_current_phase_project_id)
-  if [ -n "$fname" ] && [ -n "$fproj" ]; then
-    printf '%s\t%s\tfile\n' "$fname" "$fproj"
-  fi
+  pk_native_phase_context "$(pk_linear_initiatives_json)"
 }
 
 # Back-compat thin wrappers (older code paths / external callers). The hot path
@@ -1470,102 +1426,6 @@ pk_warn_if_conflicting() {
   echo ""
 }
 
-# Find the legacy .vbw-planning/ PLAN.md for an issue ID across all phase dirs.
-# Read-only fallback for un-migrated projects; native /work plans live in
-# .pk-work/<ID>-PLAN.md. Flat layout is .vbw-planning/phases/<phase>/<phase-num>-<id-num>-PLAN.md,
-# but consumers may use alt nested layouts. Returns first match or empty.
-pk_legacy_find_plan() {
-  local root="$1"
-  local issue="$2"
-  [ -d "$root/.vbw-planning/phases" ] || return 1
-  local id_num
-  id_num=$(echo "$issue" | grep -oE '[0-9]+$' || echo "")
-  [ -z "$id_num" ] && return 1
-  local f
-  # Native flat: phases/<phase>/<phase-num>-<id-num>-PLAN.md
-  for f in "$root"/.vbw-planning/phases/*/*-"${id_num}"-PLAN.md; do
-    if [ -f "$f" ]; then
-      echo "$f"
-      return 0
-    fi
-  done
-  # Alt nested: phases/<phase>/<slug>-<id>/PLAN.md
-  for f in "$root"/.vbw-planning/phases/*/*"${issue}"*/PLAN.md; do
-    if [ -f "$f" ]; then
-      echo "$f"
-      return 0
-    fi
-  done
-  return 1
-}
-
-# v2.6.0 #2: After a confirmed pk done merge, flip the PLAN.md frontmatter
-# status from "ready" to "complete" and write a SUMMARY.md alongside.
-# Legacy read-only fallback for un-migrated projects that still carry a
-# .vbw-planning/ layer. Unblocks fresh-worktree edits for batch flows by
-# removing the stale "active plan" marker the legacy file-guard treats as in-progress.
-# Idempotent — re-runs are safe (existing SUMMARY.md is kept; status flip
-# is no-op if already complete). Skips silently when no .vbw-planning/ or
-# no matching PLAN.md exists.
-pk_legacy_finalize_plan() {
-  local root="$1"
-  local issue="$2"
-  local pr_url="$3"
-  local merge_sha="$4"
-  local commits_count="$5"
-  local diffstat="$6"
-
-  local plan_file
-  plan_file=$(pk_legacy_find_plan "$root" "$issue") || return 1
-
-  # Flip PLAN status: ready → complete (frontmatter-scoped). Awk because
-  # sed -i is non-portable across BSD/GNU; awk gives us safe replacement
-  # bounded to the leading `---` block.
-  if grep -q "^status: ready$" "$plan_file" 2>/dev/null; then
-    local tmp
-    tmp=$(mktemp)
-    awk '
-      NR==1 && /^---$/ { in_fm=1; print; next }
-      in_fm && /^---$/ { in_fm=0; print; next }
-      in_fm && /^status: ready$/ { print "status: complete"; next }
-      { print }
-    ' "$plan_file" > "$tmp" && mv "$tmp" "$plan_file"
-  fi
-
-  # Write SUMMARY.md (idempotent — skip if exists).
-  local summary_file="${plan_file%-PLAN.md}-SUMMARY.md"
-  if [ ! -f "$summary_file" ]; then
-    local today
-    today=$(date +%Y-%m-%d)
-    cat > "$summary_file" <<SUMMARY
----
-status: shipped
-issue: ${issue}
-pr: ${pr_url}
-merged: ${merge_sha}
-commits: ${commits_count}
-closed: ${today}
----
-
-# Shipped — ${issue}
-
-- PR: ${pr_url}
-- Merge commit: \`${merge_sha}\`
-- Commits shipped: ${commits_count}
-- Diff: ${diffstat:-n/a}
-- Closed: ${today}
-SUMMARY
-  fi
-
-  # Print the relative paths so the user can see what was touched.
-  local plan_rel summary_rel
-  plan_rel="${plan_file#$root/}"
-  summary_rel="${summary_file#$root/}"
-  echo "$plan_rel"
-  echo "$summary_rel"
-  return 0
-}
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommands
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1613,21 +1473,16 @@ cmd_next() {
     echo "Switch to $integration first:  git checkout $integration"
     return 0
   fi
-  # Phase-aware mode: Linear initiatives (i<N>./P<N>.) when available, else the
-  # legacy .vbw-planning/ files. One fetch via pk_phase_context. Falls back to
-  # "next Approved anywhere" when no phase context exists at all.
-  local phase_ctx phase_name phase_project phase_src
+  # Phase-aware mode: Linear initiatives (i<N>./P<N>.). One fetch via
+  # pk_phase_context. Falls back to "next Approved anywhere" when the board
+  # carries no live i<N>. initiative.
+  local phase_ctx phase_name phase_project
   phase_ctx=$(pk_phase_context)
   phase_name=$(printf '%s' "$phase_ctx" | cut -f1)
   phase_project=$(printf '%s' "$phase_ctx" | cut -f2)
-  phase_src=$(printf '%s' "$phase_ctx" | cut -f3)
 
   if [ -n "$phase_name" ] && [ -n "$phase_project" ]; then
-    if [ "$phase_src" = "native" ]; then
-      echo "On $current — Initiative: $phase_name (Linear)"
-    else
-      echo "On $current — Initiative: $phase_name"
-    fi
+    echo "On $current — Initiative: $phase_name (Linear)"
     echo ""
     local in_progress approved needs_spec ip_count ap_count ns_count
     # Annotate blocked-by once per group (Linear inverseRelations → .blocked) so
@@ -1672,11 +1527,7 @@ cmd_next() {
     fi
     if [ "$ip_count" = "0" ] && [ "$ap_count" = "0" ] && [ "$ns_count" = "0" ]; then
       echo "Initiative $phase_name has no In Progress / Approved / Needs Spec issues."
-      if [ "$phase_src" = "native" ]; then
-        echo "Check  pk status  for the full board, or advance the initiative/project state in Linear."
-      else
-        echo "Check  pk status  for the full board, or update PHASES.md to the next phase."
-      fi
+      echo "Check  pk status  for the full board, or advance the initiative/project state in Linear."
     fi
 
     # Other phases — surface Approved work outside current phase
@@ -1690,7 +1541,7 @@ cmd_next() {
     return 0
   fi
 
-  # Legacy fallback — no phase context available
+  # No phase context — degrade to a global "next Approved anywhere" read.
   echo "On $current — looking for next Approved issue in Linear..."
   local approved count
   approved=$(pk_linear_issues_in_state "Approved" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
@@ -1801,13 +1652,6 @@ cmd_portfolio() {
   nat=$(pk_native_phase_context "$init_json")
   phase_name=$(printf '%s' "$nat" | cut -f1)
   phase_project=$(printf '%s' "$nat" | cut -f2)
-  # Legacy/file projects (no i<N>. initiatives): fall back to pk_phase_context.
-  if [ -z "$phase_project" ]; then
-    local pc
-    pc=$(pk_phase_context)
-    phase_name=$(printf '%s' "$pc" | cut -f1)
-    phase_project=$(printf '%s' "$pc" | cut -f2)
-  fi
 
   if [ -z "$roadmap" ] && [ -z "$phase_project" ]; then
     echo ""
@@ -2647,25 +2491,6 @@ $commits"
     fi
   fi
 
-  # Legacy fallback: write SUMMARY + flip PLAN status for un-migrated
-  # projects (v2.6.0 #2). Best-effort: skips silently when there's no
-  # .vbw-planning/ or no matching PLAN.md (always, for native /work projects).
-  # Unblocks fresh-worktree edits for batch flows — the legacy file-guard
-  # otherwise treats `status: ready` PLAN.md files as still-active and
-  # blocks edits outside their files_modified list.
-  local merge_sha commits_count
-  merge_sha=$(git rev-parse --short "origin/${integration}" 2>/dev/null || echo "")
-  commits_count="0"
-  [ -n "${commits:-}" ] && commits_count=$(echo "$commits" | wc -l | tr -d ' ')
-  local plan_touched
-  plan_touched=$(pk_legacy_finalize_plan "$root" "$issue" "${pr_url_done:-}" "$merge_sha" "$commits_count" "${diffstat:-}" 2>/dev/null || true)
-  if [ -n "$plan_touched" ]; then
-    echo ""
-    echo "Legacy plan: marked complete + wrote summary"
-    echo "$plan_touched" | sed 's/^/  → /'
-    echo "  Commit when ready: git add .vbw-planning/ && git commit"
-  fi
-
   # Deploy reminder (non-branch-per-env projects). When a project deploys via a
   # script rather than branch promotion, `pk promote` is disabled and nothing in
   # the loop ensures the merged code reached an environment ("merged ≠ deployed").
@@ -3265,7 +3090,6 @@ cmd_init() {
   echo ""
   echo "Checking your method.config.md for v2 keys..."
   echo ""
-  # v4.0.0: `Backend` is no longer required — native-on-Workflow is the sole executor.
   local needed=("Integration branch" "Promote to main" "Require QA review")
   local missing=()
   for k in "${needed[@]}"; do
@@ -3794,8 +3618,6 @@ cmd_doctor() {
   fi
   # Integration branch
   echo "  • Integration branch: $(pk_integration_branch)"
-  # Backend (v4.0.0: native is the sole executor; value shown only to surface a stale vbw config)
-  echo "  • Backend: $(pk_config "Backend" "native")"
   # Session logs (v2.1.2+ — replaces the retired bash Stop hook).
   if [ -n "$root" ] && [ -d "$root/Logs/Sessions" ]; then
     echo "  ✓ Logs/Sessions/ present"
@@ -3924,7 +3746,6 @@ cmd_config() {
   fi
   local key
   for key in \
-    "Backend" \
     "Integration branch" \
     "Promote to main" \
     "Require QA review" \

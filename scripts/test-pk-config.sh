@@ -48,7 +48,7 @@ piper_cfg='# method.config.md (Piper-style)
 ## V2 keys
 
 ```
-Backend: auto
+Migration dir: supabase/migrations
 Integration branch: dev
 Promote to main: true
 Require QA review: true
@@ -58,7 +58,7 @@ Ship environments: dev,beta,main
 '
 
 echo "Fixture 1: code-block Key: Value (Piper-style)"
-assert_eq "Backend"             "auto"          "$(with_fixture "$piper_cfg" "Backend" "vbw")"
+assert_eq "Migration dir"       "supabase/migrations" "$(with_fixture "$piper_cfg" "Migration dir" "db/migrate")"
 assert_eq "Integration branch"  "dev"           "$(with_fixture "$piper_cfg" "Integration branch")"
 assert_eq "Ship environments"   "dev,beta,main" "$(with_fixture "$piper_cfg" "Ship environments" "dev,main")"
 assert_eq "Require QA review"   "true"          "$(with_fixture "$piper_cfg" "Require QA review" "false")"
@@ -68,7 +68,7 @@ assert_eq "Promote to main"     "true"          "$(with_fixture "$piper_cfg" "Pr
 rsvault_cfg='## V2 keys
 
 ```
-Backend: native
+Migration dir: db/migrate
 Integration branch: main
 Promote to main: false
 Ship environments: main
@@ -76,7 +76,7 @@ Ship environments: main
 '
 
 echo "Fixture 2: code-block Key: Value (rs-vault-style)"
-assert_eq "Backend"            "native" "$(with_fixture "$rsvault_cfg" "Backend" "vbw")"
+assert_eq "Migration dir"      "db/migrate" "$(with_fixture "$rsvault_cfg" "Migration dir" "supabase/migrations")"
 assert_eq "Integration branch" "main"   "$(with_fixture "$rsvault_cfg" "Integration branch")"
 assert_eq "Promote to main"    "false"  "$(with_fixture "$rsvault_cfg" "Promote to main" "true")"
 
@@ -85,13 +85,13 @@ legacy_cfg='## V2 keys
 
 | Key | Value | Default | Used by |
 |-----|-------|---------|---------|
-| **Backend** | `vbw` | `vbw` | `/work` |
+| **Migration dir** | `db/migrate` | none | `pk ship` |
 | **Integration branch** | `dev` | derived | `pk ship` |
 | **Ship environments** | `dev,main` | `dev,main` | `pk ship` |
 '
 
 echo "Fixture 3: legacy markdown-table"
-assert_eq "Backend"             "vbw"      "$(with_fixture "$legacy_cfg" "Backend" "native")"
+assert_eq "Migration dir"       "db/migrate" "$(with_fixture "$legacy_cfg" "Migration dir" "supabase/migrations")"
 assert_eq "Integration branch"  "dev"      "$(with_fixture "$legacy_cfg" "Integration branch")"
 assert_eq "Ship environments"   "dev,main" "$(with_fixture "$legacy_cfg" "Ship environments" "dev,beta,main")"
 
@@ -100,16 +100,16 @@ empty_cfg='# method.config.md
 no v2 keys here
 '
 echo "Fixture 4: missing key → default"
-assert_eq "Missing key default" "fallback" "$(with_fixture "$empty_cfg" "Backend" "fallback")"
-assert_eq "Missing key no-default" "" "$(with_fixture "$empty_cfg" "Backend")"
+assert_eq "Missing key default" "fallback" "$(with_fixture "$empty_cfg" "Migration dir" "fallback")"
+assert_eq "Missing key no-default" "" "$(with_fixture "$empty_cfg" "Migration dir")"
 
 # ─── Fixture 5: malformed (table-style label but blank value) ───────────────
 malformed_cfg='## V2 keys
 
-| **Backend** |   |  |  |
+| **Migration dir** |   |  |  |
 '
 echo "Fixture 5: blank value → default"
-assert_eq "Blank table value → default" "vbw" "$(with_fixture "$malformed_cfg" "Backend" "vbw")"
+assert_eq "Blank table value → default" "db/migrate" "$(with_fixture "$malformed_cfg" "Migration dir" "db/migrate")"
 
 echo ""
 if [ "$fail" -eq 0 ]; then

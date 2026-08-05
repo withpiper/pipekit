@@ -254,7 +254,7 @@ check_paths() {
 
       # Skip paths that are clearly about consuming project structure (when in method repo)
       if $IS_METHOD_REPO; then
-        if echo "$path" | grep -qE '^\.(claude|vbw-planning)/'; then
+        if echo "$path" | grep -qE '^\.claude/'; then
           continue
         fi
         if echo "$path" | grep -qE '^(pipekit/|Strategy/|Security/|src/|src_poc/|packages/|Logs/|rules/)'; then
@@ -471,7 +471,7 @@ check_skill_refs() {
       if echo "$ref" | grep -qE '^(g-promote|g-test|g-deploy|migrate|component|reset-user|seed-data)'; then
         continue  # Project-specific skills — not expected in method repo
       fi
-      if echo "$ref" | grep -qE '^(vbw:|speckit|board|code-review|commit|simplify|skill-name)'; then
+      if echo "$ref" | grep -qE '^(speckit|board|code-review|commit|simplify|skill-name)'; then
         continue  # External tools / Claude Code built-ins / generic examples
       fi
       # Skip references with arguments (e.g., /work PROJ-123, /light-spec PROJ-1)

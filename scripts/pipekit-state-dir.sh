@@ -3,10 +3,9 @@
 #
 # Resolve Pipekit's per-repo machine-local state directory. Pipekit's ephemeral
 # state (pipeline-state records, strategy-sync marker) lives outside the repo
-# at an XDG-style cache path. Earlier Pipekit placed these in `<repo>/.pipekit/`
-# but that path is inside the repo and gets blocked by VBW's file-guard hook
-# when running inside an active-plan scope. The relocation to an out-of-repo
-# cache dir lets writes succeed unconditionally.
+# at an XDG-style cache path. Earlier Pipekit placed these in `<repo>/.pipekit/`,
+# but in-repo state dirties the worktree and shows up in diffs and status. The
+# relocation to an out-of-repo cache dir keeps ephemeral writes out of the tree.
 #
 # Path scheme:
 #   ${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/
