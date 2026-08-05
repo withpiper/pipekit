@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
+**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed (+16/−195 in `bin/pk`), along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -33,19 +33,18 @@ Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a 
 
 ## How Consuming Projects Work
 
-Projects pull from this repo using `sync-method.sh`. The sync copies `skills/`, `sop/`, `templates/`, and `method.md` into the project. It never touches project-specific files (`method.config.md`, `.claude/rules/`, legacy `.vbw-planning/`, project-specific skills). Exception: the five `pipekit-*` canonical rule files in `.claude/rules/` are sync-owned; a `Skip rules` key in `method.config.md` opts a project out of canonical rules that don't apply to it (v4.21.0+).
+Projects pull from this repo using `sync-method.sh`. The sync copies `skills/`, `sop/`, `templates/`, and `method.md` into the project. It never touches project-specific files (`method.config.md`, `.claude/rules/`, project-specific skills). Exception: the five `pipekit-*` canonical rule files in `.claude/rules/` are sync-owned; a `Skip rules` key in `method.config.md` opts a project out of canonical rules that don't apply to it (v4.21.0+).
 
 **Sync-safe overrides:** projects can override synced skills/SOPs/method.md without forking by writing to `.claude/overrides/`. The sync script applies overrides after the upstream copy and surfaces drift warnings when upstream changes a file you override. See `method.md` § Sync-Safe Overrides.
 
 ## Initiative Surface Ownership
 
-VBW is fully retired: the executor went in v4.0.0 (native-on-Workflow is the sole executor), the plugin was decoupled in v4.2.0, and the initiative surface became Linear-native in v4.1.0. Pipekit owns the whole surface:
+Native-on-Workflow is the sole executor and the initiative surface is Linear-native. Pipekit owns the whole surface:
 
 - **Pipekit owns** Linear issues, the **initiative surface** (Linear Initiatives `i{N}.` → Projects `I{N}.P{N}.` → Issues; v4.1.0, project `I{N}.` prefix added v4.5.0), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current initiative from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
 - **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`I{N}.P{N}.` hierarchy *is* the roadmap.
 - **Both levels are completable** (v4.28.0, the lanes model): an initiative is a release phase, a project is a **lane of ~3–8 issues**, and uncut work rests with **no project plus an `Area:` label**. The walk reads *into* a project but never *inside* one, so a project that keeps accepting work hides its contents from `pk next`/`pk status`. Completability lives at the project level; eternity lives at the theme/label level.
 - **`/work` is the only executor entry point.** It plans inline (parallel `Agent` grounding) and executes on the native-on-Workflow backend, keeping Linear and the `pk *` state in sync. There is no backend selection.
-- **Legacy read-only fallback:** `bin/pk` still reads a legacy `.vbw-planning/PHASES.md`/`linear-map.json` (and legacy `PLAN.md` finalize) *only* for un-migrated projects that haven't moved to the Linear-native surface. Never the normal path.
 
 Full initiative model in `method.md` (§ Initiative Surface Ownership).
 

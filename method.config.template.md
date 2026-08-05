@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.29.0** — Last updated: 2026-08-03  *(**v4.29.0 — a third skill-sync mode: scaffold-once.** Portable skills are overwritten every sync; local skills (`.local-skills`) never receive upstream fixes at all. Scaffold-once splits the difference: seeded from the method repo's `.scaffold-once-skills` manifest once, when `.claude/skills/<name>/` is absent, then never touched again — paired with a normally-synced SOP so conventions still propagate while curation stays local. `/lane-map` is the worked example: `sop/Lane_Map_SOP.md` (new) + the scaffolded `skills/lane-map/SKILL.md`, plus this file's new `Lane map URL` key. Verified against a real sync run, not just reviewed. Smoke 199 → 200.)*
+**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -129,7 +129,6 @@ illustrative.
 - Leave this section blank to skip the convention; skills that read it no-op when it's empty.
 
 > **Legacy fallback:** projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the
-> legacy `.vbw-planning/PHASES.md` + `linear-map.json` automatically — `bin/pk` reads them read-only.
 > Rename your delivery initiatives with `i{N}.` prefixes to switch a project to the native surface,
 > then the files can be deleted. New projects are native from `/roadmap-create`.
 
@@ -214,7 +213,7 @@ Best for: solo dev, small teams, projects where preview URLs replace a staging e
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote main` opens the `dev` → `main` PR (Phase 1, no state change); `pk promote main --finish` after the merge transitions WITs to `Done` (Phase 2).
-**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed, on dev) + auto-pull (legacy `.vbw-planning/` SUMMARY/PLAN-flip for un-migrated projects only); `pk promote main --finish` → `Done` (after the promote PR merges; two-phase, not optimistic). `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed, on dev) + auto-pull; `pk promote main --finish` → `Done` (after the promote PR merges; two-phase, not optimistic). `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
 
 ### Three-Tier (dev → beta → main)
 
@@ -229,7 +228,7 @@ Best for: teams with QA, projects needing a stable UAT environment, regulated in
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote <env>` walks one hop per invocation (`pk promote beta` then `pk promote main`); each hop is two-phase — Phase 1 opens the PR, Phase 2 (`--finish`) transitions Linear states after merge.
-**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed) + auto-pull (legacy `.vbw-planning/` SUMMARY/PLAN-flip for un-migrated projects only); `pk promote beta --finish` → `In Beta` (after promote PR merges); `pk promote main --finish` → `Done`. Each `pk promote` is two-phase — WITs stay in source state until `--finish` after the merge.
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed) + auto-pull; `pk promote beta --finish` → `In Beta` (after promote PR merges); `pk promote main --finish` → `Done`. Each `pk promote` is two-phase — WITs stay in source state until `--finish` after the merge.
 
 ### Environments
 

@@ -26,7 +26,6 @@
     rules/                   -- Auto-loaded constraint files (see Routing Pointers)
     skills/                  -- Portable skills
     agents/                  -- Pipekit-shipped agents (e.g., plan-reviewer)
-  .vbw-planning/             -- VBW planning state (ROADMAP, PLAN.md, STATE)
   notepad.md                 -- Personal scratch space (gitignored; seeded by `pk init`)
   Logs/Sessions/             -- Per-session narrative logs (written by `/pk-exit`)
   method.config.md           -- Project-specific config (workflow state IDs, git arch, etc.)
@@ -48,7 +47,7 @@ Promotion mechanism: `pk ship` (feature → integration branch from `method.conf
 
 ## Pipeline
 
-This project uses **Pipekit** (a portable AI-delivery methodology) with **Linear** for the initiative surface, review, and tracking. Execution is native-on-Workflow (the sole executor as of v4.0.0). The VBW plugin is no longer required (v4.2.0); a legacy `.vbw-planning/` planning layer may remain for direct-VBW projects and is slated for separate, later retirement.
+This project uses **Pipekit** (a portable AI-delivery methodology) with **Linear** for the initiative surface, review, and tracking. Execution is native-on-Workflow (the sole executor).
 
 The full pipeline is documented in `method/method.md`; the one-page operational view is in `method/RUNBOOK.md`. Core loop:
 
@@ -71,7 +70,7 @@ Daily loop (per issue):
 Per session: /pk-exit (writes Logs/Sessions/<date>_<HHMM>.md before /exit)
 ```
 
-Interactive skills live in `.claude/skills/`. `pk *` commands live in `bin/pk`. Legacy VBW commands (if the plugin is installed) live under `/vbw:*`.
+Interactive skills live in `.claude/skills/`. `pk *` commands live in `bin/pk`.
 
 ## Working Style
 
@@ -123,7 +122,6 @@ If CLAUDE.md and a rules file conflict on implementation detail, the rules file 
 - Plans reference CLAUDE.md conventions. The executor follows them during execution.
 - Skills are for interactive sessions, not agent execution paths.
 - Agents must validate against the pre-deploy gate before marking work complete.
-- `/work` is the only executor entry point. It plans inline and executes on the native-on-Workflow backend (the sole executor as of v4.0.0), keeping Linear and the `pk *` state machine in sync. There is no backend selection.
-- VBW is fully retired (executor v4.0.0, plugin v4.2.0, Linear-native initiative surface v4.1.0). The only vestige is a read-only `bin/pk` fallback to a legacy `.vbw-planning/` layer for un-migrated projects — never the normal path.
+- `/work` is the only executor entry point. It plans inline and executes on the native-on-Workflow backend (the sole executor), keeping Linear and the `pk *` state machine in sync. There is no backend selection.
 
 See `method/method.md` § "Initiative Surface Ownership" for details.

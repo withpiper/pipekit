@@ -3,8 +3,7 @@ set -u
 # Pipekit-owned PostToolUse hook: validate git commit message format.
 # Non-blocking feedback only (always exit 0). Surfaces an advisory nudge to the
 # model when a commit subject does not match {type}({scope}): {desc}.
-# Re-homed from the retired VBW plugin (validate-commit.sh) so the nudge in
-# .claude/rules + CLAUDE.md survives plugin removal as a Pipekit-owned hook.
+# Pairs with the commit-format rule in .claude/rules + CLAUDE.md.
 #
 # Synced to consumers at .claude/hooks/validate-commit.sh by scripts/sync-method.sh.
 # Register it in the consuming project's .claude/settings.json:

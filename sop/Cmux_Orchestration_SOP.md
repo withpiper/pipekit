@@ -2,7 +2,7 @@
 
 > Base cmux pane discipline lives in `.claude/rules/pipekit-cmux.md` (always-on). This SOP is the demand-loaded half: read it **before** driving other Claude sessions in worker panes — not needed for ordinary single-session cmux work.
 
-**v4.24.0** — Last updated: 2026-07-28  *(**v4.24.0 — new SOP.** The four orchestrating-other-Claude-sessions rules move here from always-on `pipekit-cmux.md`, which keeps a trigger pointer. Content unchanged — menu navigation, repaint waits, stale-ref fallback, turn-END detection, plus the orchestration anti-patterns.)*
+**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** The 2026-05-17 menu-mapping anchor no longer names the executor path it mis-selected — that path was removed with the legacy planning layer, so naming it made the anchor cite something a reader can't find. The incident is unchanged: sending `6` selected option 4.)*
 
 When master control is driving other Claude sessions in worker panes (the parallel-batch pattern), four extra rules apply that don't apply to non-Claude panes.
 
@@ -12,7 +12,7 @@ When master control is driving other Claude sessions in worker panes (the parall
 Claude Code's interactive menus accept arrow-key navigation + Enter, OR numeric shortcuts — but the numeric mapping is NOT always 1:1 with what's rendered. Items like "Type something" or "Chat about this" may be parsed separately from the numbered options, and numeric input clamps to the last "real" option.
 </important>
 
-Empirically observed 2026-05-17: sending `"6"$'\n'` to confirm option 6 ("Chat about this") on a 6-option menu silently selected option 4 ("Use a VBW subagent"). The worker proceeded with the wrong path, corrupting a native-only test.
+Empirically observed 2026-05-17: sending `"6"$'\n'` to confirm option 6 ("Chat about this") on a 6-option menu silently selected option 4 — a different execution path entirely. The worker proceeded down it, corrupting the run it was supposed to be measuring.
 
 Use arrow-key navigation + Enter instead:
 

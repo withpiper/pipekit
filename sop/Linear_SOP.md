@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.28.1** — Last updated: 2026-08-02  *(**v4.28.1 — skills must cite `method.config.md` for values, never for prose.** `method.config.md` is project-owned and never synced, so a section added to the *template* reaches new projects and no existing consumer. v4.28.0 shipped `/roadmap-create` pointing at `§ Board shapes`, which was dangling on both consumers the day it shipped. The explanation moved to `sop/Linear_SOP.md § Board shapes` (synced everywhere) and skills now point there. New smoke guard fails when a skill cites a config section carrying no `| **Key** |` row. Smoke 198 → 199.)*
+**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -135,7 +135,7 @@ The **Milestone = Work Package** layer is an optional intra-project grouping, or
 
 ## Initiative Surface Mapping
 
-The roadmap's initiative order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. The legacy initiative-source files `.vbw-planning/PHASES.md` and `.vbw-planning/linear-map.json` are **retired** — no skill writes them; `bin/pk` reads them only as a read-only fallback for un-migrated projects.
+The roadmap's initiative order lives in the **Linear hierarchy** (Initiative `i{N}.` / Project `P{N}.`), not in a committed file. There is no phase-file mirror and no committed ID map.
 
 | Concept | Linear | Notes |
 |---|---|---|
@@ -403,7 +403,5 @@ The **Linear hierarchy itself is the source of truth** for the roadmap's initiat
 
 Linear IDs that skills consume directly:
 1. `method.config.md` — team ID and state IDs for skill consumption (see the § Initiative Surface contract).
-
-The legacy `.vbw-planning/linear-map.json` is **retired**: no skill writes it, and it is no longer the ID map. `bin/pk` reads it only as a read-only fallback for un-migrated projects.
 
 See `method.config.template.md` for the template.

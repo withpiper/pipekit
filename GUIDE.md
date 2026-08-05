@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.29.1** — Last updated: 2026-08-03  *(**v4.29.1 — snapshot vs. live wasn't a fork in the road.** SiteLine's live `/lane-map` follow-up (`Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md`) showed the curated/live tradeoff dissolves once the two are merged and diffed rather than one replacing the other. `sop/Lane_Map_SOP.md` now documents the hybrid as an explicit opt-in — curation stays authored, a live overlay reconciles loudly (append+flag uncurated-active and still count it toward the frontier, fold uncurated-done silently, mark curated-but-gone stale) instead of picking a side, which is also the staleness signal for free. Plus an artifact gotcha: declaring `mcp` on a publicly-shared artifact 422s; un-share via the claude.ai UI first. Docs only, no `bin/pk` behavior change.)*
+**v4.30.0** — Last updated: 2026-08-05 09:00  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 ---
 
@@ -342,7 +342,7 @@ This is where you set up the actual infrastructure. The `/startup` orchestrator 
 **Input:** Strategy docs + `project-definition.md`
 **Output:** The Linear Initiative→Project→Issue hierarchy (`i{N}.` / `I{N}.P{N}.`), populated directly in Linear
 
-This is where strategy becomes work items. The skill reads your strategy docs and project definition, extracts requirements, groups them into feature clusters, identifies dependencies, and authors the phase hierarchy **directly in Linear** — no `.vbw-planning/ROADMAP.md` merge dependency and no `linear-map.json`.
+This is where strategy becomes work items. The skill reads your strategy docs and project definition, extracts requirements, groups them into feature clusters, identifies dependencies, and authors the phase hierarchy **directly in Linear** — no roadmap-file merge dependency and no committed ID map.
 
 **What it produces:**
 
@@ -390,7 +390,7 @@ An initiative is a batch of issues selected for the current execution cycle. Thi
 2. If On Deck is now empty, issues from "Future Initiatives" get promoted to On Deck
 3. A Linear comment is posted on each issue noting its initiative assignment
 
-**Initiative state is derived from Linear, not a file.** The current initiative is the lowest-numbered `i{N}.` Initiative whose status is not `Completed`; the current sub-phase is the lowest-numbered `P{N}.` Project in it whose state is not `completed`/`canceled`. `/phase-plan` advances the initiative by transitioning that initiative/project state in Linear — `pk next`/`pk status` then read the new current initiative live. (Projects not yet migrated to `i{N}.`-prefixed initiatives fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
+**Initiative state is derived from Linear, not a file.** The current initiative is the lowest-numbered `i{N}.` Initiative whose status is not `Completed`; the current sub-phase is the lowest-numbered `P{N}.` Project in it whose state is not `completed`/`canceled`. `/phase-plan` advances the initiative by transitioning that initiative/project state in Linear — `pk next`/`pk status` then read the new current initiative live.
 
 ---
 
@@ -506,7 +506,7 @@ After agent review passes, you review the spec in Linear. This is where product 
 **Input:** Approved spec
 **Output:** Worktree + feature branch + Linear → In Progress
 
-`pk next` is initiative-aware (v2.1.0+): it **derives the current initiative live from the Linear hierarchy** — the lowest-numbered `i{N}.` Initiative that isn't `Completed`, then its lowest-numbered open `P{N}.` Project (by numeric name prefix, `P2` before `P10`; Linear's `sortOrder` is never used) — and groups that initiative's Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Legacy `.vbw-planning/PHASES.md` + `linear-map.json` fall back automatically for un-migrated projects. Falls back to global "next Approved" when no initiative context.
+`pk next` is initiative-aware (v2.1.0+): it **derives the current initiative live from the Linear hierarchy** — the lowest-numbered `i{N}.` Initiative that isn't `Completed`, then its lowest-numbered open `P{N}.` Project (by numeric name prefix, `P2` before `P10`; Linear's `sortOrder` is never used) — and groups that initiative's Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Falls back to global "next Approved" when no initiative context.
 
 `pk branch <ID>` is mechanical setup — idempotent against Linear+git ground truth. It creates the worktree, the branch, and transitions Linear:
 
@@ -543,7 +543,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 ### Plan Review
 
 **Skill:** `/review-plan` (spawns the `plan-reviewer` agent on the plan-review tier per `method.config.md § Model Policy` — default `opus`, effort `xhigh`)
-**Input:** the inline plan — `/work` emits a task DAG at `.pk-work/<ID>-PLAN.md`, which `/review-plan` targets directly. (For un-migrated projects with a legacy `PLAN.md` under `.vbw-planning/phases/{phase-slug}/`, `/review-plan` still reviews those as a fallback.)
+**Input:** the inline plan — `/work` emits a task DAG at `.pk-work/<ID>-PLAN.md`, which `/review-plan` targets directly.
 **Output:** Validated plan or revision requests
 
 Run between `/work`'s inline planning and execution as an optional plan-quality gate. Native execution has per-task verify-before-integrate as its own plan-safety net, so `/review-plan` is most useful when a plan is large or high-risk and you want a whole-plan stress-test before any task runs. The plan reviewer stress-tests:
@@ -641,7 +641,7 @@ Skip PR review for pure copy/UI tweaks and internal-only refactors with no exter
 
 Test the feature against the spec's acceptance criteria under real usage conditions. The PR should already have a Vercel preview URL by the time you start UAT (Vercel auto-deploys on PR open).
 
-**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`, or → `Done` for 1-tier projects), auto-pulls the integration branch (v2.6.0+), and — for un-migrated projects that still carry a legacy `.vbw-planning/` layer — writes its `.vbw-planning/.../SUMMARY.md` + flips PLAN status to complete (v2.6.0+; skipped silently otherwise). Or pass `--merge` and let `pk done` run `gh pr merge` for you. v2.7.0+ also resets the parent branch after worktree teardown, prints a stack advisory (a local dev server / Supabase keeps running), and — for script-deploy projects with a `Deploy command` set in `method.config.md` — reminds you to deploy (the merge doesn't auto-ship the app).
+**Accept:** Merge the PR (rebase or merge-commit; squash is disabled repo-wide). Then exit the worktree and run `pk done <ID>` from the parent repo — this verifies the merge, cleans up the worktree + branch, posts commits + diffstat to Linear, transitions Linear `UAT → In <FirstEnv>` (e.g. `In Dev`, or → `Done` for 1-tier projects), and auto-pulls the integration branch (v2.6.0+). Or pass `--merge` and let `pk done` run `gh pr merge` for you. v2.7.0+ also resets the parent branch after worktree teardown, prints a stack advisory (a local dev server / Supabase keeps running), and — for script-deploy projects with a `Deploy command` set in `method.config.md` — reminds you to deploy (the merge doesn't auto-ship the app).
 
 **Reject:** Describe what's wrong — the issue re-enters execution with your feedback (return to Stage 2's `/work`).
 
@@ -824,7 +824,7 @@ If you want time-boxed sprints with capacity tracking, map initiatives to Linear
 
 ### Initiative State Tracking
 
-Initiatives are tracked **live in Linear**, not in a committed file. An initiative is a `i{N}.` Initiative; its sub-phases are `I{N}.P{N}.` Projects that hold the issues (v4.5.0 — the project carries its initiative number so the initiative reads at the project level; legacy bare `P{N}.` still parses). The current initiative is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current initiative and the initiative's overall progress straight from this hierarchy. (Un-migrated projects fall back to the legacy `.vbw-planning/PHASES.md` automatically.)
+Initiatives are tracked **live in Linear**, not in a committed file. An initiative is a `i{N}.` Initiative; its sub-phases are `I{N}.P{N}.` Projects that hold the issues (v4.5.0 — the project carries its initiative number so the initiative reads at the project level; legacy bare `P{N}.` still parses). The current initiative is derived on demand — the lowest-numbered `i{N}.` Initiative not yet `Completed`, then its lowest-numbered open `P{N}` Project (ordered by the numeric name prefix, never Linear's `sortOrder`). Linear also tracks individual issue status (Needs Spec, Building, UAT, In Dev, In Beta, Done — env-mapped per `Ship environments`). `pk next`/`pk status` read which issues belong to the current initiative and the initiative's overall progress straight from this hierarchy.
 
 ---
 
@@ -932,7 +932,7 @@ Terminal:
 | Content | Home | Never In |
 |---------|------|----------|
 | Feature specs, AC, scope | Linear issue description | plan files |
-| Task decomposition | `.pk-work/` PLAN files (legacy `.vbw-planning/` for un-migrated projects) | Linear |
+| Task decomposition | `.pk-work/` PLAN files | Linear |
 | Execution status | Both (synced via `/sync-linear`) | — |
 | Code | Git | Linear or plan files |
 | Phase composition | Linear `i{N}.` Initiatives + `P{N}.` Projects (derived live) | a committed file |
@@ -955,10 +955,6 @@ The roadmap's initiative order lives in **Linear** (`i{N}.` Initiatives → `P{N
 | Anytime | `pk status` | Always | Project progress dashboard, derived live from Linear |
 
 The plan-safety net is per-task verify-before-integrate (`/work`) plus the `/verify` gate and the antagonistic review gates (`/review-plan`, `/pr-security-review`), not a separate QA agent.
-
-### Legacy `.vbw-planning/` fallback
-
-Pipekit fully retired VBW: no Pipekit skill, gate, or executor depends on it, and the VBW plugin is not installed. The one remaining vestige is read-only — `bin/pk` keeps a legacy fallback that reads `.vbw-planning/PHASES.md` / `linear-map.json` **only** for projects that haven't yet migrated to the Linear-native initiative surface. Migrated projects (the normal path) never touch it. `/work` writes its task DAG and run trail to gitignored `.pk-work/`, never `.vbw-planning/`.
 
 ---
 
@@ -1036,7 +1032,6 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 | `.claude/rules/` | Project coding conventions |
 | `.claude/skills/{project-specific}/` | Stack-specific skills |
 | `.claude/overrides/` | Sync-safe customization (applied on top of sync; see `method.md` § Sync-Safe Overrides) |
-| `.vbw-planning/` | Project state (legacy fallback for un-migrated projects) |
 | `CLAUDE.md` | Project-specific |
 
 ### Commands

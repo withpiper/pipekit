@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.29.0** — Last updated: 2026-08-03  *(**v4.29.0 — a third skill-sync mode: scaffold-once.** New `§ Syncing Portable Skills → Scaffold-once skills` subsection documents the mechanism generally; `/lane-map` (new, scaffolded) is the worked example, listed in the portable-skills table above. Declared in the method repo's own `.scaffold-once-skills` — a consuming project has nothing of its own to configure. Carries v4.28.1 — cite `method.config.md` for values, never for prose.)*
+**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 ---
 
@@ -64,7 +64,7 @@ These skills work across any project that follows the method. They read `method.
 | `pk doctor` | Diagnostic: config validity, Linear API access, worktree dir, stale artifacts | Anytime |
 | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config | One-time setup |
 | `/linear` | Linear issue workflow helper | Anytime |
-| `/sync-linear` | Reconcile legacy `.vbw-planning/` state with Linear (un-migrated projects only) | Anytime |
+| `/sync-linear` | Reconcile strategy-doc drift against the Linear initiative hierarchy | Anytime |
 | `/pipekit-help` | Read project state, recommend next pipeline step | Anytime |
 | `/spec-validator` | Validate spec completeness | Stage 1: Spec |
 | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) | Anytime |
