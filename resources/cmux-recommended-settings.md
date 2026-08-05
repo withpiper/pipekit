@@ -215,7 +215,6 @@ These settings make the cmux integrations more useful:
 | `Worktree prefix` | `method.config.md` | cmux tab titles + Vault entries derive from the worktree path; setting a clean prefix (`~/Projects/<repo>-`) keeps them readable |
 | Session log path (`Logs/Sessions/`) | `method.config.md` | When you `/pk-exit` mid-session, cmux can show the session log alongside the Vault entry on next resume |
 | `Self-reference check: enabled` | `method.config.md` (PR #67) | Cmd-clickable matches in `pk verify` output route through #2831's path-punctuation fix |
-| `Backend: native` | `method.config.md` | Smaller in-context Claude sessions reuse the same pane; less Vault entry sprawl than `vbw` (which spawns multiple sub-agents) |
 
 ---
 
