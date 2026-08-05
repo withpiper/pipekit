@@ -215,7 +215,7 @@ For **inherited** mode, the tracker is read-only — the foundation check produc
 
 The steps below describe the **greenfield** flow in full. Brownfield skips Steps 1-2 (and Steps 3-4, since the codebase already exists) and adapts the others as noted in [Mode Routing](#mode-routing) above. Inherited mode does not execute these steps — it runs the Foundation Check and exits.
 
-Stage 0 chain (greenfield): `/concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan`. `/vbw:init` is **not** part of this chain — the Linear `i{N}.`/`P{N}.` hierarchy that `/roadmap-create` authors is the initiative surface; there is no `.vbw-planning/` scaffold step.
+Stage 0 chain (greenfield): `/concept → /define → /strategy-create → /startup → /roadmap-create → /phase-plan`. The Linear `i{N}.`/`P{N}.` hierarchy that `/roadmap-create` authors is the initiative surface; there is no scaffold step.
 
 Each step checks if its output already exists and offers to skip — making `/startup` resumable. If you stop after Step 4, re-running picks up at Step 5.
 
@@ -567,7 +567,7 @@ Two possible states:
 1. **No initiative hierarchy yet** (most common — fresh project) → Run `/roadmap-create`. It authors the Linear `i{N}.` initiative / `I{N}.P{N}.` project hierarchy directly from the strategy docs and seeds the issues underneath. This is the expected flow for new projects.
 2. **Already populated by `/roadmap-create`** (re-running `/startup`) → Ask: _"Roadmap appears fully populated. Skip, or redo?"_
 
-To tell empty vs. populated: check whether the Linear board has any `i{N}.` initiatives with `P{N}.` projects and Linear-traced issues underneath. An optional legacy `.vbw-planning/ROADMAP.md` may exist from a prior version, but the Linear hierarchy is the authoritative initiative surface.
+To tell empty vs. populated: check whether the Linear board has any `i{N}.` initiatives with `P{N}.` projects and Linear-traced issues underneath. An optional narrative `ROADMAP.md` may exist, but the Linear hierarchy is the authoritative initiative surface.
 
 The Pipekit flow is:
 
@@ -705,6 +705,6 @@ Next steps:
   2. Remove the unchosen option's configuration blocks (environment tables, promotion skills, workflow details, etc.) so they don't look active.
   3. If the unchosen option has reference value, move it to a collapsed section at the bottom: `<!-- Not chosen: three-tier --> ... <!-- /Not chosen -->` — but only if it adds value. When in doubt, remove it entirely.
   This applies to `method.config.md`, `CLAUDE.md`, strategy docs, and any file where alternatives were presented. A document should never look like two conflicting decisions are both active.
-- **App code lives in `src/`.** All application code (framework, components, API routes, etc.) goes in a `src/` subdirectory. The project root is reserved for Pipekit files (`method.config.md`, `concept-brief.md`, `project-definition.md`, `Strategy/`, `.pk-work/`, `pipekit/`, `.claude/`, plus a legacy `.vbw-planning/` in un-migrated projects), config files (`.gitignore`, `.env`, `package.json`, `tsconfig.json`), and scripts. This keeps Pipekit's methodology layer cleanly separated from the application. When initializing a framework (Next.js, Remix, etc.), configure it to use `src/` as the source directory.
+- **App code lives in `src/`.** All application code (framework, components, API routes, etc.) goes in a `src/` subdirectory. The project root is reserved for Pipekit files (`method.config.md`, `concept-brief.md`, `project-definition.md`, `Strategy/`, `.pk-work/`, `pipekit/`, `.claude/`), config files (`.gitignore`, `.env`, `package.json`, `tsconfig.json`), and scripts. This keeps Pipekit's methodology layer cleanly separated from the application. When initializing a framework (Next.js, Remix, etc.), configure it to use `src/` as the source directory.
 - **Resumable.** The tracker + artifact checks make `/startup` fully resumable across sessions. A new session reads the tracker and picks up exactly where the last one stopped.
 - **Emit inline `➜ Next:` after every step.** When completing any step (including mid-`/startup` step transitions), emit an inline `➜ Next:` line in your terminal output with the next command the user should run and why. Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear once the foundation contract is satisfied.

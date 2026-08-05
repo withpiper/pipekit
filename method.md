@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.29.1** — Last updated: 2026-08-03  *(**v4.29.1 — snapshot vs. live wasn't a fork in the road.** SiteLine's live `/lane-map` follow-up (`Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md`) showed the curated/live tradeoff dissolves once the two are merged and diffed rather than one replacing the other. `sop/Lane_Map_SOP.md` now documents the hybrid as an explicit opt-in — curation stays authored, a live overlay reconciles loudly (append+flag uncurated-active and still count it toward the frontier, fold uncurated-done silently, mark curated-but-gone stale) instead of picking a side, which is also the staleness signal for free. Plus an artifact gotcha: declaring `mcp` on a publicly-shared artifact 422s; un-share via the claude.ai UI first. Docs only, no `bin/pk` behavior change.)*
+**v4.30.0** — Last updated: 2026-08-05 09:00  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -153,7 +153,7 @@ Stage 0 is the contract above (Foundation Contract), not a script. The greenfiel
 - `/roadmap-create` extracts requirements from strategy docs and authors the **Linear-native initiative surface** — Initiatives (`i{N}.` initiatives) → Projects (`I{N}.P{N}.` sub-phases) → Issues
 - `/phase-plan` confirms the current initiative and promotes its first sub-phase's issues to "Needs Spec"
 
-**Output:** `concept-brief.md`, `project-definition.md`, `Strategy/` docs, working infrastructure, and a populated Linear board structured as the native initiative surface (`i{N}.` initiatives → `P{N}.` projects → issues), with the first sub-phase's issues in "Needs Spec". (No `.vbw-planning/` scaffold — the initiative surface lives in Linear; see `method.config.md § Initiative Surface`.)
+**Output:** `concept-brief.md`, `project-definition.md`, `Strategy/` docs, working infrastructure, and a populated Linear board structured as the native initiative surface (`i{N}.` initiatives → `P{N}.` projects → issues), with the first sub-phase's issues in "Needs Spec". (No scaffold step — the initiative surface lives in Linear; see `method.config.md § Initiative Surface`.)
 
 **Gate:** `/roadmap-review` validates all Stage 0 outputs before the spec pipeline begins.
 
@@ -353,11 +353,8 @@ Skills are convenience wrappers. They automate the same conventions documented i
 
 **The initiative surface is Linear-native (v4.1.0) and wholly Pipekit-owned.** The roadmap's initiative order —
 Initiatives (`i{N}.`) → Projects (`I{N}.P{N}.`, v4.5.0; bare `P{N}.` still parses) → Issues — lives in
-Linear. VBW is fully retired: the executor went in v4.0.0, the plugin was decoupled in v4.2.0, and no
-Pipekit skill, doc, or dependency reaches for it. The lone vestige is `bin/pk`'s **legacy read-only
-fallback** — it reads `.vbw-planning/PHASES.md` / `linear-map.json` only for projects that haven't yet
-migrated to the Linear-native surface; nothing writes those files. The boundaries below make ownership
-explicit.
+Linear. There is no committed phase-file mirror and no external planning layer — no Pipekit skill, doc,
+or dependency reaches for one. The boundaries below make ownership explicit.
 
 ### Ownership Table
 
@@ -366,7 +363,6 @@ explicit.
 | **Initiative surface** — Linear Initiatives (`i{N}.`) → Projects (`I{N}.P{N}.`) → Issues | Pipekit | `/roadmap-create` (authors), `/phase-plan` (advances, cuts lanes) | `pk next`, `pk status`, all Pipekit skills. The naming convention is the contract (`method.config.md § Initiative Surface`); ordering is the prefix number, never Linear `sortOrder`. **Initiatives and projects are both completable** — an initiative is a release phase, a project is a lane of ~3–8 issues. A project that keeps accepting work is a pool, and the walk cannot see inside it. |
 | **`Area:` label group + project-less backlog** (v4.28.0, lanes model) | Pipekit | `/linear-hygiene` (classifies), `/roadmap-create` (creates the group) | The default home for **uncut** work. Orthogonal to lane membership in both directions: a label survives a lane move, and a lane may mix areas — so neither is ever inferred from the other. Opt in via `method.config.md § Initiative Surface → Area Labels`. |
 | **Phase-label layer** (optional, v4.14.0 — the *other* board shape) | Pipekit | `/roadmap-create` Phase 3.5 (scaffolds at authoring), `/roadmap-review` Phase 3.5 (bootstraps the layer onto an existing board on retrofit, then drift-checks vs `ROADMAP.md`) | Humans (the board view). A **visualization mirror** of `ROADMAP.md`'s per-phase build order, for roadmaps whose phases span many `I{N}.P{N}.` projects. **Mutually exclusive with the lanes model** — there phases ≡ initiatives, so the layer would be a second mirror of an order the prefixes already carry. Opt-in via `method.config.md § Phase Label Layer`; `/linear-hygiene` must **not** touch these labels (project membership ≠ phase-label membership). |
-| `.vbw-planning/PHASES.md`, `linear-map.json` (legacy) | Retired | Nothing — no skill writes them | `bin/pk` reads them only as a **legacy read-only fallback** for projects that have no `i{N}.` initiatives yet (not yet migrated to the Linear-native surface) |
 | `notepad.md` (project root, gitignored) | Human | Whoever's typing | Whoever's reading. v2 retired the auto-written `NEXT.md` mirror — `pk next` reads "what's next?" live from Linear instead. |
 | Curated roadmap (optional — `NEXT.md` / `ROADMAP.md` at project root, committed) | Human | Human only — skills and agents never write it | Humans and stakeholders. Narrative orientation (initiatives, themes, standing backlogs), never read by skills as operational state. |
 | Linear issues | Pipekit | `/light-spec`, `pk branch`, `pk ship`, `pk done`, `/roadmap-create`, `/phase-plan` | Everyone |

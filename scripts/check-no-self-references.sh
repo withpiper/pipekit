@@ -20,7 +20,7 @@
 # Configuration (read from method.config.md if present):
 #   Source root        — defaults to `src/`
 #   Allowlist          — globs always excluded (defaults: *.md, *.test.*,
-#                        Logs/Sessions/**, .vbw-planning/**, CHANGELOG*)
+#                        Logs/Sessions/**, CHANGELOG*)
 
 set -euo pipefail
 
@@ -102,7 +102,6 @@ ALLOWLIST=(
   ":(exclude)*.spec.*"
   ":(exclude)**/__tests__/**"
   ":(exclude)Logs/Sessions/**"
-  ":(exclude).vbw-planning/**"
   ":(exclude)CHANGELOG*"
 )
 

@@ -338,7 +338,6 @@ If a local clone exists:
 | `method.config.md` | Project-specific — your Linear IDs, team name, etc. |
 | `.claude/rules/` | Project coding conventions |
 | `.claude/skills/{project-specific}/` | Stack-specific skills |
-| `.vbw-planning/` | Project state |
 | `CLAUDE.md` | Project-specific |
 
 ## Related

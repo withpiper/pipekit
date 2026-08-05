@@ -20,10 +20,8 @@ You are a roadmap builder. Your job is to extract requirements from strategy doc
 - `method.config.md` should exist with Linear configuration (and `§ Initiative Surface`)
 - Linear MCP server must be connected (`mcp__linear-server__*` tools available)
 
-> **No `/vbw:init` step.** The initiative surface is now Linear itself — there is no `.vbw-planning/`
-> scaffold, `PHASES.md`, or `linear-map.json` to create. The Linear Initiative→Project→Issue
-> hierarchy *is* the roadmap. (Existing projects with legacy `.vbw-planning/` files keep working via
-> bin/pk's fallback; this skill no longer writes them.)
+> **No scaffold step.** The initiative surface is Linear itself — there is no phase file or ID map to
+> create. The Linear Initiative→Project→Issue hierarchy *is* the roadmap.
 
 ## Purpose
 
@@ -101,8 +99,8 @@ i2. Reporting (Stage 2)
 ```
 
 Optionally also write a human-readable narrative `ROADMAP.md` at the project root (per the curated-roadmap
-doctrine in `method.md` — a legitimate *optional* artifact). **Do not** write `linear-map.json` or
-`.vbw-planning/PHASES.md` — those are retired; the Linear hierarchy is the source of truth. Tell the user:
+doctrine in `method.md` — a legitimate *optional* artifact). **Do not** write any phase-file or ID-map
+mirror — the Linear hierarchy is the source of truth. Tell the user:
 
 _"Proposed {K} initiatives (i1–i{K}) with {M} sub-phases (projects) and {N} requirements. Approve before I
 create them in Linear? (y/n/edit)"_
@@ -208,7 +206,7 @@ Next steps:
 - **Trace everything.** Every requirement references a strategy doc section. Untraced = orphan.
 - **Human approves the tree before Linear population.** Don't create issues until the structure is approved.
 - **Stage 1 issues go to On Deck** — not "Needs Spec" (that's `/phase-plan`'s job).
-- **No mirror files.** Never write `linear-map.json` or `.vbw-planning/PHASES.md`. The Linear hierarchy is the truth.
+- **No mirror files.** Never write a phase-file or ID-map mirror. The Linear hierarchy is the truth.
 
 ## Common Drifts to Avoid
 

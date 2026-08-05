@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.29.1** — Last updated: 2026-08-03  *(**v4.29.1 — snapshot vs. live wasn't a fork in the road.** SiteLine's live `/lane-map` follow-up (`Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md`) showed the curated/live tradeoff dissolves once the two are merged and diffed rather than one replacing the other. `sop/Lane_Map_SOP.md` now documents the hybrid as an explicit opt-in — curation stays authored, a live overlay reconciles loudly (append+flag uncurated-active and still count it toward the frontier, fold uncurated-done silently, mark curated-but-gone stale) instead of picking a side, which is also the staleness signal for free. Plus an artifact gotcha: declaring `mcp` on a publicly-shared artifact 422s; un-share via the claude.ai UI first. Docs only, no `bin/pk` behavior change.)*
+**v4.30.0** — Last updated: 2026-08-05 09:00  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.29.1                (or latest tag)
+1. ./scripts/sync-method.sh v4.30.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -343,8 +343,6 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • posts journal highlights to Linear                 │
   │     • Linear: UAT → In <FirstEnv> (or → Done for 1-tier) │
   │     • removes worktree, deletes local branch             │
-  │     • legacy fallback: writes .vbw-planning/ SUMMARY +   │
-  │       PLAN-flip + commit hint for un-migrated projects   │
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -443,7 +441,7 @@ If `method.config.md § Phase Label Layer` is configured, the board mirrors `ROA
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
-| 7 | Cleanup | `pk done <ID> [--merge]` | `./bin/pk done <ID> [--merge]` | parent, dev | verifies PR merged (or `--merge` runs `gh pr merge` first), removes worktree, posts journal highlights to Linear, transitions Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls the integration branch (legacy fallback: writes `.vbw-planning/.../SUMMARY.md` + flips PLAN status only for un-migrated projects). `--confirmed` accepted for backward compat (no-op). |
+| 7 | Cleanup | `pk done <ID> [--merge]` | `./bin/pk done <ID> [--merge]` | parent, dev | verifies PR merged (or `--merge` runs `gh pr merge` first), removes worktree, posts journal highlights to Linear, transitions Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls the integration branch. `--confirmed` accepted for backward compat (no-op). |
 | **8** | **Promote — open** | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | **v2.6.0+ two-phase**: opens promote PR, embeds bundled-WIT tracker in PR body, **WITs stay in source state until merge**. Refuses if any bundled issue is still in `UAT`; pass `--confirmed` after env-UAT sign-off. |
 | **8b** | **Promote — finish** | **`pk promote <env> --finish`** | **`./bin/pk promote <env> --finish`** | **parent, dev** | **v2.6.0+**: after the promote PR merges, transitions bundled WITs → `In <Env>` (intermediate) or → Done (final). Reads the tracker from the merged PR body; falls back to PR commits for older promote PRs without the marker. |
 | **8′** | **Deploy (script projects)** | `pk deploy [<env>] [-- <args>]` | `./bin/pk deploy [<env>] [-- <args>]` | parent | **v4.6.0**: the script-deploy analog of promote (steps 8/8b). Runs the configured `Deploy command` for `<env>` (bare / `prod` → `Deploy command`; `pk deploy dev` → `Deploy command dev`); args after `--` pass to the script. Thin delegate — the script owns confirmation + safety. Used by projects that ship by script, not branch promotion (`Promote to main: false` + a `Deploy command`). |

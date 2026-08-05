@@ -50,6 +50,33 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.30.0 — 2026-08-05
+
+**The VBW planning layer is fully removed.** v4.0.0 removed the executor, v4.1.0 made the initiative surface Linear-native, and v4.2.0 decoupled the plugin — but a read-only fallback survived in `bin/pk` for "un-migrated projects." No live consumer needs it: verified 2026-08-05, neither Piper nor SiteLine carries a `.vbw-planning/` directory, and the fallback required *both* `PHASES.md` and `linear-map.json` present to produce anything. It was dead code that every doc still had to explain.
+
+**Removed from `bin/pk`** (+16 / −195 lines):
+- `pk_file_current_phase_name` / `pk_file_current_phase_project_id` — the `.vbw-planning/PHASES.md` + `linear-map.json` readers. `pk_phase_context` is now a thin wrapper over the Linear-native derivation.
+- `pk_legacy_find_plan` / `pk_legacy_finalize_plan` and their `pk done` call site — the legacy SUMMARY write + PLAN status flip.
+- The `phase_src` native/file branch in `pk next` (and its "update PHASES.md" hint) — the source is always Linear now.
+- A redundant second initiatives fetch in `pk portfolio`: its file-fallback branch called `pk_phase_context`, which re-queried Linear and could only ever return what the caller had already derived from the same payload.
+
+**The `Backend` config key is gone.** It existed only to select between the vbw and native executors; with one executor it read nothing. Removed: the `pk doctor` echo, the `pk config` key list, `bin/pk-init/detect_vbw.sh`, its `main.sh` registration, the `render.sh` substitution block, and `/work`'s `Backend: vbw|auto` refusal row. A stale `Backend:` row in a consumer's `method.config.md` is now inert — nothing reads it, so nothing breaks; delete it at your convenience.
+
+**Skills.** `/spec-preflight` drops its `phase-detect` probe entirely — it resolved through `.vbw-planning/scripts/` and the plugin cache, so post-retirement it could only ever emit `⚠ unverified`. Step 2 now buckets claims into four categories, not five, and sub-steps renumber `3d→3c` / `3e→3d`. `/review-plan` drops the `{phase-slug}` invocation form and its legacy `PLAN.md` discovery; `.pk-work/<ID>-PLAN.md` is the only input. `/sync-linear`'s `skill.json` description finally matches its SKILL.md (it stopped syncing planning files in v4.1.0). Prose cleanups in `/work`, `/pipekit-help`, `/00-roadmap-review`, `/roadmap-create`, `/startup`, `/01-light-spec`, `/pipekit-update`.
+
+**Tests.** `tests/pk-smoke.sh` and `scripts/test-pk-config.sh` used `Backend` as an arbitrary key for the `pk_config` parser fixtures; they now use `Migration dir`, a key that still exists. Same assertions, same coverage.
+
+**Archived, not deleted.** `experiments/poc-48-roundtwo/` and `experiments/poc-57-backend-ab/` (the A/B that decided native over vbw) and `resources/vbw-retirement-plan.md` moved to `archive/`. `experiments/` is now empty and gone.
+
+**`sop/Cmux_Orchestration_SOP.md`'s 2026-05-17 anchor is genericized, not dropped.** It quoted the mis-selected menu option by name; that option was an executor path removed with the legacy layer, so the anchor pointed at something a reader can no longer find. The incident — sending `6` selected option 4, and why numeric menu input is unsafe — is unchanged.
+
+**Deliberately untouched:** `CHANGELOG.md` and `Logs/Sessions/` (dated history — editing them falsifies the record) and `archive/`.
+
+**Consumer impact: none required.** No consumer syncs a `.vbw-planning/` layer. A leftover `Backend:` row is inert.
+
+---
+
+
 ## v4.29.1 — 2026-08-03
 
 > **Snapshot vs. live wasn't the fork in the road it looked like.** v4.29.0's `Lane_Map_SOP.md` treated curated-snapshot and live-feed as a tradeoff: pick one, because a live re-render can't reconstruct curation from the board alone. Anchor: SiteLine's `Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md` — a same-day follow-up after SiteLine shipped a live `/lane-map` (SiteLine PR #801) and found the tradeoff dissolves once curation and live state are merged and diffed against each other rather than one replacing the other. The core claim survives (curation still can't be derived from the board), but "so it's snapshot-or-live" was the wrong conclusion drawn from it. `Lane_Map_SOP.md` now documents the hybrid as an explicit, opt-in option — not a more-finished successor to the snapshot default, most projects should still start with the snapshot — where curation (`flow`, notes, parallel groups, frontier membership) stays authored while live state (status, priority, title, cycle) merges on top at render time, keyed on issue identifier. **The new § Reconciling live against curated** captures the three-case shape that makes this safe rather than just fresher: an uncurated-but-active live issue renders appended and flagged, and still counts toward the frontier — the load-bearing property, since an in-flight issue going invisible is exactly how the old uncurated pools failed; an uncurated-but-done issue folds silently into the done-stack; a curated entry no longer found live gets a stale marker instead of being silently kept or dropped. That reconciliation is also the "is the map older than the board" staleness signal v4.29.0 speculated wasn't worth building as a separate timestamp check — it falls out for free once live and curated data get diffed on every render, so a project reconciling this way shouldn't also build the separate check. **One artifact gotcha, also folded into § Artifact constraints:** declaring the `mcp` runtime capability on an Artifact 422s if the artifact is currently shared publicly, with no tool-level way to un-share — it's a claude.ai UI action on the artifact's own page, not a tool call; un-share first, then declare `mcp`. Docs only — `Lane_Map_SOP.md` stamp bumped, `bin/pk` `PK_VERSION` bumped, no `bin/pk` behavior change.

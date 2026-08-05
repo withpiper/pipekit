@@ -35,7 +35,6 @@ DETECTORS=(
   detect_scripts.sh
   detect_tiers.sh
   detect_strategy.sh
-  detect_vbw.sh
   detect_linear.sh
 )
 

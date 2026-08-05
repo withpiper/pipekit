@@ -15,7 +15,7 @@
 # and forward-only, so it never fights `pk done` or pulls a WIT back.
 #
 # It does NOT replace `pk done`/`pk promote --finish` (those also clean
-# up worktrees, post commits, write VBW SUMMARY). It's the safety net
+# up worktrees and post commits). It's the safety net
 # for when they're skipped: both end at the same Linear state, and the
 # idempotent skip means running both is harmless.
 #

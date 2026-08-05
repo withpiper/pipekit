@@ -362,7 +362,7 @@ Procedure:
 
 **Cost note:** each invocation uses Gemini API quota. Free tier covers casual use; for heavy use the cost is small but non-zero. The flag exists for the "I want one more set of eyes on this important PR" case, not for every review.
 
-**Vendor framing:** Gemini is acceptable risk under Pipekit's vendor model (see `resources/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"). Google's track record is closer to Anthropic's than to OpenAI/Microsoft's — moderate-but-acceptable IP-absorption surface. If your project's risk tolerance is tighter, skip this flag and rely on Semgrep + Claude.
+**Vendor framing:** Gemini is acceptable risk under Pipekit's vendor model (see `archive/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"). Google's track record is closer to Anthropic's than to OpenAI/Microsoft's — moderate-but-acceptable IP-absorption surface. If your project's risk tolerance is tighter, skip this flag and rely on Semgrep + Claude.
 
 ---
 

@@ -33,7 +33,6 @@ repo_name=$(val repo_name)
 repo_org=$(val repo_org)
 default_branch=$(val default_branch)
 pm=$(val package_manager)
-backend=$(val backend)
 team_key=$(val linear_team_key)
 team_id=$(val linear_team_id)
 tiers_json=$(valj tiers)
@@ -82,13 +81,6 @@ if [ -n "$team_key" ]; then
 fi
 if [ -n "$team_id" ]; then
   content=${content//00000000-0000-0000-0000-000000000000/$team_id}
-fi
-
-# Backend (V2 keys row)
-if [ -n "$backend" ]; then
-  content=$(echo "$content" | awk -v val="$backend" '
-    /^\| \*\*Backend\*\*/ { sub(/`vbw` \\\| `native`/, "`" val "`") } 1
-  ')
 fi
 
 # Integration branch (V2 keys row)

@@ -11,7 +11,7 @@
 #                                             # lockstep with the synced bin/pk.
 #
 # What it syncs:
-#   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills, VBW)
+#   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills)
 #   pipekit/templates/  <- Spec and review templates
 #   pipekit/method.md   <- The deeper methodology overview
 #   pipekit/RUNBOOK.md  <- The one-page operational doc (v2.3.1+)
@@ -27,7 +27,6 @@
 #   pipekit/decisions/       <- Project-specific ADRs
 #   .claude/rules/          <- Project coding conventions
 #   .claude/skills/{local}  <- Project-specific skills
-#   .vbw-planning/          <- Project state
 #   method.config.md        <- Project configuration
 #
 # Overrides (sync-safe customization):
@@ -280,7 +279,7 @@ sync_file "$TEMP/RUNBOOK.md" "$PROJECT_ROOT/pipekit/RUNBOOK.md" "RUNBOOK.md"
 sync_file "$TEMP/GUIDE.md" "$PROJECT_ROOT/pipekit/GUIDE.md" "GUIDE.md"
 sync_file "$TEMP/STARTUP.md" "$PROJECT_ROOT/pipekit/STARTUP.md" "STARTUP.md"
 
-# --- Sync Pipekit hook scripts (VBW lifecycle integration) ---
+# --- Sync Pipekit hook scripts (pipeline lifecycle integration) ---
 echo ""
 echo "Hook scripts:"
 mkdir -p "$PROJECT_ROOT/scripts"
@@ -399,8 +398,8 @@ if [ -d "$TEMP/agents" ]; then
 fi
 
 # --- Sync canonical .claude/hooks/ + register them ---
-# Pipekit owns the advisory commit-format hook (re-homed from the retired VBW
-# plugin so the {type}({scope}): {desc} nudge survives plugin removal). Ship the
+# Pipekit owns the advisory commit-format hook: the {type}({scope}): {desc}
+# nudge on every commit. Ship the
 # script, then idempotently register it in the consumer's committed
 # .claude/settings.json. Project-authored hooks + other settings.json content are
 # preserved — we append our block only if validate-commit.sh isn't already wired.

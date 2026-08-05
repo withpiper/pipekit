@@ -71,7 +71,7 @@ make_fixture
 write_config '# Config
 
 ```
-Backend: native
+Migration dir: supabase/migrations
 Ship environments: dev,beta,main
 Quoted key: `backticked`
 ```
@@ -81,8 +81,8 @@ unit_config() {
   ( cd "$FIXTURE" && source "$PK" && pk_config "$@" )
 }
 
-v=$(unit_config "Backend" "")
-[ "$v" = "native" ] && ok "config: code-block form" || fail "config: code-block form" "got '$v', want 'native'"
+v=$(unit_config "Migration dir" "")
+[ "$v" = "supabase/migrations" ] && ok "config: code-block form" || fail "config: code-block form" "got '$v', want 'supabase/migrations'"
 
 v=$(unit_config "Quoted key" "")
 [ "$v" = "backticked" ] && ok "config: backticks stripped" || fail "config: backticks stripped" "got '$v'"
@@ -94,21 +94,21 @@ write_config '# Config
 
 | Key | Value | Notes |
 |-----|-------|-------|
-| **Backend** | `vbw` | legacy table form |
+| **Migration dir** | `db/migrate` | legacy table form |
 '
-v=$(unit_config "Backend" "")
-[ "$v" = "vbw" ] && ok "config: legacy table form" || fail "config: legacy table form" "got '$v', want 'vbw'"
+v=$(unit_config "Migration dir" "")
+[ "$v" = "db/migrate" ] && ok "config: legacy table form" || fail "config: legacy table form" "got '$v', want 'db/migrate'"
 
 write_config '# Config
 
-| **Backend** | `vbw` | table says vbw |
+| **Migration dir** | `db/migrate` | table says db/migrate |
 
 ```
-Backend: native
+Migration dir: supabase/migrations
 ```
 '
-v=$(unit_config "Backend" "")
-[ "$v" = "native" ] && ok "config: code-block wins over table" || fail "config: code-block wins over table" "got '$v', want 'native'"
+v=$(unit_config "Migration dir" "")
+[ "$v" = "supabase/migrations" ] && ok "config: code-block wins over table" || fail "config: code-block wins over table" "got '$v', want 'supabase/migrations'"
 
 cleanup
 
@@ -452,7 +452,6 @@ echo "== dispatch =="
 
 make_fixture
 write_config '```
-Backend: native
 Integration branch: main
 Ship environments: dev,beta,main
 Promote to main: true
@@ -654,7 +653,6 @@ echo "== doctor staleness check =="
 
 make_fixture
 write_config '```
-Backend: native
 Integration branch: main
 Ship environments: dev,beta,main
 ```'
@@ -684,7 +682,6 @@ rm -rf "$METHOD_FIXTURE"
 echo "== ship guard rails =="
 
 write_config '```
-Backend: native
 Integration branch: main
 ```'
 
@@ -943,7 +940,6 @@ echo "== verify-complete ship gate (E2E) =="
 
 make_fixture
 write_config '```
-Backend: native
 Integration branch: main
 Ship environments: dev,beta,main
 ```'
@@ -1189,7 +1185,6 @@ echo "== security-gate ship gate (E2E, v4.17.0) =="
 
 make_fixture
 write_config '```
-Backend: native
 Integration branch: main
 Security categories: ./sec-cats.md
 ```'
@@ -1281,7 +1276,6 @@ git -C "$FIXTURE" checkout -q main
 # returns 1 when the section is absent — the fixture must pass it to reach
 # the prod-ready gate under test.
 write_config '```
-Backend: native
 Integration branch: dev
 Ship environments: dev,main
 Prod-ready checks: ./prod-checks.md
@@ -1348,7 +1342,6 @@ echo "== done worktree guard (regression: SiteLine dead-session) =="
 
 make_fixture
 write_config '```
-Backend: native
 Integration branch: main
 Ship environments: dev,beta,main
 ```'
@@ -1539,7 +1532,7 @@ DRIFT_SH="$REPO_ROOT/scripts/check-migration-drift.sh"
 make_fixture
 # (1) No Migration dir configured → clean skip, exit 0.
 write_config '```
-Backend: native
+Integration branch: main
 ```'
 out=$(cd "$FIXTURE" && "$DRIFT_SH" 2>&1); rc=$?
 [ $rc -eq 0 ] && case "$out" in *skipping*) ok "drift: no Migration dir → skip (exit 0)" ;; *) fail "drift: no Migration dir → skip (exit 0)" "out: $out" ;; esac \
@@ -1547,7 +1540,6 @@ out=$(cd "$FIXTURE" && "$DRIFT_SH" 2>&1); rc=$?
 
 # Build a migration history: base (main) carries 001+003, feature branches vary.
 write_config '```
-Backend: native
 Integration branch: main
 Migration dir: db/migrations
 ```'

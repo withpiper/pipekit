@@ -40,7 +40,6 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 | File paths from spec | `Read` or `Glob` | Confirm cited files exist |
 | Line ranges from spec | `Read` with `offset`/`limit` | Confirm line citations resolve to real content |
 | Symbol/heading refs from spec | `Grep` | Confirm cited symbols/headings exist in the cited files |
-| `phase-detect.sh` output | Bash via the legacy lookup chain (see Step 3) | Confirm stated phase baseline is current (legacy projects only) |
 | Linear status (re-fetched) | `mcp__linear-server__linear_getIssueById` | Compare current status against spec body's claim |
 | Each `blocked_by` issue | `mcp__linear-server__linear_getIssueById` | Confirm dependency claims of "Done" |
 | `Strategy docs path` (from `method.config.md`) | `Glob` + `Read` | Probe 3.6a — canonical-doc cross-check (#21) |
@@ -63,13 +62,12 @@ If the issue isn't found or has no description: stop and report `"PROJ-XXX has n
 
 ### Step 2 — Parse empirical claims
 
-Walk the spec body and bucket claims into five categories. Use these heuristics — when in doubt, prefer false-positive (treat ambiguous text as a claim and verify it) over false-negative (silently skipping a claim).
+Walk the spec body and bucket claims into four categories. Use these heuristics — when in doubt, prefer false-positive (treat ambiguous text as a claim and verify it) over false-negative (silently skipping a claim).
 
 1. **File paths.** Any backtick-quoted token containing `/` or a file extension (e.g., `` `supabase/config.toml` ``, `` `src/lib/auth.ts` ``). Treat absolute paths and project-relative paths the same way. Strip surrounding punctuation.
 2. **Code citations (line + symbol).** Line forms: `line N of <file>`, `lines N-M of <file>`, `<file>:N`, `<file>:N-M` — capture the file token and line range. Symbol forms (the preferred citation style, v4.23.0+ — `/light-spec` now emits path + symbol because line numbers rot fastest): `` `<file>` → `<symbol>` ``, `<symbol>() in <file>`, a backticked symbol and backticked file named in the same sentence, and `<file> § <heading>` for markdown targets — capture the file token and the symbol/heading text.
-3. **Phase-detect baselines.** Phrases like `phase_count=N`, `next_phase_state=<value>`, `qa_status=<value>`, especially when they appear in §Acceptance Criteria after wording like *"currently returns"*, *"baseline is"*, *"expect"*. Capture the field name and stated value.
-4. **Linear status claim.** A line in the spec body of the form `Status: <name>` (typical Light Spec metadata). Capture the stated status.
-5. **Dependency claims.** Cross-references to other Linear issues (`PROJ-NN`) inside §Dependencies, §Blocked by, or in narrative prose like *"blocked by PROJ-42 (Done)"*. The blocker list also comes from `relations.blocked_by` in Step 1 — combine both sources, dedupe by identifier.
+3. **Linear status claim.** A line in the spec body of the form `Status: <name>` (typical Light Spec metadata). Capture the stated status.
+4. **Dependency claims.** Cross-references to other Linear issues (`PROJ-NN`) inside §Dependencies, §Blocked by, or in narrative prose like *"blocked by PROJ-42 (Done)"*. The blocker list also comes from `relations.blocked_by` in Step 1 — combine both sources, dedupe by identifier.
 
 If a category yields zero claims, that's fine — record it as `n/a` in the verdict, not a failure.
 
@@ -113,41 +111,11 @@ For each symbol/heading citation, `Grep` the cited file for the symbol's definit
 
 A symbol found nowhere is a divergence (`✗`, REVISE). A moved symbol is `⚠` with the new location — the spec needs a path update, but the contract still exists. When a citation carries both a symbol and a line number, the symbol is authoritative: if the symbol resolves at a different line, record `⚠ drifted (symbol at line X, spec says Y)` rather than `✗`.
 
-#### 3c — phase-detect baseline (legacy fallback)
-
-The initiative surface is Linear-native (v4.1.0) — `phase_count` / `next_phase_state` claims only appear in specs from un-migrated projects that still carry a `phase-detect.sh`. This probe is therefore a legacy fallback: it runs only when the script is present, and degrades silently otherwise. Resolve it via the same lookup chain `/work` uses:
-
-```bash
-PHASE_DETECT=""
-if command -v phase-detect.sh >/dev/null 2>&1; then
-  PHASE_DETECT="phase-detect.sh"
-elif [ -x ".vbw-planning/scripts/phase-detect.sh" ]; then
-  PHASE_DETECT=".vbw-planning/scripts/phase-detect.sh"
-else
-  for c in "$HOME"/.claude/plugins/cache/vbw-marketplace/vbw/*/scripts/phase-detect.sh; do
-    [ -x "$c" ] && PHASE_DETECT="$c"
-    # Don't break — alphabetic glob expansion means later iterations
-    # overwrite with higher-versioned installs.
-  done
-fi
-
-if [ -n "$PHASE_DETECT" ]; then
-  "$PHASE_DETECT" > /tmp/pipekit-spec-preflight-phase.txt 2>/dev/null
-  PHASE_DETECT_RC=$?
-else
-  PHASE_DETECT_RC=127
-fi
-```
-
-If `PHASE_DETECT_RC != 0` or the script is unavailable: record the phase-detect category as `phase baseline unverified — phase-detect.sh unavailable (Linear-native project, expected)`. This is graceful degradation, not failure. Do not fail the verdict on this category alone.
-
-If the script ran, parse its output line-by-line (it emits `key=value` pairs). For each phase-detect baseline claim from Step 2, compare stated value against actual value. Record `match` / `mismatch (spec says X, actual Y)`.
-
-#### 3d — Linear status
+#### 3c — Linear status
 
 Re-fetch the issue (or reuse Step 1's payload if still in scope). Compare `state.name` to the spec body's `Status:` line. Record `match` or `mismatch (spec says X, actual Y)`. The spec body claim is a documentation artifact, not the source of truth — Linear is. The point is to surface drift so the human knows the spec body is stale.
 
-#### 3e — Dependencies
+#### 3d — Dependencies
 
 For each `blocked_by` identifier (from `relations` and from any narrative claims in Step 2.5), call `mcp__linear-server__linear_getIssueById` and read `state.name`. Record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `pk branch` / `/work` would also catch — surfacing it pre-flight saves a round trip.
 
@@ -295,7 +263,6 @@ Pre-flight checks for PROJ-XXX ({tier} tier):
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: {n_pass}/{n_total} exist
   ✓ Code refs (line/symbol): {n_pass}/{n_total} resolve
-  ⚠ phase-detect baseline: spec says {field}={stated}, actual={observed}
   ✓ Linear status: {state} (matches spec)
   ✓ Dependencies: {n_done}/{n_total} Done
 
@@ -311,8 +278,8 @@ Verdict: {PASS | REVISE} — {one-line reason if REVISE}
 
 Verdict rules:
 
-- **PASS** — every category is `✓` or `n/a` (no claims of that type) or graceful-degradation `⚠ unverified` for phase-detect / Linear API. Phase 3.6 may emit `⚠` (warnings) and still PASS — warnings inform but don't block.
-- **REVISE** — at least one real divergence in Phases 1–3 (missing file, unresolved line, phase-detect mismatch, status mismatch, non-Done dependency) OR a Phase 3.6 hard-fail (`✗`: managed-Supabase GUC pattern; tooling absent from `package.json`). The user updates the spec (or resolves the blocker) before `pk branch`.
+- **PASS** — every category is `✓` or `n/a` (no claims of that type) or graceful-degradation `⚠ unverified` for the Linear API. Phase 3.6 may emit `⚠` (warnings) and still PASS — warnings inform but don't block.
+- **REVISE** — at least one real divergence in Phases 1–3 (missing file, unresolved line, status mismatch, non-Done dependency) OR a Phase 3.6 hard-fail (`✗`: managed-Supabase GUC pattern; tooling absent from `package.json`). The user updates the spec (or resolves the blocker) before `pk branch`.
 - **REVISE (downgraded with `--accept`)** — Phase 3.6 hard-fails alone don't force REVISE when `--accept` is in effect; they appear as warnings. Phase 1–3 hard-fails are never downgradeable.
 
 When emitting REVISE, point at *where* in the spec the divergence sits — by AC number, by section heading, by file path, or by the migration constraint — so the human can edit surgically rather than re-reading the whole spec.
@@ -327,8 +294,6 @@ These rules are explicit so the skill stays useful when infrastructure is partia
 
 | Condition | Behavior |
 |-----------|----------|
-| `phase-detect.sh` not found anywhere | Phase-detect category records `⚠ phase baseline unverified` (expected on Linear-native projects). Verdict is still PASS-eligible if all other categories pass. |
-| `phase-detect.sh` exits non-zero | Same as above — record `⚠ phase baseline unverified` with the exit code in `--explain` mode. |
 | Linear MCP timeout fetching the main issue | Stop. The skill needs the spec body to do anything else. Report `"Linear API unavailable — re-run later."`. |
 | Linear MCP timeout fetching a blocker | Record that dependency as `⚠ unverified`. Verdict is PASS-eligible if all other categories pass. |
 | File doesn't exist | Real divergence. Record `✗`. Triggers REVISE. Not graceful — file-presence is verifiable without infrastructure. |
@@ -350,7 +315,6 @@ Pre-flight checks for RS-87 (Standard tier):
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 4/4 exist
   ✓ Code refs (line/symbol): 2/2 resolve
-  ✓ phase-detect baseline: phase_count=1 (matches spec)
   ✓ Linear status: Approved (matches spec)
   ✓ Dependencies: 2/2 Done
 
@@ -371,8 +335,7 @@ Pre-flight checks for RS-51 (Standard tier):
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 5/5 exist
   ✓ Code refs (line/symbol): 3/3 resolve
-  ⚠ phase-detect baseline: spec says phase_count=0, actual=1
-  ✓ Linear status: Approved (matches spec)
+  ✗ Linear status: Needs Spec (spec body says Approved)
   ✓ Dependencies: 2/2 Done
 
   ─ Project signal probes (Phase 3.6)
@@ -381,8 +344,8 @@ Pre-flight checks for RS-51 (Standard tier):
   ✓ Tooling availability: n/a — no test runner in ACs
   ✓ Migration data shape: n/a
 
-Verdict: REVISE — phase-detect baseline divergence at AC #1.
-Update the spec's "currently returns phase_count=0" line before pk branch.
+Verdict: REVISE — Linear status diverges from the spec body.
+Update the spec's "Status: Approved" line (or advance the issue) before pk branch.
 ```
 
 REVISE with the WIT-348 canary pattern (#21 + #22):
@@ -394,7 +357,6 @@ Pre-flight checks for WIT-348 (Standard tier):
   ⚠ File paths: 4/6 exist (renamed: projects.js → database/projects.js,
                             budget-edit-main.js → pages/budget-edit-main.js)
   ✓ Code refs (line/symbol): 2/2 resolve
-  ✓ phase-detect baseline: matches spec
   ✓ Linear status: Specced (matches spec)
   ✓ Dependencies: 1/1 Done
 
@@ -430,7 +392,6 @@ Pre-flight checks for WIT-348 (Standard tier):
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 6/6 exist
   ✓ Code refs (line/symbol): 2/2 resolve
-  ✓ phase-detect baseline: matches spec
   ✓ Linear status: Specced (matches spec)
   ✓ Dependencies: 1/1 Done
 
@@ -446,7 +407,7 @@ Verdict: PASS (with --accept warnings) — proceed knowing the listed gaps are a
 
 - **Read-only.** Never edit the spec. Never transition Linear. Never write any project file. The only writes allowed are scratch files under `/tmp/` for parsing state.
 - **No false confidence.** A graceful-degradation `⚠` is not a `✓`. The verdict surfaces what was unverified so the human can re-run later or accept the gap.
-- **Specific divergences.** When something fails, name *which* claim failed (AC #, section heading, file path, dependency identifier) — not just "phase-detect mismatch." The user shouldn't have to grep the spec to find what to fix.
+- **Specific divergences.** When something fails, name *which* claim failed (AC #, section heading, file path, dependency identifier) — not just "a mismatch." The user shouldn't have to grep the spec to find what to fix.
 - **Don't recurse into the daily loop.** This skill ends at the verdict. The user invokes `pk branch <ID>` themselves on PASS (then `/work` from inside the worktree), or `/light-spec-revise` on REVISE.
 
 ## Relationship to Other Skills
@@ -456,4 +417,4 @@ Verdict: PASS (with --accept warnings) — proceed knowing the listed gaps are a
 | `/light-spec` | Produces the spec this skill verifies. |
 | Spec Review Agent | Reviews narrative coherence. `/spec-preflight` reviews empirical claims — complementary, not redundant. |
 | `/light-spec-revise` | Where the user goes on REVISE if the spec body is the problem (most cases). |
-| `pk branch` + `/work` | The daily loop consumes specs that have passed `/spec-preflight`. On legacy projects `/work` also reads `phase-detect.sh` (inherited from v1's `/launch` Step 1.6 logic) as a runtime informational gate, not as a spec-vs-reality check. |
+| `pk branch` + `/work` | The daily loop consumes specs that have passed `/spec-preflight`. |

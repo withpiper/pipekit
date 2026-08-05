@@ -1,19 +1,19 @@
 # cmux Parallel-Native Batch Orchestrator Prompt
 
-A reusable Claude Code prompt for batch-shipping a cluster of small Linear WITs in parallel via cmux-orchestrated worker sessions running `/work --backend=native`. **This is a manual replacement for the dead Quick-tier + `/06-linear-todo-runner` integration**; the proper fix is v2.6.0 candidate #1 (wire tier inference back into `/work`).
+A reusable Claude Code prompt for batch-shipping a cluster of small Linear WITs in parallel via cmux-orchestrated worker sessions running `/work`. **This is a manual replacement for the dead Quick-tier + `/06-linear-todo-runner` integration**; the proper fix is v2.6.0 candidate #1 (wire tier inference back into `/work`).
 
 ## When to use this
 
 Use this orchestrator when:
 
 - You have 3-7 Linear WITs that are all small, all independent, all parallel-eligible, and ideally tagged as a single Wave/cycle cleanup
-- Each WIT is ~10-60 min of work (Quick-Win class — anything heavier should run through `/work` solo or via VBW)
+- Each WIT is ~10-60 min of work (Quick-Win class — anything heavier should run through `/work` solo)
 - You want them shipped today, not over the next 3 days
 - The WITs are in `Approved` state in Linear with `## Acceptance Criteria` sections
 
 Don't use this for:
 
-- A single WIT (just run `/work WIT-XXX --backend=native` directly)
+- A single WIT (just run `/work WIT-XXX` directly)
 - Heavyweight WITs (>1h each — run `/work WIT-XXX` solo with forced `--deep` grounding rather than batching)
 - WITs with cross-dependencies (run them serially)
 - Manual-only WITs (e.g. LaunchDarkly UI archival — do those separately)
@@ -52,7 +52,7 @@ These are the empirically-confirmed pitfalls from the 2026-05-17 batch test. Eac
 The prompt assumes you're starting from your project's root directory with a clean tree. Replace the bracketed `[REPLACE]` values before pasting.
 
 ```
-You are the master orchestrator for a parallel batch run of Linear WITs. Spawn worker Claude sessions in cmux panes, each running /work --backend=native on its assigned WIT, and coordinate the human gates as workers reach them.
+You are the master orchestrator for a parallel batch run of Linear WITs. Spawn worker Claude sessions in cmux panes, each running /work on its assigned WIT, and coordinate the human gates as workers reach them.
 
 ## WITs to batch
 
@@ -67,9 +67,9 @@ Total expected: [N] WITs, ~[X-Y] min serial estimate.
 
 [REPLACE if any are NOT in this batch — e.g. UI-only work like LaunchDarkly flag archival should be done manually outside the runner. List those separately.]
 
-## Backend
+## Executor
 
-native per WIT. Use `/work WIT-XXX --backend=native` in each worker session. Do NOT use vbw backend.
+One `/work WIT-XXX` per worker session. Native-on-Workflow is the sole executor — there is no backend selection.
 
 ## Canonical cmux discipline
 
@@ -90,25 +90,6 @@ Read /Users/ethanrosch/Projects/pipekit/.claude/rules/pipekit-cmux.md before spa
    - Team: [REPLACE: "Withpiper"]   (read from method.config.md Team name)
    - State is "Approved" (bump from Triage if needed via `save_issue` with the Approved state UUID)
    - Description has `## Acceptance Criteria` (if missing, STOP and surface to user — runner can't proceed without AC)
-
-3. **Pre-flight stale-PLAN sweep.** Any PLAN.md with `status: ready` whose corresponding SUMMARY.md already exists is STALE and will block file-guard edits in fresh worktrees. Sweep them in one commit before the batch starts:
-
-   ```bash
-   cd [REPLACE: ~/Projects/<project>]
-   for f in .vbw-planning/phases/[REPLACE: current-phase-slug]/02-*-PLAN.md; do
-     plan_id=$(basename "$f" -PLAN.md)
-     summary="${f%-PLAN.md}-SUMMARY.md"
-     plan_status=$(grep -E "^status:" "$f" | head -1 | sed 's/status: *//')
-     if [ -f "$summary" ] && [ "$plan_status" = "ready" ]; then
-       sed -i '' 's/^status: ready$/status: shipped/' "$f"
-       echo "Flipped $plan_id status: ready → shipped"
-     fi
-   done
-   git diff --stat .vbw-planning/phases/[REPLACE: current-phase-slug]/   # verify
-   git add .vbw-planning/phases/[REPLACE: current-phase-slug]/02-*-PLAN.md
-   git commit -m "chore(plan): backfill status:shipped on stale PLANs (batch pre-flight)"
-   git push origin dev   # admin bypass acceptable for non-code metadata sweep
-   ```
 
    If any PLAN.md has `status: ready` but NO matching SUMMARY.md, STOP and surface — that's actual in-flight work, not stale.
 
@@ -146,7 +127,7 @@ cmux send --surface "$WORKER" "cd $WT && claude --dangerously-skip-permissions"$
 sleep 3
 cmux read-screen --surface "$WORKER" --lines 20   # verify Claude is ready
 
-cmux send --surface "$WORKER" "/work WIT-XXX --backend=native"$'\n'
+cmux send --surface "$WORKER" "/work WIT-XXX"$'\n'
 ```
 
 Record `$WORKER` ref for each WIT.
@@ -258,7 +239,7 @@ Write a report covering:
 
 - Per-WIT outcome (Done / Stuck / Reverted)
 - Empirical timing (start → plan-approve → ship → UAT → Done per WIT)
-- Any new findings worth folding into `/Users/ethanrosch/Projects/pipekit/resources/v2.6.0-candidates.md`
+- Any new findings worth folding into `/Users/ethanrosch/Projects/pipekit/archive/v2.6.0-candidates.md`
 - Any working patterns worth celebrating (Step 6.5 self-checks, auto-scope-decisions, etc.)
 - Total wall-clock vs sum-of-efforts estimate
 - Follow-up WITs filed (with audit-trail provenance)

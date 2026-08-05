@@ -370,6 +370,6 @@ After the spec is drafted and posted to Linear, emit an inline `➜ Next:` line 
 ## Related Skills
 
 - `/brainstorm` — lighter: feasibility-only, no structured spec
-- `/sync-linear` — legacy: reconciles `.vbw-planning/` files ↔ Linear (un-migrated projects only; initiative surface is Linear-native as of v4.1.0)
+- `/sync-linear` — reconciles strategy-doc drift against the Linear initiative hierarchy
 - `/linear-todo-runner` — executes specced issues in parallel (requires AC section)
 - `/spec-validator` — validates full Strategy docs (heavier than light specs)
