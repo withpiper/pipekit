@@ -1,6 +1,6 @@
 ---
 name: security-gate
-description: Feature-scoped security gate between /verify and pk ship — classifies the diff into sensitive categories, runs matched checklists, writes the PASS sentinel pk ship hard-requires on gated projects. Not /security-review (repo-wide) or /pr-security-review (PR-scoped).
+description: Feature-scoped security gate between /verify and pk ship — classifies the diff into sensitive categories, runs matched checklists, writes the PASS sentinel pk ship hard-requires on gated projects. Not /repo-security-review (repo-wide) or /pr-security-review (PR-scoped).
 ---
 
 # /security-gate
@@ -16,7 +16,7 @@ Three security surfaces, three jobs — don't conflate them:
 | Skill | Scope | Cadence | This gate? |
 |-------|-------|---------|-----------|
 | **`/security-gate`** (this) | the **feature's diff**, category-triggered | once per feature, at Building → UAT | — |
-| `/security-review` | the **whole repo** | periodic / pre-release | no |
+| `/repo-security-review` | the **whole repo** | periodic / pre-release | no |
 | `/pr-security-review` | a **PR**, antagonistic | on demand for risky PRs | no |
 
 It is the per-feature counterpart to `/verify`: `/verify` runs every task and is fast; `/security-gate` runs once per feature and only does real work when a sensitive category is touched. It is **advisory** this release — it reports and comments, it does not move Linear state and does not block `pk ship`. See § Future.
@@ -122,7 +122,7 @@ If **no category matches**, skip to Step 5 with status **PASS (no sensitive cate
 
 ## Step 3 — Per-category review (parallel sub-agents)
 
-For **each matched category**, spawn a read-only review sub-agent (`general-purpose`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`) scoped to the **feature diff**. Run them in parallel. Each runs its category checklist and returns findings with `file:line` evidence, a **severity** (Critical/High/Medium/Low) and a **confidence** — and, where the category checklist is clean, an explicit cited "verified, no issue" verdict (coverage before filtering, per `/security-review`).
+For **each matched category**, spawn a read-only review sub-agent (`general-purpose`, execution tier per `method.config.md § Model Policy` — default `sonnet`, effort `medium` — `allowed-tools: Read, Bash, Grep, Glob`) scoped to the **feature diff**. Run them in parallel. Each runs its category checklist and returns findings with `file:line` evidence, a **severity** (Critical/High/Medium/Low) and a **confidence** — and, where the category checklist is clean, an explicit cited "verified, no issue" verdict (coverage before filtering, per `/repo-security-review`).
 
 Per-category checklist (the project file refines the specifics):
 
@@ -139,7 +139,7 @@ Skip any category the definitions file lists under **Not applicable** (record it
 
 ## Step 4 — Adversarial verification, reconcile, rate
 
-Run an adversarial pass over the candidate findings (mirroring `/security-review` and `pipekit-discipline.md` § DOUBT): for each finding, **try to refute it** — open the cited code and check it's actually reachable and exploitable given auth, RLS, and the real call sites. Mark each **confirmed / refuted / needs-info**. Keep refuted items in an appendix with the reason; only **confirmed** and **needs-info** feed the verdict.
+Run an adversarial pass over the candidate findings (mirroring `/repo-security-review` and `pipekit-discipline.md` § DOUBT): for each finding, **try to refute it** — open the cited code and check it's actually reachable and exploitable given auth, RLS, and the real call sites. Mark each **confirmed / refuted / needs-info**. Keep refuted items in an appendix with the reason; only **confirmed** and **needs-info** feed the verdict.
 
 Headline status (a single read-only gate run can't iterate-to-fix, so the rubric is on confirmed severity, not an "addressed" loop):
 
@@ -216,7 +216,7 @@ printf '# secgate-complete\n\nissue: %s\nstatus: PASS\nsha: %s\ncategories: %s\n
 ## Key principles
 
 1. **Classify before you review.** The gate's first job is to decide *whether* a review is owed. Most features owe none — keep that path instant. The expensive checklist only runs on a confirmed category match.
-2. **Feature-scoped, not repo-wide.** This reviews *this diff* for *its* categories — `/security-review` owns the whole-repo audit. Don't re-audit the world here.
+2. **Feature-scoped, not repo-wide.** This reviews *this diff* for *its* categories — `/repo-security-review` owns the whole-repo audit. Don't re-audit the world here.
 3. **Evidence-based, adversarially verified.** Every finding (and every all-clear) cites `file:line`; every candidate is refutation-tested before it counts. No vibes.
 4. **Hard-gated, once per feature.** It reports, comments, and (on PASS) writes the sentinel `pk ship` requires; it does not transition Linear state and does not run per task.
 5. **Framework here, signals in the project.** Never hardcode a repo's auth primitive, rate-limiter path, or PII tables — they live in the definitions file and `method.config.md`.
@@ -226,7 +226,7 @@ printf '# secgate-complete\n\nissue: %s\nstatus: PASS\nsha: %s\ncategories: %s\n
 - No Linear state transitions — `pk ship` owns Building → UAT; this only comments.
 - No code modifications — sub-agents are read-only (`Read, Bash, Grep, Glob`).
 - No per-task running — that's `/verify`. This runs once, before `pk ship`.
-- No whole-repo audit — that's `/security-review`. This is the feature diff.
+- No whole-repo audit — that's `/repo-security-review`. This is the feature diff.
 - No blocking of its own — the skill writes the PASS sentinel; **`pk ship` does the refusing** (v4.17.0). The skill never aborts a ship itself.
 - No session-log writes — `/pk-exit` owns the session log.
 

@@ -1,0 +1,5 @@
+{
+  "name": "repo-security-review",
+  "description": "Periodic whole-repo security audit — area sweep, adversarial verification, evidence-classified score report",
+  "invocable": true
+}

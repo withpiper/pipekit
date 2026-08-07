@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.30.0** — Last updated: 2026-08-05 09:00  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
+**v4.31.0** — Last updated: 2026-08-07 13:31  *(**v4.31.0 — the portable security audit was one project's checklist.** `/security-review` shipped as portable while hardcoding SiteLine's stack; audit areas, primitives, and checks now live in a project areas file (`Repo security areas` → `resources/repo-security-areas.md`), one area = one parallel agent, and the three artifact paths are optional keys that report `n/a` when blank. Renamed to **`/repo-security-review`** — `security-review` collided with Claude Code's built-in of that name. The machinery worth having (coverage-before-filtering, grounded reads, adversarial verification, evidence classification) moved verbatim. Carries v4.30.0 — the legacy planning layer is gone (`bin/pk`'s phase-file/ID-map fallback, the `Backend` key and its whole chain, `/spec-preflight`'s dead `phase-detect` probe, `/review-plan`'s phase-slug path). Linear is the only initiative surface.)*
 
 ---
 
@@ -584,7 +584,7 @@ If verify fails → fix the gaps in the worktree (often by re-invoking `/work` w
 
 `/security-gate` runs at the Building → UAT seam — after `/verify`, before `pk ship`. Its first job is to **classify**: a read-only sub-agent maps the feature diff to six sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) using the project's `resources/security-categories.md` signals. If **none match**, the gate is an instant PASS — most features touch nothing sensitive and this path is meant to be cheap. If a category matches, a per-category checklist runs against the diff (parallel read-only sub-agents), every finding is adversarially refutation-tested, and the gate emits a PASS/FAIL report.
 
-It is a **hard gate** as of v4.17.0 — on PASS the gate writes a sha-matched `secgate-complete.md` sentinel, and `pk ship` **refuses** without one matching HEAD on any project with a categories file (`--force` / `PK_SECGATE_BYPASS=1` escape, both audited). A FAIL writes no sentinel: close the findings and re-gate. It is distinct from `/security-review` (periodic whole-repo audit) and `/pr-security-review` (PR-scoped, antagonistic): this one is feature-scoped and category-triggered, and it runs automatically at the ship seam like `/verify`. A no-op without a `resources/security-categories.md` file (scaffolds the template and stops on first run). Full methodology in `sop/Security_Gate_SOP.md`.
+It is a **hard gate** as of v4.17.0 — on PASS the gate writes a sha-matched `secgate-complete.md` sentinel, and `pk ship` **refuses** without one matching HEAD on any project with a categories file (`--force` / `PK_SECGATE_BYPASS=1` escape, both audited). A FAIL writes no sentinel: close the findings and re-gate. It is distinct from `/repo-security-review` (periodic whole-repo audit) and `/pr-security-review` (PR-scoped, antagonistic): this one is feature-scoped and category-triggered, and it runs automatically at the ship seam like `/verify`. A no-op without a `resources/security-categories.md` file (scaffolds the template and stops on first run). Full methodology in `sop/Security_Gate_SOP.md`.
 
 ### Ship
 
@@ -1200,7 +1200,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Sync Linear | `/sync-linear` | Reconcile strategy-doc / requirement drift against the Linear initiative hierarchy |
 | Linear | `/linear` | Linear issue workflow helper |
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
-| Security Review | `/security-review` | Periodic repo security audit (different from `/pr-security-review`) |
+| Repo Security Review | `/repo-security-review` | Periodic whole-repo security audit — area sweep + adversarial verification + score report (different from `/pr-security-review`) |
 | Financial Review | `/financial-review` | Periodic financial-accuracy review (finance/calculation-heavy projects) — cross-layer parity audit + severity report. Portable framework; project checks in `resources/financial-review-checks.md`. No-op without a checks file. |
 | Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
 | Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project. **Phase P** (v2.7.0) also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |

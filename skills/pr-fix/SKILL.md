@@ -538,7 +538,7 @@ If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip 
 ## When NOT to use
 
 - Migrations / RLS / SECURITY DEFINER / auth in the diff — run `/pr-security-review` **alongside** (different rubrics, different surface); `/pr-fix` alone under-covers privilege boundaries.
-- Repo-wide audit — `/security-review`; this skill is PR-scoped by design.
+- Repo-wide audit — `/repo-security-review`; this skill is PR-scoped by design.
 - No PR and no reviewer findings yet — `pk ship --review` produces the antagonistic findings this skill triages; running `/pr-fix` first inverts the order.
 - Working-tree (uncommitted) review — `/code-review`; `/pr-fix`'s cross-spec handoff scan and Linear comment assume a PR exists.
 
@@ -556,6 +556,6 @@ If the PR has no linked Linear issue (no `<TEAM>-<N>` reference anywhere), skip 
 ## Related Skills
 
 - `/code-review` — Lighter-weight review (no interactive discussion, no fixes)
-- `/security-review` — Comprehensive weekly security audit (full codebase, not PR-scoped)
+- `/repo-security-review` — Periodic whole-repo security audit (full codebase, not PR-scoped)
 - `/commit` — For committing after manual fixes
 - `pk ship` — Opens the feature → integration-branch PR; `pk promote` walks the chain to main

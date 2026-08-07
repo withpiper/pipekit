@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.30.0** — Last updated: 2026-08-05 09:00  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
+**v4.31.0** — Last updated: 2026-08-07 13:31  *(**v4.31.0 — the portable security audit was one project's checklist.** `/security-review` shipped as portable while hardcoding SiteLine's stack; audit areas, primitives, and checks now live in a project areas file, one area = one parallel agent, and the three artifact paths are optional keys that report `n/a` when blank. Renamed to **`/repo-security-review`** — `security-review` collided with Claude Code's built-in of that name. Carries v4.30.0 — the legacy planning layer is gone (`bin/pk`'s phase-file/ID-map fallback, the `Backend` key and its whole chain, `/spec-preflight`'s dead `phase-detect` probe, `/review-plan`'s phase-slug path). Linear is the only initiative surface.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.30.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.31.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -279,7 +279,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │      A1-A5 auth, P1-P4 server actions on privileged.    │
   │                                                          │
   │      Different from pk ship --review (broad/generic)     │
-  │      and /security-review (periodic repo audit). Run     │
+  │      and /repo-security-review (whole-repo audit). Run   │
   │      ALONGSIDE 5b for security-sensitive PRs — they      │
   │      cover different surface area.                       │
   │                                                          │

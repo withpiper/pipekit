@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.17.0** — Last updated: 2026-07-16  *(**v4.17.0 — the hard gate ships.** `/prod-ready` now writes a `prodready-complete.md` sentinel on PASS (sha of the audited source-branch head), and `pk promote` **refuses** the final `Ship environments` hop without a matching sentinel on any project whose `Prod-ready checks` file exists — escapes `--force` / `PK_PRODREADY_BYPASS=1` (both logged to bypass.log). 1-tier projects have no promote seam, so the gate stays advisory there. § Enforcement roadmap updated. Carries v4.3.0: new SOP — the production-readiness gate: `/prod-ready` verifies the operational preconditions a feature needs to reach production safely, distinct from `/verify`'s per-task code-readiness gate.)*
+**v4.31.0** — Last updated: 2026-08-07  *(**v4.31.0 — § Overlap credited the wrong skill.** The rate-limit overlap this SOP documents is with **`/security-gate`** (feature-scoped — "this feature's login route is itself rate-limited"), not the whole-repo periodic audit; `security-gate/SKILL.md` § Overlap with /prod-ready has always documented it correctly from the other side, so the two halves contradicted each other. Fixed here rather than propagated through the `/security-review` → `/repo-security-review` rename that surfaced it. Carries v4.17.0: the hard gate — PASS writes `prodready-complete.md` and `pk promote` refuses the final hop without it on checks-armed projects.)*
 
 **Source of truth:** The concrete checks for a project live in its checks file (`resources/prod-readiness-checks.md`, scaffolded from `templates/prod-readiness-checks.template.md`) and `method.config.md`. This SOP provides the methodology that applies regardless of stack.
 
@@ -53,7 +53,7 @@ The feature's new error surface must be observable. A subagent reads the changed
 
 ### 3. Rate limiting on new public endpoints — *agent-verifiable*
 
-Every new publicly-reachable route in the diff must be covered by the project's rate-limit middleware. A subagent enumerates new route files, determines which are public (not behind an auth guard), and confirms each is covered by the matcher (or calls the limiter inline). **A new public endpoint with no rate limit = High.** (Overlap with `/security-review` is intentional and resolved — see § Overlap below.)
+Every new publicly-reachable route in the diff must be covered by the project's rate-limit middleware. A subagent enumerates new route files, determines which are public (not behind an auth guard), and confirms each is covered by the matcher (or calls the limiter inline). **A new public endpoint with no rate limit = High.** (Overlap with `/security-gate` is intentional and resolved — see § Overlap below.)
 
 ### 4. Backups active on the target env — *manual-confirm*
 
@@ -104,11 +104,11 @@ The shape is constant; the substitutions change. Fill the checks file for your s
 
 For any other stack, the checks file must still answer: *what command produces the user-facing artifact*, *what strings must never appear in it*, *how is an error made observable*, *where do public requests get throttled*, *how are backups confirmed*, *how is a risky path gated*, and *where is it watched*. If a check genuinely doesn't apply, list it under **Not applicable** with a reason — never silently skip it.
 
-## Overlap with `/security-review` (gap #3)
+## Overlap with `/security-gate` (gap #3)
 
-Rate limiting appears in both `/prod-ready` and the security review. The split is clean:
+Rate limiting appears in both `/prod-ready` and the feature-scoped security gate. The split is clean:
 
-- **`/security-review`** verifies *this feature's* auth/input/secret handling is correct in isolation — e.g. the login route is itself rate-limited against brute force.
+- **`/security-gate`** verifies *this feature's* auth/input/secret handling is correct in isolation — e.g. the login route is itself rate-limited against brute force.
 - **`/prod-ready`** verifies the *app* throttles public traffic at all — that the new public endpoint is covered by the platform's rate-limit middleware.
 
 Same word, different layer. Both run; neither subsumes the other.

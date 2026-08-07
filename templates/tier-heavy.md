@@ -22,7 +22,7 @@ Heavy = Standard + the additions below. Every Standard gate is also required.
 
 | Added gate | When | Owner |
 |------------|------|-------|
-| **Security review** | After QA passes, before `--close` | `/security-review` skill (or human security review for projects without it) |
+| **Security review** | After QA passes, before `--close` | `/repo-security-review` skill (or human security review for projects without it) |
 | **Strategy sync (mandatory)** | After merge, before the initiative closes — not a `pk ship`/`pk done` gate | `/strategy-sync` must run and produce no unapplied diffs |
 | **Pre-deploy compliance check** | Before merge to production | Project-defined (e.g., SOC2 evidence capture) |
 

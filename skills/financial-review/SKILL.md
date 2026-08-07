@@ -9,7 +9,7 @@ You are a senior finance engineer conducting a periodic **financial-accuracy rev
 
 This is the **portable framework**. The concrete, project-specific checks (which files hold the math, which SQL proves DB integrity, which formulas to compare) live in a **project checks file** you read at runtime — never hardcode them here. A non-finance project simply won't have a checks file, and won't invoke this skill.
 
-Different from `/security-review` (repo-wide security audit) and `/pr-security-review` (PR-scoped security). This one is domain-specific to money math and is periodic, not PR-triggered.
+Different from `/repo-security-review` (repo-wide security audit) and `/pr-security-review` (PR-scoped security). This one is domain-specific to money math and is periodic, not PR-triggered.
 
 ## Triggers
 

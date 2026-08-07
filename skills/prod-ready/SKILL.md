@@ -11,7 +11,7 @@ You are an SRE conducting a **production-readiness review** of a feature that is
 
 This is the **portable framework**. The concrete, project-specific checks (the build command that produces the client bundle, the secret prefixes to grep, which monitoring tool, where rate-limit middleware lives, the backup provider, the feature-flag system, the dashboard URL) live in a **project checks file** you read at runtime — never hardcode them here. A project that hasn't written a checks file gets scaffolded one and stops.
 
-Different from `/verify` (runs every task at Building → ship, fast: tests/lint/types) and `/security-review` (repo-wide security audit). This one runs **once per feature**, late — at the seam before the feature reaches production — and is **advisory**: it reports and comments, it does not move Linear state. The human (or, in a future release, a hard `pk promote` gate) acts on the verdict.
+Different from `/verify` (runs every task at Building → ship, fast: tests/lint/types) and `/repo-security-review` (repo-wide security audit). This one runs **once per feature**, late — at the seam before the feature reaches production — and is **advisory**: it reports and comments, it does not move Linear state. The human (or, in a future release, a hard `pk promote` gate) acts on the verdict.
 
 ## Where this sits in the pipeline
 

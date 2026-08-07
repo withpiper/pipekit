@@ -1,6 +1,6 @@
 ---
 name: pr-security-review
-description: Security-focused antagonistic PR diff review. Use when a PR touches migrations, RLS, SECURITY DEFINER, auth, or Server Actions on privileged tables. Use before merge of any security-sensitive change. Different from /security-review (repo-wide) and /pr-fix (broad review).
+description: Security-focused antagonistic PR diff review. Use when a PR touches migrations, RLS, SECURITY DEFINER, auth, or Server Actions on privileged tables. Use before merge of any security-sensitive change. Different from /repo-security-review (repo-wide) and /pr-fix (broad review).
 ---
 
 # /pr-security-review — Security-focused PR review
@@ -16,7 +16,7 @@ description: Security-focused antagonistic PR diff review. Use when a PR touches
 
 Run an antagonistic security-focused review of a specific PR's diff and post findings as a PR review comment via `gh api`. Companion to `/pr-fix` for triage.
 
-This skill is **purpose-built for the security-sensitive surface**. Use it when generic antagonistic review (`pk ship --review`) is too broad and `/security-review` (periodic repo audit) is the wrong shape.
+This skill is **purpose-built for the security-sensitive surface**. Use it when generic antagonistic review (`pk ship --review`) is too broad and `/repo-security-review` (periodic repo audit) is the wrong shape.
 
 ## When to use this skill
 
@@ -34,7 +34,7 @@ Run `/pr-security-review` when the PR touches **any** of:
 ## When NOT to use this skill
 
 - Pure UI / styling PRs — use `pk ship --review` instead (generic antagonistic)
-- Periodic codebase-wide security audits — use `/security-review` (different skill, different shape)
+- Periodic codebase-wide security audits — use `/repo-security-review` (different skill, different shape)
 - Broad PR review covering many dimensions — use `pr-review-toolkit:review-pr`
 
 ## Common Rationalizations
@@ -222,7 +222,7 @@ Critical findings should NOT be merged without fix or explicit waive rationale.
 ## What this skill does NOT do
 
 - Doesn't fix anything — that's `/pr-fix`'s job
-- Doesn't replace `/security-review` — that's the periodic repo-wide audit
+- Doesn't replace `/repo-security-review` — that's the periodic repo-wide audit
 - Doesn't replace `pk ship --review` — that's broader / non-security-focused
 - Doesn't run static analysis tools (semgrep, etc.) — out of scope; could be a v2.2 follow-on
 
@@ -230,7 +230,7 @@ Critical findings should NOT be merged without fix or explicit waive rationale.
 
 - `/pr-fix` — triage findings (the natural next step)
 - `pk ship --review` — generic antagonistic review (run alongside for non-security dimensions)
-- `/security-review` — periodic codebase-wide audit (different skill, different shape)
+- `/repo-security-review` — periodic codebase-wide audit (different skill, different shape)
 - `pr-review-toolkit:code-reviewer` — the underlying agent this skill drives
 
 ## Calibration notes

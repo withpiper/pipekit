@@ -2,21 +2,21 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.20.0** — Last updated: 2026-07-20  *(**v4.20.0 — `pk ship --force` no longer waives this gate.** The ship-time `--force` split from the verify gate: `pk ship --force` now waives **only** the verify sentinel; waiving an armed security gate requires the separate **`--force-secgate`** (still logs the Linear audit comment). A plain `--force` on a security-gated project with no HEAD-matching sentinel now blocks. `PK_SECGATE_BYPASS=1` unchanged. Carries **v4.17.0 — the hard gate ships.** `/security-gate` (and `/verify` Flag check F, which embeds it) now writes a sha-matched `secgate-complete.md` sentinel on PASS, and `pk ship` **refuses** without a HEAD-matching sentinel on any project whose `Security categories` file exists — escapes `--force` (Linear audit comment) / `PK_SECGATE_BYPASS=1` (bypass.log). § Enforcement roadmap updated. Carries v4.4.0: new SOP — the feature-scoped security gate: `/security-gate` classifies a change into sensitive categories (auth, payments, user-input, external-APIs, file-storage, PII) at the Building → UAT seam and runs the category checklist against the feature diff before `pk ship`. Closes gap #3.)*
+**v4.31.0** — Last updated: 2026-08-07  *(**v4.31.0 — the whole-repo audit this gate is contrasted against is now `/repo-security-review`.** Renamed from `/security-review` (collided with Claude Code's built-in) and genericized to a project areas file. § Why a gate and the four-skill comparison table repointed; the coverage-before-filtering and adversarial-verification lineage this SOP cites is unchanged — that machinery moved verbatim. Carries v4.20.0: `pk ship --force` no longer waives this gate (`--force-secgate` does). Carries v4.17.0: the hard gate — PASS writes a sha-matched `secgate-complete.md` and `pk ship` refuses without one on categories-armed projects.)*
 
 **Source of truth:** The concrete category signals for a project live in its definitions file (`resources/security-categories.md`, scaffolded from `templates/security-categories.template.md`) and `method.config.md`. This SOP provides the methodology that applies regardless of stack.
 
 ---
 
-## Why a gate, when `/security-review` already exists
+## Why a gate, when `/repo-security-review` already exists
 
-Pipekit has had a `/security-review` skill (whole-repo audit, periodic) and `/pr-security-review` (antagonistic, PR-scoped, on demand) for a while. Both are **opt-in** — a human decides to run them. The gap that left: a security-sensitive feature can sail Building → UAT → production without anyone deciding it needed a look, because nothing in the loop *forces* the decision.
+Pipekit has had a whole-repo periodic audit (`/repo-security-review`, named `/security-review` before v4.31.0) and `/pr-security-review` (antagonistic, PR-scoped, on demand) for a while. Both are **opt-in** — a human decides to run them. The gap that left: a security-sensitive feature can sail Building → UAT → production without anyone deciding it needed a look, because nothing in the loop *forces* the decision.
 
 `/security-gate` closes that. It runs at the Building → UAT seam (in the v2 loop, the `pk ship` transition) and its **first** job is to decide whether a review is owed at all. The deciding is the product: most features touch no sensitive category and pass in seconds; the ones that do don't reach UAT unreviewed.
 
 This is distinct from the **PR-time** reviewers (`pk ready` fires Semgrep + claude-review; `pk ship --review` runs the antagonistic reviewer): those run *after* the feature has already left Building — generic, on the whole PR, at merge time. `/security-gate` runs *before* `pk ship`, is targeted to the change's specific category failure modes, and is adversarially verified — it's the pre-UAT decision, not a duplicate of the merge-time scans. Both layers are cheap insurance on a sensitive change; neither replaces the other.
 
-| | `/verify` | `/security-gate` | `/security-review` | `/pr-security-review` |
+| | `/verify` | `/security-gate` | `/repo-security-review` | `/pr-security-review` |
 |---|---|---|---|---|
 | **Scope** | the diff | the feature diff | the whole repo | a PR |
 | **Question** | is the code correct? | was a sensitive change reviewed for its category? | is the repo's security posture sound? | is this PR safe? |
@@ -47,7 +47,7 @@ The gate's first stage is a read-only **classifier sub-agent** that maps the fea
 1. **The diff** (authoritative) — `git diff --name-only origin/<integration-branch>...HEAD` plus the hunks. The classifier reads the actual changed code.
 2. **The project definitions file** — per-category **path globs** and **keywords** that mean "this category" in *this* repo, so the classifier isn't guessing from generic signals.
 
-**Classify from opened files, never a filename alone.** A path under `auth/` whose only change is a comment is not an auth change; a `stripe` string in a test fixture is not a payments change. Open the hunk, confirm the change exercises the category. When genuinely ambiguous, **match** — a false match costs one extra checklist run; a false miss ships an unreviewed sensitive change. (This is the same coverage-before-filtering discipline `/security-review` uses at its finding stage.)
+**Classify from opened files, never a filename alone.** A path under `auth/` whose only change is a comment is not an auth change; a `stripe` string in a test fixture is not a payments change. Open the hunk, confirm the change exercises the category. When genuinely ambiguous, **match** — a false match costs one extra checklist run; a false miss ships an unreviewed sensitive change. (This is the same coverage-before-filtering discipline `/repo-security-review` uses at its finding stage.)
 
 If no category matches, the gate is an immediate **PASS** — no review sub-agents run. That is the common, cheap path and it is the point: the gate is nearly free on the features that don't need it.
 

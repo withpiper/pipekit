@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed (+16/−195 in `bin/pk`), along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
+**v4.31.0** — Last updated: 2026-08-07  *(**v4.31.0 — `/security-review` → `/repo-security-review`, genericized.** The canonical skill carried SiteLine's audit verbatim (PHP endpoints, `api-auth.php`/`cors.php`/`rate-limiter.php`, `.htaccess`, `Security/`, `src/marketing/security.html`), so every consumer inherited another repo's checklist and audited primitives it doesn't have. Audit areas + primitives now come from a project areas file (`Repo security areas`); the three artifact paths are optional keys that report `n/a` when blank rather than being invented. Renamed because `security-review` collided with Claude Code's own built-in of that name. The load-bearing machinery — coverage-before-filtering, grounded reads, adversarial verification — moved verbatim. Smoke 200, unchanged. Carries v4.30.0 — the legacy planning layer is gone (`bin/pk`'s phase-file/ID-map fallback, the `Backend` key and its whole chain, `/spec-preflight`'s dead `phase-detect` probe, `/review-plan`'s phase-slug path). Linear is the only initiative surface.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -92,6 +92,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/spec-preflight` | Read-only empirical checks of a spec against reality (paths, symbol/line refs, deps). |
 | `/pr-fix` | PR review with severity×confidence triage and targeted remediation. |
 | `/pr-security-review` | Antagonistic security review of a PR diff (migrations, RLS, auth). |
+| `/repo-security-review` | Periodic **whole-repo** security audit — area sweep, adversarial verification, score report. Portable framework; audit areas in `resources/repo-security-areas.md`. Renamed from `/security-review` in v4.31.0 (built-in collision). |
 | `/pk-bug` | Bug pipeline: reproduce → regression-test-first → fix → ship → postmortem. |
 | `/pk-express` | Idea→Draft-PR autopilot for Quick/Standard-tier WITs; stops at attention gates. |
 | `/linear-hygiene` | Classifies unclassified/untriaged issues (placement, not disposition) and flags board-shape drift — pool smell, spent lanes, walk-skip hazards. Never creates a project. |
