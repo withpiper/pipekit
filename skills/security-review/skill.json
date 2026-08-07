@@ -1,5 +1,0 @@
-{
-  "name": "security-review",
-  "description": "Run a weekly security review of the codebase and update the public security page",
-  "invocable": true
-}

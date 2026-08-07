@@ -808,7 +808,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 ## When NOT to use
 
 - Design / code-quality review of a PR — that's `/pr-fix` (interactive triage) or `pk ship --review` (antagonistic). `/verify` checks spec adherence, not what the spec forgot to ask.
-- Security audit — `/pr-security-review` (PR-scoped) or `/security-review` (repo-wide). `/verify`'s Step 6 security gate is a classifier pass, not a review.
+- Security audit — `/pr-security-review` (PR-scoped) or `/repo-security-review` (repo-wide). `/verify`'s Step 6 security gate is a classifier pass, not a review.
 - Interactive UAT — `/verify` proves the code passes its gates; it is **not** a substitute for the human exercising the feature (RUNBOOK step [5e], the non-skippable Stage 3 gate).
 - Production-readiness — operational preconditions (monitoring, backups, flags) are `/prod-ready`, run once per feature at the production boundary, not per task.
 
