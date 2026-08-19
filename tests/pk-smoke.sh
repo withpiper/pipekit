@@ -763,6 +763,92 @@ out=$(unit_rfr)
 cleanup
 FIXTURE=""
 
+# ── Unit tests: reviewer probe respects the base-branch filter ───────────────
+# Second recurrence of the over-claim class. The probe learned to scan
+# .github/workflows/ (SiteLine 2026-07-29, above) but still ignored each
+# workflow's `branches:` filter, so a reviewer scoped to [beta, main] was
+# announced on a feature -> dev PR that it could never fire on.
+# Anchor: Piper PIPER-699 / PR #674, 2026-08-19 — `pk ready` printed
+# "PR reviewers will now fire: Claude Code Review, Semgrep" on a dev-based PR;
+# only Semgrep ran. The PR looked reviewed and nothing said otherwise.
+
+echo "== reviewer probe honours branches: filter (sourced) =="
+
+make_fixture
+unit_rfr_base() { ( cd "$FIXTURE" && source "$PK" && pk_ready_for_review_list "$1" ); }
+write_wf() { mkdir -p "$FIXTURE/.github/workflows"; printf '%s
+' "$2" > "$FIXTURE/.github/workflows/$1"; }
+
+write_wf claude-code-review.yml 'name: Claude Code Review
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+    branches:
+      - beta
+      - main'
+write_wf semgrep.yml 'name: Semgrep
+on:
+  pull_request:
+    types: [opened, ready_for_review]'
+
+out=$(unit_rfr_base dev)
+[ "$out" = "Semgrep" ] && ok "rfr-base: beta/main-scoped reviewer not claimed on a dev PR" || fail "rfr-base: beta/main-scoped reviewer not claimed on a dev PR" "out='$out'"
+
+out=$(unit_rfr_base beta)
+[ "$out" = "Claude Code Review, Semgrep" ] && ok "rfr-base: same reviewer IS claimed on a beta PR" || fail "rfr-base: same reviewer IS claimed on a beta PR" "out='$out'"
+
+# Unknown base (probe called with no argument) must stay permissive — the old
+# behaviour — rather than silently under-claiming.
+out=$(unit_rfr_base "")
+[ "$out" = "Claude Code Review, Semgrep" ] && ok "rfr-base: empty base stays permissive" || fail "rfr-base: empty base stays permissive" "out='$out'"
+
+# A `push:` branches filter in the same file must not be read as the PR one.
+rm -f "$FIXTURE/.github/workflows/claude-code-review.yml" "$FIXTURE/.github/workflows/semgrep.yml"
+write_wf mixed.yml 'name: Mixed
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [ready_for_review]'
+out=$(unit_rfr_base dev)
+[ "$out" = "Mixed" ] && ok "rfr-base: push branches filter not mistaken for the PR one" || fail "rfr-base: push branches filter not mistaken for the PR one" "out='$out'"
+
+# Flow-sequence form of the filter.
+write_wf mixed.yml 'name: Mixed
+on:
+  pull_request:
+    types: [ready_for_review]
+    branches: [dev, "beta"]'
+out=$(unit_rfr_base dev)
+[ "$out" = "Mixed" ] && ok "rfr-base: flow-sequence branches parsed" || fail "rfr-base: flow-sequence branches parsed" "out='$out'"
+out=$(unit_rfr_base main)
+[ -z "$out" ] && ok "rfr-base: flow-sequence excludes an unlisted base" || fail "rfr-base: flow-sequence excludes an unlisted base" "out='$out'"
+
+# Globs must match the way GitHub means them.
+write_wf mixed.yml 'name: Mixed
+on:
+  pull_request:
+    types: [ready_for_review]
+    branches:
+      - "releases/**"'
+out=$(unit_rfr_base releases/v2)
+[ "$out" = "Mixed" ] && ok "rfr-base: glob base pattern matches" || fail "rfr-base: glob base pattern matches" "out='$out'"
+out=$(unit_rfr_base dev)
+[ -z "$out" ] && ok "rfr-base: glob does not over-match" || fail "rfr-base: glob does not over-match" "out='$out'"
+
+# branches-ignore is the inverse: listed bases are the ones that do NOT fire.
+write_wf mixed.yml 'name: Mixed
+on:
+  pull_request:
+    types: [ready_for_review]
+    branches-ignore: [docs]'
+out=$(unit_rfr_base docs)
+[ -z "$out" ] && ok "rfr-base: branches-ignore excludes a listed base" || fail "rfr-base: branches-ignore excludes a listed base" "out='$out'"
+out=$(unit_rfr_base dev)
+[ "$out" = "Mixed" ] && ok "rfr-base: branches-ignore admits an unlisted base" || fail "rfr-base: branches-ignore admits an unlisted base" "out='$out'"
+cleanup
+FIXTURE=""
+
 # ── Unit tests: fires-once-only reviewer probe (sourced) ─────────────────────
 # pk_review_workflows_without_sync names ready_for_review reviewers that omit
 # `synchronize`, i.e. that review the Ready flip and nothing you push after it.
