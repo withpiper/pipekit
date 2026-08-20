@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.31.0"
+PK_VERSION="4.31.1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -2633,6 +2633,33 @@ cmd_verify() {
   fi
 }
 
+# Extracts the set of issue IDs a promote hop's commits actually OWN, for
+# args: <range> (a git log revision range, e.g. "origin/target..origin/source")
+# <issue_prefix> (e.g. "PIPER"). Prints one ID per line, deduped/sorted.
+#
+# Matches ONLY:
+#   1. Subject-line IDs (%s) — the normal case: type(scope): message (PREFIX-N)
+#   2. Body lines starting exactly "Carries:" — the sync-legacy skill's
+#      structured manifest trailer for commits that vendor many issues'
+#      already-reviewed work in one mechanical publish (e.g. a legacy-tier
+#      sync). This is a deliberate declared list, not incidental prose.
+#
+# NEVER matches free body prose. Auditing the 2026-08-20 beta→main promote
+# found 11/32 bundled issues (34%) were false positives: their ID appeared
+# only as a cross-reference in some OTHER commit's body ("blocked by X",
+# "deferred to X", "see X", even one explicit "out of scope for this
+# ticket") and got swept in as if that commit shipped X's own work — then
+# silently transitioned to Done by `--finish` with no shipped code behind
+# it. A commit's subject line is authorship; a Carries: line is a declared
+# manifest; a mention anywhere else in prose is neither.
+pk_extract_bundled_issue_ids() {
+  local range="$1" issue_prefix="$2"
+  {
+    git log "$range" --pretty=format:%s 2>/dev/null
+    git log "$range" --pretty=format:%b 2>/dev/null | { grep -E '^Carries:' || true; }
+  } | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u
+}
+
 # Walks `Ship environments` one hop per invocation. Target arg is the
 # destination env. Two-phase Linear state transition (v2.6.0 #3 / F2):
 #   - `pk promote <env>` opens the PR, WITs stay in source state.
@@ -2758,9 +2785,22 @@ cmd_promote() {
       local issue_prefix
       issue_prefix=$(pk_config "Issue prefix" "")
       if [ -n "$issue_prefix" ]; then
-        issue_ids=$(gh pr view "$pr_number" --json commits 2>/dev/null \
-          | jq -r '.commits[].messageBody, .commits[].messageHeadline' 2>/dev/null \
-          | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
+        # Subject line, OR a body line starting exactly "Carries:" (the
+        # sync-legacy skill's structured manifest trailer for multi-issue
+        # vendoring commits) — NEVER free body prose. Prose routinely
+        # mentions OTHER issues as cross-references ("blocked by X",
+        # "deferred to X", "see X"), and matching those swept unrelated
+        # issues into Done with no shipped work behind them (34%
+        # false-positive rate found auditing the 2026-08-20 beta→main
+        # promote). An issue's own commit owns it in the subject line, or is
+        # declared in a Carries: manifest; a mention elsewhere is not
+        # ownership.
+        local _commits_json
+        _commits_json=$(gh pr view "$pr_number" --json commits 2>/dev/null)
+        issue_ids=$( {
+          echo "$_commits_json" | jq -r '.commits[].messageHeadline' 2>/dev/null
+          echo "$_commits_json" | jq -r '.commits[].messageBody' 2>/dev/null | { grep -E '^Carries:' || true; }
+        } | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
       fi
       if [ -n "$issue_ids" ]; then
         echo "  (no marker; derived WITs from PR commits)"
@@ -2910,12 +2950,7 @@ cmd_promote() {
   issue_prefix=$(pk_config "Issue prefix" "")
   if ! $confirmed && [ -n "$issue_prefix" ]; then
     local bundled_ids
-    # `{ grep ... || true; }` because under `set -euo pipefail`, grep with
-    # no matches exits 1 and pipefail propagates that, killing the script
-    # before the `if [ -n "$bundled_ids" ]` check below can skip cleanly.
-    # Scoped to grep so a later sort failure still surfaces.
-    bundled_ids=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
-      | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
+    bundled_ids=$(pk_extract_bundled_issue_ids "origin/$target..origin/$source" "$issue_prefix")
     if [ -n "$bundled_ids" ]; then
       local uat_ids=""
       while IFS= read -r bid; do
@@ -2987,8 +3022,7 @@ cmd_promote() {
   # cross-machine-portable (lives on the PR, not in local files).
   local bundled_wits_csv=""
   if [ -n "$issue_prefix" ]; then
-    bundled_wits_csv=$(git log "origin/$target..origin/$source" --pretty=format:%s%n%b 2>/dev/null \
-      | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u \
+    bundled_wits_csv=$(pk_extract_bundled_issue_ids "origin/$target..origin/$source" "$issue_prefix" \
       | tr '\n' ',' | sed 's/,$//')
   fi
 
