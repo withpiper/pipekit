@@ -1260,16 +1260,18 @@ pk_gh_pr_view() {
       echo "$rest" | jq -c '{
         state: (if .merged_at then "MERGED" elif .state == "open" then "OPEN" else "CLOSED" end),
         url: .html_url,
-        number: .number
+        number: .number,
+        base: .base.ref
       }'
       return 0
     fi
   fi
   # REST returned nothing — try GraphQL as last resort.
   local result
-  result=$(gh pr view "$branch" --json state,url,number 2>/dev/null || true)
+  result=$(gh pr view "$branch" --json state,url,number,baseRefName 2>/dev/null || true)
   if [ -n "$result" ] && [ "$result" != "null" ]; then
-    echo "$result"
+    # Normalise to the REST shape above so callers see one key for the base.
+    echo "$result" | jq -c '{state, url, number, base: .baseRefName}'
   fi
 }
 
@@ -1339,8 +1341,63 @@ pk_gh_pr_create() {
 # Semgrep workflow and no commit that ever added one (tracked as PIPER-475).
 # Same class as pipekit-tooling.md § "Enumerate the Surface Before Claiming
 # Behavior": list .github/workflows/, don't assert from the template set.
+# Prints the `pull_request` branches filter for a workflow, one entry per line.
+# `__ANY__` means no filter (fires on every base); a leading `!` marks a
+# branches-ignore entry. Only the pull_request block is read — a `push:` filter
+# in the same file must not be mistaken for it, and `pull_request_target:` is
+# deliberately not matched.
+pk_workflow_pr_branches() {
+  awk '
+    function ind(s,   r) { match(s, /[^ ]/); return RSTART - 1 }
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      i = ind($0); line = $0
+      sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line)
+      if (in_br && line ~ /^-/) {
+        v = line; sub(/^-[[:space:]]*/, "", v); gsub(/["\047]/, "", v)
+        if (v != "") print (neg ? "!" v : v)
+        next
+      }
+      in_br = 0
+      if (in_pr && i <= pr_ind) in_pr = 0
+      if (!in_pr && line ~ /^pull_request:/) { in_pr = 1; pr_ind = i; next }
+      if (in_pr) {
+        neg = (line ~ /^branches-ignore:/)
+        if (line ~ /^branches(-ignore)?:[[:space:]]*\[/) {
+          s = line; sub(/^[^[]*\[/, "", s); sub(/\].*$/, "", s)
+          n = split(s, a, ",")
+          for (k = 1; k <= n; k++) { gsub(/[ "\047]/, "", a[k]); if (a[k] != "") print (neg ? "!" a[k] : a[k]) }
+          found = 1; next
+        }
+        if (line ~ /^branches(-ignore)?:[[:space:]]*$/) { in_br = 1; found = 1; next }
+      }
+    }
+    END { if (!found) print "__ANY__" }
+  ' "$1"
+}
+
+# 0 if the workflow's pull_request trigger applies to base branch $2.
+# An empty base means "unknown" — stay permissive rather than under-claim.
+pk_workflow_applies_to_base() {
+  local f="$1" base="$2" pat had_allow=0
+  [ -n "$base" ] || return 0
+  while IFS= read -r pat; do
+    [ -n "$pat" ] || continue
+    case "$pat" in
+      __ANY__) return 0 ;;
+      '!'*) case "$base" in ${pat#!}) return 1 ;; esac ;;
+      *) had_allow=1; case "$base" in $pat) return 0 ;; esac ;;
+    esac
+  done <<EOF
+$(pk_workflow_pr_branches "$f")
+EOF
+  [ "$had_allow" -eq 1 ] && return 1
+  return 0
+}
+
 pk_ready_for_review_workflows() {
-  local root dir f name
+  local root dir f name base="${1:-}"
   root=$(pk_repo_root) || return 0
   dir="$root/.github/workflows"
   [ -d "$dir" ] || return 0
@@ -1348,6 +1405,9 @@ pk_ready_for_review_workflows() {
     [ -f "$f" ] || continue
     # Skip commented-out triggers — a `# ready_for_review` line fires nothing.
     grep -qE '^[^#]*ready_for_review' "$f" || continue
+    # A workflow scoped to other bases will not fire on THIS PR — claiming it
+    # would is the same over-claim the workflow scan was added to stop.
+    pk_workflow_applies_to_base "$f" "$base" || continue
     # sed, not `grep | sed`: pk runs under `set -euo pipefail`, so a grep that
     # matches nothing (a workflow with no top-level `name:`) would fail the
     # pipeline and abort pk mid-command. sed exits 0 whether or not it matched.
@@ -1361,7 +1421,7 @@ pk_ready_for_review_workflows() {
 
 # Comma-joined form of the above, for a one-line message. Empty when none.
 pk_ready_for_review_list() {
-  pk_ready_for_review_workflows \
+  pk_ready_for_review_workflows "${1:-}" \
     | awk 'NR>1 {printf ", "} {printf "%s", $0} END {if (NR) print ""}'
 }
 
@@ -1373,7 +1433,7 @@ pk_ready_for_review_list() {
 # a bare `cmd && continue` whose left side fails returns non-zero as a complete
 # command — which would abort pk mid-`ready`, after the Draft flip already landed.
 pk_review_workflows_without_sync() {
-  local root dir f name
+  local root dir f name base="${1:-}"
   root=$(pk_repo_root) || return 0
   dir="$root/.github/workflows"
   [ -d "$dir" ] || return 0
@@ -1381,6 +1441,7 @@ pk_review_workflows_without_sync() {
     [ -f "$f" ] || continue
     grep -qE '^[^#]*ready_for_review' "$f" || continue
     if grep -qE '^[^#]*synchronize' "$f"; then continue; fi
+    pk_workflow_applies_to_base "$f" "$base" || continue
     name=$(sed -n -E '/^name:[[:space:]]*[^[:space:]]/ {
         s/^name:[[:space:]]*//; s/^["'"'"']//; s/["'"'"']$//; s/[[:space:]]+$//; p; q;
       }' "$f")
@@ -1390,7 +1451,7 @@ pk_review_workflows_without_sync() {
 }
 
 pk_review_without_sync_list() {
-  pk_review_workflows_without_sync \
+  pk_review_workflows_without_sync "${1:-}" \
     | awk 'NR>1 {printf ", "} {printf "%s", $0} END {if (NR) print ""}'
 }
 
@@ -2221,9 +2282,12 @@ cmd_ready() {
     echo "ERROR: gh pr ready failed. Check gh auth + PR permissions." >&2
     return 1
   fi
-  local reviewers no_sync
-  reviewers=$(pk_ready_for_review_list)
-  no_sync=$(pk_review_without_sync_list)
+  local reviewers no_sync pr_base
+  # Scope the reviewer claim to THIS PR's base: a workflow filtered to other
+  # branches cannot fire here, and saying it will is a false all-clear.
+  pr_base=$(echo "$pr_view" | jq -r '.base // empty')
+  reviewers=$(pk_ready_for_review_list "$pr_base")
+  no_sync=$(pk_review_without_sync_list "$pr_base")
   if [ -n "$reviewers" ]; then
     echo "Done. PR reviewers will now fire: $reviewers"
     if [ -n "$no_sync" ]; then
@@ -2235,6 +2299,13 @@ cmd_ready() {
     fi
   else
     echo "Done. PR is Ready."
+    if [ -n "$(pk_ready_for_review_list)" ]; then
+      echo "  NOTE: this repo HAS ready_for_review reviewers, but none of them are"
+      echo "        scoped to base '$pr_base' — no outside reviewer will fire on this PR."
+      echo "        Check the 'branches:' filter on .github/workflows/*.yml."
+      echo "  PR: $(echo "$pr_view" | jq -r '.url // empty')"
+      return 0
+    fi
     echo "  NOTE: no workflow in .github/workflows/ triggers on ready_for_review —"
     echo "        no outside reviewer will fire on this PR. Pipekit ships opt-in"
     echo "        templates (templates/ci/semgrep.yml, templates/ci/claude-review.yml)."
