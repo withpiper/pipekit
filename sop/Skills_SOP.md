@@ -240,6 +240,8 @@ Any skill that invokes `Agent()` should **explicitly pass `model:`** rather than
 | Verification | QA review subagent | `sonnet` | `high` |
 | Plan review / adversarial | `plan-reviewer`, antagonistic reviewer, spec reviewers | `opus` | `xhigh` |
 
+**What earns a tier is the cost of a silent miss, not task difficulty.** Verification, adversarial review, and sign-off gates run at the top tiers because their failure mode is invisible — a miss ships. Execution runs mid-tier even when the task is hard, because verify, tests, and review sit behind it and fail loudly. Grounding lookups run cheapest — their errors surface immediately on use. When assigning a role to a new spawn site (or arguing a skill deserves an upgrade), derive from this rubric, not from felt difficulty.
+
 When a skill spawns a subagent, spell out the role and its default inline — e.g. *"execution tier per `method.config.md § Model Policy`, default `sonnet`"* — so the skill still works in a project whose config predates the section.
 
 Add an escape hatch (e.g., a `--deep` flag) when the skill routes to an execution agent that sometimes needs heavier reasoning — race conditions, silent failures, cross-layer bugs. See `skills/work/SKILL.md` for a worked example (`/work --deep` adds spec-validator + plan-review + security-review subagents). A structural sibling worth knowing about (not yet adopted): escalate-on-failure — start a task on the cheapest plausible role and re-run one tier up after repeated verify failures.
