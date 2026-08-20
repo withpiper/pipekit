@@ -286,6 +286,13 @@ so un-migrated projects see no behavior change.
 | **Verification** | `/verify` QA review subagent | `sonnet` | `high` |
 | **Plan review / adversarial** | `plan-reviewer` (`/review-plan`), antagonistic reviewer (`/verify --review`), spec reviewers | `opus` | `xhigh` |
 
+- **The rubric behind the rows: a tier is earned by the cost of a silent miss, not by task
+  difficulty.** Work whose failure ships invisibly — a verification pass that quietly misses, an
+  adversarial review that validates instead of doubting, a sign-off gate — gets the top tiers,
+  because nothing downstream catches it. Spec'd execution fails loudly (verify, tests, and review
+  all sit behind it), so the middle tier is enough even when the task is hard. Mechanical lookups
+  whose errors surface immediately on use run cheapest. When adding a role or re-pointing a row at
+  the next model generation, derive from this rubric rather than from how demanding the work feels.
 - **The session model is not configured here** — that's whatever the human runs Claude Code on.
   Roles govern *spawned subagents* only.
 - Model values are harness aliases (`haiku` / `sonnet` / `opus`), which resolve to the current
