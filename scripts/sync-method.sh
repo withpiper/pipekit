@@ -30,7 +30,9 @@
 #   method.config.md        <- Project configuration
 #
 # Overrides (sync-safe customization):
-#   .claude/overrides/skills/<name>/SKILL.md      <- full-file replacement
+#   .claude/overrides/skills/<name>/<file>        <- full-file replacement (any
+#                                                   file in the skill dir, e.g.
+#                                                   SKILL.md or skill.json)
 #   .claude/overrides/sop/<file>.md               <- full-file replacement
 #   .claude/overrides/method.md.patch             <- unified diff applied to method.md
 #   .claude/overrides/.upstream-snapshot/         <- managed by sync; do not edit
@@ -628,6 +630,10 @@ apply_override() {
 
   if $DRY_RUN; then
     echo "  WOULD OVERRIDE $label"
+    # Record in dry-run too, or the summary below contradicts the lines just
+    # printed with "(no overrides found)" — the one report a --dry-run user is
+    # reading to confirm their overrides are wired up.
+    OVERRIDES_APPLIED="$OVERRIDES_APPLIED $label"
   else
     # Snapshot the upstream version BEFORE overwriting it.
     cp "$target" "$snap_path"
@@ -662,6 +668,7 @@ apply_patch_override() {
 
   if $DRY_RUN; then
     echo "  WOULD PATCH $label"
+    OVERRIDES_APPLIED="$OVERRIDES_APPLIED $label"
     return
   fi
 
@@ -685,7 +692,7 @@ if [ -d "$OVERRIDES_DIR" ]; then
   echo ""
   echo "Overrides:"
 
-  # Skill overrides: .claude/overrides/skills/<name>/SKILL.md
+  # Skill overrides: .claude/overrides/skills/<name>/<any file>
   if [ -d "$OVERRIDES_DIR/skills" ]; then
     while IFS= read -r -d '' override_file; do
       skill_name=$(basename "$(dirname "$override_file")")
@@ -694,7 +701,12 @@ if [ -d "$OVERRIDES_DIR" ]; then
       [ "$override_base" = "skill.md" ] && override_base="SKILL.md"
       target="$PROJECT_ROOT/.claude/skills/$skill_name/$override_base"
       apply_override "$override_file" "$target" "skills/$skill_name/$override_base"
-    done < <(find "$OVERRIDES_DIR/skills" -type f -name '*.md' -print0 2>/dev/null)
+      # NOT -name '*.md'. A skill directory is more than its SKILL.md: skill.json
+      # carries the `description` Claude routes on, so a project that pins a skill
+      # to a redirect stub via SKILL.md had the json silently reverted to upstream
+      # on every sync — the guard held in prose and leaked in metadata. Dotfiles
+      # stay excluded (.DS_Store would just log a missing-target SKIP).
+    done < <(find "$OVERRIDES_DIR/skills" -type f ! -name '.*' -print0 2>/dev/null)
   fi
 
   # SOP overrides: .claude/overrides/sop/<file>.md
