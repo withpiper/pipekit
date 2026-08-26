@@ -1888,6 +1888,217 @@ esac
 
 rm -rf "$OVR_TMP"
 
+# ── Branch resolution matches follow-up prefixes (v4.32.0, PIPER-793) ─────────
+# pk ready and pk done both globbed feature/<ID>-* alone, so a follow-up fix on
+# fix/<ID>-* was invisible: pk done errored "no local feature branch found"
+# (which reads as "unknown issue"), the second PR never reached the Linear ship
+# record, and the branch was never cleaned up. cmd_done also lacked the remote
+# fallback cmd_ready had, so it gave up whenever the local branch was gone.
+# Anchor: SiteLine — all five multi-PR issues across 185 ID-prefixed merged PRs
+# had this shape; POC-426 and PIPER-782 were hand-patched five weeks apart.
+
+echo "== branch resolution: feature|fix|hotfix, newest wins, remote fallback =="
+
+# The picker must EXIT 0 on empty input, not merely print nothing. Under the
+# `set -euo pipefail` at bin/pk:28, the natural grep|sort|head pipeline returns 1
+# when grep matches nothing — and bash 3.2 honours errexit for a bare call while
+# suppressing it inside `$( )`, so the fragile form is invisible to any test that
+# only inspects captured output. Assert the status from a bare call, or this
+# whole block is decorative: the exit code is the only channel the defect uses.
+unit_pick() { ( cd "$REPO_ROOT" && source "$PK" && pk_branch_pick_newest "$1" ); }
+unit_pick_rc() {
+  ( cd "$REPO_ROOT" && source "$PK" >/dev/null 2>&1
+    pk_branch_pick_newest "$1" >/dev/null )
+  echo $?
+}
+
+[ "$(unit_pick_rc '')" = "0" ] && ok "pick-newest: empty input exits 0 (no errexit abort)" \
+  || fail "pick-newest: empty input exits 0" "rc=$(unit_pick_rc '') — a failing pipeline here aborts the caller before its remote fallback"
+[ "$(unit_pick_rc '
+
+')" = "0" ] && ok "pick-newest: blank-only input exits 0 (no errexit abort)" \
+  || fail "pick-newest: blank-only input exits 0" "rc=$(unit_pick_rc '
+
+')"
+[ -z "$(unit_pick '')" ] && ok "pick-newest: empty input → empty output" \
+  || fail "pick-newest: empty input" "got: $(unit_pick '')"
+[ "$(unit_pick '100 feature/A-1-x')" = "feature/A-1-x" ] \
+  && ok "pick-newest: single candidate" || fail "pick-newest: single candidate" "got: $(unit_pick '100 feature/A-1-x')"
+pick_many=$(unit_pick '100 feature/A-1-x
+900 fix/A-1-y
+50 hotfix/A-1-z')
+[ "$pick_many" = "fix/A-1-y" ] \
+  && ok "pick-newest: highest timestamp wins regardless of listing order" \
+  || fail "pick-newest: highest timestamp wins" "got: $pick_many"
+
+BR_TMP=$(mktemp -d)
+mkdir -p "$BR_TMP/repo" "$BR_TMP/shim"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BR_TMP/shim/gh"
+chmod +x "$BR_TMP/shim/gh"
+
+git -C "$BR_TMP/repo" init -q -b main
+printf '```\nIntegration branch: main\n```\n' > "$BR_TMP/repo/method.config.md"
+br_commit() { # $1 = committer date, $2 = message
+  GIT_COMMITTER_DATE="$1" git -C "$BR_TMP/repo" \
+    -c user.email=t@t -c user.name=t -c committer.email=t@t \
+    commit -q --allow-empty -m "$2"
+}
+# Committer date, not author date: the sort key is %(committerdate:unix), and a
+# fixture that only sets --date leaves every branch stamped "now" and silently
+# tests nothing.
+br_commit "2026-08-01T10:00:00" init
+br_commit "2026-08-02T10:00:00" feature-work
+git -C "$BR_TMP/repo" branch feature/PK-1-original
+br_commit "2026-08-20T10:00:00" followup-fix
+git -C "$BR_TMP/repo" branch fix/PK-1-followup
+git -C "$BR_TMP/repo" branch hotfix/PK-2-urgent
+
+run_br() { # $@ = pk args; captures combined output
+  BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" "$PK" "$@" 2>&1)
+}
+
+# The gh shim answers every call with exit 0 and no JSON, so pk gets as far as
+# "no PR / not merged" and names the branch it resolved. That name IS the
+# assertion — reaching this error at all means resolution succeeded.
+run_br done PK-1
+case "$BR_OUT" in
+  *"no local feature branch found"*|*"no branch found for PK-1"*)
+    fail "pk done resolves a follow-up fix/ branch" "still branch-not-found: $(echo "$BR_OUT" | head -1)" ;;
+  *"fix/PK-1-followup"*)
+    ok "pk done resolves a follow-up fix/ branch (newest commit wins over feature/)" ;;
+  *)
+    fail "pk done resolves a follow-up fix/ branch" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+
+# The main path must not regress: a plain feature/ branch with no follow-up is
+# what every ordinary issue looks like.
+git -C "$BR_TMP/repo" branch feature/PK-3-solo
+for sub in done ready; do
+  run_br "$sub" PK-3
+  case "$BR_OUT" in
+    *"feature/PK-3-solo"*) ok "pk $sub still resolves a plain feature/ branch (main path)" ;;
+    *) fail "pk $sub resolves a plain feature/ branch" "got: $(echo "$BR_OUT" | head -1)" ;;
+  esac
+done
+
+run_br ready PK-1
+case "$BR_OUT" in
+  *"fix/PK-1-followup"*)
+    ok "pk ready resolves a follow-up fix/ branch" ;;
+  *)
+    fail "pk ready resolves a follow-up fix/ branch" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+
+run_br done PK-2
+case "$BR_OUT" in
+  *"hotfix/PK-2-urgent"*) ok "hotfix/ prefix resolves too" ;;
+  *) fail "hotfix/ prefix resolves too" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+
+# The error must name every glob actually searched. The old text named only
+# feature/<ID>-*, so a miss on a fix/ branch read as "I don't know this issue"
+# rather than "I looked in three places and none matched".
+for sub in done ready; do
+  run_br "$sub" PK-404
+  miss=""
+  case "$BR_OUT" in *"feature/PK-404-*"*) ;; *) miss="feature" ;; esac
+  case "$BR_OUT" in *"fix/PK-404-*"*)     ;; *) miss="$miss fix" ;; esac
+  case "$BR_OUT" in *"hotfix/PK-404-*"*)  ;; *) miss="$miss hotfix" ;; esac
+  if [ -z "$miss" ]; then
+    ok "pk $sub: not-found error names every searched prefix"
+  else
+    fail "pk $sub: not-found error names every searched prefix" "missing:$miss — got: $(echo "$BR_OUT" | head -1)"
+  fi
+done
+
+# Remote fallback: cmd_ready always had one, cmd_done did not. With the local
+# branches deleted, both must still resolve from origin — and pk done must say
+# out loud that there is nothing local to clean up rather than quietly posting a
+# ship record with no commit list.
+git -C "$BR_TMP/repo" init -q --bare "$BR_TMP/remote.git" 2>/dev/null || git init -q --bare "$BR_TMP/remote.git"
+git -C "$BR_TMP/repo" remote add origin "$BR_TMP/remote.git"
+git -C "$BR_TMP/repo" push -q origin main fix/PK-1-followup
+git -C "$BR_TMP/repo" branch -D fix/PK-1-followup feature/PK-1-original >/dev/null 2>&1
+
+run_br done PK-1
+case "$BR_OUT" in
+  *"fix/PK-1-followup"*) ok "pk done falls back to origin when no local branch (parity with pk ready)" ;;
+  *) fail "pk done remote fallback" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+case "$BR_OUT" in
+  *"resolved from origin"*) ok "pk done says a remote-only resolution has nothing local to clean up" ;;
+  *) fail "pk done announces remote-only resolution" "no advisory in: $(echo "$BR_OUT" | head -2)" ;;
+esac
+
+run_br ready PK-1
+case "$BR_OUT" in
+  *"fix/PK-1-followup"*) ok "pk ready remote fallback still works (no regression)" ;;
+  *) fail "pk ready remote fallback" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+
+rm -rf "$BR_TMP"
+
+# ── Follow-up ship records (v4.32.0, PIPER-793) ──────────────────────────────
+# A second pk done on an already-shipped issue must read as a follow-up, not as
+# a repeat of the first ship. Fails closed: anything that isn't a provable prior
+# ship (no key, unreachable Linear, malformed response) is treated as a first
+# ship, because mislabelling a genuine first ship is the worse error.
+
+echo "== follow-up ship record detection =="
+
+unit_shipped() { # $1 = stubbed pk_linear_comments payload, $2 = issue id
+  ( cd "$REPO_ROOT" && source "$PK" \
+    && eval "pk_linear_comments() { printf '%s' '$1'; }" \
+    && pk_has_shipped_comment "$2" )
+}
+
+if unit_shipped '[{"body":"**Shipped — PK-1**\nPR: http://x/1"}]' PK-1; then
+  ok "shipped-detect: prior Shipped comment → follow-up"
+else
+  fail "shipped-detect: prior Shipped comment" "returned false"
+fi
+
+if unit_shipped '[]' PK-1; then
+  fail "shipped-detect: empty thread" "returned true"
+else
+  ok "shipped-detect: empty thread → first ship"
+fi
+
+if unit_shipped '' PK-1; then
+  fail "shipped-detect: Linear unreachable" "returned true — must fail closed"
+else
+  ok "shipped-detect: unreachable Linear → first ship (fails closed)"
+fi
+
+# A Shipped record for a DIFFERENT issue must not mark this one a follow-up.
+if unit_shipped '[{"body":"**Shipped — PK-9**\nPR: http://x/9"}]' PK-1; then
+  fail "shipped-detect: other issue's record" "returned true"
+else
+  ok "shipped-detect: another issue's Shipped record does not count"
+fi
+
+# Substring collision: PK-10's record must not mark PK-1 a follow-up.
+if unit_shipped '[{"body":"**Shipped \u2014 PK-10**\nPR: http://x/10"}]' PK-1; then
+  fail "shipped-detect: PK-10 vs PK-1" "substring match — id comparison is not exact"
+else
+  ok "shipped-detect: PK-10's record does not mark PK-1 a follow-up"
+fi
+
+# Third ship stays a follow-up — the header it matches is its own.
+if unit_shipped '[{"body":"**Shipped (follow-up) — PK-1**\nPR: http://x/2"}]' PK-1; then
+  ok "shipped-detect: a follow-up record also counts (third ship stays follow-up)"
+else
+  fail "shipped-detect: follow-up record counts" "returned false"
+fi
+
+# The --force ship audit line ("Shipped without a HEAD-matching...") is NOT a
+# ship record and must not suppress the first real Shipped comment.
+if unit_shipped '[{"body":"Shipped without a HEAD-matching verify-complete.md (--force) PK-1"}]' PK-1; then
+  fail "shipped-detect: --force audit line" "counted as a ship record"
+else
+  ok "shipped-detect: the --force audit comment is not a ship record"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo

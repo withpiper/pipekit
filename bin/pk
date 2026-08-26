@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.31.3"
+PK_VERSION="4.32.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1138,6 +1138,108 @@ pk_branch_issue_id() {
   fi
 }
 
+# Branch-name prefixes pk searches when resolving an issue's branch.
+#
+# `pk branch` only ever CREATES feature/ (cmd_branch), but the loop legitimately
+# produces a second branch: feature/ merges, UAT surfaces something small, the
+# fix lands on fix/<ID>-* hours later. Before v4.32.0 both pk ready and pk done
+# globbed feature/ alone, so that branch was invisible to them — pk done errored
+# with "no local feature branch found" (which reads as "unknown issue"), the
+# follow-up PR never reached the Linear ship record, and its local branch was
+# never cleaned up. Across 185 ID-prefixed merged PRs on SiteLine, every one of
+# the five multi-PR issues had this exact shape (PIPER-793).
+PK_BRANCH_PREFIXES="feature fix hotfix"
+
+# Human-readable list of the globs pk_branch_for_issue tried, for error text.
+# The old messages named only feature/<ID>-*, so a miss on a fix/ branch read as
+# "I don't know this issue" rather than "I looked in the wrong places".
+pk_branch_search_hint() {
+  local id="$1" p out=""
+  for p in $PK_BRANCH_PREFIXES; do
+    out="${out}${out:+, }${p}/${id}-*"
+  done
+  printf '%s\n' "$out"
+}
+
+# From lines of "<committer-unix> <branch>", echo the branch with the highest
+# timestamp. Nothing else — no globbing, no git.
+#
+# Deliberately awk-and-sort with no grep and no head. Under the `set -euo
+# pipefail` at the top of this file, a `grep` that matches nothing returns 1 and
+# `head -1` can SIGPIPE the stage above it — so the obvious pipeline exits
+# non-zero on exactly the input this must survive: no candidates, which is the
+# no-local-branch case that has to fall through to the remote lookup.
+#
+# Today's callers happen to be safe: bash suppresses errexit inside `$( )`
+# (measured on 3.2.57 — a bare call aborts, a substituted one does not), and both
+# call sites substitute. That is a property of the callers, not of this function,
+# and it makes the hazard invisible to any test that only reads captured output.
+# awk and sort exit 0 on empty input, so this holds however it is called; the
+# smoke suite asserts the exit status, not just the output.
+pk_branch_pick_newest() {
+  printf '%s' "$1" \
+    | awk 'NF >= 2' \
+    | sort -rn \
+    | awk 'NR == 1 { sub(/^[0-9]+[[:space:]]+/, ""); print }'
+}
+
+# Echo the branch belonging to <id>, or nothing. THE single resolution rule for
+# both pk ready and pk done — they disagreed before v4.32.0 (cmd_ready had a
+# remote fallback, cmd_done gave up at the local miss), and two commands in the
+# same chain resolving a branch differently is its own bug class.
+#
+# Order: local branches first, newest commit wins; then the remote. Newest-wins
+# is what makes the follow-up case resolve correctly — a fix/ branch is by
+# definition committed after the feature/ branch it follows, whereas the old
+# `head -1` took whatever git listed first (alphabetical: feature before fix).
+#
+# Callers that care whether the result is local (pk done, which cleans up after
+# itself) ask git directly — `git show-ref --verify refs/heads/<b>`. This
+# function deliberately does NOT report it through a global: callers invoke it in
+# a command substitution, and a variable set inside that subshell never reaches
+# the caller, so the flag would read empty every time while looking correct.
+pk_branch_for_issue() {
+  local id="$1" p line cands="" pick
+  [ -n "$id" ] || return 1
+
+  for p in $PK_BRANCH_PREFIXES; do
+    # committerdate:unix sorts numerically without parsing dates in shell.
+    cands="${cands}$(git branch --list "${p}/${id}-*" \
+      --format='%(committerdate:unix) %(refname:short)' 2>/dev/null)
+"
+  done
+  pick=$(pk_branch_pick_newest "$cands")
+  if [ -n "$pick" ]; then
+    printf '%s\n' "$pick"
+    return 0
+  fi
+
+  # No local branch — ask the remote. ls-remote answers without a fetch, but
+  # returns only sha+ref, so date each candidate from the local object store
+  # where the object is present. An undatable ref scores 0 and sorts last:
+  # a datable follow-up still outranks it instead of losing to listing order.
+  cands=""
+  for p in $PK_BRANCH_PREFIXES; do
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      local sha ref ct
+      sha=${line%%[[:space:]]*}
+      ref=${line##*refs/heads/}
+      ct=$(git log -1 --format=%ct "$sha" 2>/dev/null) || ct=""
+      cands="${cands}${ct:-0} ${ref}
+"
+    done <<EOF
+$(git ls-remote --heads origin "${p}/${id}-*" 2>/dev/null)
+EOF
+  done
+  pick=$(pk_branch_pick_newest "$cands")
+  if [ -n "$pick" ]; then
+    printf '%s\n' "$pick"
+    return 0
+  fi
+  return 1
+}
+
 pk_worktree_path() {
   local id="$1"
   local root
@@ -2155,15 +2257,12 @@ cmd_ready() {
   done
   local current pr_number pr_state
   if [ -n "$id" ]; then
-    # Explicit ID — find the feature branch locally so we can look up its PR.
-    current=$(git branch --list "feature/${id}-*" --format="%(refname:short)" 2>/dev/null | head -1)
+    # Explicit ID — resolve the branch so we can look up its PR. Shared with
+    # pk done (pk_branch_for_issue): local first, then the remote, and a
+    # follow-up fix/ branch counts, not just feature/.
+    current=$(pk_branch_for_issue "$id") || current=""
     if [ -z "$current" ]; then
-      # No local branch — try matching by remote.
-      current=$(git ls-remote --heads origin "feature/${id}-*" 2>/dev/null \
-        | head -1 | awk '{print $2}' | sed 's|refs/heads/||')
-    fi
-    if [ -z "$current" ]; then
-      echo "ERROR: no feature branch found matching feature/${id}-*" >&2
+      echo "ERROR: no branch found for ${id} — searched $(pk_branch_search_hint "$id") locally and on origin." >&2
       return 1
     fi
   else
@@ -2331,15 +2430,24 @@ cmd_done() {
   local current
   local issue
   if [ -n "$id" ]; then
-    # Explicit ID — find the matching feature branch by glob.
-    # This is the supported path: pk done is meant to run from the parent
-    # repo (so it can delete the worktree), where the current branch is
-    # 'dev' or 'main', not the feature branch being cleaned up.
+    # Explicit ID — resolve the branch by glob. This is the supported path:
+    # pk done is meant to run from the parent repo (so it can delete the
+    # worktree), where the current branch is 'dev' or 'main', not the branch
+    # being cleaned up. Same resolver as pk ready, remote fallback included —
+    # cmd_done used to give up at the local miss while cmd_ready fell back,
+    # and the two disagreeing about how to find a branch was half of PIPER-793.
     issue="$id"
-    current=$(git branch --list "feature/${id}-*" --format="%(refname:short)" 2>/dev/null | head -1)
+    current=$(pk_branch_for_issue "$id") || current=""
     if [ -z "$current" ]; then
-      echo "ERROR: no local feature branch found matching feature/${id}-*" >&2
+      echo "ERROR: no branch found for ${id} — searched $(pk_branch_search_hint "$id") locally and on origin." >&2
       return 1
+    fi
+    if ! git show-ref --verify --quiet "refs/heads/${current}" 2>/dev/null; then
+      # Nothing local to remove or delete, and merge_base/commits below come out
+      # empty because the branch is not a local ref. Say so rather than posting a
+      # thinner ship record without explanation.
+      echo "ℹ $current resolved from origin — no local branch or worktree to clean up."
+      echo "  The Linear comment will carry the PR but not the commit list."
     fi
   else
     # No arg — must be on the feature branch (rare; can only happen if
@@ -2488,7 +2596,18 @@ cmd_done() {
     fi
   fi
 
-  local body="**Shipped — ${issue}**"
+  # A second pk done on an already-shipped issue is the follow-up-fix case.
+  # Before v4.32.0 it could not get this far — branch resolution errored out and
+  # the extra PR never reached Linear at all (POC-448 lost two PRs, POC-426 and
+  # PIPER-782 were patched by hand five weeks apart). Record it as a follow-up so
+  # the thread reads as one issue that shipped twice, not two first ships.
+  local body
+  if pk_has_shipped_comment "$issue"; then
+    body="**Shipped (follow-up) — ${issue}**"
+    echo "  Linear: $issue already carries a Shipped record — posting this as a follow-up."
+  else
+    body="**Shipped — ${issue}**"
+  fi
   [ -n "$pr_url_done" ] && body="$body
 PR: $pr_url_done"
   [ -n "$diffstat" ]    && body="$body
@@ -3324,6 +3443,26 @@ pk_linear_comments() {
   local q='query($id: String!) { issue(id: $id) { comments(orderBy: createdAt) { nodes { id body createdAt user { displayName } } } } }'
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" \
     | jq -r '.data.issue.comments.nodes // []'
+}
+
+# True when the issue already carries a pk-authored Shipped record. Used by
+# cmd_done to tell a first ship from a follow-up: the loop legitimately ships an
+# issue twice (feature/ merges, UAT surfaces something small, fix/ merges), and
+# a second comment headed plain "Shipped" reads like the first one repeated.
+#
+# Fails closed to "not shipped" — no API key, an unreachable Linear, or a
+# non-array response all mean we cannot prove a prior ship, and mislabelling a
+# genuine first ship as a follow-up is the worse error.
+pk_has_shipped_comment() {
+  local id="$1" comments
+  comments=$(pk_linear_comments "$id" 2>/dev/null) || return 1
+  case "$comments" in \[*) ;; *) return 1 ;; esac
+  # Match the exact header, not "**Shipped" + contains(id): a substring test
+  # makes PK-10's ship record mark PK-1 a follow-up. Both headers count, so a
+  # third ship stays a follow-up rather than reverting to a plain Shipped.
+  printf '%s' "$comments" \
+    | jq -e --arg a "**Shipped — ${id}**" --arg b "**Shipped (follow-up) — ${id}**" \
+        'any(.[]?; (.body // "") | startswith($a) or startswith($b))' >/dev/null 2>&1
 }
 
 pk_spec_cycle_agent_count() {
