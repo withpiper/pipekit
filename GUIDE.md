@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.31.2** — Last updated: 2026-08-26  *(**v4.31.2 — `/pk-bug` Phase 8's Urgent sign-off gate was unreachable.** It required sign-off "before marking complete", but `pk ship` puts the issue ID in the PR title, so Linear's GitHub integration closes the issue at Phase 6 — two phases earlier. Phase 8 now gates on the **artifact** (a `# Postmortem` comment + filled sign-off), never on the state, and `/linear-hygiene` gains Phase 2c to sweep for the debt. Skills only, this doc unaffected — stamped to confirm still accurate. Carries v4.31.1 — promote's issue-bundler stopped matching prose. Carries v4.31.0 — the portable security audit was one project's checklist, renamed to **`/repo-security-review`**. Carries v4.30.0 — the legacy planning layer is gone. Linear is the only initiative surface.)*
+**v4.31.3** — Last updated: 2026-08-26  *(**v4.31.3 — skill overrides now cover the whole skill directory.** `sync-method.sh` discovered overrides with `-name '*.md'`, so a project could override `SKILL.md` but never `skill.json` — whose `description` Claude routes on — and the json silently reverted to upstream on every sync. Also fixes a `--dry-run` summary that printed "(no overrides found)" directly under the overrides it had just listed. Carries v4.31.2 — `/pk-bug` Phase 8's Urgent sign-off gate was unreachable; it now gates on the artifact, and `/linear-hygiene` Phase 2c sweeps postmortem debt. Carries v4.31.1 — promote's issue-bundler stopped matching prose. Carries v4.31.0 — the portable security audit was one project's checklist, renamed to **`/repo-security-review`**.)*
 
 ---
 

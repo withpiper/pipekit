@@ -50,6 +50,16 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.31.3 — 2026-08-26
+
+> **Skill overrides only ever covered `*.md`, so `skill.json` silently reverted on every sync.** `sync-method.sh` discovered the skill-override set with `find "$OVERRIDES_DIR/skills" -type f -name '*.md'`. A skill directory is more than its `SKILL.md`: `skill.json` carries the `description` Claude routes on. So a project that deliberately pins a superseded upstream skill to a redirect stub — the documented pattern in `MANIFEST.md`, and the reason the override system exists — kept the stub in prose while the metadata was quietly restored to upstream's on **every** run. The guard held where a human would read it and leaked where the model does. `skills/pipekit-help/SKILL.md` already told projects to override a non-`SKILL.md` file (`state-rules.md`), so the filter was an implementation accident rather than a designed contract; it only stayed invisible because that file happens to be markdown too.
+>
+> **Fix: discover any file in the override skill directory** (`! -name '.*'`, so a stray `.DS_Store` doesn't try to override anything). The legacy lowercase `skill.md` → `SKILL.md` remap is unchanged, and SOP overrides — which are markdown by nature — are left alone. Anchor: SiteLine, 2026-08-26 — `repo-security-review`'s json description had been leaking back since the override was authored on 2026-08-20, caught only because a sync PR diff was read line by line.
+>
+> **Also: `--dry-run` contradicted itself.** `apply_override` recorded into `OVERRIDES_APPLIED` on the apply path only, so a dry run printed each `WOULD OVERRIDE …` line and then closed with `(no overrides found)` — in the one report someone runs specifically to confirm their overrides are wired up. Recorded on both paths now.
+>
+> Three new smoke tests, each mutation-checked: restoring the `*.md` filter reddens the json-discovery test alone, and dropping the dry-run record reddens the summary test alone. `method.md`, `sop/Skills_SOP.md`, and `templates/overrides-manifest.template.md` restate the contract as whole-directory. pk-smoke: 213/213.
+
 ## v4.31.2 — 2026-08-26
 
 > **`/pk-bug` Phase 8's Urgent sign-off was gated on a precondition the pipeline destroys two phases earlier.** Phase 8 said to request reviewer sign-off *"before marking complete"*. But `pk ship` puts the issue ID at the front of every PR title (`--title "${issue}: ${title}"`), so wherever Linear's GitHub integration is configured to transition on merge, the issue reaches `Done` at **Phase 6** — before Phase 8 runs at all. Phase 7 already documented the same auto-transition one phase later, so the skill quietly contradicted itself. The gate was unreachable by construction: an Urgent bug arrives at `Done` with no postmortem and no sign-off, and nothing anywhere reported it. Anchor: SiteLine PIPER-766, 2026-08-25 — an Urgent bug auto-closed on merge and sat `Done` postmortem-less. It got written a day later only because the operator went looking, and it was the postmortem that found the *actual* gate: `no-inner-declarations`, dropped from `eslint:recommended` in ESLint 9 and silently off ever since, which would have failed the lint gate on the commit that introduced the bug.
