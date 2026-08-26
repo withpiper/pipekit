@@ -234,7 +234,13 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
    - What broke (1 sentence)
    - Which gate should have caught it
    - One change to prevent recurrence
-2. **Urgent only:** request reviewer sign-off in the comment thread before marking complete.
+2. **Urgent only:** request reviewer sign-off in the comment thread. The bug is not closed out until that sign-off lands — **whatever state Linear is showing.**
+
+   **Do not read this as "sign off before the issue reaches `Done`."** It almost never will. `pk ship` puts the issue ID at the front of the PR title (`bin/pk`: `--title "${issue}: ${title}"`), so wherever Linear's GitHub integration is configured to transition on merge, the issue flips to `Done` back at **Phase 6** — two phases before this one. (Phase 7's note about the deploy auto-transition is the same mechanism, one phase later.) A gate keyed on "before `Done`" is unreachable by construction: an Urgent bug arrives at `Done` with no postmortem and no sign-off, and nothing anywhere reports it. **`Done` is not evidence that this phase ran.**
+
+   Gate on the artifact instead. An Urgent bug is closed out when its issue carries **both** a `# Postmortem` comment and a filled-in reviewer sign-off. `/linear-hygiene` Phase 2c reports issues missing either.
+
+   *Anchor: SiteLine PIPER-766, 2026-08-25 — an Urgent bug auto-closed on merge and sat `Done` with no postmortem. It got written a day later only because the operator went looking, and it was the postmortem that found the actual gate: an ESLint rule (`no-inner-declarations`) dropped from `eslint:recommended` in v9, silently off ever since. The fix alone would have left that open for the next occurrence.*
 3. If "one change to prevent recurrence" is concrete (e.g. "add Playwright e2e for every auth-method × sign-out combo"), create a follow-up Linear issue or add a rule to `.claude/rules/`.
 
 ---
@@ -247,7 +253,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 | No fix code before failing test exists | Phase 3 writes the test; Phase 4 commits it test-first, before any fix |
 | Cannot repro → STOP | Phase 2 gate; mark `needs-info`, exit (no worktree cut) |
 | Linear is the source of truth | Resume always re-reads Linear, never local state |
-| Postmortem mandatory for priority 1–3 | Phase 8; reviewer sign-off if Urgent |
+| Postmortem mandatory for priority 1–3 | Phase 8; reviewer sign-off if Urgent. Gate on the **artifact** (a `# Postmortem` comment + filled sign-off), never on the issue reaching `Done` — the PR-title auto-transition beats Phase 8 to it |
 | Urgent → solo promote | Phase 7 |
 | Test commit lands before fix commit | Phase 4 commits the test; Phase 5 writes the fix |
 
@@ -257,6 +263,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 - **Don't write the test after the fix.** A test written against passing code tests the fix, not the spec — it won't catch the same bug class re-introduced later.
 - **Don't fold test + fix into one commit.** The audit trail is part of the value.
 - **Don't promote `Urgent` bugs in a batch.** Blast radius mismatch.
+- **Don't treat `Done` as proof Phase 8 ran.** The PR-title auto-transition closes the issue at merge, before the postmortem exists. Check for the `# Postmortem` comment, not the state.
 
 ## Common Rationalizations
 
@@ -265,6 +272,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 | "The fix is obvious, repro is a waste of time" | Phase 2 is a GATE because unrepro'd bugs get guess-fixed and ship as silent regressions — and "this error is probably X" is a Red Flag, not a diagnosis. Can't repro → `needs-info`, not a guess-fix. |
 | "I'll write the test after the fix" | A test written against passing code tests the fix, not the spec (Red Flags). Test-first is the audit trail — the failing commit *is* the repro record. |
 | "It's urgent — skip the process" | Urgent changes the *routing* (solo promote, Phase 7), not the discipline. The postmortem stays mandatory for priority 1–3; urgency is when guess-fixes are most tempting and most expensive. |
+| "Linear already says `Done` — the bug is finished" | `Done` arrived from the PR-title auto-transition at Phase 6; nobody decided the work was complete. For priority 1–3 the postmortem is still owed, and for Urgent so is the sign-off. The state is a side effect of a merge — the artifact is the evidence. |
 | "It's three small bugs, I'll batch them in one run" | One bug per run — a bundle gets one repro, one test, one postmortem, and two of the three bugs lose their audit trail. Split first (`/linear-hygiene`'s bundle rule exists for the same reason). |
 
 ## Origin
