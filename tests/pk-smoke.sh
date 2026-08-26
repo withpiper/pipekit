@@ -1835,6 +1835,59 @@ else
   fail "dogfood: .claude/ mirrors are stale" "run scripts/dogfood-sync.sh"
 fi
 
+# ── Overrides cover the whole skill directory (v4.31.3) ──────────────────────
+# The skills-override discovery used `find ... -name '*.md'`, so a project could
+# override SKILL.md but NOT skill.json — whose `description` is what Claude routes
+# on. A project pinning a superseded skill to a redirect stub kept the stub in
+# prose and had the metadata reverted to upstream on every sync, silently.
+# Anchor: SiteLine, 2026-08-26 — repo-security-review, guarded since 2026-08-20,
+# had been leaking its json description back on each sync the whole time.
+
+echo "== sync-method overrides cover non-.md skill files =="
+OVR_TMP=$(mktemp -d)
+mkdir -p "$OVR_TMP/proj/.claude/skills/demo" \
+         "$OVR_TMP/proj/.claude/overrides/skills/demo" \
+         "$OVR_TMP/method/skills/demo"
+# The fake method tree needs a skills/ dir: the portable-skills step pipes
+# `ls -d "$TEMP/skills/"*/` into xargs, and under `set -o pipefail` an empty
+# TEMP makes that pipeline fail and aborts the whole sync before Overrides.
+echo 'upstream demo body' > "$OVR_TMP/method/skills/demo/SKILL.md"
+echo 'upstream body'                    > "$OVR_TMP/proj/.claude/skills/demo/SKILL.md"
+echo '{"description":"UPSTREAM"}'       > "$OVR_TMP/proj/.claude/skills/demo/skill.json"
+echo 'local redirect stub'              > "$OVR_TMP/proj/.claude/overrides/skills/demo/SKILL.md"
+echo '{"description":"SUPERSEDED"}'     > "$OVR_TMP/proj/.claude/overrides/skills/demo/skill.json"
+
+# SYNC_METHOD_REEXEC=1 is load-bearing: without it the self-update guard would
+# copy the fixture's (absent) sync-method.sh over the real one.
+OVR_OUT=$(SYNC_METHOD_REEXEC=1 SYNC_METHOD_TEMP="$OVR_TMP/method" \
+  bash "$REPO_ROOT/scripts/sync-method.sh" --dry-run --target="$OVR_TMP/proj" 2>&1)
+
+case "$OVR_OUT" in
+  *"WOULD OVERRIDE skills/demo/skill.json"*)
+    ok "overrides: a non-.md file in the skill dir is discovered" ;;
+  *)
+    fail "overrides: skill.json override not discovered" \
+         "find in sync-method.sh is filtering the skill-override set again" ;;
+esac
+
+case "$OVR_OUT" in
+  *"WOULD OVERRIDE skills/demo/SKILL.md"*)
+    ok "overrides: SKILL.md still discovered (no regression)" ;;
+  *)
+    fail "overrides: SKILL.md override not discovered" "the base case broke" ;;
+esac
+
+# The summary must not contradict the lines it just printed.
+case "$OVR_OUT" in
+  *"(no overrides found)"*)
+    fail "overrides: dry-run summary says none while listing some" \
+         "OVERRIDES_APPLIED not recorded on the DRY_RUN path" ;;
+  *)
+    ok "overrides: dry-run summary agrees with the overrides it listed" ;;
+esac
+
+rm -rf "$OVR_TMP"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo

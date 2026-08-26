@@ -4,7 +4,7 @@
 
 ## How overrides work
 
-- `.claude/overrides/skills/<name>/SKILL.md` — full-file replacement for a synced skill
+- `.claude/overrides/skills/<name>/<file>` — full-file replacement for any file in a synced skill's directory (`SKILL.md`, `skill.json`, data files)
 - `.claude/overrides/sop/<file>.md` — full-file replacement for a synced SOP
 - `.claude/overrides/method.md.patch` — unified diff applied to `pipekit/method.md`
 

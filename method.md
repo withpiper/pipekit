@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.31.2** — Last updated: 2026-08-26  *(**v4.31.2 — `/pk-bug` Phase 8's Urgent sign-off gate was unreachable.** It required sign-off "before marking complete", but `pk ship` puts the issue ID in the PR title, so Linear's GitHub integration closes the issue at Phase 6 — two phases earlier. Phase 8 now gates on the **artifact** (a `# Postmortem` comment + filled sign-off), never on the state, and `/linear-hygiene` gains Phase 2c to sweep for the debt. Skills only, this doc unaffected — stamped to confirm still accurate. Carries v4.31.1 — promote's issue-bundler stopped matching prose. Carries v4.31.0 — the portable security audit was one project's checklist, renamed to **`/repo-security-review`**. Carries v4.30.0 — the legacy planning layer is gone. Linear is the only initiative surface.)*
+**v4.31.3** — Last updated: 2026-08-26  *(**v4.31.3 — skill overrides now cover the whole skill directory.** `sync-method.sh` discovered overrides with `-name '*.md'`, so a project could override `SKILL.md` but never `skill.json` — whose `description` Claude routes on — and the json silently reverted to upstream on every sync. Also fixes a `--dry-run` summary that printed "(no overrides found)" directly under the overrides it had just listed. Carries v4.31.2 — `/pk-bug` Phase 8's Urgent sign-off gate was unreachable; it now gates on the artifact, and `/linear-hygiene` Phase 2c sweeps postmortem debt. Carries v4.31.1 — promote's issue-bundler stopped matching prose. Carries v4.31.0 — the portable security audit was one project's checklist, renamed to **`/repo-security-review`**.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -524,7 +524,9 @@ Pipekit syncs upstream content via `scripts/sync-method.sh`, which overwrites `s
 
 ```
 .claude/overrides/
-  skills/<name>/SKILL.md        # full-file replacement for a synced skill
+  skills/<name>/<file>          # full-file replacement for ANY file in the
+                                #   skill dir — SKILL.md, skill.json, a data
+                                #   file like state-rules.md
   sop/<file>.md                 # full-file replacement for a synced SOP
   method.md.patch               # unified diff applied to pipekit/method.md
   MANIFEST.md                   # human-curated list (what + why)
@@ -541,6 +543,7 @@ Pipekit syncs upstream content via `scripts/sync-method.sh`, which overwrites `s
 ### Authoring guidance
 
 - Use **full-file overrides** for skills and SOPs. They're easy to reason about and survive any upstream change.
+- **Override every file that carries the behavior you're changing, not just `SKILL.md`.** A skill's `skill.json` holds the `description` Claude routes on, so a project pinning a superseded skill to a redirect stub must override *both* — otherwise the prose says "superseded" while the metadata still advertises the upstream skill. (Before v4.31.3 the sync only discovered `*.md` overrides, so the json silently reverted on every run even when an override file existed.)
 - Use **patches** for `method.md` (the only patch-target supported). Patches preserve upstream improvements when they don't touch your patched section.
 - Always document the override in `MANIFEST.md` with a **why**. Without it, future-you can't tell whether the override is still load-bearing.
 

@@ -319,7 +319,7 @@ When you add a new skill that spawns file-editing agents, copy the permission-de
 
 If a project needs to change behavior of a synced skill, **do not edit the file in `.claude/skills/<name>/` directly** — it will be overwritten on the next sync. Use the override system instead:
 
-1. Copy the skill into `.claude/overrides/skills/<name>/SKILL.md`.
+1. Copy the skill into `.claude/overrides/skills/<name>/SKILL.md`. Any other file in the skill directory can be overridden the same way — `skill.json`, a data file — by putting it at the matching path.
 2. Make your project-specific edits there.
 3. Add a row to `.claude/overrides/MANIFEST.md` explaining what you changed and why.
 4. Re-run `scripts/sync-method.sh` — the override is applied on top of the upstream sync.
