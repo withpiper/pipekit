@@ -1,6 +1,6 @@
 ---
 name: linear-hygiene
-description: Linear placement janitor — batch-classifies unclassified/untriaged/unprioritized issues and flags board-shape drift (pool smell, spent lanes), propose-then-apply. Use after pk done or when follow-ups pile up. Placement only; disposition is /brainstorm-review.
+description: Linear placement janitor — batch-classifies unclassified/untriaged/unprioritized issues, flags board-shape drift (pool smell, spent lanes) and postmortem debt on closed bugs, propose-then-apply. Use after pk done or when follow-ups pile up. Placement only; disposition is /brainstorm-review.
 ---
 
 # Linear Hygiene Skill
@@ -62,6 +62,19 @@ Skip entirely when `§ Area Labels` is blank. These are **project-level** findin
 
 > **What "head of lane" means, precisely.** A lane's run order is stamped in issue `sortOrder` (see `/phase-plan --cut`), but **a workflow-state change re-ranks `sortOrder`** — Linear moves the issue to the top of its new column. Since `pk branch` and `pk ship` are state changes, ordinary pipeline motion perturbs the stamp. So the stamp is authoritative for **queued issues only**: once an issue has entered the pipeline its position *is* its state, not its stamp. Compute the head as *the first issue by stamp among the lane's not-yet-started issues*, and treat anything already in flight as legitimately holding a slot regardless of where its stamp now sits. A check that compares cycle membership against raw `sortOrder` will false-positive after every normal transition.
 
+### Phase 2c — Postmortem debt (report, never auto-fix)
+
+Unlike Phase 2b, this check is **not** lanes-gated — run it whether or not `§ Area Labels` is populated. Phase 1 deliberately fetches **open states only**, so every finding below is invisible to it. This check needs its own query — which is why it is scoped as tightly as it is.
+
+`/pk-bug` Phase 8 makes a postmortem mandatory for priority ≤ 3 (Urgent / High / Medium), and adds a reviewer sign-off for Urgent. Neither is enforceable by workflow state: `pk ship` puts the issue ID at the front of the PR title, so where Linear's GitHub integration transitions on merge, the issue reaches `Done` at Phase 6 — before the postmortem phase runs at all. **A closed bug with no postmortem is the default outcome, not an anomaly**, which is exactly why it needs a sweep rather than a gate.
+
+1. One additional `mcp__linear-server__linear_searchIssues`, filtered **server-side** and scoped hard: `label = Bug`, `state.type = completed`, `priority` in 1–3, `completedAt` within the last 30 days. On a normal board that is single digits. (If the configured Linear MCP surface won't filter on `completedAt`, filter it client-side but keep the label + state + priority filters server-side — see the 10k complexity note in Phase 1.)
+2. For **that set only**, read comments and look for a `# Postmortem` heading:
+   - 🧾 **Postmortem debt** — no `# Postmortem` comment. Report identifier, priority, and completion date. Recommend `/pk-bug <ID>`: its resume routing sends a `statusType=completed` issue with no postmortem straight into Phase 8.
+   - ✍️ **Unsigned postmortem** *(Urgent only)* — a `# Postmortem` comment whose `Reviewer:` / `Approved:` lines are still blank. The postmortem exists; the human gate on it never closed.
+
+**Cap the window, and say so in the output.** Thirty days is a deliberate bound, not full coverage — an older debt will not appear. Print the window alongside the findings so "no findings" cannot be misread as "nothing is owed" (`pipekit-tooling.md` § no silent caps).
+
 ### Phase 3 — Infer the fix per issue
 
 - **Home (for orphans / unclassified).** On the lanes model the default home is **no project**, not a project. Work through this ladder in order and stop at the first hit:
@@ -120,7 +133,18 @@ Then, **only if Phase 2b found anything**, a second block — advisory, not part
 Say "go" to apply the issue table above, or redirect any line.
 ```
 
-**In `--check` mode, stop here** — print both blocks (or "✓ board is tidy — no drift") and make no writes.
+Then, **only if Phase 2c found anything**, a third block — also advisory, also not part of the "go":
+
+```
+## Postmortem debt — {N} findings (window: last 30 days)
+
+| Issue | Finding | Priority | Closed | Recommended |
+|-------|---------|----------|--------|-------------|
+| PIPER-766 | ✍️ unsigned postmortem | Urgent | 2026-08-25 | reviewer sign-off owed |
+| PIPER-741 | 🧾 postmortem debt | High | 2026-08-19 | /pk-bug PIPER-741 |
+```
+
+**In `--check` mode, stop here** — print every block (or "✓ board is tidy — no drift") and make no writes.
 
 ### Phase 5 — Apply (on `go`, default mode only)
 
@@ -143,6 +167,7 @@ Un-parked:  {N} (Parked state → Backlog + label)
 Left for your pick: {N} (ambiguous Area)
 
 Board shape: {N} findings for /phase-plan (not applied)
+Postmortem debt: {N} closed bugs missing a postmortem or sign-off (last 30d, not applied)
 ```
 
 Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** — placement ≠ disposition.
