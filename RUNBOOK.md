@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.31.1** — Last updated: 2026-08-20 11:41  *(**v4.31.1 — promote's issue-bundler stopped matching prose.** `cmd_promote` no longer greps a promote hop's full commit body for issue IDs — only the subject line, or a body line starting exactly `Carries:` (a structured manifest trailer for commits that legitimately vendor many issues at once). Free-prose cross-references ("blocked by X", "see X") were being swept in as if they shipped X's own work, silently marking issues Done with nothing behind them. `bin/pk` behavior fix only, this doc unaffected — stamped to confirm still accurate. Carries v4.31.0 — the portable security audit was one project's checklist, renamed to **`/repo-security-review`**. Carries v4.30.0 — the legacy planning layer is gone (`bin/pk`'s phase-file/ID-map fallback, the `Backend` key and its whole chain, `/spec-preflight`'s dead `phase-detect` probe, `/review-plan`'s phase-slug path). Linear is the only initiative surface.)*
+**v4.31.2** — Last updated: 2026-08-26  *(**v4.31.2 — `/pk-bug` Phase 8's Urgent sign-off gate was unreachable.** It required sign-off "before marking complete", but `pk ship` puts the issue ID in the PR title, so Linear's GitHub integration closes the issue at Phase 6 — two phases earlier. Phase 8 now gates on the **artifact** (a `# Postmortem` comment + filled sign-off), never on the state, and `/linear-hygiene` gains Phase 2c to sweep for the debt. Skills only, this doc unaffected — stamped to confirm still accurate. Carries v4.31.1 — promote's issue-bundler stopped matching prose. Carries v4.31.0 — the portable security audit was one project's checklist, renamed to **`/repo-security-review`**. Carries v4.30.0 — the legacy planning layer is gone. Linear is the only initiative surface.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.31.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.31.2                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

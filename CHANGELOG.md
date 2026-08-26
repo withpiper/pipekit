@@ -50,6 +50,16 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.31.2 — 2026-08-26
+
+> **`/pk-bug` Phase 8's Urgent sign-off was gated on a precondition the pipeline destroys two phases earlier.** Phase 8 said to request reviewer sign-off *"before marking complete"*. But `pk ship` puts the issue ID at the front of every PR title (`--title "${issue}: ${title}"`), so wherever Linear's GitHub integration is configured to transition on merge, the issue reaches `Done` at **Phase 6** — before Phase 8 runs at all. Phase 7 already documented the same auto-transition one phase later, so the skill quietly contradicted itself. The gate was unreachable by construction: an Urgent bug arrives at `Done` with no postmortem and no sign-off, and nothing anywhere reported it. Anchor: SiteLine PIPER-766, 2026-08-25 — an Urgent bug auto-closed on merge and sat `Done` postmortem-less. It got written a day later only because the operator went looking, and it was the postmortem that found the *actual* gate: `no-inner-declarations`, dropped from `eslint:recommended` in ESLint 9 and silently off ever since, which would have failed the lint gate on the commit that introduced the bug.
+>
+> **Fix: gate on the artifact, not the workflow state.** Phase 8 now states plainly that `Done` is not evidence the phase ran, and defines closed-out as carrying **both** a `# Postmortem` comment and a filled-in reviewer sign-off. The Invariants row, the failure-modes list, and the rationalizations table each name the trap, since "Linear already says Done" is exactly the reasoning that skips it.
+>
+> **And a gate nobody can fail is worth little, so the debt is now swept.** `/linear-hygiene` gains **Phase 2c — Postmortem debt**: a separately-scoped query (label `Bug`, `state.type = completed`, priority 1–3, closed within 30 days) reporting 🧾 missing postmortems and ✍️ unsigned Urgent ones. It needs its own fetch because Phase 1 deliberately reads **open states only** — closed bugs are invisible to the board-wide sweep — and unlike Phase 2b it is **not** lanes-gated. `--check` mode covers it, so `/pk-exit` surfaces the debt at every session close. The 30-day window is printed with the findings so "no findings" cannot be misread as "nothing owed".
+>
+> Skills only — no `bin/pk` behavior change. pk-smoke: 210/210.
+
 ## v4.31.1 — 2026-08-20
 
 > **`cmd_promote`'s issue-bundler stopped matching prose.** Both the UAT-leapfrog guard and the PR tracking-marker computation (which `--finish` reads post-merge to decide which issues transition) grepped a promote hop's full commit **body** text for `${issue_prefix}-[0-9]+`, not just the subject line — and so did the marker-less fallback path for pre-v2.6.0 promote PRs. Commit bodies routinely mention *other* issues as cross-references ("blocked by X", "deferred to X", "see X", one case even said "out of scope for this ticket") — every one of those got swept in as if that commit shipped X's own work, then `--finish` silently transitioned X to `Done` with no shipped code behind it. Auditing a real `beta → main` promote against its bundled issues found 11 of 32 (34%) were exactly this failure mode, three confirmed still carrying the original bug live in code weeks after being marked `Done`.
