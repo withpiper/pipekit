@@ -393,13 +393,13 @@ Use Task tool with:
   <full Linear issue description from Step 4a — the AC list is the contract>
   ```
 
-The adversarial subagent's job is to find issues — it does NOT classify them. Classification happens in the parent's RECONCILE step (per `pipekit-discipline.md` § Completion Claims): AC misread → Valid actionable → Valid trade-off → Noise. That step is the user's, not the subagent's.
+The adversarial subagent's job is to find issues — it does NOT classify them. Classification happens in the parent's RECONCILE step (per `pipekit-discipline.md` § Completion Claims): AC misread → AC wrong (amend the AC) → Valid actionable → Valid trade-off → Noise. That step is the user's, not the subagent's.
 
 After the subagent returns, read `$VERIFY_DIR/adversarial.md` and count findings to set `ADVERSARIAL_FINDING_COUNT`. Used in Step 7 status reasoning and Step 6 flag check E (added below).
 
 ### Doubt theater check
 
-Per the discipline rule: "2+ cycles with substantive findings, zero actionable classifications = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future multi-cycle iteration-loop skill. Day-4 deliverable surfaces the findings; user judgment closes the loop.
+Per the discipline rule: "2+ cycles with substantive findings, zero classifications that changed the artifact or the AC = you're validating, not doubting." `/verify` only runs the loop **once** by design (subagent finds issues; the user classifies during the ship decision), so this check is not enforced here. It belongs to a future multi-cycle iteration-loop skill. Day-4 deliverable surfaces the findings; user judgment closes the loop.
 
 ### Scope-drift signals across repeated `/verify` runs (v4.26.0+)
 
@@ -540,7 +540,7 @@ if [ -n "$ADVERSARIAL_FINDING_COUNT" ] && [ "$ADVERSARIAL_FINDING_COUNT" -gt 0 ]
 fi
 ```
 
-Adversarial findings are advisory — they do not auto-downgrade the QA verdict — but they always warrant a human eye before ship. The RECONCILE step (per `pipekit-discipline.md` § Completion Claims) is the user's: AC misread → Valid actionable → Valid trade-off → Noise.
+Adversarial findings are advisory — they do not auto-downgrade the QA verdict — but they always warrant a human eye before ship. The RECONCILE step (per `pipekit-discipline.md` § Completion Claims) is the user's: AC misread → AC wrong (amend the AC) → Valid actionable → Valid trade-off → Noise.
 
 ### Flag check F — Security-sensitive change (auto-gated; v4.4.0)
 
@@ -715,7 +715,7 @@ For `tier:quick` this minimal sentinel is the **only** file written — `evidenc
 - QA ran and Verdict == Fail → NEEDS WORK (no `verify-complete.md`)
 - Otherwise (gate green AND no QA-Fail) → PASS (write `verify-complete.md`)
 
-Antagonistic findings do **not** downgrade the status — they pause auto-ship in Step 9 via Flag check E, but the file still gets written. The reasoning: adversarial review surfaces issues for the user to RECONCILE; classification (actionable vs trade-off vs noise) is the user's, not the subagent's. Pre-classifying as Fail would short-circuit the discipline.
+Antagonistic findings do **not** downgrade the status — they pause auto-ship in Step 9 via Flag check E, but the file still gets written. The reasoning: adversarial review surfaces issues for the user to RECONCILE; classification is the user's, not the subagent's (the class list is canonical in `pipekit-discipline.md` § Completion Claims — do not re-enumerate it here). Pre-classifying as Fail would short-circuit the discipline.
 
 Flags do **not** downgrade the status — they pause auto-ship in Step 9 but the file still gets written. `pk ship` consults `verify-complete.md` (Day 3); the Step 9 flag-pause is the additional human-gate layer.
 
