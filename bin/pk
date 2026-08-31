@@ -1148,14 +1148,26 @@ pk_branch_issue_id() {
 # follow-up PR never reached the Linear ship record, and its local branch was
 # never cleaned up. Across 185 ID-prefixed merged PRs on SiteLine, every one of
 # the five multi-PR issues had this exact shape (PIPER-793).
-PK_BRANCH_PREFIXES="${PK_BRANCH_PREFIXES:-feature fix hotfix refactor chore docs}"
+PK_BRANCH_PREFIXES_DEFAULT="feature fix hotfix refactor chore docs"
+PK_BRANCH_PREFIXES="${PK_BRANCH_PREFIXES:-$PK_BRANCH_PREFIXES_DEFAULT}"
+# A whitespace-only override is neither unset nor empty, so `:-` does not catch it,
+# and it word-splits to ZERO prefixes — every lookup would then report "not found"
+# with nothing pointing at the env var. Treat it as unset.
+case "$PK_BRANCH_PREFIXES" in *[![:space:]]*) ;; *) PK_BRANCH_PREFIXES="$PK_BRANCH_PREFIXES_DEFAULT" ;; esac
+# Split once, with globbing OFF: the value is now caller-controlled, and an
+# unquoted `for p in $PK_BRANCH_PREFIXES` both word-splits AND glob-expands, so a
+# value containing `t*` would splice in matching filenames from the cwd.
+set -f
+# shellcheck disable=SC2206
+PK_BRANCH_PREFIX_LIST=($PK_BRANCH_PREFIXES)
+set +f
 
 # Human-readable list of the globs pk_branch_for_issue tried, for error text.
 # The old messages named only feature/<ID>-*, so a miss on a fix/ branch read as
 # "I don't know this issue" rather than "I looked in the wrong places".
 pk_branch_search_hint() {
   local id="$1" p out=""
-  for p in $PK_BRANCH_PREFIXES; do
+  for p in "${PK_BRANCH_PREFIX_LIST[@]}"; do
     out="${out}${out:+, }${p}/${id}-*"
   done
   printf '%s\n' "$out"
@@ -1202,7 +1214,7 @@ pk_branch_for_issue() {
   local id="$1" p line cands="" pick
   [ -n "$id" ] || return 1
 
-  for p in $PK_BRANCH_PREFIXES; do
+  for p in "${PK_BRANCH_PREFIX_LIST[@]}"; do
     # committerdate:unix sorts numerically without parsing dates in shell.
     cands="${cands}$(git branch --list "${p}/${id}-*" \
       --format='%(committerdate:unix) %(refname:short)' 2>/dev/null)
@@ -1219,7 +1231,7 @@ pk_branch_for_issue() {
   # where the object is present. An undatable ref scores 0 and sorts last:
   # a datable follow-up still outranks it instead of losing to listing order.
   cands=""
-  for p in $PK_BRANCH_PREFIXES; do
+  for p in "${PK_BRANCH_PREFIX_LIST[@]}"; do
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       local sha ref ct

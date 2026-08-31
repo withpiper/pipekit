@@ -1955,6 +1955,7 @@ git -C "$BR_TMP/repo" branch hotfix/PK-2-urgent
 git -C "$BR_TMP/repo" branch refactor/PK-5-extract
 git -C "$BR_TMP/repo" branch chore/PK-6-deps
 git -C "$BR_TMP/repo" branch docs/PK-7-guide
+git -C "$BR_TMP/repo" branch wip/PK-11-override
 
 run_br() { # $@ = pk args; captures combined output
   BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" "$PK" "$@" 2>&1)
@@ -2010,6 +2011,33 @@ for pair in "refactor/PK-5-extract:PK-5" "chore/PK-6-deps:PK-6" "docs/PK-7-guide
   esac
 done
 
+# PK_BRANCH_PREFIXES is caller-overridable. The override is the point of the
+# env var, so it gets the coverage the hardcoded list lacked (PIPER-793).
+BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" PK_BRANCH_PREFIXES="wip" "$PK" ready PK-11 2>&1)
+case "$BR_OUT" in
+  *"wip/PK-11-override"*) ok "PK_BRANCH_PREFIXES override resolves a custom prefix" ;;
+  *) fail "PK_BRANCH_PREFIXES override resolves a custom prefix" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+
+# A whitespace-only override is neither unset nor empty, so ${x:-default} does not
+# catch it and it word-splits to zero prefixes — every lookup would silently miss.
+BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" PK_BRANCH_PREFIXES="   " "$PK" ready PK-3 2>&1)
+case "$BR_OUT" in
+  *"feature/PK-3-solo"*) ok "whitespace-only PK_BRANCH_PREFIXES falls back to the default" ;;
+  *) fail "whitespace-only PK_BRANCH_PREFIXES falls back to the default" "got: $(echo "$BR_OUT" | head -1)" ;;
+esac
+
+# The value is caller-controlled and was consumed by an unquoted `for p in $VAR`,
+# which glob-expands as well as word-splits: a value containing a pattern would
+# splice matching filenames from the cwd in as bogus "prefixes".
+: > "$BR_TMP/repo/globbait1"; : > "$BR_TMP/repo/globbait2"
+BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" PK_BRANCH_PREFIXES="feature globbait*" "$PK" ready PK-404 2>&1)
+case "$BR_OUT" in
+  *globbait1*|*globbait2*) fail "PK_BRANCH_PREFIXES is not glob-expanded against the cwd" "leaked a filename: $(echo "$BR_OUT" | head -1)" ;;
+  *) ok "PK_BRANCH_PREFIXES is not glob-expanded against the cwd" ;;
+esac
+rm -f "$BR_TMP/repo/globbait1" "$BR_TMP/repo/globbait2"
+
 # The error must name every glob actually searched. The old text named only
 # feature/<ID>-*, so a miss on a fix/ branch read as "I don't know this issue"
 # rather than "I looked in three places and none matched".
@@ -2019,6 +2047,9 @@ for sub in done ready; do
   case "$BR_OUT" in *"feature/PK-404-*"*) ;; *) miss="feature" ;; esac
   case "$BR_OUT" in *"fix/PK-404-*"*)     ;; *) miss="$miss fix" ;; esac
   case "$BR_OUT" in *"hotfix/PK-404-*"*)  ;; *) miss="$miss hotfix" ;; esac
+  case "$BR_OUT" in *"refactor/PK-404-*"*) ;; *) miss="$miss refactor" ;; esac
+  case "$BR_OUT" in *"chore/PK-404-*"*)    ;; *) miss="$miss chore" ;; esac
+  case "$BR_OUT" in *"docs/PK-404-*"*)     ;; *) miss="$miss docs" ;; esac
   if [ -z "$miss" ]; then
     ok "pk $sub: not-found error names every searched prefix"
   else
