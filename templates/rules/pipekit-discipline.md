@@ -89,8 +89,9 @@ Before declaring any non-trivial decision or completed work, run the completion-
 1. **CLAIM** — one sentence + why it matters. If you can't write it that compactly, you have a vibe, not a decision.
 2. **EXTRACT** — hand the ARTIFACT and its CONTRACT (the Linear AC) to the reviewer, stripped of your reasoning.
 3. **DOUBT** — fresh-context adversarial subagent, prompted to find issues, never to validate.
-4. **RECONCILE** — classify findings in precedence order: AC misread → valid + actionable → valid trade-off → noise.
-5. **STOP** — when a cycle returns only trivia, after 3 cycles (escalate, don't grind a fourth), or on "ship it." If 2+ substantive cycles produced zero actionable classifications, you're validating, not doubting — stop and escalate.
+4. **RECONCILE** — classify findings in precedence order: AC misread → **AC wrong (amend the AC)** → valid + actionable → valid trade-off → noise.
+   A finding that the artifact contradicts a stated AC resolves **only** by changing the artifact or amending the AC — never by deferring the contradiction itself as a "trade-off" and shipping with both standing.
+5. **STOP** — when a cycle returns only trivia, after 3 cycles (escalate, don't grind a fourth), or on "ship it." If 2+ substantive cycles produced zero classifications that changed *either* the artifact or the AC (classes 2–3), you're validating, not doubting — stop and escalate.
 
 ## Parallel work patterns
 
