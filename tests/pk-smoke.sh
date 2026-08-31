@@ -1952,6 +1952,9 @@ git -C "$BR_TMP/repo" branch feature/PK-1-original
 br_commit "2026-08-20T10:00:00" followup-fix
 git -C "$BR_TMP/repo" branch fix/PK-1-followup
 git -C "$BR_TMP/repo" branch hotfix/PK-2-urgent
+git -C "$BR_TMP/repo" branch refactor/PK-5-extract
+git -C "$BR_TMP/repo" branch chore/PK-6-deps
+git -C "$BR_TMP/repo" branch docs/PK-7-guide
 
 run_br() { # $@ = pk args; captures combined output
   BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" "$PK" "$@" 2>&1)
@@ -1994,6 +1997,18 @@ case "$BR_OUT" in
   *"hotfix/PK-2-urgent"*) ok "hotfix/ prefix resolves too" ;;
   *) fail "hotfix/ prefix resolves too" "got: $(echo "$BR_OUT" | head -1)" ;;
 esac
+
+# Every prefix in PK_BRANCH_PREFIXES must actually resolve. The original bug
+# (PIPER-793) was a prefix list narrower than the naming convention it served;
+# the re-widening is only safe if each entry is exercised here.
+for pair in "refactor/PK-5-extract:PK-5" "chore/PK-6-deps:PK-6" "docs/PK-7-guide:PK-7"; do
+  want=${pair%%:*}; id=${pair##*:}
+  run_br ready "$id"
+  case "$BR_OUT" in
+    *"$want"*) ok "pk ready resolves ${want%%/*}/ prefix" ;;
+    *) fail "pk ready resolves ${want%%/*}/ prefix" "got: $(echo "$BR_OUT" | head -1)" ;;
+  esac
+done
 
 # The error must name every glob actually searched. The old text named only
 # feature/<ID>-*, so a miss on a fix/ branch read as "I don't know this issue"

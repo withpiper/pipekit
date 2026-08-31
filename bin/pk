@@ -1148,7 +1148,7 @@ pk_branch_issue_id() {
 # follow-up PR never reached the Linear ship record, and its local branch was
 # never cleaned up. Across 185 ID-prefixed merged PRs on SiteLine, every one of
 # the five multi-PR issues had this exact shape (PIPER-793).
-PK_BRANCH_PREFIXES="feature fix hotfix"
+PK_BRANCH_PREFIXES="${PK_BRANCH_PREFIXES:-feature fix hotfix refactor chore docs}"
 
 # Human-readable list of the globs pk_branch_for_issue tried, for error text.
 # The old messages named only feature/<ID>-*, so a miss on a fix/ branch read as
