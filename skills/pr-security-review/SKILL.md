@@ -27,7 +27,10 @@ Run `/pr-security-review` when the PR touches **any** of:
 - New or modified `SECURITY DEFINER` functions
 - New or modified RLS policies (`CREATE POLICY`, `ALTER POLICY`)
 - New `GRANT` / `REVOKE` statements
-- Authentication code paths (`/api/auth`, middleware, session handling)
+- Authentication code paths — by path (`/api/auth`, middleware, session handling) **or by content**
+  (a call to a shared auth helper such as `requireUser(` / `requireServiceCaller(`, or an import of
+  a shared auth module), since a handler that authenticates lives anywhere
+- Caller-supplied or DB-sourced text interpolated into an LLM prompt (`messages:`, `role: "user"`, `system:`)
 - Server Actions that read or write privileged tables (`audit_log`, `profiles`, etc.)
 - Any code that constructs SQL strings dynamically
 
@@ -59,7 +62,7 @@ Or content-based:
 
 ```bash
 git diff $(git merge-base HEAD origin/dev)..HEAD | \
-  grep -qE 'SECURITY DEFINER|auth\.uid\(\)|CREATE POLICY|REVOKE EXECUTE|GRANT EXECUTE'
+  grep -qE 'SECURITY DEFINER|auth\.uid\(\)|CREATE POLICY|REVOKE EXECUTE|GRANT EXECUTE|requireUser\(|requireServiceCaller\(|role: *"user"|messages: *\['
 ```
 
 ## Execution Steps
@@ -85,7 +88,8 @@ Identify which of the following surfaces the diff touches. Each surface gets its
 | **RLS policies** | `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY` in diff | R1–R6 below |
 | **SECURITY DEFINER functions** | `SECURITY DEFINER` keyword in diff | S1–S8 below |
 | **GRANT/REVOKE** | grant/revoke statements in diff | G1–G3 below |
-| **Auth code** | files matching `auth/`, `middleware`, `session` | A1–A5 below |
+| **Auth code** | files matching `auth/`, `middleware`, `session` — **or** a diff calling `requireUser(` / `requireServiceCaller(` / importing a shared auth module, at any path | A1–A5 below |
+| **Untrusted content in an LLM prompt** | diff interpolates a request-body or DB-sourced string into a prompt (`messages:`, `role: "user"`, `system:`, `max_tokens`) | L1–L4 below |
 | **Server Actions on privileged tables** | actions that read/write `audit_log`, `profiles`, `auth.users` | P1–P4 below |
 
 A PR can touch multiple surfaces. Load all relevant rubrics.
@@ -145,6 +149,13 @@ Spawn a `pr-review-toolkit:code-reviewer` subagent (or invoke directly) with a s
 - **P2** — Actions that read from privileged tables go through SECURITY DEFINER projection functions, not direct queries.
 - **P3** — Actions validate the caller's identity (`auth.uid()`) and authorization separately. Authentication ≠ authorization.
 - **P4** — Actions return only the data the caller is entitled to see, even if the underlying query reads more (project the result before returning).
+
+#### Untrusted content in an LLM prompt (L1–L4)
+
+- **L1** — Standing instructions live in the `system` parameter, never the user turn, and the system prompt states an explicit instruction hierarchy. A bare splice of caller-supplied text into a `role: "user"` turn alongside the instructions is Critical/High: the model cannot distinguish data from directive.
+- **L2** — Untrusted text is wrapped in a **per-request, non-guessable** delimiter, and any occurrence of that delimiter inside the untrusted text is scrubbed **before** the real markers are added. A fixed hardcoded delimiter fails this — the caller can plant a matching one and close the block early.
+- **L3** — The text is neutralized against whatever other trigger shapes the codebase keys on (reuse the project's existing neutralizer; don't fork one).
+- **L4** — Input and output are both length-bounded, and the bound is applied **after** any step that can grow the string (neutralization prefixes, heading demotion). Model output is normalized so a reply cannot spoof the app's own framing. Check the order, not just the presence.
 
 ### Phase 4 — Post review
 
