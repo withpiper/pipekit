@@ -715,7 +715,7 @@ For `tier:quick` this minimal sentinel is the **only** file written — `evidenc
 - QA ran and Verdict == Fail → NEEDS WORK (no `verify-complete.md`)
 - Otherwise (gate green AND no QA-Fail) → PASS (write `verify-complete.md`)
 
-Antagonistic findings do **not** downgrade the status — they pause auto-ship in Step 9 via Flag check E, but the file still gets written. The reasoning: adversarial review surfaces issues for the user to RECONCILE; classification (actionable vs trade-off vs noise) is the user's, not the subagent's. Pre-classifying as Fail would short-circuit the discipline.
+Antagonistic findings do **not** downgrade the status — they pause auto-ship in Step 9 via Flag check E, but the file still gets written. The reasoning: adversarial review surfaces issues for the user to RECONCILE; classification is the user's, not the subagent's (the class list is canonical in `pipekit-discipline.md` § Completion Claims — do not re-enumerate it here). Pre-classifying as Fail would short-circuit the discipline.
 
 Flags do **not** downgrade the status — they pause auto-ship in Step 9 but the file still gets written. `pk ship` consults `verify-complete.md` (Day 3); the Step 9 flag-pause is the additional human-gate layer.
 
