@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.33.0** — Last updated: 2026-09-02 06:10  *(**v4.33.0 — RECONCILE gains "AC wrong" and a closure rule.** An artifact-vs-AC contradiction now resolves only by changing the artifact or amending the AC, never by deferring it as a trade-off (anchor: SiteLine PIPER-770 — detection worked, classification failed, the bug shipped). Also: Linear's per-User quota is canonical in `sop/Linear_SOP.md` § Rate limits; `/pr-security-review` detects auth code by content with project-configured helper names and gains an LLM-prompt rubric (L1–L4); `pk done` / `pk ready` resolve every prefix in the naming convention via `PK_BRANCH_PREFIXES`. Carries v4.32.0 — `pk done` / `pk ready` find follow-up branches, and a second ship reads as one.)*
+**v4.34.0** — Last updated: 2026-09-02 06:40  *(**v4.34.0 — `/work` executes on the saved `pk-execute` workflow.** The prose Workflow could never run as written (scripts have no filesystem access); the loop now lives in `workflows/pk-execute.js`, synced to every consumer's `.claude/workflows/`: one agent per task, tests before verify, commit only on pass, the expected HEAD threaded task to task, disjoint-file parallel waves gated on `worktree.baseRef: head` with an integration step. The skill is de-prescribed for Fable 5.1 (602 → 340 lines), `--resume` is defined, and the surviving `Backend` guard is gone. Carries v4.33.0 — RECONCILE gains "AC wrong" and a closure rule; Linear rate limits canonical in the SOP; `/pr-security-review` detects auth by content; `PK_BRANCH_PREFIXES`.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.33.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.34.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

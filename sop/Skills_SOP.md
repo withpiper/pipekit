@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.31.0** — Last updated: 2026-08-07  *(**v4.31.0 — `/security-review` → `/repo-security-review`.** Renamed to stop colliding with Claude Code's built-in `/security-review` (diff-scoped, pending changes) in every consumer's skill list, and genericized: SiteLine's audit checklist was baked into the canonical skill, so audit areas + primitives now live in a project areas file (`resources/repo-security-areas.md`, scaffolded from `templates/repo-security-areas.template.md`). Portable-skills table row updated. Consumers: the old `security-review/` directory is not auto-deleted — the sync flags it as undeclared with the removal command. Carries v4.30.0 — the legacy planning layer is gone (`bin/pk`'s phase-file/ID-map fallback, the `Backend` key and its whole chain, `/spec-preflight`'s dead `phase-detect` probe, `/review-plan`'s phase-slug path). Linear is the only initiative surface.)*
+**v4.34.0** — Last updated: 2026-09-02  *(**v4.34.0 — saved workflows are a synced artifact.** `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
 
 ---
 
