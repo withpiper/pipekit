@@ -33,7 +33,7 @@ This skill is invoked when the user says:
 - Linear MCP server should be connected (`mcp__linear-server__*` tools available)
 - Linear's quota is one shared, per-user bucket and **every worker session spawns its own `mcp-linear` server** — four workers plus the orchestrator all draw from it. Keep each worker's Linear traffic to the state transitions its prompt specifies, and never run a whole-board sweep (`/linear-hygiene`, `/sync-linear`) while workers are live. Rules and anchor in `sop/Linear_SOP.md` § Rate limits.
 - Issues need `## Acceptance Criteria` in their description (issues without AC are skipped)
-- The orchestrator creates one real `git worktree add` per agent before spawning. Do NOT rely on the Agent tool's `isolation: "worktree"` parameter — empirically a no-op on current harnesses, which collapses all "parallel" agents into the same checkout and causes sibling branch switches to silently discard each other's uncommitted work. If you cannot run `git worktree add` from the orchestrator, run the queue with `--max-agents 1` (sequential) instead.
+- The orchestrator creates one real `git worktree add` per agent before spawning, and does not use the Agent tool's `isolation: "worktree"` for this. That parameter works on current harnesses (verified 2026-09-02 on Claude Code 2.1.258; it was a silent no-op until mid-2026, which is how four "parallel" agents once shared one checkout and discarded each other's work), but it places the worktree under `.claude/worktrees/` on a `worktree-<name>` branch based on `worktree.baseRef` — origin's default branch unless set to `head` — while the runner needs sibling paths, `pk`-convention branch names, and a base it chooses. The `cd` + `pwd` verification in the worker prompt stays the containment mechanism either way. If you cannot run `git worktree add` from the orchestrator, run the queue with `--max-agents 1` (sequential) instead.
 
 ## Linear State IDs
 
@@ -157,7 +157,7 @@ For each issue at the front of the queue (up to max-agents):
 
 **Subagent mandate for this skill:** spawn parallel worktree agents — recent Claude models are conservative about delegating unless a skill states when delegation is wanted, and this skill wants it. The whole point of `/linear-todo-runner` is fanning out independent work across isolated worktrees. A single-session sequential loop would defeat the purpose. Spawn up to `max-agents` in the same turn when the dependency graph permits; don't serialize them.
 
-**Worktree isolation is the orchestrator's job, not the Agent tool's.** Each agent gets a real `git worktree add` before it spawns, and is told via its prompt to `cd` into that worktree as its first action and verify (`pwd` + `git rev-parse --show-toplevel`) before any edits. The Agent tool itself currently exposes no working-directory parameter — `isolation: "worktree"` is a no-op on current harnesses (see Prerequisites), and there is no `cwd` parameter. The prompt-level `cd` + verification is the actual containment mechanism, so it is NOT optional.
+**Worktree isolation is the orchestrator's job, not the Agent tool's.** Each agent gets a real `git worktree add` before it spawns, and is told via its prompt to `cd` into that worktree as its first action and verify (`pwd` + `git rev-parse --show-toplevel`) before any edits. The Agent tool exposes no working-directory parameter, and its `isolation: "worktree"` would put the agent in a harness-managed worktree on a harness-named branch rather than the one the runner prepared (see Prerequisites). The prompt-level `cd` + verification is the actual containment mechanism, so it is NOT optional.
 
 For each issue that passes the AC gate (up to max-agents concurrently):
 
@@ -175,7 +175,7 @@ For each issue that passes the AC gate (up to max-agents concurrently):
    If this fails (e.g., dirty index, lock contention), skip the issue, move it back to Approved, post the git error in a Linear comment, and continue with the next queue item. Do NOT spawn an agent without a worktree.
 5. **Verify the worktree:** run `git worktree list` and confirm `<WORKTREE_PATH>` appears with the expected branch. If not, treat as Step 4 failure.
 6. **Post a Linear comment**: `"Runner: spawning agent in worktree {WORKTREE_PATH} on branch {BRANCH_NAME}."`
-7. **Spawn a worker agent** using the `Agent` tool with `run_in_background: true`. The Agent tool does NOT support a `cwd` parameter and `isolation: "worktree"` is a no-op — DO NOT pass either. Instead, the worker prompt's first instruction must be `cd <WORKTREE_PATH>` followed by `pwd` and `git rev-parse --show-toplevel` verification (see Worker Agent Prompt Template). Pass `<WORKTREE_PATH>` and `<BRANCH_NAME>` as concrete values inside the prompt — do not leave placeholders:
+7. **Spawn a worker agent** using the `Agent` tool with `run_in_background: true`. The Agent tool has no `cwd` parameter, and passing `isolation: "worktree"` would create a second, harness-managed worktree instead of using the one prepared above — pass neither. Instead, the worker prompt's first instruction must be `cd <WORKTREE_PATH>` followed by `pwd` and `git rev-parse --show-toplevel` verification (see Worker Agent Prompt Template). Pass `<WORKTREE_PATH>` and `<BRANCH_NAME>` as concrete values inside the prompt — do not leave placeholders:
 
 ```
 Agent(
