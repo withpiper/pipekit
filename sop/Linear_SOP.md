@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
+**v4.33.0** — Last updated: 2026-09-02  *(**v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.** Serial calls, ~50 per page, wait once / retry once / then stop; the error is HTTP 400 `RATELIMITED`, not 429. Anchor: SiteLine 2026-08-31. Carries v4.30.0 — the legacy planning layer is gone.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
