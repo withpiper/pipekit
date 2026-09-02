@@ -17,6 +17,9 @@
 #   pipekit/RUNBOOK.md  <- The one-page operational doc (v2.3.1+)
 #   pipekit/GUIDE.md    <- The full instruction manual
 #   pipekit/STARTUP.md  <- The bootstrap reference
+#   .claude/workflows/ <- Saved Workflow scripts that skills invoke by name
+#                         (pk-execute for /work). Per-file copy; project-local
+#                         workflows persist.
 #   .claude/skills/    <- Portable skills (won't touch project-specific ones).
 #                         A skill listed in the method repo's own
 #                         .scaffold-once-skills is seeded once (if absent),
@@ -396,6 +399,22 @@ if [ -d "$TEMP/agents" ]; then
     [ -f "$agent_src" ] || continue
     name=$(basename "$agent_src")
     sync_file "$agent_src" "$PROJECT_ROOT/.claude/agents/$name" ".claude/agents/$name"
+  done
+fi
+
+# --- Sync Pipekit workflows (saved Workflow scripts skills invoke by name) ---
+# Per-file copy, same pattern as agents, so a project-local workflow persists.
+# .claude/workflows/ is a tracked path in consuming projects, which is what
+# makes a saved workflow visible inside every pk worktree — the same argument
+# as .mcp.json in pipekit-tooling.md § MCP Server Configuration.
+if [ -d "$TEMP/workflows" ]; then
+  echo ""
+  echo "Workflows (.claude/workflows/):"
+  mkdir -p "$PROJECT_ROOT/.claude/workflows"
+  for wf_src in "$TEMP/workflows"/*.js; do
+    [ -f "$wf_src" ] || continue
+    name=$(basename "$wf_src")
+    sync_file "$wf_src" "$PROJECT_ROOT/.claude/workflows/$name" ".claude/workflows/$name"
   done
 fi
 

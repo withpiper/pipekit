@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.31.0** — Last updated: 2026-08-07  *(**v4.31.0 — five keys for `/repo-security-review`** (renamed from `/security-review`, genericized this release). `Repo security areas` points at the project audit-area file — the substance the skill used to hardcode; `Repo security report path` sets where the periodic report lands. The three artifact keys — `Security architecture doc`, `Public security page`, `Security scan host` — are **optional by design**: blank means the step reports `n/a`, never that it passed, and the skill never invents a path the project didn't configure. `Security scan host` is its own key rather than a read of § Environments, which carries no `| **Key** |` row and so can't be cited by a skill. Carries v4.30.0 — the legacy planning layer is gone (`bin/pk`'s phase-file/ID-map fallback, the `Backend` key and its whole chain, `/spec-preflight`'s dead `phase-detect` probe, `/review-plan`'s phase-slug path). Linear is the only initiative surface.)*
+**v4.34.0** — Last updated: 2026-09-02  *(**v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.** On current frontier models `low` / `medium` effort on the session model can cost less per completed task than a smaller model; measure before flipping — the silent-miss rubric still decides the tier. Carries v4.31.0 — five keys for `/repo-security-review`; v4.30.0 — the `Backend` key and its chain are gone.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -301,6 +301,10 @@ so un-migrated projects see no behavior change.
   the hardest review work, `low` sufficient for mechanical lookups on current-generation models).
   Effort calibration shifts between model generations — re-validate rather than assuming the
   mapping ports unchanged.
+- **The execution row may be left blank to inherit the session model.** On current frontier models,
+  `low` / `medium` effort on the session model can cost less *per completed task* than a smaller
+  model at `medium` (fewer retries, fewer verify failures). Measure before flipping — the silent-miss
+  rubric still decides the tier; this only says which model to put on the scale.
 
 ## Pre-Deploy Gate
 

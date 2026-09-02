@@ -1835,6 +1835,52 @@ else
   fail "dogfood: .claude/ mirrors are stale" "run scripts/dogfood-sync.sh"
 fi
 
+# ── Saved workflows parse and ship (v4.34.0) ──────────────────────────────────
+# workflows/*.js are Claude Code saved-workflow scripts: an `export const meta`
+# literal first, then a plain-JS body with top-level await and a top-level
+# `return`. `node --check` rejects a bare top-level return, so wrap the body in
+# an async IIFE for the parse check — the meta block is a plain const there.
+
+echo "== saved workflow scripts parse =="
+if command -v node >/dev/null 2>&1; then
+  WF_CHECK_DIR=$(mktemp -d)
+  for wf in "$REPO_ROOT"/workflows/*.js; do
+    [ -f "$wf" ] || continue
+    wf_name=$(basename "$wf")
+    if head -1 "$wf" | grep -q '^export const meta = {'; then
+      ok "workflow meta is the first statement: $wf_name"
+    else
+      fail "workflow meta is not the first statement: $wf_name" "Claude Code drops /<name> from autocomplete"
+    fi
+    { echo '(async () => {'; sed 's/^export const meta/const meta/' "$wf"; echo '})()'; } > "$WF_CHECK_DIR/check.mjs"
+    if node --check "$WF_CHECK_DIR/check.mjs" >/dev/null 2>&1; then
+      ok "workflow parses: $wf_name"
+    else
+      fail "workflow does not parse: $wf_name" "$(node --check "$WF_CHECK_DIR/check.mjs" 2>&1 | head -3)"
+    fi
+  done
+  rm -rf "$WF_CHECK_DIR"
+else
+  ok "workflow parse check: node not installed → skipped"
+fi
+
+# sync-method.sh must ship workflows/ to the consumer's .claude/workflows/, or
+# /work's Step 5.2 falls back to sequential Agent dispatch on every project.
+echo "== sync-method ships saved workflows =="
+WF_TMP=$(mktemp -d)
+mkdir -p "$WF_TMP/proj/.claude" "$WF_TMP/method/skills/demo" "$WF_TMP/method/workflows"
+echo 'upstream demo body' > "$WF_TMP/method/skills/demo/SKILL.md"
+printf 'export const meta = { name: "demo", description: "d" }\nreturn 1\n' > "$WF_TMP/method/workflows/demo.js"
+WF_OUT=$(SYNC_METHOD_REEXEC=1 SYNC_METHOD_TEMP="$WF_TMP/method" \
+  bash "$REPO_ROOT/scripts/sync-method.sh" --dry-run --target="$WF_TMP/proj" 2>&1)
+case "$WF_OUT" in
+  *"WOULD UPDATE .claude/workflows/demo.js"*)
+    ok "workflows: a saved workflow ships to .claude/workflows/" ;;
+  *)
+    fail "workflows: demo.js not shipped" "$(echo "$WF_OUT" | grep -i -A2 'Workflows' | head -4)" ;;
+esac
+rm -rf "$WF_TMP"
+
 # ── Overrides cover the whole skill directory (v4.31.3) ──────────────────────
 # The skills-override discovery used `find ... -name '*.md'`, so a project could
 # override SKILL.md but NOT skill.json — whose `description` is what Claude routes
