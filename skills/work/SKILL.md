@@ -7,30 +7,30 @@ description: V2 daily-loop skill — plan + execute a Linear issue from inside i
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
-You are a focused work driver. Given a Linear issue ID, you read its spec, infer the tier from Linear labels, plan the work, present the plan for verdict, dispatch execution, and stop. Tier shapes which gates run; no round-2 verdict loops, no auto-chain.
+You drive one Linear issue from spec to verified commits. Read the spec, infer the tier from Linear labels, plan, present the plan for a verdict, execute the plan on the `pk-execute` workflow, self-check, and roll over to `/verify`. Tier shapes which gates run. The human paces the loop; you do not chain past it.
 
 ## Triggers
 
-- `/work <ISSUE-ID>` — primary (tier inferred from Linear `tier:*` label, defaults to Standard)
-- `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec-validator + plan-review subagent + security-review; no-op on Quick (light by design); redundant on Heavy (already forced)
+- `/work <ISSUE-ID>` — primary (tier from the Linear `tier:*` label, default Standard)
+- `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec-validator + code survey + security review; no-op on Quick, already forced on Heavy
+- `/work <ISSUE-ID> --resume` — continue an execution that stopped (see § Resume)
+- `/work <ISSUE-ID> --no-rollover` — build, but do not auto-run `/verify`
 - "work on RS-30" / "let's do PIP-123"
 
-## Required preconditions
+## Preconditions
 
-1. Either (a) you are inside a worktree on a feature branch (not `dev`, `main`, `beta`, or `master`), OR (b) `<ISSUE-ID>` is passed as an argument so `/work` can auto-branch into a fresh worktree.
-2. If neither (a) nor (b) holds, refuse.
-3. `method.config.md` is readable in the repo root.
+1. Either you are inside a worktree on a feature branch (not `dev`, `main`, `beta`, `master`), or `<ISSUE-ID>` is passed so Step 0 can auto-branch.
+2. `method.config.md` is readable in the repo root.
 
 ## Step 0 — Verify or create the worktree
 
-`/work` auto-branches when invoked from an integration branch with an explicit `<ISSUE-ID>` — creating worktree + branch via `pk branch` and `cd`-ing into it before continuing. This removes the manual `pk branch` step that v2.0–v2.2 required.
+From an integration branch with an explicit `<ISSUE-ID>`, create the worktree via `pk branch` and `cd` into it. Run this exactly:
 
 ```bash
 CURRENT=$(git branch --show-current)
 
 case "$CURRENT" in
   dev|main|master|beta)
-    # Integration branch — auto-branch path.
     if [ -z "$1" ]; then
       echo "ERROR: /work invoked from integration branch '$CURRENT' with no <ISSUE-ID>." >&2
       echo "Pass an ID (e.g. /work RS-123) or run 'pk branch <ID>' yourself first." >&2
@@ -39,8 +39,6 @@ case "$CURRENT" in
     ISSUE="$1"
     echo "→ Auto-branching: pk branch $ISSUE"
     pk branch "$ISSUE" || { echo "ERROR: pk branch failed for $ISSUE" >&2; exit 1; }
-    # pk branch creates the worktree and prints its path on the last line.
-    # Resolve and cd into it so the rest of /work runs in the right place.
     WORKTREE=$(git worktree list --porcelain | awk -v id="$ISSUE" '
       /^worktree / { wt=$2 }
       /^branch / && index($0, id) { print wt; exit }
@@ -50,189 +48,74 @@ case "$CURRENT" in
     CURRENT=$(git branch --show-current)
     ;;
 esac
-```
 
-If `<ISSUE-ID>` not passed and `$CURRENT` is a feature branch, extract from `$CURRENT`:
-
-```bash
 ISSUE=${ISSUE:-$(echo "$CURRENT" | grep -oE '[A-Z]+-[0-9]+' | head -1)}
 [ -z "$ISSUE" ] && { echo "ERROR: no issue ID in branch name and none provided." >&2; exit 1; }
 ```
 
 ## Step 1 — Read configuration
 
-Read these values from `method.config.md` using `pk config <key> [default]` — do not grep the file directly, as the markdown table format (bold keys, backtick values) is unreliable to parse inline. (`pk_config` is the internal shell function inside `bin/pk`; the subcommand exposed to skill bodies is `pk config`. Using `bin/pk pk_config` would exit 1 with "Unknown subcommand: pk_config" — surfaced 2026-05-14 canary, fixed v2.4.3.3.)
+Read values with `pk config <key> [default]`, never by grepping the markdown table (the table format is unreliable to parse inline; the subcommand is `pk config`, not the internal `pk_config`).
 
 ```bash
 DEEP_FLAG=$(pk config "Default deep flag" "false")
 QA_REVIEW=$(pk config "Require QA review" "false")
 STRATEGY_PATH=$(pk config "Strategy docs path" "Strategy/")
-BACKEND=$(pk config "Backend" "native")   # v4.0.0: native is the sole executor; read only to guard stale configs
+INTEGRATION=$(pk config "Integration branch" "dev")
 ```
 
-Resolve the effective `--deep` (CLI flag OR `Default deep flag: true`).
-
-**Native-on-Workflow is the sole executor (v4.0.0).** There is no pluggable backend to resolve — but reject any explicit request for a removed backend loudly, so a stale config or muscle-memory flag fails fast instead of silently running something else:
-
-- If `--backend=` is passed with any value other than `native`, refuse: `Backend selection was removed in v4.0.0 — native-on-Workflow is the sole executor. Drop the --backend flag.`
-- If `BACKEND` (from `method.config.md`) is anything other than `native`, refuse: `method.config.md sets 'Backend: <value>', removed in v4.0.0. Set 'Backend: native' or delete the row, then re-run.`
-
-Print one line:
-
-```
-Work: <ISSUE-ID>  ·  Deep: <yes|no>
-```
+The effective `--deep` is the CLI flag OR `Default deep flag: true`. Print one line: `Work: <ISSUE-ID>  ·  Deep: <yes|no>`.
 
 ## Step 2 — Fetch the spec from Linear
 
-Use the Linear MCP tool `mcp__linear-server__linear_getIssueById` with the issue ID. Capture:
+Call `mcp__linear-server__linear_getIssueById` once and capture `title`, `description`, `state.name`, and `labels`. Expected states: `In Progress`, `Building`, or `Approved` (Step 0's auto-branch transitions it). On `Backlog` / `Todo` without a just-completed auto-branch, refuse.
 
-- `title`
-- `description` (the spec body)
-- `state.name` (expected: `In Progress` or `Building`. `Approved` is also fine — Step 0's auto-branch will have transitioned it. If `Backlog`/`Todo` and Step 0 did not just auto-branch, refuse.)
-- `labels`
+**Read once.** This is the one full-content read `/work` needs. The payload carries the whole comment thread and is sticky (re-billed every turn, `pipekit-tooling.md` § MCP Result Payloads Are Sticky). For any later state check use `pk issue show <ID>`, `pk status`, `git`, or `gh`.
 
-> **Read once.** This is the one genuine full-content read `/work` needs — capture these fields and carry them. `getIssueById` also drags the entire comment thread, and that payload is sticky (re-billed every turn — `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky). Don't re-fetch the issue later just to check its state; use `pk issue show <ID>` (lean, field-scoped) / `pk status` / `git` / `gh` for that.
-
-Validate the description contains either `## Light Spec` or `## Acceptance Criteria`. If neither:
-
-- **Without `--deep`:** print a warning, print the description's first 30 lines, ask: `Continue planning with this vague spec? (y/N)`. Default N.
-- **With `--deep`:** refuse: `Spec missing required sections. Run /light-spec <ID> first, OR pk delegate <ID> "draft a Light Spec for this issue against {project} conventions" to invoke Linear Agent.`
+The description must contain `## Light Spec` or `## Acceptance Criteria`. If neither: without `--deep`, warn, print the first 30 lines, ask `Continue planning with this vague spec? (y/N)`, default N. With `--deep`, refuse: `Spec missing required sections. Run /light-spec <ID> first, OR pk delegate <ID> "draft a Light Spec for this issue against {project} conventions".`
 
 ## Step 2.5 — Label the session and terminal
 
-Now that you have `<ISSUE-ID>` and the issue `title`, label the work in two places so the human can find this session at a glance.
+Best-effort, never blocking:
 
-1. **Claude session topic** — set if the helper script exists:
-
-   ```bash
-   if [ -x "$HOME/.claude/scripts/set-topic.sh" ]; then
-     "$HOME/.claude/scripts/set-topic.sh" "<ISSUE-ID> — <title>"
-   fi
-   ```
-
-2. **Terminal / multiplexer tab title** — emit the OSC 0 escape (honored by most terminals, tmux, screen, and CMUX):
-
-   ```bash
-   printf '\033]0;%s\007' "<ISSUE-ID>"
-   ```
-
-Both are best-effort. Skip silently if either fails — never block planning on a labeling failure.
+```bash
+[ -x "$HOME/.claude/scripts/set-topic.sh" ] && "$HOME/.claude/scripts/set-topic.sh" "<ISSUE-ID> — <title>"
+printf '\033]0;%s\007' "<ISSUE-ID>"
+```
 
 ## Step 2.6 — Infer tier from Linear labels
 
-Scan the `labels` you fetched in Step 2 for `tier:quick`, `tier:standard`, or `tier:heavy`. Take the first match. If none, default to **Standard**.
+Take the first of `tier:quick`, `tier:standard`, `tier:heavy` in `labels`; default **Standard**. Print `Tier: <quick|standard|heavy>`. Per-tier semantics are canonical in `pipekit/templates/tier-{quick,standard,heavy}.md`.
 
-```bash
-TIER=$(echo "$labels" | grep -oE 'tier:(quick|standard|heavy)' | head -1 | sed 's/^tier://')
-TIER=${TIER:-standard}
-```
-
-Print one line:
-
-```
-Tier: <quick|standard|heavy>
-```
-
-Tier shapes which gates run in Steps 3, 4, and 6. Standard is the existing baseline. Quick lightens; Heavy strengthens. Per-tier semantics live in `pipekit/templates/tier-{quick,standard,heavy}.md` — read those for the canonical definitions.
-
-### Quick-tier batch offer
-
-If `TIER == quick`, surface the batch path inline (non-blocking — user can `Ctrl-C` if they want to switch):
-
-```
-tier:quick — single-issue mode (light gates).
-  Batch alternative: abort and run /06-linear-todo-runner for parallel
-  execution of multiple tier:quick issues from the backlog.
-```
-
-### Heavy-tier surface
-
-If `TIER == heavy`, surface upcoming requirements so the user can plan:
-
-```
-tier:heavy — extended gates. This run will require:
-  - Security review (forced at Step 6, regardless of --deep)
-  - /strategy-sync before the initiative closes (post-merge, not before this issue's pk done)
-Plan accordingly.
-```
-
-### Tier interaction with --deep
-
-- `Quick`: `--deep` is no-op (Quick is deliberately light — trust the AC; skip subagents).
-- `Standard`: `--deep` works as before (user-controlled rigor).
-- `Heavy`: `--deep` behavior is forced regardless of CLI flag. Passing `--deep` is harmless but redundant.
+- **Quick**: light by design. `--deep` is ignored. Mention once that `/06-linear-todo-runner` batches several Quick issues in parallel.
+- **Heavy**: `--deep` behaviour is forced, the security review is forced at Step 6, and `/strategy-sync` is required before the initiative closes (after this issue merges, not before its `pk done`). Say so up front so the human can plan.
 
 ## Step 3 — Plan
 
-**Tier-aware path selection** (resolved against `$TIER` from Step 2.6):
-
 | Tier | Path | Subagents |
 |------|------|-----------|
-| Quick | Default (inline) — **forced**; `--deep` is ignored | None |
-| Standard | `--deep` if flag set, else Default | spec-validator + Explore if `--deep` |
-| Heavy | `--deep` parallel grounding — **forced** | spec-validator + Explore |
-
-If `TIER == quick`, skip directly to "Default path: plan inline." Do not spawn the spec-validator / Explore subagents even if `--deep` was passed.
-
-If `TIER == heavy`, take the `--deep` parallel-grounding path below regardless of whether `--deep` was passed on the invocation.
+| Quick | inline, forced | none |
+| Standard | `--deep` if set, else inline | spec validator + code survey when `--deep` |
+| Heavy | `--deep` grounding, forced | spec validator + code survey |
 
 ### `--deep` path: parallel grounding
 
-Send these two Agent invocations **in a single message** (parallel execution):
+Send both `Agent` calls in one message. Each prompt opens with the intent line, because a grounded reviewer does better work when it knows why the issue exists:
 
-1. **Spec validator subagent.** Use Task tool with:
-   - `subagent_type: "general-purpose"` (or `"spec-validator"` if a project-local subagent of that name exists)
-   - plan-review tier per `method.config.md § Model Policy` (default `model: opus`, effort `xhigh`) — spec review gates an AI-to-AI contract
-   - `description: "Validate spec for <ISSUE-ID>"`
-   - Prompt template:
-     ```
-     You are a spec validator. The Linear issue <ISSUE-ID> has this description:
+> Linear issue `<ISSUE-ID>` — `<title>`. Goal: `<one sentence from the spec>`.
 
-     <full description>
+1. **Spec validator.** `subagent_type: "general-purpose"` (or a project-local `spec-validator`), on the plan-review tier per `method.config.md § Model Policy` (default `opus` / `xhigh`). Prompt: the full description, then the rubric — a one-sentence Goal; at least three testable Acceptance Criteria; concrete file paths and line refs rather than "the auth module"; dependencies listed; no open questions. Return **Pass**, **Concerns** (specific gaps with refs), or **Block** (a gap that prevents planning). Conclusions only.
+2. **Code survey.** `subagent_type: "Explore"`, on the grounding tier (default `haiku` / `low`). Prompt: the file paths, tables, and packages the spec names; for each, its purpose, the key types and functions present, and the patterns the surrounding code uses so new work fits. Conclusions only.
 
-     Validate against this rubric:
-     - Has a Goal section (1 sentence)
-     - Has explicit Acceptance Criteria (≥3 testable items)
-     - File paths and line refs are concrete (not "the auth module")
-     - Dependencies are listed (if any)
-     - No open questions remaining
+Synthesize both into the plan.
 
-     Return:
-     **Pass** — all rubric items met.
-     **Concerns** — list specific gaps with line refs.
-     **Block** — fundamental gap that prevents planning (missing AC, etc.)
+### Inline path
 
-     Be terse. ≤200 words.
-     ```
-
-2. **Codebase explorer subagent.** Use Task tool with:
-   - `subagent_type: "Explore"`
-   - grounding tier per `method.config.md § Model Policy` (default `model: haiku`, effort `low`) — read-only fact sweep, conclusions only
-   - `description: "Survey code areas for <ISSUE-ID>"`
-   - Prompt template:
-     ```
-     The Linear issue <ISSUE-ID> says it will touch these areas:
-
-     <extract file paths, table names, package names from spec>
-
-     For each, read the current state and report:
-     - File/module purpose (1 line)
-     - Key types/functions present
-     - Patterns the rest of the codebase uses (so the new work fits)
-
-     Be terse. ≤300 words.
-     ```
-
-When both return, synthesize their outputs into a written plan in step 3b.
-
-### Default path: plan inline
-
-Read the spec. Read project context: `CLAUDE.md`, any `Strategy/*` files referenced in the spec. Plan directly.
+Read the spec, `CLAUDE.md`, and any `Strategy/*` files the spec cites. Plan directly.
 
 ### Step 3b — Write the plan (both paths)
 
-Format (single screen — keep tight):
+One screen:
 
 ```
 ## Plan: <ISSUE-ID> — <title>
@@ -242,43 +125,21 @@ Format (single screen — keep tight):
 **Approach:** <2–4 sentences — the technical strategy>
 
 **Files to touch:**
-- `path/to/file1.ts` — <one-line what changes>
-- `path/to/file2.ts` — <one-line>
-- `supabase/migrations/<N>_<name>.sql` — <one-line>
+- `path/to/file1.ts` — <what changes>
+- `supabase/migrations/<N>_<name>.sql` — <what changes>
 
 **Tests:**
-- <test scenario 1>
-- <test scenario 2>
+- <scenario>
 
 **Risks / open questions:**
-- <empty list — if non-empty, the spec is not ready, go back to step 2>
+- <empty — if non-empty, the spec is not ready; go back to Step 2>
 ```
 
 ## Step 4 — Verdict gate
 
-**Tier-aware verdict** (resolved against `$TIER` from Step 2.6):
+**Quick:** print the plan and ask once, `Plan looks right? (y/n)`. `y` proceeds; `n` exits with `Aborted. Refine the AC in Linear and rerun /work <ISSUE-ID>.` No revision loop: on Quick the AC is the plan, so a wrong plan means a wrong AC.
 
-| Tier | Gate form | Revision loop |
-|------|-----------|---------------|
-| Quick | Single y/N | None — one shot, no revisions |
-| Standard / Heavy | 3-option verdict | Up to 3 revisions, then refuse |
-
-### Quick path (single y/N)
-
-For `tier:quick`, the AC is the plan. Print the plan and ask once:
-
-```
-Plan looks right? (y/n)
-```
-
-- **`y`** → step 5
-- **`n`** → exit cleanly with: `Aborted. Refine the AC in Linear and rerun /work <ISSUE-ID>.`
-
-No revision loop — Quick tier trusts the spec. If the plan is wrong, the AC is the cause; revising the plan in-session is the wrong fix.
-
-### Standard / Heavy path (3-option verdict)
-
-Print the plan, then ask exactly:
+**Standard / Heavy:** print the plan, then ask exactly:
 
 ```
 Verdict?
@@ -287,46 +148,20 @@ Verdict?
   abort                    — stop, do nothing
 ```
 
-Wait for user input. Branch:
-
-- **`proceed`** → step 5
-- **`revise: <feedback>`** → integrate feedback into the plan, re-print, re-ask. Track revision count locally.
-- **`abort`** → exit cleanly. Do not change any state.
-
-**Hard limit:** 3 revisions. If the user revises a 4th time, refuse:
-
-```
-Plan has been revised 3 times. The spec is likely the problem, not the plan.
-Stopping to prevent waste.
-
-Recommendation: pk delegate <ISSUE-ID> "the plan keeps revising on <area>. Refine the spec to clarify <X>." Then restart /work.
-```
+`proceed` → Step 5. `revise:` → fold the feedback in, re-print, re-ask, counting revisions. `abort` → exit without changing state. After three revisions refuse a fourth: `Plan has been revised 3 times. The spec is likely the problem, not the plan. Stopping to prevent waste.` and recommend `pk delegate <ISSUE-ID> "the plan keeps revising on <area>. Refine the spec to clarify <X>."`
 
 ## Step 5 — Execute
 
-### Test command discipline (applies to every execute path)
+The executor contract is: a PLAN artifact, one atomic commit per task with verify before commit, and a SUMMARY trail. Nothing else — no UAT, no known-issue registry, no sprint state. The full Pre-Deploy Gate runs once at the end, inside `/verify`.
 
-If the spec's Acceptance Criteria names a specific test command verbatim — e.g., `pnpm turbo run test --filter=@piper/web` — **use that command verbatim before improvising.** Spec-stated commands are pre-tested and known to work; ad-hoc invocations (`pnpm vitest run <path>`, `pnpm <pkg> test <abs-path>`, etc.) routinely cost two-to-three retries while you re-discover package-script naming, monorepo path conventions, and filter syntax. Surfaced 2026-05-14 canary (F7); fixed v2.4.3.3.
+### Step 5.0 — Materialize the PLAN artifact
 
-If the AC doesn't name a test command, fall back to the project's § Pre-Deploy Gate in `method.config.md`.
-
-### Execute (native-on-Workflow)
-
-Native execution is **Workflow-primitive-driven** for multi-task plans and **inline** for trivial ones. Both paths produce the same executor contract: a PLAN artifact, atomic commits with verify-before-integrate, and a SUMMARY trail. The scope is *only* that contract — PLAN → atomic tasks → verify-before-integrate → SUMMARY. Do **not** add UAT, known-issue registries, or sprint/retro state; the executor's job is to land verified atomic commits, nothing more. The full Pre-Deploy Gate still runs once at the end via the Step 7 `/verify` rollover.
-
-#### Step 5n.0 — Materialize the PLAN artifact (the executor contract)
-
-Convert the Step 3b plan into a structured task DAG and write it to `.pk-work/<ISSUE-ID>-PLAN.md` before executing. This is the contract the executor consumes and the durable record downstream tooling (and any plan review) reads. `.pk-work/` is gitignored at the repo root (same directory as the Step 6.5 flag markers).
-
-```bash
-mkdir -p .pk-work
-```
-
-Format — one entry per atomic task, each independently verifiable:
+Convert the plan into a task DAG at `.pk-work/<ISSUE-ID>-PLAN.md` (`.pk-work/` is gitignored; `mkdir -p .pk-work` first). This is the contract the workflow consumes and `/review-plan` reads.
 
 ```
 # PLAN — <ISSUE-ID> <title>
-Backend: native  ·  Mode: <inline|workflow>  ·  Generated: <date>
+Goal: <one line — why this issue exists and who it serves>
+Mode: <inline|workflow>  ·  Generated: <date>
 
 ## T1 — <short imperative title>
 - deps: <none | T-ids this task requires>
@@ -336,205 +171,129 @@ Backend: native  ·  Mode: <inline|workflow>  ·  Generated: <date>
 - done: <observable condition that proves the AC slice is met>
 
 ## T2 — ...
-- deps: T1
-- ...
 ```
 
-Rules for the DAG:
-- One logical change per task → one atomic commit. If a task can't be described in one `change:` line, split it.
-- `deps` encodes ordering. `files` encodes conflict: two tasks may run concurrently **only** if their `files` sets are disjoint.
-- Every task has a `verify` that can run in isolation. A task with no meaningful verify is a smell — fold it into a sibling or add a real check.
-- **Author the tests the spec/PLAN calls for — don't just run the existing suite.** If an AC or a task's `done` implies coverage (a new RLS/authz path, a calculation, a state transition), the task's `change` MUST include *writing* that test, and `verify` runs it. Running the pre-existing suite green is necessary but never sufficient: a security- or correctness-critical path that ships with no *new* test is an incomplete task, not a passing one. Prefer test-first — author the failing test, then the code that makes it pass. (This is the gap an executor pilot surfaced: it built a correct security guard but shipped it *unverified* because it ran existing tests instead of authoring the one that proved the guard.)
+DAG rules:
 
-#### Step 5n.1 — Choose execution mode
+- One logical change per task, one atomic commit. If `change:` needs two sentences, split the task.
+- `deps` encodes order. `files` encodes conflict: two tasks may run concurrently only when their `files` sets are disjoint.
+- Every task has a `verify` that runs in isolation. A task with no meaningful verify gets folded into a sibling or gains a real check.
+- **The task authors the tests the AC implies; running the existing suite is necessary, never sufficient.** A security- or correctness-critical path shipped without a new test that proves it is an incomplete task. Prefer test-first. (The native-executor pilot, SiteLine POC-57 2026-06-07, built a correct security guard and shipped it unverified for exactly this reason.)
+- If the AC names a test command verbatim, tasks use it verbatim; ad-hoc invocations cost retries re-discovering package scripts and filter syntax. Otherwise the project's § Pre-Deploy Gate command is the fallback.
 
-- **Inline mode** — plan has ≤2 tasks AND touches ≤2 files AND no migration. Execute directly with Edit/Write/Bash: one atomic commit per task, run that task's `verify` immediately after the change and before the commit, surface blockers without looping. Spinning up a Workflow for a one-liner is waste.
-- **Workflow mode** — everything else. Orchestrate via the Workflow primitive (Step 5n.2).
+### Step 5.1 — Choose the mode
 
-Record the chosen mode in the PLAN's `Mode:` header line.
+- **Inline** — at most 2 tasks, at most 2 files, no migration. Execute directly with Edit/Write/Bash: change, run the task's `verify`, commit only on pass, surface a failure without looping.
+- **Workflow** — everything else. Step 5.2.
 
-#### Step 5n.2 — Workflow execution (verify-before-integrate)
+Record the mode in the PLAN header.
 
-Drive execution with the **Workflow tool**. The workflow:
+### Step 5.2 — Run the `pk-execute` workflow
 
-1. Reads the task DAG from `.pk-work/<ISSUE-ID>-PLAN.md`.
-2. Executes tasks in dependency order, **sequentially by default** — one task fully done (verified + committed) before the next. Parallelism is opt-in, not the default: fan out tasks at the same dependency level with **disjoint `files` sets** *only when there is rate-limit headroom*. On a rate-capped plan (e.g. Claude Max), aggressive fan-out self-saturates the API limit and serializes into long waits anyway — and uncontrolled nested fan-out is precisely what makes multi-agent execution expensive. So sequential-with-verify-gates is the default; parallel is a deliberate optimization, not a reflex. Tasks whose `files` sets intersect MUST be serialized regardless — a shared worktree can't take concurrent writers. When in doubt, serialize.
-3. **Verify-before-integrate:** each task agent makes its change (**including authoring the tests the task calls for**, per the DAG rules above), runs the task's `verify` (which executes those new tests), and commits (atomic, conventional `feat/fix/refactor/docs` format) **only if verify passes**. A failing verify does not loop and does not get papered over — the task returns its failure to the orchestrator.
-4. Appends each task's result (commit SHA, verify verdict, elapsed) to `.pk-work/<ISSUE-ID>-SUMMARY.md`.
-5. If any task fails verify or hits a blocker (permission denial, unfixable hook failure, plan-contradicting type error), **stop and surface** — do not auto-revise the plan unilaterally.
+The saved workflow `pk-execute` (`.claude/workflows/pk-execute.js`, synced by Pipekit) holds the execution loop, so this session's context holds only the result. Invoke it with the `Workflow` tool by name. The user opted in by typing `/work`; the first run in a project may ask once for approval of the named workflow.
 
-> **Worktree-isolation invariant:** `Agent isolation: "worktree"` is a no-op on this harness — parallel agents share the working directory. The orchestrator therefore relies entirely on the disjoint-`files` rule above to keep parallel tasks from trampling each other. Any task whose file set overlaps another's runs sequentially, full stop.
+Build `args` from the PLAN — the script has no filesystem access, so the DAG travels as data:
 
-> **Portability fallback:** if the Workflow tool is unavailable in the host, degrade to sequential `Task`-tool dispatch — one Task per atomic task in dependency order, each carrying the same verify-before-integrate discipline and writing to the same SUMMARY trail. Degrade loudly: print `Workflow tool unavailable — native backend running sequential fallback.` Never silently collapse to the old single-blob-subagent behavior.
+```
+{
+  "issue": "<ISSUE-ID>", "title": "<title>", "goal": "<Goal line from the PLAN>",
+  "integration": "<INTEGRATION>",
+  "baseSha": "<git rev-parse HEAD>",
+  "worktreePath": "<pwd>",
+  "testCommand": "<the AC-named test command, else the pre-deploy gate command>",
+  "parallel": <true|false — see below>, "maxParallel": 3,
+  "model": "<execution-tier model or null>", "effort": "<execution-tier effort or null>",
+  "tasks": [ { "id": "T1", "title": "...", "deps": [], "files": ["..."], "change": "...", "verify": "...", "done": "...", "spec": "<the AC lines this task covers>" } ]
+}
+```
 
-Each task agent's prompt carries: the single task entry (title, files, change, verify, done), the relevant spec slice, and the discipline (atomic commit, conventional format, surface-don't-loop). It does **not** carry the whole plan — task scope is the task, the orchestrator owns the DAG.
+**Model and effort** come from the execution tier in `method.config.md § Model Policy` (default `sonnet` / `medium`). Pass them explicitly so a frontier-model session does not silently run every task at frontier cost. When the project has measured that the session model at `low` or `medium` effort costs less per completed task, it sets the execution-tier row to blank and the fields are passed as null to inherit. A task that genuinely needs deeper reasoning is surfaced to the human, not escalated unilaterally.
 
-> **Task agents run on the execution tier** per `method.config.md § Model Policy` (default `model: sonnet`, effort `medium`) — pass `model`/`effort` explicitly in every `agent()` call (and on every fallback Task dispatch). Never let task agents inherit the session model: a frontier-model session would otherwise silently run every atomic task at frontier cost. If a specific task genuinely needs heavier reasoning (race conditions, cross-layer bugs), surface that to the human rather than escalating unilaterally.
+**Parallelism.** Tasks at one dependency level with disjoint `files` may run concurrently, each in its own harness-managed worktree, followed by an integration step that cherry-picks the wave onto the feature branch and re-runs each verify on the integrated tree. Set `parallel: true` only when both hold, and say which one failed when it is false:
 
-## Step 6 — Security review (tier-aware)
+```bash
+# 1. The harness must branch subagent worktrees from THIS worktree's HEAD, not from origin's default branch.
+jq -r '.worktree.baseRef // "fresh"' .claude/settings.json 2>/dev/null   # must print: head
+# 2. Subagent worktrees must not show up as untracked files.
+git check-ignore -q .claude/worktrees/                                   # exit 0
+```
 
-**Tier-aware gate** (resolved against `$TIER` from Step 2.6):
+Otherwise `parallel: false` runs every task sequentially in this worktree — the production-validated path, and the right default on a rate-capped plan where a wide fan-out only queues behind the API limit. Task agents never spawn agents of their own.
 
-| Tier | Security review |
-|------|-----------------|
-| Quick | Skip (forced — even if `--deep` was passed; rely on `/pr-security-review` post-ship for sensitive Quick changes) |
-| Standard | Run if `--deep` was passed |
-| Heavy | Run (forced — regardless of `--deep`) |
+**What the workflow does** (read `.claude/workflows/pk-execute.js` if in doubt): orders tasks by `deps`; runs each task agent with only its task slice, the intent line, and the discipline (author tests, verify, commit only on pass, stay inside the file set, report grounded); threads the expected HEAD sha from task to task so an agent that finds a different HEAD refuses to edit; stops at the first task that is not `done` and returns `{ status: "complete" | "stopped", headSha, results }`.
 
-After execution completes, invoke the review when the gate fires:
+**When it returns**, write `.pk-work/<ISSUE-ID>-SUMMARY.md` from `results` — the session does this deterministically, task agents do not append to it:
 
-Use Task tool with:
-- `subagent_type: "security-review"` (project may have this; otherwise `"general-purpose"`)
-- plan-review/adversarial tier per `method.config.md § Model Policy` (default `model: opus`, effort `xhigh`) — adversarial review benefits from deeper reasoning
-- `description: "Security review of <ISSUE-ID> diff"`
-- Prompt template:
-  ```
-  Review the diff on this branch (relative to origin/<integration>) for security issues.
+```
+# SUMMARY — <ISSUE-ID>
+Workflow run: <runId from the tool result>  ·  Base: <baseSha>  ·  Head: <headSha>  ·  Status: <complete|stopped>
 
-  Specifically check:
-  - SQL injection / parameterized queries
-  - RLS policies (Supabase): are new tables protected?
-  - Authn/authz: any auth-checking code paths added or modified?
-  - Secrets: any new env vars or hardcoded values?
-  - PII handling: any new user-data flows?
+| Task | Mode | Status | Commit | Verify | Tests authored | Notes |
+|------|------|--------|--------|--------|----------------|-------|
+| T1 | sequential | done | <sha> | pass | tests/x.test.ts | — |
+```
 
-  Diff context:
-  <output of: git diff origin/<integration-branch>...HEAD>
+On `stopped`: print the failing task's `summary`, `verifyTail`, and `notes` verbatim, and stop. Do not revise the plan or retry on your own; the human decides (fix and `/work --resume`, or `revise` the plan).
 
-  Return findings ranked Critical / High / Medium / Low.
-  Be terse. Cite file:line for each finding.
-  ```
+**Fallbacks, both loud.** If `.claude/workflows/pk-execute.js` is absent, print `pk-execute workflow not found — run /pipekit-update, running sequential Agent fallback` and dispatch one `Agent` per task in dependency order with the same prompt contract the script uses (task slice, intent line, expected HEAD check, verify-before-commit, structured result). If the `Workflow` tool itself is unavailable, do the same and say so. Never collapse to a single agent with the whole plan.
 
-Print the review verbatim.
+## Step 6 — Security review
+
+| Tier | Runs |
+|------|------|
+| Quick | never (rely on `/pr-security-review` post-ship for sensitive Quick changes) |
+| Standard | when `--deep` |
+| Heavy | always |
+
+Spawn one `Agent` (`subagent_type: "security-review"` if the project has it, else `general-purpose`) on the adversarial tier (default `opus` / `xhigh`) with the diff against `origin/<INTEGRATION>` and this brief: SQL injection and parameterization; RLS on new tables; authn/authz paths added or changed; new env vars or hardcoded secrets; new user-data flows. Findings ranked Critical / High / Medium / Low with `file:line`. Print the review verbatim.
 
 ## Step 6.5 — Behavioral self-check before declaring complete
 
-Before printing the hand-off, verify the work *behaviorally* — not just that tests pass. Tests-pass + 7-check-gate-green is necessary but not sufficient: see RS-63/64 in rs-vault (2026-05-02), where every check passed but the running app was 60% broken.
+Tests passing and the gate green are necessary, not sufficient (rs-vault RS-63/64, 2026-05-02: every check passed, the running app was 60% broken).
 
-For UI changes — if the spec touched any user-visible surface:
-- **Run the app locally** (or check the existing dev server) and verify the changed surface renders correctly.
-- **Click the new affordances.** If the spec says "Save button persists notes," click Save and confirm the data round-trips. Don't trust callback-fire mocks.
-- **Diff against the design source** if one exists (`resources/<handoff>/...`). Note any deviations in the hand-off summary.
+**UI changes:** run the app (or use the running dev server) and exercise the changed surface. If the spec says "Save persists notes", click Save and confirm the round-trip. Diff against the design source in `resources/` if one exists and note deviations in the hand-off.
 
-For integration changes — if the spec promised "X will replace Y" or "this updates Z to consume W":
-- **Grep the integration site** to verify the swap landed. Example: if the spec says "wire `<NewComponent>` into `<page.tsx>`", grep for both `<NewComponent>` (should be present) and `<OldComponent>` (should be absent).
-- **Don't ship if the predecessor's promised handoff is still un-integrated.** That's the RS-64 miss in concrete form.
+**Integration changes:** if the spec promised "X replaces Y", grep the integration site for both — the new symbol present, the old one absent. An un-integrated predecessor handoff is the RS-64 miss in concrete form; do not ship over it.
 
-### Self-reference grep — RUN THESE EXACTLY (do not paraphrase)
-
-Before printing the hand-off, run **all three** of the following commands and surface every match in the hand-off summary. Do not skip, summarize, or "trust" the spec instead. Predecessors leave placeholder branches that the spec cannot enumerate; the only reliable way to find them is to grep your own ticket ID in the codebase.
+### Self-reference grep — run these exactly
 
 ```bash
 # 1. Every reference to the current ticket — placeholders, TODOs, scaffolded handoffs
 git grep -nE '<ISSUE-ID>' -- 'src/' ':(exclude)*.test.*' ':(exclude)*.md'
 
-# 2. Placeholder-shape strings — coming soon, NOT_IMPLEMENTED, 501, awaiting, TODO
+# 2. Placeholder-shape strings
 git grep -nE '501|NOT_IMPLEMENTED|coming soon|placeholder|awaiting|TODO' -- 'src/' ':(exclude)*.test.*'
 
-# 3. Every reference to predecessor ticket IDs called out in the spec body
+# 3. Every predecessor ticket ID the spec body names
 git grep -nE '<PREDECESSOR-IDS>' -- 'src/' ':(exclude)*.test.*'
 ```
 
-(Substitute `<ISSUE-ID>` with the current ticket ID, e.g. `RS-29`; substitute `<PREDECESSOR-IDS>` with any ticket IDs the spec body references in `<issue id=…>` blocks or "RS-NN will replace…" prose. Adjust the path scope from `src/` to whatever the project's source root is — read it from `method.config.md` if needed.)
+Substitute the IDs; read the source root from `method.config.md` if it is not `src/`. **Any match outside the files you edited means the integration is not complete.** Either remove the placeholder, or name the match in the hand-off as a known un-integrated site with the reason it is intentional, and let the human decide. A test whose name carries the current ticket's ID pins the pre-ticket world and is an edit target, not a passing check. (rs-vault RS-29, 2026-05-05: a working export route, 763 tests green, and a hardcoded `coming soon (RS-29)` branch left in the UI because this step was prose rather than a command.)
 
-**Rule: if any match exists *outside* the file you just edited, you have not completed the integration. Do not declare complete.** Either:
-1. Make the change to remove the placeholder/integration site, or
-2. Surface the match explicitly in the hand-off summary as a known un-integrated site, name *why* it's intentional to leave it, and let the user decide.
+### Risk-fallback follow-up — required when a documented fallback was used
 
-Why this is mandatory: RS-29 (rs-vault, 2026-05-05) shipped a working JPG export route, all 763 tests passing, full pre-deploy gate green, Vercel preview returning valid bytes — but the report builder UI still had a hardcoded `if (res.status === 501) /* show "coming soon (RS-29)" */` branch from RS-27. The placeholder hint literally said "until RS-29 ships" and `/work` missed it because Step 6.5 was prose, not a command. A single `git grep -n RS-29 src/` would have surfaced the integration site in 30 seconds.
+If you shipped a spec's `R<N>: Mitigation` path instead of the primary implementation, file the deferred scope now with `mcp__linear-server__linear_createIssue`: title `<short noun phrase> — closes <ISSUE-ID> R<N> fallback`, state Approved, same project and milestone as the parent, description citing the parent, the `R<N>` clause, the AC numbers covered, and the deferred scope. Reference the new ID in the hand-off, and mark the AC partial in the parent spec if you can edit it. (WIT-451, 2026-05-13: a fallback shipped correctly, two follow-ups were filed by hand, and the third was found in triage a round later.)
 
-### Pinned-broken-behavior tests
+### Flag marker for `/verify`
 
-Tests whose names contain the *current* ticket's ID — especially predecessor tests that asserted the placeholder behavior was correct — are **almost always known-edit targets**, not bystanders. A green test for a placeholder is a TODO disguised as a check. When grep #1 above surfaces test names, do not read "the test passes" as confirmation; read it as "the test pins the world before this ticket shipped, and ought to be updated to assert the new behavior."
+When this step surfaces a self-reference match outside your edits, a UI or integration gap you are shipping with, or an invoked risk fallback, write `.pk-work/<ISSUE-ID>.flags`, one plain line per flag. `/verify` Step 3.5 pauses auto-ship on any line. **Never write an empty marker** — existence means flags present. On `--resume`, overwrite rather than append. `pk done` removes it with the worktree.
 
-### Risk-fallback follow-up filing — MANDATORY when a Risk-fallback was invoked
+### When asked about visible state during execution
 
-If you used a documented Risk-fallback (`R<N>: Mitigation` clause from the spec body) during this run — i.e. you shipped the documented "if X is too hard, do Y instead" path — you MUST file the deferred work as a new Linear WIT before declaring complete. Do not bundle it into the hand-off summary as a "partial AC" footnote and hope the user files it later; they won't, and the follow-up rots.
+If the human asks "is this right?" or "shouldn't there be X here?", re-read the relevant spec section, grep the integration site, compare, and report the gap plainly. A code comment that explains a placeholder as intentional is not evidence when the predecessor's spec promised its replacement (RS-64).
 
-For each invoked fallback:
+## Step 7 — Auto-rollover to `/verify`
 
-1. Identify the AC the fallback covers and the deferred scope (the "proper" implementation the fallback is standing in for).
-2. Call `mcp__claude_ai_Linear__save_issue` to file a new WIT, scoped tightly to closing the fallback:
-   - **Title:** `<short noun phrase> — closes <ISSUE-ID> R<N> fallback`
-   - **State:** `Approved` (the design decisions are inherited from the original spec; the new WIT is execution-only)
-   - **Description:** Cite the parent ISSUE-ID + the specific R<N> clause + the AC numbers the fallback covers + the deferred scope spelled out
-   - **Project / Milestone:** Match the parent issue
-3. Reference the new WIT-ID in the hand-off summary.
-4. Update the original spec body (if you have permission to edit it post-implementation) to mark the AC as "partial per R<N>; full coverage tracked in <NEW-WIT-ID>".
+When the last commit lands and the last command exits 0, invoke `/verify` at once by calling the `Skill` tool with `skill="verify"` and `args="--auto-ship"`. Env vars do not cross Bash subshells, so the `args` parameter is the only reliable signal. The human opted into the chain by typing `/work`; they pause it with Ctrl-C, `stop`, or `--no-rollover`.
 
-Why mandatory: WIT-451 canary 2026-05-13 shipped via the R4 documented fallback (NOTE editable only via Edit modal, not inline). The session correctly used the fallback but only filed 2 follow-up WITs and missed the dual-field inline editor; that one was caught later in triage. If R-fallback follow-ups had been automatic, the canary closeout would have been one round faster.
+Exactly two mechanical conditions skip the rollover, and nothing else does: the execution failed (a non-zero exit or a workflow `stopped` status), or `--no-rollover` was passed. Advisory output from Step 6.5, deviations from the spec's wording, and your own uncertainty go into the hand-off, not into a skip. Before ending your turn, check your last paragraph: if it is a hand-off that says `Required next: /verify` after a green run, you skipped on judgment — stop and invoke the Skill tool instead. (Three earlier versions of this skill listed soft skip conditions and the model paraphrased past every one of them.)
 
-If something fails this self-check, **surface it in the hand-off summary** — don't paper over. The user paces; they decide whether to ship-with-known-gap or revise.
+After `/verify` returns, surface its verdict block verbatim.
 
-### Cross-skill flag marker (F6 — load-bearing for /verify Step 3.5)
+- **Pass:** `pk ship` already ran inside `/verify`. Print: _"Run `/pk-exit` at the end of the session to write `Logs/Sessions/<date>_<HHMM>.md`."_ On Heavy add: _"`/strategy-sync` is required before this initiative closes — run it from the integration branch after this issue merges, typically at `/phase-plan --next`."_
+- **Partial / Fail:** stop. Tell the human: _"Address the failures and re-run `/verify` when ready (or `/work --resume` if execution gaps remain)."_
 
-When this Step 6.5 surfaces *any* of the following, you MUST also write a flag marker file so `/verify` can pause the auto-ship chain:
-
-- Self-reference grep #1, #2, or #3 returned a match outside the file you just edited
-- Behavioral self-check found a UI/integration gap and you're shipping anyway with the gap documented
-- A documented Risk-fallback was invoked during this run (the same trigger as the mandatory follow-up WIT)
-
-Write the marker as `.pk-work/<ISSUE-ID>.flags`, one human-readable line per flag:
-
-```bash
-mkdir -p .pk-work
-{
-  # one line per surfaced flag — examples:
-  echo "self-ref match: <FILE:LINE> contains '<ISSUE-ID>' outside edited file"
-  echo "behavioral gap: <component> renders but <affordance> not wired (shipping with gap)"
-  echo "risk-fallback R<N> invoked: <deferred scope> — follow-up WIT <NEW-WIT-ID>"
-} > .pk-work/${ISSUE_ID}.flags
-```
-
-`.pk-work/` is gitignored at the repo root (see `.gitignore`). Marker is per-issue so concurrent worktrees on different issues don't collide. `/verify` reads this file in its Step 3.5 flag enumeration and pauses auto-ship if any line is present.
-
-**Do not write an empty marker** — `/verify` treats file existence as "flags present." If Step 6.5 found nothing surface-worthy, do not create the file.
-
-**Marker lifecycle:** the file is consumed by `/verify` (read-only) and cleaned up by `pk done` when the worktree is removed. If you re-run `/work --resume <ISSUE-ID>`, overwrite the marker — don't append to a stale one.
-
-### Anti-rationalization guard
-
-If the user asks during execution about visible state — *"is this correct?"*, *"why does it look like this?"*, *"shouldn't there be X here?"* — and provides a screenshot or describes what they see:
-
-**Default behavior: skepticism + verification, not defense.**
-
-1. **Re-read the relevant section of the spec** (don't paraphrase from memory)
-2. **Grep the integration site** (don't infer from comments)
-3. **Compare what's shown to what the spec says**
-4. **Surface any gap honestly**, even if a comment in the code "explains" the current state as intentional (placeholder comments are load-bearing only when the predecessor's spec doesn't promise replacement)
-
-Do **not** generate plausible-sounding rationale that fits the visible artifact. RS-64's miss got worse because Claude pattern-matched on a placeholder comment header and explained the missing integration as "wiring harness for something to come later" — when in fact RS-63's spec said "RS-64 will replace the placeholder." The integration was promised; the comment was misleading; rationalizing made the user trust a broken state.
-
-When in doubt, default to: *"Let me check the spec and the integration site before I answer."*
-
-## Step 7 — Auto-rollover to /verify (mandatory)
-
-**Rollover is mandatory.** When Step 6 finishes — last commit lands, last shell command exits 0 — invoke `/verify` immediately. Do not deliberate. Do not weigh whether the user "might want" to inspect first. Do not interpret implementation notes, Step 6.5 advisory output, or surfaced deviations as a pause signal. The user opted into the chain by typing `/work`; they will type Ctrl-C, `stop`, or pass `--no-rollover` if they want to pause.
-
-This rule exists because three prior versions of this skill listed soft skip conditions ("explicit stop", "deviation pending user input", "behavioral gap surfaced") and the model paraphrased past every one of them — turning the v2 loop into a manual chain. Rollover is the loop. If you skip it on agent judgment, you broke the loop.
-
-### Mechanical skip conditions (the only ones)
-
-Skip rollover only when **a deterministic, non-judgmental signal** holds. There are exactly two:
-
-1. **Execution failed.** The last shell command in Step 6 exited non-zero, or a Bash tool call returned an error you could not auto-recover. This is checkable: `if (last_exit_code != 0)`. No interpretation.
-2. **`--no-rollover` flag.** Passed on the original `/work <ISSUE-ID> --no-rollover` invocation. The user said "build but don't auto-verify." This is checkable: scan the invocation args.
-
-Nothing else skips. Not "the user might want to inspect." Not "implementation deviated from spec wording." Not "Step 6.5 listed gaps." Not "I'm uncertain." Those produce *advisory output in the hand-off summary*, not skips.
-
-### Procedure
-
-1. Print: `✓ /work complete for <ISSUE-ID> — auto-running /verify`
-2. Invoke `/verify` by calling the Skill tool with `skill="verify"` and `args="--auto-ship"`. The `--auto-ship` arg signals `/verify` that this invocation is part of the auto-flow and authorises `pk ship` on Pass. **Do not** try to set environment variables before invoking — env vars don't propagate across separate Bash subshells, so the only reliable signal is the Skill tool's `args` parameter.
-3. Surface `/verify`'s verdict block to the user verbatim.
-4. After `/verify` returns:
-   - **Pass:** `pk ship` will already have run inside `/verify`'s rollover. Print: _"Run `/pk-exit` at the end of the session to write `Logs/Sessions/<date>_<HHMM>.md`."_
-     - **If `TIER == heavy`**, append: _"Heavy tier: `/strategy-sync` is required before this initiative closes. Run it after this issue merges — from `main`/the integration branch, not this Draft PR — typically at the initiative boundary (`/phase-plan --next`), not before every individual `pk done`."_
-   - **Partial / Fail:** STOP. The verdict block already showed the per-AC table; do not invoke `pk ship`. Tell the user: _"Address the failures and re-run `/verify` when ready (or `/work --resume` if execution gaps remain)."_
-
-### When the rollover IS skipped (one of the two mechanical conditions)
-
-Print the legacy hand-off:
+When the rollover is skipped, print:
 
 ```
 ✓ /work paused for <ISSUE-ID>
@@ -542,61 +301,40 @@ Print the legacy hand-off:
 Reason: <execution-failure | --no-rollover>
 
 Resume:
-  /work <ISSUE-ID>          — continue execution
-  /verify                   — run gate manually if you want to inspect first
+  /work <ISSUE-ID> --resume   — continue execution
+  /verify                     — run the gate manually
 ```
 
-### Self-check before declaring complete
+## Resume
 
-Before printing the hand-off, ask yourself: "Did the last shell command exit 0?" If yes, **the rollover MUST run.** If you find yourself drafting a hand-off with `Required next: /verify` (the legacy form) when execution succeeded, **stop and invoke the Skill tool instead.** That hand-off line is reserved for the mechanical-skip case. Printing it after a green run means you skipped on judgment, which is forbidden.
+`/work <ISSUE-ID> --resume` skips Steps 3 and 4. Read the PLAN and SUMMARY, mark every task whose SUMMARY row is `done` and whose commit is reachable from HEAD (`git merge-base --is-ancestor <sha> HEAD`) as complete, and launch `pk-execute` with only the remaining tasks and the current HEAD as `baseSha`. It does not rely on the Workflow runtime's cached replay, which is same-session only and assumes nobody committed in between; a human fix between runs is the normal case. Overwrite the SUMMARY with the merged result.
 
 ## Failure model
 
 | Failure | Behavior |
 |---|---|
-| On dev/main/beta at step 0 | Refuse. Print "Run pk branch <ID> first." |
-| Spec missing required sections, no `--deep` | Warn, ask y/N. |
-| Spec missing required sections, with `--deep` | Refuse. Recommend `/light-spec` or `pk delegate`. |
-| Plan revised >3 times | Refuse. Recommend `pk delegate`. |
-| `--backend=` with any value | Refuse: `Backend selection was removed in v4.0.0 — native is the sole executor. Drop the --backend flag.` |
-| `pk` (or `bin/pk`) binary absent | Warn: `pk not found — run /pipekit-update to fix.` |
-| Subagent returns permission denial | Stop. Print the denial. Do not retry. |
-| Subagent returns ambiguous failure | Print full output. Ask user how to proceed. |
-| Tests fail post-execute | Surface. Don't auto-fix — that's `/verify`. |
+| On dev/main/beta at Step 0 with no ID | Refuse: `Run pk branch <ID> first.` |
+| Spec missing required sections, no `--deep` | Warn, ask y/N |
+| Spec missing required sections, with `--deep` | Refuse; recommend `/light-spec` or `pk delegate` |
+| Plan revised more than 3 times | Refuse; recommend `pk delegate` |
+| `pk` binary absent | Warn: `pk not found — run /pipekit-update to fix.` |
+| `pk-execute` workflow file absent, or `Workflow` tool unavailable | Sequential `Agent` fallback, announced |
+| Workflow returns `stopped` | Print the task's result verbatim; stop; no rollover |
+| Task agent returns `wrong-base` | Someone moved the branch mid-run; stop and show both shas |
+| Integration step fails | Picks stay in place; stop and show the conflicting files or the failing verify |
+| Subagent returns a permission denial | Stop, print it, do not retry |
+| Tests fail post-execute | Surface; do not auto-fix — that is `/verify`'s job |
 
 ## When NOT to use
 
-- No Approved spec yet — `/light-spec` first; `/work` consumes specs, it doesn't write them. Executing an unapproved spec is guesswork crossing a stage boundary.
-- It's a bug — `/pk-bug` (repro gate + regression-test-first discipline `/work` doesn't have).
-- You're in the parent repo — `pk branch <ID>` first; `/work` runs inside the issue's worktree (Step 0 refuses otherwise).
-- Deciding *whether/where* an issue belongs — that's `/brainstorm-review` (disposition) or `/linear-hygiene` (placement), not execution.
-
-## Common Rationalizations
-
-| You're about to say… | The rebuttal |
-|---|---|
-| "This is simple, I don't need the plan step" | You definitely need a plan — simple-feeling changes are where silent regressions live (`pipekit-discipline.md` Red Flags, row 1). tier:quick already collapses the plan to one screen and the verdict to one keystroke; the floor is low on purpose. |
-| "The spec is 90% clear, I'll fill the gap myself" | No stage may introduce guesswork into the next (the core principle). Ambiguity goes *backward* — `revise: <feedback>` at the verdict gate — not forward into code. |
-| "While I'm here, let me also fix…" | Scope hygiene: flag the dependency and stop. Awareness of an adjacent problem ≠ obligation to resolve it — that's a follow-up issue, not a rider commit. |
-| "UAT will obviously pass, I'll run pk done now" | Never. A worker auto-fired `pk done` before the human finished UAT and wiped the worktree mid-test (WIT-451, 2026-05-13). That incident is why the two "ever" bullets below exist. |
+- No Approved spec — `/light-spec` first. Executing an unapproved spec is guesswork crossing a stage boundary.
+- It is a bug — `/pk-bug` has the repro gate and regression-test-first discipline this skill lacks.
+- You are in the parent repo — `pk branch <ID>` first.
+- Deciding whether or where an issue belongs — `/brainstorm-review` (disposition) or `/linear-hygiene` (placement).
 
 ## What this skill does NOT do
 
-- No `--auto` chain (the user is the chain).
-- No PR creation (that's `pk ship`).
-- No NEXT.md write (NEXT.md doesn't exist in v2).
-- No session log write (`/pk-exit` owns the session log).
-- No Linear status writes during work (`pk branch` set In Progress; `pk ship` will set UAT).
-- No `/end-session` invocation.
-- **No `pk done` invocation, ever.** `pk done` is a deliberate human step after PR merge AND interactive UAT — neither of which `/work` has signal for. The WIT-451 canary 2026-05-13 surfaced this: a worker session auto-ran `pk done` before the human finished UAT and wiped the worktree mid-test. Stage 3's UAT gate is non-skippable from inside this skill. If you complete an auto-rollover successfully, the hand-off line ends at `/pk-exit`, never at `pk done`.
-- **No `pk promote` invocation, ever.** Same rationale — promotion is a Stage 4 human step that runs from the parent repo after the user has signed off on UAT and merged. A worker session has no business advancing the workflow past its own scope.
-
-## Comparison with v1
-
-| Concern | v1 (`/launch --auto`) | v2 (`/work`) |
-|---|---|---|
-| Lines of skill prose | 765 | ~330 |
-| Tier system | Quick/Standard/Heavy (label-driven) | Quick/Standard/Heavy (Linear `tier:*` labels, opt-in; restored in v2.6.0) |
-| Verdict loop | 3 rounds + stalemate detection | 1 screen, 3 options, 3-revision hard limit |
-| Auto-chain | Yes (4 hidden agent invocations) | No (user paces) |
-| State writes | Linear (twice), plus a pipeline-state JSON | None (read-only) |
+- No auto-chain past `/verify`: the human is the chain.
+- No PR creation (`pk ship`), no session log (`/pk-exit`), no Linear status writes during work (`pk branch` set In Progress; `pk ship` sets UAT).
+- **No `pk done`, ever.** It is a human step after PR merge and interactive UAT, neither of which this skill can observe. A worker session auto-ran it before UAT finished and wiped the worktree mid-test (WIT-451, 2026-05-13).
+- **No `pk promote`, ever.** Promotion is a Stage 4 human step from the parent repo after UAT sign-off and merge.
