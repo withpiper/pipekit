@@ -1162,7 +1162,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
 | Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
-| Ship | `pk ship` | Push, open PR as **Draft** (v2.6.0+) against integration branch, Linear → UAT |
+| Ship | `pk ship` | Push, open PR as **Draft** (v2.6.0+) against integration branch, Linear → UAT. Refuses off-format commit subjects (v4.35.0; `--force` waives) |
 | Ship Ready | `pk ship --ready` | Open Ready immediately (v2.6.0+; one-shot tiny WITs) |
 | Ready flip | `pk ready [<ID>]` | Flip Draft → Ready (v2.6.0+); fires outside reviewers. v4.32.0+: matches `fix/`/`hotfix/` branches too |
 | Ship + Review | `pk ship --review` | Adds Linear "review-in-flight" comment + reviewer invocation printed |

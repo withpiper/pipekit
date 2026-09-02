@@ -189,6 +189,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   ┌──────────────────────────────────────────────────────────┐
   │ [5] Ship   (still in worktree, still on feature branch)  │
   │     pk ship                 (or --env=<env>)             │
+  │     • refuses off-format commit subjects (--force)       │
   │     • push (idempotent)                                  │
   │     • gh pr create as DRAFT against integration branch   │
   │       (v2.6.0+: Draft is default; --ready opens Ready)   │

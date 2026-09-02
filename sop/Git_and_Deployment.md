@@ -468,6 +468,8 @@ If you're unsure, ask: "Will the next `dev → beta` promote happen within ~24h 
 
 Include issue IDs in commit messages: `feat(grid): add column definitions ({PREFIX}-42)`
 
+**Enforcement (v4.35.0).** Two gates, both shipped by the sync. `.claude/hooks/validate-commit.sh` is registered as a **PreToolUse** hook and denies an off-format `git commit` before it runs (the commit never exists); the same script as **PostToolUse** nudges to amend any commit whose subject the pre-check could not parse. `pk ship` then reads the real subjects in `<base>..HEAD` (merge commits skipped) and refuses to push an off-format one: `--force` waives and posts a Linear audit comment, `PK_COMMITFMT_BYPASS=1` skips it in an emergency. Neither gate sees a raw `git push` of a commit made outside Claude Code; a git-native `commit-msg` hook was considered and rejected as per-clone config that redirects every git hook. Anchor: piper PR #771, 2026-09-02 — the nudge fired, the session pushed anyway, and the unscoped subject is permanent on `dev`.
+
 ---
 
 ## Rollback

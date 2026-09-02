@@ -77,7 +77,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, hands it to the saved `pk-execute` workflow as data — one agent per task, verify before commit, expected-HEAD threading, optional disjoint-file parallel waves with an integration step — and writes the SUMMARY from the structured results. |
 | `/verify` | Pre-deploy gate. |
 | `/security-gate [<ID>]` | Feature-scoped security gate, between `/verify` and `pk ship`. Hard gate on projects with a categories file: `pk ship` refuses without a sha-matched PASS sentinel (`--force-secgate` / `PK_SECGATE_BYPASS=1` to waive; plain `--force` does NOT). |
-| `pk ship [--review] [--ready]` | Push, open Draft PR, Linear → UAT. |
+| `pk ship [--review] [--ready]` | Push, open Draft PR, Linear → UAT. Refuses to push an off-format commit subject (`--force` waives, logs a Linear comment). |
 | `pk ready [<ID>] [--force]` | Flip Draft PR to Ready; outside reviewers run. No Linear state change. Refuses if source or a migration changed after the `/verify` that vouches for the branch, or if the verified sha is unreachable after a rebase (`pk ship`'s gate is point-in-time; post-ship commits went unchecked). `--force` flips anyway and logs a Linear comment. |
 | `pk done <ID> [--merge]` | Verify the merge happened, clean up worktree+branch, post commits to Linear, transition UAT → `In <FirstEnv>` (→ Done on 1-tier). |
 | `/prod-ready [<ID>]` | Production-readiness gate, run once before the final `pk promote`. Hard gate on projects with a checks file: the final promote refuses without its sentinel (`--force` / `PK_PRODREADY_BYPASS=1` to waive). |
