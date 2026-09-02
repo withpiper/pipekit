@@ -2,7 +2,7 @@
 
 > Claude Code hooks are shell commands the harness runs on lifecycle events (prompt submit, tool use, session start, etc.). They belong in the **CI / Hooks** layer of Pipekit's [three-layer enforcement model](Skills_SOP.md#how-skills-work) — hard enforcement that runs without Claude's cooperation.
 
-**v1.1.0** — Last updated: 2026-04-21  *(check-context hook removal)*
+**v4.35.0** — Last updated: 2026-09-02  *(**v4.35.0 — rewritten: Pipekit ships and syncs a project hook.** `validate-commit.sh` under two events, the data-vs-invocation corpus, why there is no `if:` filter. The v1.1.0 text said no hook ships and none are synced; both were false.)*
 
 ---
 

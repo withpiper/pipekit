@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` + `pk ship` Draft default + `pk ready` flip command; `pk done` auto-pulls integration and writes planning SUMMARY)*
+**v4.35.0** — Last updated: 2026-09-02  *(**v4.35.0 — § Commit Messages gains Enforcement:** PreToolUse deny at commit time, `pk ship` refusal at push time, `--force` waiver with audit comment. Carries v2.6.0 — two-phase `pk promote`, `pk ship` Draft default, `pk ready`.)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---

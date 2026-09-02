@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.34.0** — Last updated: 2026-09-02  *(**v4.34.0 — `/work` executes on the saved `pk-execute` workflow.** `workflows/pk-execute.js` is a fourth mirrored source (`scripts/dogfood-sync.sh` → `.claude/workflows/`; consumers get it from `sync-method.sh`). The session parses `.pk-work/<ID>-PLAN.md` and passes the DAG as `args`; the script runs one agent per task, verify before commit, expected-HEAD threading, and disjoint-file parallel waves when the project sets `worktree.baseRef: head`. Carries v4.31.0 — `/security-review` → `/repo-security-review`, genericized; v4.30.0 — the legacy planning layer is gone. Linear is the only initiative surface.)*
+**v4.35.0** — Last updated: 2026-09-02  *(**v4.35.0 — the commit-format check blocks instead of nudging.** PreToolUse deny + `pk ship` refusal; the rule is in the auto-loaded discipline rule. `pk status` / `pk next` refuse without a Linear key. Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow (`workflows/` is a mirrored source). Carries v4.31.0 — `/security-review` → `/repo-security-review`. Linear is the only initiative surface.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
