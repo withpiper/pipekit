@@ -31,6 +31,7 @@ This skill is invoked when the user says:
 
 - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` should be set to `"1"` in `.claude/settings.json` under `env`
 - Linear MCP server should be connected (`mcp__linear-server__*` tools available)
+- Linear's quota is one shared, per-user bucket and **every worker session spawns its own `mcp-linear` server** — four workers plus the orchestrator all draw from it. Keep each worker's Linear traffic to the state transitions its prompt specifies, and never run a whole-board sweep (`/linear-hygiene`, `/sync-linear`) while workers are live. Rules and anchor in `sop/Linear_SOP.md` § Rate limits.
 - Issues need `## Acceptance Criteria` in their description (issues without AC are skipped)
 - The orchestrator creates one real `git worktree add` per agent before spawning. Do NOT rely on the Agent tool's `isolation: "worktree"` parameter — empirically a no-op on current harnesses, which collapses all "parallel" agents into the same checkout and causes sibling branch switches to silently discard each other's uncommitted work. If you cannot run `git worktree add` from the orchestrator, run the queue with `--max-agents 1` (sequential) instead.
 

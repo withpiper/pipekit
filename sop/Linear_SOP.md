@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.30.0** — Last updated: 2026-08-05  *(**v4.30.0 — the legacy planning layer is gone.** `bin/pk`'s read-only fallback to a committed phase file + ID map (phase context and `PLAN.md` finalize) is removed, along with the vestigial `Backend` config key and its whole chain — `pk-init`'s detector, the `render.sh` substitution, the `/work` refusal, and the `pk doctor` echo. Nothing read `Backend` for behavior, and the fallback needed *both* legacy files to fire — no live consumer had either. `/spec-preflight` loses its permanently-dead `phase-detect` probe (four claim categories, not five) and `/review-plan` loses its phase-slug path. Linear is the only initiative surface.)*
+**v4.33.0** — Last updated: 2026-09-02  *(**v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.** Serial calls, ~50 per page, wait once / retry once / then stop; the error is HTTP 400 `RATELIMITED`, not 429. Anchor: SiteLine 2026-08-31. Carries v4.30.0 — the legacy planning layer is gone.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -59,6 +59,21 @@ All verified live during the SiteLine board reorg, 2026-08-02.
 **Sanity-gate before the first write of any batch mutation:** enumerate the target set, then re-survey fresh and compare counts (tolerance ±5) before mutating. A batch that starts from a stale survey is very hard to unwind.
 
 *(Cosmetic, harmless: Linear auto-links bare `table.column` tokens in `content` markdown.)*
+
+### Rate limits — one shared, per-User quota (incident-anchored)
+
+Linear meters requests **per User**, not per key or per process: its docs state that requests by the same user share quota across different API keys. An API key gets **2,500 req/hr**, an OAuth app 5,000, refilled as a **leaky bucket** at `LIMIT/PERIOD` (~42 req/min on a key). Complexity is metered separately (object 1 pt, property 0.1, a connection multiplies its children by the pagination arg; the 10k single-query cap above), so one large page is one request but not a cheap one.
+
+Why this bites Pipekit specifically: **every Claude session spawns its own `mcp-linear` server, 1:1**, and every session is the same user. Worktree workers, the parent-repo session, and a board sweep all draw from one bucket. Anchor: SiteLine 2026-08-31 — three concurrent `/linear-hygiene` sweeps paging 250 exhausted the quota, blocked the board for ~1h, and starved four active worktree workers.
+
+Rules, for any skill or session that reads or writes the board:
+
+- **Never fan out parallel subagents at `linear-server`.** One subagent, serial calls. Batch writes go one at a time.
+- **Page in chunks of ~50**, not 250+.
+- **On rate-limit: wait once, retry once, then STOP and report partial.** Retry loops re-arm the MCP server's flat 60s backoff indefinitely — at ~42 req/min refill, 60s buys back ~42 requests, so a big burst resuming on that timer overdraws instantly and never drains.
+- **The error is HTTP 400 with a `RATELIMITED` code, not 429** — a 429 check misses it.
+- **`isBlocked: false` plus one successful small call is NOT proof the quota recovered.** `linear_getRateLimitStatus` reports only the local cooldown, never remaining quota (Linear's `X-RateLimit-Requests-Remaining` header is not surfaced). It proves "not blocked this instant" only.
+- **Run whole-board sweeps when no `/work` sessions are live.** Check with `pgrep -f 'bin/mcp-linear' | wc -l`.
 
 ---
 
