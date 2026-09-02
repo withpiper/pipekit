@@ -28,8 +28,11 @@ Run `/pr-security-review` when the PR touches **any** of:
 - New or modified RLS policies (`CREATE POLICY`, `ALTER POLICY`)
 - New `GRANT` / `REVOKE` statements
 - Authentication code paths — by path (`/api/auth`, middleware, session handling) **or by content**
-  (a call to a shared auth helper such as `requireUser(` / `requireServiceCaller(`, or an import of
-  a shared auth module), since a handler that authenticates lives anywhere
+  (a call to one of the project's shared auth helpers, or an import of a shared auth module), since a
+  handler that authenticates lives anywhere. The helper names are the project's, not this skill's: the
+  `Keywords:` line of the **Auth** category in the `Security categories` file (`method.config.md`;
+  default `resources/security-categories.md`). Without that file, fall back to the generic set
+  `requireAuth(`, `requireUser(`, `getServerSession(`, `requireServiceCaller(`.
 - Caller-supplied or DB-sourced text interpolated into an LLM prompt (`messages:`, `role: "user"`, `system:`)
 - Server Actions that read or write privileged tables (`audit_log`, `profiles`, etc.)
 - Any code that constructs SQL strings dynamically
@@ -61,8 +64,14 @@ git diff $(git merge-base HEAD origin/dev)..HEAD --name-only | \
 Or content-based:
 
 ```bash
+# Auth helper names come from the project's Security categories file (Auth → Keywords:),
+# falling back to a generic set. Each keyword is escaped for grep -E.
+CATS=$(pk config "Security categories" "resources/security-categories.md")
+AUTH_HELPERS=$(awk '/^## Auth/{f=1} f && /^Keywords:/{sub(/^Keywords:[ ]*/,""); print; exit}' "$CATS" 2>/dev/null \
+  | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$' | sed 's/[][\.*^$()+?{}|]/\\&/g' | paste -sd'|' -)
+AUTH_HELPERS=${AUTH_HELPERS:-'requireAuth\(|requireUser\(|getServerSession\(|requireServiceCaller\('}
 git diff $(git merge-base HEAD origin/dev)..HEAD | \
-  grep -qE 'SECURITY DEFINER|auth\.uid\(\)|CREATE POLICY|REVOKE EXECUTE|GRANT EXECUTE|requireUser\(|requireServiceCaller\(|role: *"user"|messages: *\['
+  grep -qE "SECURITY DEFINER|auth\.uid\(\)|CREATE POLICY|REVOKE EXECUTE|GRANT EXECUTE|${AUTH_HELPERS}|role: *\"user\"|messages: *\["
 ```
 
 ## Execution Steps
@@ -88,7 +97,7 @@ Identify which of the following surfaces the diff touches. Each surface gets its
 | **RLS policies** | `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY` in diff | R1–R6 below |
 | **SECURITY DEFINER functions** | `SECURITY DEFINER` keyword in diff | S1–S8 below |
 | **GRANT/REVOKE** | grant/revoke statements in diff | G1–G3 below |
-| **Auth code** | files matching `auth/`, `middleware`, `session` — **or** a diff calling `requireUser(` / `requireServiceCaller(` / importing a shared auth module, at any path | A1–A5 below |
+| **Auth code** | files matching `auth/`, `middleware`, `session` — **or** a diff calling one of the project's auth helpers (Auth → `Keywords:` in the `Security categories` file; generic fallback set in § When to use) or importing a shared auth module, at any path | A1–A5 below |
 | **Untrusted content in an LLM prompt** | diff interpolates a request-body or DB-sourced string into a prompt (`messages:`, `role: "user"`, `system:`, `max_tokens`) | L1–L4 below |
 | **Server Actions on privileged tables** | actions that read/write `audit_log`, `profiles`, `auth.users` | P1–P4 below |
 
