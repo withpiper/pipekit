@@ -153,7 +153,7 @@ Split every handoff and log on this line:
 
 **The test:** *would re-reading this in three months teach me something, or just recite what state things were in?* Keep the former; the latter is what Linear and harness memory already hold.
 
-This does not delete handoffs — they stay committed cross-machine artifacts. It *slims* them: a 400-line migration runbook becomes a one-page durable record once the migration has run, and the procedural body lives in git history if anyone needs to replay it. See `resources/nebula-piper-pipekit-v2.5.0.1-handoff.md` for a handoff retrofitted to this shape.
+This does not delete handoffs — they stay committed cross-machine artifacts. It *slims* them: a 400-line migration runbook becomes a one-page durable record once the migration has run, and the procedural body lives in git history if anyone needs to replay it. See `resources/nebula-piper-pipekit-v2.5.0.1-handoff.md` (in the Pipekit repo; `resources/` is not synced) for a handoff retrofitted to this shape.
 
 ---
 
