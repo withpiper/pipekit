@@ -254,6 +254,10 @@ Portable skills are maintained in the method repo and synced into projects via `
 
 To update: `./scripts/sync-method.sh [tag]`
 
+### Saved workflows (`workflows/` → `.claude/workflows/`)
+
+A skill that needs deterministic control flow over many subagents — loops, fan-out, stop-on-first-failure — keeps that loop in a Claude Code **saved workflow** rather than in prose: a `workflows/<name>.js` script (an `export const meta` literal first, then a plain-JS body using `agent()` / `parallel()` / `pipeline()`) that the skill invokes by name with the `Workflow` tool, passing its input as structured `args`. The sync copies `workflows/*.js` per-file into the consumer's `.claude/workflows/`, which is a tracked path there, so the script is present in every `pk` worktree; project-local workflows persist across syncs, like agents. Pipekit's own mirror is refreshed by `scripts/dogfood-sync.sh`. `/work`'s `pk-execute` is the worked example. Before editing a script, load the `workflow-authoring` bundled skill — scripts have no filesystem access, `Date.now()` throws, and `meta` must stay a pure literal or the `/<name>` command disappears.
+
 ### Declaring project-specific skills (`pipekit/.local-skills`)
 
 The sync flags any `.claude/skills/` entry that doesn't exist upstream — it can't otherwise tell a project's own skill from a portable skill that upstream removed or renamed. Declare your project-specific skills in a committed manifest, one name per line (`#` comments allowed):

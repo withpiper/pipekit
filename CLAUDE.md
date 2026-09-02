@@ -44,13 +44,13 @@ Native-on-Workflow is the sole executor and the initiative surface is Linear-nat
 - **Pipekit owns** Linear issues, the **initiative surface** (Linear Initiatives `i{N}.` → Projects `I{N}.P{N}.` → Issues; v4.1.0, project `I{N}.` prefix added v4.5.0), strategy docs, and `method.config.md`. "What's next?" is read live from Linear via `pk next` (derives the current initiative from the initiative/project hierarchy); v2 retired the `NEXT.md` mirror, v4.1.0 retired `PHASES.md`/`linear-map.json`.
 - **The roadmap is authored directly into Linear**, at `/roadmap-create` — the `i{N}.`/`I{N}.P{N}.` hierarchy *is* the roadmap.
 - **Both levels are completable** (v4.28.0, the lanes model): an initiative is a release phase, a project is a **lane of ~3–8 issues**, and uncut work rests with **no project plus an `Area:` label**. The walk reads *into* a project but never *inside* one, so a project that keeps accepting work hides its contents from `pk next`/`pk status`. Completability lives at the project level; eternity lives at the theme/label level.
-- **`/work` is the only executor entry point.** It plans inline (parallel `Agent` grounding) and executes on the native-on-Workflow backend, keeping Linear and the `pk *` state in sync. There is no backend selection.
+- **`/work` is the only executor entry point.** It plans inline (parallel `Agent` grounding) and executes on the saved `pk-execute` workflow (`workflows/pk-execute.js`, synced to consumers' `.claude/workflows/`) — the native-on-Workflow backend — keeping Linear and the `pk *` state in sync. There is no backend selection.
 
 Full initiative model in `method.md` (§ Initiative Surface Ownership).
 
 ## Editing Skills
 
-**Edit the source, then run `scripts/dogfood-sync.sh`.** Claude Code loads skills and rules from `.claude/`, but in this repo those are *generated mirrors* of `skills/`, `templates/rules/`, and `agents/` — gitignored, and refreshed only by that script (consuming projects get theirs from `sync-method.sh`). Editing `.claude/` directly changes nothing that ships and is silently reverted on the next refresh. A stale mirror means your own `/verify`, `/work`, etc. are running old code: measured 2026-07-31, every mirrored skill had drifted, six were missing, and `.claude/skills/verify/SKILL.md` still carried a gate bug the same release had fixed. `tests/pk-smoke.sh` fails on drift locally and skips on CI, where the mirrors don't exist.
+**Edit the source, then run `scripts/dogfood-sync.sh`.** Claude Code loads skills and rules from `.claude/`, but in this repo those are *generated mirrors* of `skills/`, `templates/rules/`, `agents/`, and `workflows/` — gitignored, and refreshed only by that script (consuming projects get theirs from `sync-method.sh`). Editing `.claude/` directly changes nothing that ships and is silently reverted on the next refresh. A stale mirror means your own `/verify`, `/work`, etc. are running old code: measured 2026-07-31, every mirrored skill had drifted, six were missing, and `.claude/skills/verify/SKILL.md` still carried a gate bug the same release had fixed. `tests/pk-smoke.sh` fails on drift locally and skips on CI, where the mirrors don't exist.
 
 Skills live in `skills/{name}/SKILL.md` with YAML frontmatter (`name`, `description`). Portable skills must read `method.config.md` for project-specific values — never hardcode Linear IDs, team names, paths, or **model names**: subagent model + effort comes from the `method.config.md § Model Policy` roles (v4.13.0+), cited as "role per § Model Policy, default `X`" so the skill still works when the section is absent. Skills that reference `skill.json` use it for metadata only.
 
@@ -74,7 +74,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 |---------|---------|
 | `pk next` | What's next, read live from Linear — derives the current initiative, groups issues by status with per-group hints. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
-| `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, executes on the Workflow primitive — atomic commit per task, verify-before-integrate. |
+| `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, hands it to the saved `pk-execute` workflow as data — one agent per task, verify before commit, expected-HEAD threading, optional disjoint-file parallel waves with an integration step — and writes the SUMMARY from the structured results. |
 | `/verify` | Pre-deploy gate. |
 | `/security-gate [<ID>]` | Feature-scoped security gate, between `/verify` and `pk ship`. Hard gate on projects with a categories file: `pk ship` refuses without a sha-matched PASS sentinel (`--force-secgate` / `PK_SECGATE_BYPASS=1` to waive; plain `--force` does NOT). |
 | `pk ship [--review] [--ready]` | Push, open Draft PR, Linear → UAT. |

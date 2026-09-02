@@ -301,6 +301,10 @@ so un-migrated projects see no behavior change.
   the hardest review work, `low` sufficient for mechanical lookups on current-generation models).
   Effort calibration shifts between model generations — re-validate rather than assuming the
   mapping ports unchanged.
+- **The execution row may be left blank to inherit the session model.** On current frontier models,
+  `low` / `medium` effort on the session model can cost less *per completed task* than a smaller
+  model at `medium` (fewer retries, fewer verify failures). Measure before flipping — the silent-miss
+  rubric still decides the tier; this only says which model to put on the scale.
 
 ## Pre-Deploy Gate
 

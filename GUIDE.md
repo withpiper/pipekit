@@ -534,7 +534,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 
 **Execution** is native-on-Workflow — the sole executor as of v4.0.0:
 
-`/work` plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then executes on the Workflow primitive — atomic commit per task with verify-before-integrate — writing a `.pk-work/<ID>-SUMMARY.md` trail. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). There is no backend selection — native-on-Workflow is the only executor (a stale `Backend:` row in `method.config.md` is ignored).
+`/work` plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then hands it as data to the saved `pk-execute` workflow (`.claude/workflows/pk-execute.js`, synced by Pipekit) — one agent per task, verify before commit, the expected HEAD threaded task to task, optional disjoint-file parallel waves with an integration step — and writes the `.pk-work/<ID>-SUMMARY.md` trail from the structured results. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). There is no backend selection — native-on-Workflow is the only executor (a stale `Backend:` row in `method.config.md` is ignored).
 
 `--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
 
@@ -944,7 +944,7 @@ Terminal:
 
 ## Execution Model
 
-**Native-on-Workflow is the sole executor.** `/work` plans the issue inline (parallel `Agent` calls for grounding) and executes on Claude Code's Workflow primitive — atomic commit per task, verify-before-integrate. There is no backend selection and no separate planning service: planning and execution both run in your Claude session, against the spec read live from Linear.
+**Native-on-Workflow is the sole executor.** `/work` plans the issue inline (parallel `Agent` calls for grounding) and executes on Claude Code's Workflow primitive through the saved `pk-execute` script — atomic commit per task, verify before commit, integrate in dependency order. There is no backend selection and no separate planning service: planning and execution both run in your Claude session, against the spec read live from Linear.
 
 The roadmap's initiative order lives in **Linear** (`i{N}.` Initiatives → `P{N}.` Projects, derived live), authored directly by `/roadmap-create` — there is no scaffolded phase file to initialize. `pk next`/`pk status` derive the current initiative live from that hierarchy.
 
@@ -952,7 +952,7 @@ The roadmap's initiative order lives in **Linear** (`i{N}.` Initiatives → `P{N
 |---------------|------|-----------|---------|
 | Stage 0.5 | `/roadmap-create` authors the Linear `i{N}.`/`P{N}.` hierarchy | Always | Populate roadmap in Linear |
 | Stage 2 (planning) | `/work` inline planning | Always | Generate the plan from the spec — planning runs in-session, no separate planning service |
-| Stage 3 (execute) | native-on-Workflow | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify-before-integrate |
+| Stage 3 (execute) | native-on-Workflow (`pk-execute`) | Always | Execute tasks on the Workflow primitive — atomic commit per task, verify before commit, integrate in order |
 | Anytime | `pk status` | Always | Project progress dashboard, derived live from Linear |
 
 The plan-safety net is per-task verify-before-integrate (`/work`) plus the `/verify` gate and the antagonistic review gates (`/review-plan`, `/pr-security-review`), not a separate QA agent.
