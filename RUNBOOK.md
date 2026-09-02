@@ -343,6 +343,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • posts journal highlights to Linear                 │
   │     • Linear: UAT → In <FirstEnv> (or → Done for 1-tier) │
   │     • removes worktree, deletes local branch             │
+  │     • finds any prefix/<ID>-* (PK_BRANCH_PREFIXES)       │
   └──────────────────────────────────────────────────────────┘
        │
        ▼

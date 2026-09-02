@@ -3785,6 +3785,9 @@ Subcommands:
 
 All subcommands are idempotent. Recovery = rerun the command.
 
+Env:    PK_BRANCH_PREFIXES="feature fix hotfix refactor chore docs"   (default) — the branch prefixes
+        pk done / pk ready search for <prefix>/<ID>-*; override to match another naming convention.
+
 Config: method.config.md in repo root. v2 keys are optional (sensible defaults).
 North star: safe and frictionless. Helps, never adds work.
 EOF
