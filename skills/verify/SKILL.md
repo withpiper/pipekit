@@ -345,7 +345,9 @@ The reasoning: these are the exact surfaces where shipping without adversarial r
 
 Use `subagent_type: "general-purpose"` (same agent as QA — only the prompt differs).
 
-Configure with `allowed-tools: Read, Bash, Write`. Run it on the **plan-review / adversarial** tier per `method.config.md § Model Policy` (default `opus`, effort `xhigh`) — adversarial review benefits from deeper reasoning.
+Configure with `allowed-tools: Read, Bash, Write`. Run it on the **plan-review / adversarial** tier per `method.config.md § Model Policy` (default `opus`, effort `xhigh`) — adversarial review benefits from deeper reasoning. Set `ADVERSARIAL_TIER` to the model that role resolves to before spawning, and `ADVERSARIAL_RAN_ON` to the model that actually produced `adversarial.md` afterwards (empty if nothing did); Steps 6 and 7 read both.
+
+**The tier holds (v4.36.0).** If the subagent on that tier dies before writing its file — API rate limit, timeout, killed — retry it on the **same** tier (twice, a minute apart) before doing anything else. A run on a lower tier is not the adversarial review: if you fall back to one, or exhaust the retries and skip it, that is a flag in its own right regardless of how many findings come back (Flag check E), and the reality-check's Antagonistic section names the tier that actually ran. Anchor: SiteLine PIPER-412, 2026-09-02 — the opus run was rate-limited, the sonnet fallback returned three findings, and the two that decided the ship (the new cells never `ROUND` while every cached value is cent-rounded; a multiplier the spec excludes) were both missed. The identical diff reviewed on opus surfaced them in cycle one.
 
 Use Task tool with:
 
@@ -540,6 +542,15 @@ if [ -n "$ADVERSARIAL_FINDING_COUNT" ] && [ "$ADVERSARIAL_FINDING_COUNT" -gt 0 ]
 fi
 ```
 
+A run below the configured tier — or none at all after the retries in Step 5a — is a flag on its own, even with zero findings (v4.36.0):
+
+```bash
+if [ "$RUN_ADVERSARIAL" = "true" ] && [ "${ADVERSARIAL_RAN_ON:-}" != "$ADVERSARIAL_TIER" ]; then
+  echo "FLAG: antagonistic review ran on ${ADVERSARIAL_RAN_ON:-nothing}, below the configured tier ($ADVERSARIAL_TIER) — not a substitute; re-run /verify --review when the tier is available"
+  [ "$TIER" != "quick" ] && printf 'FLAG: antagonistic review below tier: ran on %s, configured %s\n' "${ADVERSARIAL_RAN_ON:-none}" "$ADVERSARIAL_TIER" >> "$VERIFY_DIR/evidence.txt"
+fi
+```
+
 Adversarial findings are advisory — they do not auto-downgrade the QA verdict — but they always warrant a human eye before ship. The RECONCILE step (per `pipekit-discipline.md` § Completion Claims) is the user's: AC misread → AC wrong (amend the AC) → Valid actionable → Valid trade-off → Noise.
 
 ### Flag check F — Security-sensitive change (auto-gated; v4.4.0)
@@ -647,6 +658,8 @@ Then **append** the sections below to that file (these are yours to render — t
 
 ## Antagonistic review
 
+Tier: <ADVERSARIAL_TIER / effort> — ran on: <ADVERSARIAL_RAN_ON, or "not run">
+
 <inline contents of `$VERIFY_DIR/adversarial.md`, or "Not run (tier:<TIER>, no --review).">
 
 ## Migration review
@@ -746,6 +759,10 @@ Reality check:   <VERIFY_DIR>/reality-check.md
 Verify complete: <VERIFY_DIR>/verify-complete.md  (present only on PASS)
 ```
 
+### Every cited check is in this run's evidence.txt (v4.36.0)
+
+The hand-off, the reality-check, and any Linear or PR text written from them may cite only checks that appear as a `==> $` block in **this run's** `evidence.txt` — the configured gate rows and any extra leg you ran (an artifact build, an E2E suite, a checker on fresh exports). `evidence.txt` is overwritten per run (Step 2), so a check that was not re-run at this sha is absent by construction. A result from an earlier run, from before a session resume, or from a scratchpad that no longer exists is not evidence at this sha: re-run it, or say it was not run. Anchor: SiteLine PIPER-412, 2026-09-02 — a session resumed after a machine pause closed with "fresh artifacts pass the checker, 1,940 checks", a claim from the pre-pause `/work` step; the artifacts had been wiped with the scratchpad, and the run's `evidence.txt` had no such leg.
+
 ### Auto-ship rollover (Pass + zero flags only, only when invoked with --auto-ship)
 
 Auto-ship fires when **all three** conditions hold:
@@ -804,6 +821,8 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | Spec has no AC | QA subagent should report "AC missing" as Fail; user gets clear next-action. |
 | `$VERIFY_DIR` unwritable (perms, disk full) | Print error, fall through to stdout-only mode for this run (tier downgraded to virtual). Day 3 gate will block ship in this case since `verify-complete.md` cannot be written. |
 | No `tier:` label, or Linear unreachable | Step 0 defaults to `tier:standard` and prints a visible warning that it's guessing — evidence layer still written. |
+| Session resumed mid-run (context compacted, scratchpad gone) | Re-run from Step 2. Nothing from before the resume is evidence at this sha — see Step 9. |
+| Adversarial subagent dies (rate limit, timeout) | Retry on the same tier twice; a lower-tier or skipped run is flagged as such (Step 5a, Flag check E). |
 
 ## When NOT to use
 
@@ -817,6 +836,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | You're about to say… | The rebuttal |
 |---|---|
 | "It's a small change — skip the gate" | The gate is the gate. Simple-feeling changes are where silent regressions live (`pipekit-discipline.md` Red Flags, row 1 — it's row 1 because this excuse keeps recurring). |
+| "The artifacts passed before the pause / the checker was green earlier" | Not at this sha, and not in this run's `evidence.txt`. Re-run the leg or report it as not run (Step 9). |
 | "I already ran the tests earlier this session" | The evidence layer exists because *"Done" kept overstating reality* — issues marked shipped that git never built (v2.7.0-rc5 log-mining, both consumers). Exit codes in `evidence.txt` at this SHA, or it didn't happen. |
 | "CI will catch it on the PR anyway" | CI is the backstop, not the gate. A red PR wastes the reviewer pass and blocks the merge lane — `/verify` is cheaper than a bounced PR. |
 | "The preview/dashboard looks right" | A vendor-UI affirmative state is a *claim*, not evidence of effect (Red Flags). Closing on a green checkbox you never exercised is the false-ship pattern. |

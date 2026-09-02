@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.34.0** — Last updated: 2026-09-02  *(**v4.34.0 — saved workflows are a synced artifact.** `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
+**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — the Model Policy roles have data.** The PIPER-412 A/B evidence sits under § Pinning models; the reviewer tier decides what ships. Carries v4.34.0 — saved workflows are a synced artifact. `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
 
 ---
 
@@ -241,6 +241,8 @@ Any skill that invokes `Agent()` should **explicitly pass `model:`** rather than
 | Plan review / adversarial | `plan-reviewer`, antagonistic reviewer, spec reviewers | `opus` | `xhigh` |
 
 **What earns a tier is the cost of a silent miss, not task difficulty.** Verification, adversarial review, and sign-off gates run at the top tiers because their failure mode is invisible — a miss ships. Execution runs mid-tier even when the task is hard, because verify, tests, and review sit behind it and fail loudly. Grounding lookups run cheapest — their errors surface immediately on use. When assigning a role to a new spawn site (or arguing a skill deserves an upgrade), derive from this rubric, not from felt difficulty.
+
+*(Evidence, 2026-09-02 — SiteLine PIPER-412 A/B, `resources/ab-work-PIPER-412-2026-09-02.md`: execution on `sonnet`/`medium` produced the same workbook formulas as the same plan executed inline on the session's frontier model; the cent-parity and multiplier defects both arms shipped were caught by the `opus` adversarial reviewer and missed by a `sonnet` one on the identical diff. The tier that decides what ships is the reviewer's, not the executor's — `/verify` holds it as of v4.36.0.)*
 
 When a skill spawns a subagent, spell out the role and its default inline — e.g. *"execution tier per `method.config.md § Model Policy`, default `sonnet`"* — so the skill still works in a project whose config predates the section.
 

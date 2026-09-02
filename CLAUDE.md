@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.35.0** — Last updated: 2026-09-02  *(**v4.35.0 — the commit-format check blocks instead of nudging.** PreToolUse deny + `pk ship` refusal; the rule is in the auto-loaded discipline rule. `pk status` / `pk next` refuse without a Linear key. Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow (`workflows/` is a mirrored source). Carries v4.31.0 — `/security-review` → `/repo-security-review`. Linear is the only initiative surface.)*
+**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.** A rate-limited opus review is retried on opus; a lower-tier or skipped run is a flag even with zero findings, and the reality-check names the tier that ran. Anything cited must be a `==> $` block in this run's `evidence.txt`. `/pr-security-review` reads wrapped `Keywords:` lines. Carries v4.35.0 — the commit-format check blocks instead of nudging (PreToolUse deny + `pk ship` refusal). Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.35.0** — Last updated: 2026-09-02 07:35  *(**v4.35.0 — the commit-format check blocks instead of nudging.** `validate-commit.sh` is registered as PreToolUse too and denies an off-format `git commit` before it runs; the PostToolUse nudge says amend now; the rule is in the auto-loaded `pipekit-discipline.md`; and `pk ship` refuses to push a branch carrying an off-format subject (`--force` waives with a Linear comment). Anchor: piper PR #771 — the nudge fired, a raw push followed, the subject is permanent. Also: `pk status` / `pk next` refuse without a Linear key instead of printing an empty board. Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
+**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.** A rate-limited opus review is retried on opus; a lower-tier or skipped run is a flag even with zero findings, and the reality-check names the tier that ran. Anything cited must be a `==> $` block in this run's `evidence.txt`. `/pr-security-review` reads wrapped `Keywords:` lines. Carries v4.35.0 — the commit-format check blocks instead of nudging (PreToolUse deny + `pk ship` refusal). Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
 
 ---
 
