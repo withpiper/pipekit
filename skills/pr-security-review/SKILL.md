@@ -65,9 +65,11 @@ Or content-based:
 
 ```bash
 # Auth helper names come from the project's Security categories file (Auth → Keywords:),
-# falling back to a generic set. Each keyword is escaped for grep -E.
+# falling back to a generic set. Each keyword is escaped for grep -E. A Keywords: line
+# may wrap onto indented continuation lines (SiteLine's Auth block does) — join them,
+# or the second half of the signals never reaches the grep (v4.36.0).
 CATS=$(pk config "Security categories" "resources/security-categories.md")
-AUTH_HELPERS=$(awk '/^## Auth/{f=1} f && /^Keywords:/{sub(/^Keywords:[ ]*/,""); print; exit}' "$CATS" 2>/dev/null \
+AUTH_HELPERS=$(awk '/^## Auth/{f=1} f && /^Keywords:/{sub(/^Keywords:[ ]*/,""); k=$0; g=1; next} g && /^[ \t]+[^ \t]/{sub(/^[ \t]+/,""); k=k ", " $0; next} g{print k; p=1; exit} END{if (g && !p) print k}' "$CATS" 2>/dev/null \
   | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$' | sed 's/[][\.*^$()+?{}|]/\\&/g' | paste -sd'|' -)
 AUTH_HELPERS=${AUTH_HELPERS:-'requireAuth\(|requireUser\(|getServerSession\(|requireServiceCaller\('}
 git diff $(git merge-base HEAD origin/dev)..HEAD | \
