@@ -110,6 +110,7 @@ Write code that reads like the surrounding code — match its comment density, n
 
 ## Commit discipline
 
+- **Subject format is `{type}({scope}): {desc}`, scope required.** `docs(runbook): …`, never `docs: …`. Types: feat, fix, test, refactor, perf, docs, style, chore (table in `sop/Git_and_Deployment.md` § Commit Messages). Enforced twice: a PreToolUse hook denies an off-format `git commit` before it runs, and `pk ship` refuses to push a branch carrying one (`--force` waives, with a Linear audit comment). A subject that slips past both onto a protected branch is permanent, since squash is off.
 - **One atomic change per commit.** If you can't describe it in one sentence, split it.
 - **Commit messages say why, not what.** The diff says what.
 - **Don't amend published commits.** Create new commits instead.

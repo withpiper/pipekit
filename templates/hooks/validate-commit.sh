@@ -1,23 +1,43 @@
 #!/bin/bash
 set -u
-# Pipekit-owned PostToolUse hook: validate git commit message format.
-# Non-blocking feedback only (always exit 0). Surfaces an advisory nudge to the
-# model when a commit subject does not match {type}({scope}): {desc}.
-# Pairs with the commit-format rule in .claude/rules + CLAUDE.md.
+# Pipekit-owned commit-format hook: {type}({scope}): {desc}, scope required.
+#
+# Registered TWICE in the consuming project's .claude/settings.json (the sync
+# does this idempotently, one entry per event; see scripts/sync-method.sh):
+#   PreToolUse  (matcher Bash) — DENIES an off-format `git commit` before it
+#               runs, via permissionDecision:"deny" carrying the reason. The
+#               commit never happens, so there is nothing to amend. (v4.35.0)
+#   PostToolUse (matcher Bash) — advisory nudge after a commit the pre-check
+#               could not see (a subject the parser could not extract). Tells
+#               the model to amend NOW, before any push. Always exit 0; a
+#               PostToolUse hook cannot block or undo — the tool already ran.
+# The rule this enforces is stated in .claude/rules/pipekit-discipline.md
+# § Commit discipline (auto-loaded); the type table is in
+# sop/Git_and_Deployment.md § Commit Messages. pk ship re-checks the REAL
+# subjects on the branch before pushing, so a commit that slips past both hook
+# events still cannot ship without --force.
+#
+# No `if:` filter on the registration: permission-rule patterns are matched
+# per `&&`-separated subcommand, and the hooks docs do not say whether a hook
+# `if` fires on any-match or all-match — so `cd dir && git commit …` (the
+# usual shape in a session whose cwd resets between calls) might never reach
+# the hook. The cheap `grep -q "git commit"` below is the filter instead.
 #
 # Synced to consumers at .claude/hooks/validate-commit.sh by scripts/sync-method.sh.
-# Register it in the consuming project's .claude/settings.json:
-#   { "hooks": { "PostToolUse": [ { "matcher": "Bash", "hooks": [
-#       { "type": "command",
-#         "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate-commit.sh",
-#         "timeout": 10 } ] } ] } }
+# Manual registration (both events take the same entry):
+#   { "hooks": { "PreToolUse":  [ { "matcher": "Bash", "hooks": [ { "type": "command",
+#       "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate-commit.sh", "timeout": 10 } ] } ],
+#                "PostToolUse": [ ...the same entry... ] } }
 
-# Require jq for JSON output — fail-silent if missing (non-blocking hook)
+# Require jq for JSON in and out — fail-silent if missing. On PostToolUse that
+# was always advisory; on PreToolUse silence is "no decision", so the normal
+# permission flow continues.
 if ! command -v jq &>/dev/null; then
   exit 0
 fi
 
 INPUT=$(cat)
+EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // "PostToolUse"')
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
 
 # Only check git commit commands
@@ -120,12 +140,29 @@ $SUBJECTS
 EOF
 
 if [ -n "$BAD" ]; then
-  jq -n --arg msg "$BAD" '{
-    "hookSpecificOutput": {
-      "hookEventName": "PostToolUse",
-      "additionalContext": ("Commit message does not match format {type}({scope}): {desc}. Got: " + $msg)
-    }
-  }'
+  case "$EVENT" in
+    PreToolUse)
+      # Deny before the commit exists. exit 0 + JSON is the documented path;
+      # the reason reaches the model verbatim.
+      jq -n --arg msg "$BAD" --arg types "$VALID_TYPES" '{
+        "hookSpecificOutput": {
+          "hookEventName": "PreToolUse",
+          "permissionDecision": "deny",
+          "permissionDecisionReason": ("Commit subject does not match {type}({scope}): {desc} — the scope is required. Nothing was committed. Re-run git commit with a scoped subject; types: " + $types + ". Got: " + $msg)
+        }
+      }'
+      ;;
+    *)
+      # The commit already exists (the pre-check could not see its subject).
+      # Make the nudge an instruction, not a report: it is still local.
+      jq -n --arg msg "$BAD" '{
+        "hookSpecificOutput": {
+          "hookEventName": "PostToolUse",
+          "additionalContext": ("Commit subject does not match {type}({scope}): {desc} — the scope is required. The commit is still local: run git commit --amend with a scoped subject NOW, before any push. An off-format subject on a protected branch is permanent (squash is off), and pk ship will refuse it. Got: " + $msg)
+        }
+      }'
+      ;;
+  esac
 fi
 
 exit 0

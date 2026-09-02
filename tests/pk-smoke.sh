@@ -1110,6 +1110,109 @@ out=$(pr "$OTHER_SHA"); rc=$?
 cleanup
 FIXTURE=""
 
+# ── CLI tests: commit-format ship gate (v4.35.0) ─────────────────────────────
+# pk ship reads the REAL subjects the branch adds over its base and refuses to
+# push an off-format one. The hook denies at commit time; this catches what the
+# hook never saw (a human commit, or one made outside Claude Code). Same escapes
+# as the verify gate: --force logs a Linear comment, PK_COMMITFMT_BYPASS=1 skips.
+
+echo "== commit-format ship gate (E2E) =="
+
+make_fixture
+write_config '```
+Integration branch: main
+Ship environments: dev,beta,main
+```'
+git -C "$FIXTURE" checkout -q -b feat/ABC-321-subjects
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "docs: runbook without a scope"
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "feat(gate): a scoped one"
+# The base ref the gate compares against: a fetched origin/main, simulated.
+git -C "$FIXTURE" update-ref refs/remotes/origin/main "$(git -C "$FIXTURE" rev-parse main)"
+CF_HEAD=$(git -C "$FIXTURE" rev-parse HEAD)
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-321"
+printf 'sha: %s\n' "$CF_HEAD" > "$FIXTURE/Logs/Verify/20260101/ABC-321/verify-complete.md"
+
+# (a) One off-format subject → refuse before push, naming the offender only.
+: > "$GH_LOG"
+run_pk ship
+g=0; p=0; scoped=0
+case "$RUN_OUT" in *"do not match {type}({scope}): {desc}"*) g=1 ;; esac
+case "$RUN_OUT" in *Pushing*) p=1 ;; esac
+case "$RUN_OUT" in *"a scoped one"*) scoped=1 ;; esac
+if [ $RUN_CODE -ne 0 ] && [ $g -eq 1 ] && [ $p -eq 0 ] && [ ! -s "$GH_LOG" ]; then
+  ok "ship gate: off-format subject refuses before push/gh"
+else
+  fail "ship gate: off-format subject refuses before push/gh" "rc=$RUN_CODE gate_msg=$g pushed=$p gh='$(cat "$GH_LOG")'"
+fi
+case "$RUN_OUT" in
+  *"runbook without a scope"*) ok "ship gate: refusal names the offending subject" ;;
+  *) fail "ship gate: refusal names the offending subject" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+[ $scoped -eq 0 ] && ok "ship gate: the scoped commit is not listed" || fail "ship gate: the scoped commit is not listed" "output: $(echo "$RUN_OUT" | head -4)"
+
+# (b) --force → proceeds to push (fails with no real remote; we assert the gate let it through).
+run_pk ship --force
+case "$RUN_OUT" in
+  *"bypassed via --force"*) ok "ship gate: --force waives the format gate" ;;
+  *) fail "ship gate: --force waives the format gate" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+
+# (c) PK_COMMITFMT_BYPASS=1 → gate skipped entirely.
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_COMMITFMT_BYPASS=1 "$PK" ship 2>&1)
+case "$RUN_OUT" in
+  *"commit-format gate bypassed via PK_COMMITFMT_BYPASS"*) ok "ship gate: PK_COMMITFMT_BYPASS=1 skips the format gate" ;;
+  *) fail "ship gate: PK_COMMITFMT_BYPASS=1 skips the format gate" "output: $(echo "$RUN_OUT" | head -4)" ;;
+esac
+
+# (d) Merge commits are skipped: "Merge branch ..." must not trip the gate.
+git -C "$FIXTURE" checkout -q main
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "chore(main): advance"
+git -C "$FIXTURE" update-ref refs/remotes/origin/main "$(git -C "$FIXTURE" rev-parse main)"
+git -C "$FIXTURE" checkout -q feat/ABC-321-subjects
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t merge -q --no-ff -m "Merge branch 'main' into feat/ABC-321-subjects" main
+CF_BAD_NOW=$(cd "$FIXTURE" && source "$PK" && pk_offformat_subjects origin/main)
+case "$CF_BAD_NOW" in
+  *"Merge branch"*) fail "ship gate: merge commits are skipped" "listed: $CF_BAD_NOW" ;;
+  *"runbook without a scope"*) ok "ship gate: merge commits are skipped, real offenders still listed" ;;
+  *) fail "ship gate: merge commits are skipped, real offenders still listed" "listed: $CF_BAD_NOW" ;;
+esac
+
+# (e) No base to compare against (fresh clone, no remote, no local base) → skip, not crash.
+CF_NONE=$(cd "$FIXTURE" && source "$PK" && pk_offformat_subjects "")
+[ -z "$CF_NONE" ] && ok "ship gate: empty base ref is a skip" || fail "ship gate: empty base ref is a skip" "got: $CF_NONE"
+
+cleanup
+
+# ── Board reads fail loudly without a Linear key (v4.35.0) ───────────────────
+# cmd_status and cmd_next swallow per-state read errors so one flaky call can't
+# blank the board — which meant an UNSET key rendered every column "(none)",
+# indistinguishable from an empty board. Found 2026-09-02: both consumers read
+# as idle while carrying 290 open issues between them.
+
+echo "== board reads fail loudly without a Linear key =="
+make_fixture
+write_config '```
+Team name: Piper
+Integration branch: main
+```'
+RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" status 2>&1); RUN_CODE=$?
+case "$RUN_OUT" in
+  *"Linear API key not set"*)
+    [ $RUN_CODE -ne 0 ] && ok "status: missing key is an error, not an empty board" || fail "status: missing key is an error, not an empty board" "rc=0 with error text" ;;
+  *) fail "status: missing key is an error, not an empty board" "rc=$RUN_CODE out=$(echo "$RUN_OUT" | head -3)" ;;
+esac
+case "$RUN_OUT" in
+  *"(none)"*) fail "status: no phantom empty columns without a key" "printed (none)" ;;
+  *) ok "status: no phantom empty columns without a key" ;;
+esac
+RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" next 2>&1); RUN_CODE=$?
+case "$RUN_OUT" in
+  *"Linear API key not set"*)
+    [ $RUN_CODE -ne 0 ] && ok "next: missing key is an error, not 'No Approved issues'" || fail "next: missing key is an error" "rc=0 with error text" ;;
+  *) fail "next: missing key is an error, not 'No Approved issues'" "rc=$RUN_CODE out=$(echo "$RUN_OUT" | head -3)" ;;
+esac
+cleanup
+
 # ── Unit tests: verify-drift (ship→merge window, v4.27.0) ────────────────────
 # `pk ship` proves the sentinel matched at ship time; commits landing during PR
 # review move HEAD past it and nothing re-checks. Anchor: SiteLine PIPER-490
@@ -1486,7 +1589,7 @@ else
 
   out=$(hook_run '{"tool_input":{"command":"git commit -m \"added a thing\""}}')
   case "$out" in
-    *"does not match format"*) ok "hook: bad subject nudges" ;;
+    *"does not match {type}({scope})"*) ok "hook: bad subject nudges" ;;
     *) fail "hook: bad subject nudges" "output: $out" ;;
   esac
 
@@ -1565,7 +1668,82 @@ else
 
   printf '%s' '{"tool_input":{"command":"git commit -m \"nope\""}}' | bash "$HOOK" >/dev/null 2>&1
   [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
+
+  # ── PreToolUse (v4.35.0): the same script DENIES an off-format commit before it
+  # runs. Anchor: piper PR #771, 2026-09-02 — the PostToolUse nudge fired, the
+  # session pushed with a raw `git push` anyway, and an unscoped subject is now
+  # permanent on a protected branch (squash is off). PostToolUse cannot block.
+  pre() { printf '%s' "$1" | bash "$HOOK" 2>&1; }   # $1 = PreToolUse JSON on stdin
+
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"git commit -m \"docs: no scope\""}}')
+  case "$out" in
+    *'"permissionDecision": "deny"'*) ok "hook/pre: bad subject is denied" ;;
+    *) fail "hook/pre: bad subject is denied" "output: $out" ;;
+  esac
+  case "$out" in
+    *'"hookEventName": "PreToolUse"'*) ok "hook/pre: deny names the PreToolUse event" ;;
+    *) fail "hook/pre: deny names the PreToolUse event" "output: $out" ;;
+  esac
+
+  # The incident shape: a compound command whose commit is not command-initial.
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"cd ~/Projects/piper && git commit -m \"docs: runbook records X\""}}')
+  case "$out" in
+    *'"permissionDecision": "deny"'*) ok "hook/pre: cd && git commit (incident shape) is denied" ;;
+    *) fail "hook/pre: cd && git commit (incident shape) is denied" "output: $out" ;;
+  esac
+
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"git commit -m \"feat(work): scoped\""}}')
+  [ -z "$out" ] && ok "hook/pre: good subject is silent (no decision)" || fail "hook/pre: good subject is silent (no decision)" "output: $out"
+
+  # A false positive now BLOCKS a tool call, so the data-vs-invocation corpus must
+  # stay silent under PreToolUse too.
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"grep -rn \"git commit\" docs/"}}')
+  [ -z "$out" ] && ok "hook/pre: grep-pattern data does not block" || fail "hook/pre: grep-pattern data does not block" "output: $out"
+
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"gh pr comment 1 --body \"$(cat <<EOF\nFix: git commit -m \\\"feat: x\\\" now works.\nEOF\n)\""}}')
+  [ -z "$out" ] && ok "hook/pre: heredoc prose does not block" || fail "hook/pre: heredoc prose does not block" "output: $out"
+
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"git commit -F- <<EOF\nbad subject no scope\nbody\nEOF"}}')
+  case "$out" in
+    *'"permissionDecision": "deny"'*) ok "hook/pre: -F- heredoc bad subject is denied" ;;
+    *) fail "hook/pre: -F- heredoc bad subject is denied" "output: $out" ;;
+  esac
+
+  printf '%s' '{"hook_event_name":"PreToolUse","tool_input":{"command":"git commit -m \"nope\""}}' | bash "$HOOK" >/dev/null 2>&1
+  [ $? -eq 0 ] && ok "hook/pre: deny is the JSON path (exit 0)" || fail "hook/pre: deny is the JSON path (exit 0)" "nonzero exit"
+
+  # The PostToolUse text is an instruction (amend now), not a report.
+  out=$(hook_run '{"hook_event_name":"PostToolUse","tool_input":{"command":"git commit -m \"docs: no scope\""}}')
+  case "$out" in
+    *"git commit --amend"*) ok "hook/post: nudge instructs to amend before pushing" ;;
+    *) fail "hook/post: nudge instructs to amend before pushing" "output: $out" ;;
+  esac
 fi
+
+# ── sync registers the hook once per event (v4.35.0) ─────────────────────────
+# Consumers registered before v4.35.0 carry only the PostToolUse entry. A
+# single "already registered anywhere" guard would report OK and never wire
+# PreToolUse — the one that blocks — on any existing consumer.
+
+echo "== sync-method registers validate-commit.sh per event =="
+HK_TMP=$(mktemp -d)
+mkdir -p "$HK_TMP/proj/.claude" "$HK_TMP/method/skills/demo" "$HK_TMP/method/templates/hooks"
+echo 'upstream demo body' > "$HK_TMP/method/skills/demo/SKILL.md"
+cp "$REPO_ROOT/templates/hooks/validate-commit.sh" "$HK_TMP/method/templates/hooks/validate-commit.sh"
+cat > "$HK_TMP/proj/.claude/settings.json" <<'EOF'
+{"hooks":{"PostToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate-commit.sh","timeout":10}]}]}}
+EOF
+HK_OUT=$(SYNC_METHOD_REEXEC=1 SYNC_METHOD_TEMP="$HK_TMP/method" \
+  bash "$REPO_ROOT/scripts/sync-method.sh" --dry-run --target="$HK_TMP/proj" 2>&1)
+case "$HK_OUT" in
+  *"already registered (PostToolUse)"*) ok "hook registration: existing PostToolUse entry is recognised" ;;
+  *) fail "hook registration: existing PostToolUse entry is recognised" "$(echo "$HK_OUT" | grep -i validate-commit | head -3)" ;;
+esac
+case "$HK_OUT" in
+  *"WOULD REGISTER validate-commit.sh (PreToolUse)"*) ok "hook registration: missing PreToolUse entry is added" ;;
+  *) fail "hook registration: missing PreToolUse entry is added" "$(echo "$HK_OUT" | grep -i validate-commit | head -3)" ;;
+esac
+rm -rf "$HK_TMP"
 
 # ── Unit tests: Linear write guard verdict (sourced, no network) ─────────────
 # pk_linear_guard_verdict is pure: (team_id, slug, reachable, resolved_team,

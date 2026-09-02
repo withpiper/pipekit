@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v2.6.0** — Last updated: 2026-05-23  *(two-phase `pk promote` + `pk ship` Draft default + `pk ready` flip command; `pk done` auto-pulls integration and writes planning SUMMARY)*
+**v4.35.0** — Last updated: 2026-09-02  *(**v4.35.0 — § Commit Messages gains Enforcement:** PreToolUse deny at commit time, `pk ship` refusal at push time, `--force` waiver with audit comment. Carries v2.6.0 — two-phase `pk promote`, `pk ship` Draft default, `pk ready`.)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---
@@ -467,6 +467,8 @@ If you're unsure, ask: "Will the next `dev → beta` promote happen within ~24h 
 | `test` | Tests |
 
 Include issue IDs in commit messages: `feat(grid): add column definitions ({PREFIX}-42)`
+
+**Enforcement (v4.35.0).** Two gates, both shipped by the sync. `.claude/hooks/validate-commit.sh` is registered as a **PreToolUse** hook and denies an off-format `git commit` before it runs (the commit never exists); the same script as **PostToolUse** nudges to amend any commit whose subject the pre-check could not parse. `pk ship` then reads the real subjects in `<base>..HEAD` (merge commits skipped) and refuses to push an off-format one: `--force` waives and posts a Linear audit comment, `PK_COMMITFMT_BYPASS=1` skips it in an emergency. Neither gate sees a raw `git push` of a commit made outside Claude Code; a git-native `commit-msg` hook was considered and rejected as per-clone config that redirects every git hook. Anchor: piper PR #771, 2026-09-02 — the nudge fired, the session pushed anyway, and the unscoped subject is permanent on `dev`.
 
 ---
 

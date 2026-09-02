@@ -32,7 +32,7 @@ Canonical files use a `pipekit-` prefix so they never collide with project-speci
 
 | File | Topic | Portable |
 |------|-------|----------|
-| `pipekit-discipline.md` | AI coding discipline: Red Flags, Ad-hoc Plan Gate, scope hygiene | ✅ |
+| `pipekit-discipline.md` | AI coding discipline: Red Flags, Ad-hoc Plan Gate, scope hygiene, commit-subject format | ✅ |
 | `pipekit-tooling.md` | Verify installed library APIs, pin package manager, pre-deploy gate | ✅ |
 | `pipekit-security.md` | Secrets, boundary validation, OWASP, auth must be explicit | ✅ |
 | `pipekit-migrations.md` | Frozen-file invariant, hardening discipline, parallel-branch coordination, drift recovery | ✅ |

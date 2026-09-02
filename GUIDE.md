@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.34.0** — Last updated: 2026-09-02 06:40  *(**v4.34.0 — `/work` executes on the saved `pk-execute` workflow.** The prose Workflow could never run as written (scripts have no filesystem access); the loop now lives in `workflows/pk-execute.js`, synced to every consumer's `.claude/workflows/`: one agent per task, tests before verify, commit only on pass, the expected HEAD threaded task to task, disjoint-file parallel waves gated on `worktree.baseRef: head` with an integration step. The skill is de-prescribed for Fable 5.1 (602 → 340 lines), `--resume` is defined, and the surviving `Backend` guard is gone. Carries v4.33.0 — RECONCILE gains "AC wrong" and a closure rule; Linear rate limits canonical in the SOP; `/pr-security-review` detects auth by content; `PK_BRANCH_PREFIXES`.)*
+**v4.35.0** — Last updated: 2026-09-02 07:35  *(**v4.35.0 — the commit-format check blocks instead of nudging.** `validate-commit.sh` is registered as PreToolUse too and denies an off-format `git commit` before it runs; the PostToolUse nudge says amend now; the rule is in the auto-loaded `pipekit-discipline.md`; and `pk ship` refuses to push a branch carrying an off-format subject (`--force` waives with a Linear comment). Anchor: piper PR #771 — the nudge fired, a raw push followed, the subject is permanent. Also: `pk status` / `pk next` refuse without a Linear key instead of printing an empty board. Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
 
 ---
 
@@ -1162,7 +1162,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
 | Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
-| Ship | `pk ship` | Push, open PR as **Draft** (v2.6.0+) against integration branch, Linear → UAT |
+| Ship | `pk ship` | Push, open PR as **Draft** (v2.6.0+) against integration branch, Linear → UAT. Refuses off-format commit subjects (v4.35.0; `--force` waives) |
 | Ship Ready | `pk ship --ready` | Open Ready immediately (v2.6.0+; one-shot tiny WITs) |
 | Ready flip | `pk ready [<ID>]` | Flip Draft → Ready (v2.6.0+); fires outside reviewers. v4.32.0+: matches `fix/`/`hotfix/` branches too |
 | Ship + Review | `pk ship --review` | Adds Linear "review-in-flight" comment + reviewer invocation printed |

@@ -450,7 +450,12 @@ if [ -d "$TEMP/templates/hooks" ]; then
     fi
   done
 
-  # Register validate-commit.sh in .claude/settings.json (idempotent).
+  # Register validate-commit.sh in .claude/settings.json (idempotent), once
+  # PER EVENT: PostToolUse (the advisory nudge) and PreToolUse (denies an
+  # off-format `git commit` before it runs, v4.35.0). Consumers registered
+  # before v4.35.0 carry only the PostToolUse entry, so the guard is per-event —
+  # a single "already registered anywhere" check would leave PreToolUse
+  # unwired on every existing consumer forever.
   SETTINGS="$PROJECT_ROOT/.claude/settings.json"
   HOOK_CMD='"$CLAUDE_PROJECT_DIR"/.claude/hooks/validate-commit.sh'
   if [ -f "$TEMP/templates/hooks/validate-commit.sh" ]; then
@@ -458,25 +463,32 @@ if [ -d "$TEMP/templates/hooks" ]; then
       echo "  NOTE jq not found — register the commit-format hook in .claude/settings.json manually (snippet in templates/hooks/validate-commit.sh header)."
     elif [ -f "$SETTINGS" ] && ! jq empty "$SETTINGS" >/dev/null 2>&1; then
       echo "  NOTE .claude/settings.json is not valid JSON — register the commit-format hook manually."
-    elif [ -f "$SETTINGS" ] && jq -e '[.. | .command? // empty] | any(type=="string" and test("validate-commit\\.sh"))' "$SETTINGS" >/dev/null 2>&1; then
-      echo "  OK validate-commit.sh already registered in .claude/settings.json"
-    elif $DRY_RUN; then
-      echo "  WOULD REGISTER validate-commit.sh in .claude/settings.json"
-      CHANGES=$((CHANGES + 1))
     else
-      [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-      tmp=$(mktemp)
-      if jq --arg cmd "$HOOK_CMD" '
-            (.hooks //= {})
-            | (.hooks.PostToolUse //= [])
-            | .hooks.PostToolUse += [{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10}]}]
-          ' "$SETTINGS" > "$tmp" 2>/dev/null && mv "$tmp" "$SETTINGS"; then
-        echo "  REGISTERED validate-commit.sh in .claude/settings.json"
-        CHANGES=$((CHANGES + 1))
-      else
-        rm -f "$tmp"
-        echo "  NOTE could not auto-register validate-commit.sh — add it to .claude/settings.json manually."
-      fi
+      for hook_event in PreToolUse PostToolUse; do
+        if [ -f "$SETTINGS" ] && jq -e --arg ev "$hook_event" '
+              [(.hooks[$ev] // [])[] | .hooks[]? | .command? // empty]
+              | any(type=="string" and test("validate-commit\\.sh"))
+            ' "$SETTINGS" >/dev/null 2>&1; then
+          echo "  OK validate-commit.sh already registered ($hook_event) in .claude/settings.json"
+        elif $DRY_RUN; then
+          echo "  WOULD REGISTER validate-commit.sh ($hook_event) in .claude/settings.json"
+          CHANGES=$((CHANGES + 1))
+        else
+          [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+          tmp=$(mktemp)
+          if jq --arg cmd "$HOOK_CMD" --arg ev "$hook_event" '
+                (.hooks //= {})
+                | (.hooks[$ev] //= [])
+                | .hooks[$ev] += [{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10}]}]
+              ' "$SETTINGS" > "$tmp" 2>/dev/null && mv "$tmp" "$SETTINGS"; then
+            echo "  REGISTERED validate-commit.sh ($hook_event) in .claude/settings.json"
+            CHANGES=$((CHANGES + 1))
+          else
+            rm -f "$tmp"
+            echo "  NOTE could not auto-register validate-commit.sh ($hook_event) — add it to .claude/settings.json manually."
+          fi
+        fi
+      done
     fi
   fi
 fi

@@ -31,7 +31,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.34.0"
+PK_VERSION="4.35.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1162,6 +1162,47 @@ set -f
 PK_BRANCH_PREFIX_LIST=($PK_BRANCH_PREFIXES)
 set +f
 
+# Commit subjects are {type}({scope}): {desc}, scope required — the same list
+# templates/hooks/validate-commit.sh enforces at commit time. pk ship re-checks
+# the REAL subjects on the branch (git log, not a parse of tool input), so it
+# has none of the hook's false-positive surface and also catches a commit made
+# by a human or outside Claude Code. Merge commits are skipped.
+PK_COMMIT_TYPES="feat|fix|test|refactor|perf|docs|style|chore"
+
+# The ref a feature branch's commits are measured against for that gate:
+# origin/<base> when fetched, else the local <base>, else empty (a fresh clone
+# with no remote has nothing to compare against — the gate is skipped).
+pk_ship_base_ref() {
+  local base="${1:-}"
+  [ -n "$base" ] || base=$(pk_integration_branch)
+  if git rev-parse --verify -q "origin/$base" >/dev/null 2>&1; then
+    echo "origin/$base"
+  elif git rev-parse --verify -q "$base" >/dev/null 2>&1; then
+    echo "$base"
+  fi
+}
+
+# Lines "<short-sha> <subject>" for every non-merge commit in <base>..HEAD whose
+# subject is off-format. Empty when clean or when there is no base to compare.
+pk_offformat_subjects() {
+  local base="$1"
+  [ -n "$base" ] || return 0
+  git log --no-merges --format='%h %s' "${base}..HEAD" 2>/dev/null \
+    | grep -vE "^[0-9a-f]+ ($PK_COMMIT_TYPES)\([^)]+\): ." || true
+}
+
+# A missing key must read as an error, not as an empty board. cmd_status and
+# cmd_next swallow per-state read failures on purpose (one flaky call must not
+# blank the whole board), which meant an unset key rendered every column
+# "(none)" — indistinguishable from a genuinely empty board. Found 2026-09-02:
+# both consumers read as idle while carrying 290 open issues between them.
+pk_require_linear_key() {
+  if [ -z "$(pk_linear_api_key)" ]; then
+    echo "ERROR: Linear API key not set — the board cannot be read. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..." >&2
+    return 1
+  fi
+}
+
 # Human-readable list of the globs pk_branch_for_issue tried, for error text.
 # The old messages named only feature/<ID>-*, so a miss on a fix/ branch read as
 # "I don't know this issue" rather than "I looked in the wrong places".
@@ -1641,6 +1682,7 @@ cmd_next() {
     return 0
   fi
   # Not on a feature branch — find next Approved
+  pk_require_linear_key || return 1
   local integration
   integration=$(pk_integration_branch)
   if [ "$current" != "$integration" ] && [ "$current" != "main" ]; then
@@ -1749,6 +1791,7 @@ cmd_status() {
     echo "ERROR: Team name not set in method.config.md" >&2
     return 1
   fi
+  pk_require_linear_key || return 1
   echo "── Linear: $team ──"
   # Roadmap walk (Linear initiatives) when migrated to the native phase surface.
   # Silent when no i<N>. initiatives exist (un-migrated project / no Linear key).
@@ -2137,6 +2180,31 @@ cmd_ship() {
       return 1
       ;;
   esac
+  # ------------------------------------------------------------------------
+
+  # --- v4.35.0 commit-format gate (hard-fail) ------------------------------
+  # The PreToolUse hook denies an off-format `git commit` before it runs; this
+  # reads what actually landed on the branch, so it also catches a commit the
+  # hook never saw. Escapes: --force (Linear audit comment, as for the verify
+  # gate) or PK_COMMITFMT_BYPASS=1 (emergency only).
+  local _cf_bad
+  _cf_bad=$(pk_offformat_subjects "$(pk_ship_base_ref "${env:-}")")
+  if [ -n "$_cf_bad" ]; then
+    if [ "${PK_COMMITFMT_BYPASS:-0}" = "1" ]; then
+      echo "⚠ commit-format gate bypassed via PK_COMMITFMT_BYPASS=1" >&2
+    elif $force; then
+      echo "⚠ off-format commit subject(s) on this branch — bypassed via --force:" >&2
+      printf '%s\n' "$_cf_bad" | sed 's/^/       /' >&2
+      pk_linear_comment "$issue" "Shipped with off-format commit subject(s) (--force at $(date -u +%FT%TZ)): $(printf '%s' "$_cf_bad" | tr '\n' ';')" || true
+    else
+      echo "ERROR: commit subject(s) on this branch do not match {type}({scope}): {desc} (scope required):" >&2
+      printf '%s\n' "$_cf_bad" | sed 's/^/       /' >&2
+      echo "       Types: $(printf '%s' "$PK_COMMIT_TYPES" | tr '|' ' '). Reword before shipping — git commit --amend for the" >&2
+      echo "       last commit (git rebase -i for earlier ones, interactively), then re-run pk ship." >&2
+      echo "       --force ships anyway and logs a Linear comment." >&2
+      return 1
+    fi
+  fi
   # ------------------------------------------------------------------------
 
   # Push (idempotent — git is fine with re-pushes)
