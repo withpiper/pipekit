@@ -12,8 +12,9 @@ DISCORD_POST.md
 #   tracked   hooks/         — one small file; tracking it means enforcement
 #                              exists on clone rather than after a setup step.
 #   ignored   settings.local.json — personal, per-machine.
-#   ignored   skills/ rules/ agents/ — GENERATED mirrors of tracked sources
-#                              (skills/, templates/rules/, agents/). Consuming
+#   ignored   skills/ rules/ agents/ workflows/ — GENERATED mirrors of tracked
+#                              sources (skills/, templates/rules/, agents/,
+#                              workflows/). Consuming
 #                              projects get these written by sync-method.sh;
 #                              pipekit refreshes its own with
 #                              scripts/dogfood-sync.sh. Never edit in place —
@@ -22,6 +23,8 @@ DISCORD_POST.md
 .claude/skills/
 .claude/rules/
 .claude/agents/
+.claude/workflows/
+.claude/worktrees/
 temp/
 archive/scratch/
 

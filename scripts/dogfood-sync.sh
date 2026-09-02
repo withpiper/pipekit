@@ -6,7 +6,7 @@
 # Pipekit's product is skills and rules. For Claude Code to *use* them while
 # developing pipekit, they have to sit in .claude/ — but the canonical copies
 # live elsewhere in the tree (skills/, templates/rules/, agents/,
-# templates/hooks/). Consuming projects get their .claude/ written by
+# workflows/, templates/hooks/). Consuming projects get their .claude/ written by
 # sync-method.sh; pipekit itself had no equivalent, so its .claude/ copies were
 # made by hand and then rotted.
 #
@@ -45,6 +45,7 @@ PAIRS="
 skills:.claude/skills
 templates/rules:.claude/rules
 agents:.claude/agents
+workflows:.claude/workflows
 templates/hooks:.claude/hooks
 "
 
