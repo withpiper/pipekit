@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.** A rate-limited opus review is retried on opus; a lower-tier or skipped run is a flag even with zero findings, and the reality-check names the tier that ran. Anything cited must be a `==> $` block in this run's `evidence.txt`. `/pr-security-review` reads wrapped `Keywords:` lines. Carries v4.35.0 — the commit-format check blocks instead of nudging (PreToolUse deny + `pk ship` refusal). Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
+**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
 
 ---
 

@@ -241,7 +241,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
    Gate on the artifact instead. An Urgent bug is closed out when its issue carries **both** a `# Postmortem` comment and a filled-in reviewer sign-off. `/linear-hygiene` Phase 2c reports issues missing either.
 
    *Anchor: SiteLine PIPER-766, 2026-08-25 — an Urgent bug auto-closed on merge and sat `Done` with no postmortem. It got written a day later only because the operator went looking, and it was the postmortem that found the actual gate: an ESLint rule (`no-inner-declarations`) dropped from `eslint:recommended` in v9, silently off ever since. The fix alone would have left that open for the next occurrence.*
-3. If "one change to prevent recurrence" is concrete (e.g. "add Playwright e2e for every auth-method × sign-out combo"), create a follow-up Linear issue or add a rule to `.claude/rules/`.
+3. If "one change to prevent recurrence" is concrete (e.g. "add Playwright e2e for every auth-method × sign-out combo"), create a follow-up Linear issue or add a rule to `.claude/rules/`. The issue is filed to `sop/Linear_SOP.md § Filing a follow-up issue`: `Source: <BUG-ID> postmortem` as the body's first line, the bug's `Area:` label, a Type label (usually `Tech Debt` or `Chore` — the prevention is rarely itself a Bug), priority from the floor table, state by that priority, `relates` to the bug. Name the new identifier and its placement in the postmortem comment.
 
 ---
 

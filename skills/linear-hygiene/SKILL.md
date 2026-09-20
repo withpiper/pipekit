@@ -5,7 +5,9 @@ description: Linear placement janitor — batch-classifies unclassified/untriage
 
 # Linear Hygiene Skill
 
-You are a Linear placement janitor. During the daily loop, `/work`, `/verify`, `pk ship`, `/pk-express`, and `/brainstorm` spin off follow-up issues mid-flow. They reliably land **unclassified** (no project *and* no `Area:` label), **stuck in Triage**, and **unprioritized** (priority 0), then accumulate until someone does a big manual reorg. This skill is the fast, frequent, all-states sweep that homes them before they pile up.
+You are a Linear placement janitor. During the daily loop, `/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise` and `/brainstorm` spin off follow-up issues mid-flow. Left to themselves they land **unclassified** (no project *and* no `Area:` label), **stuck in Triage**, and **unprioritized** (priority 0), then accumulate until someone does a big manual reorg. This skill is the fast, frequent, all-states sweep that homes them before they pile up.
+
+**Since v4.37.0 the filers do this placement themselves at creation** — `sop/Linear_SOP.md § Filing a follow-up issue` is the intake contract every mid-flow filer writes to (parent's `Area:`, Type label, priority floor, state by priority, `Source:` line, relation). This skill is therefore the **backstop, not the routine**: a drifting issue is now evidence that a filer missed the contract, and the manifest should say which filer (read the `Source:` line) so the leak gets fixed upstream rather than swept forever.
 
 **On the lanes model, "no project" is the correct resting state for uncut work** — an issue is homed when it carries the right `Area:` label, not when it has been filed into some project. Filing for the sake of filing is what grows the standing pools this skill also learned to detect (Phase 2b). Read `method.config.md § Initiative Surface` for the board's shape before assuming either.
 
@@ -20,7 +22,8 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 ## Modes
 
 - **default** — propose + apply (Phases 1–6).
-- **`--check`** — detect-only. Run Phases 1–4, print the manifest, **make zero writes**. This is what `/pk-exit` calls; it honors the same no-Linear-writes rule.
+- **`--check`** — detect-only. Run Phases 1–4, print the manifest, **make zero writes**. Read-only by contract so a session-close step can run it under `/pk-exit`'s no-Linear-writes rule. (**Nothing invokes it automatically today** — `/pk-exit` writes the session log and stops; earlier revisions of this file claimed otherwise. Run `--check --session` yourself at session end.)
+- **`--session`** (v4.37.0) — scope Phase 1 to issues created **this session**: `createdAt >=` the modification time of the newest file in `Logs/Sessions/` (the previous session's exit log, so its timestamp is this session's start); no such file → the last 24 hours. Print the cutoff you resolved in the manifest header so a narrow window is never mistaken for a clean board. Composes with `--check`. This is the contract check for the intake contract: every issue filed this session should come back clean, and a hit names the filer that missed it. Phases 2b and 2c are skipped under `--session` — board shape and postmortem debt are not session-scoped questions.
 
 ## Tooling notes (read before building against this)
 
@@ -33,7 +36,7 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 ### Phase 1 — Fetch (payload-safe)
 
 1. Read `method.config.md` → Team ID, Workflow State IDs, and the project's **open-state set** (everything except Done / Canceled / Duplicate — typically `Triage, Backlog, Needs Spec, Approved, In Progress, In Dev, UAT`). Also read **`§ Initiative Surface → Area Labels`** (the `Area` label group, its labels, and `Lane size`). If that section is blank, the board isn't on the lanes model — skip the Area routing in Phase 3 and the board-shape checks in Phase 2b, and behave exactly as before.
-2. `mcp__linear-server__linear_searchIssues` across those open states, requesting a **minimal field set** (`identifier, title, state, priority, project, labels, createdAt`). Do **not** pull descriptions board-wide.
+2. `mcp__linear-server__linear_searchIssues` across those open states, requesting a **minimal field set** (`identifier, title, state, priority, project, labels, createdAt`). Do **not** pull descriptions board-wide. Under `--session`, add the `createdAt >= <cutoff>` filter **server-side** — it is the whole point of the mode that this read is small.
    > **Payload watch-out (learned the hard way):** a board-wide `linear_searchIssues` with full descriptions can exceed a single context (~158K chars on a ~48-issue board). Page by state or have a subagent digest a saved tool-result if the board is large. Only fetch bodies for the drift subset (Phase 2).
 3. `mcp__linear-server__linear_getProjects` once → cache `{name, description, id, state}` for inference **and** for the board-shape checks. Derive each project's open-issue count from the Phase 1.2 result — do **not** issue a per-project issue query (see `sop/Linear_SOP.md` § API gotchas → Query complexity: an all-projects × all-issues nested read exceeds Linear's 10k cap and is rejected outright).
 4. **Exclude** any issue carrying the `Parked` *label* (already dispositioned "Later" by `/brainstorm-review`).
@@ -87,18 +90,7 @@ Unlike Phase 2b, this check is **not** lanes-gated — run it whether or not `§
   **Never file into a pool-shaped project, and never create a project.** Filing an issue into a project just to get it out of the orphan list is what grows a pool — the exact drift Phase 2b flags. A project is created only by a deliberate lane cut.
 
   On a board with no `§ Area Labels` config (not the lanes model), fall back to the pre-v4.28.0 behavior: infer the project from the parent, else keyword-match project names + descriptions (derive candidates dynamically — never hardcode a keyword→project map; that's what keeps it portable), else leave unhomed with top-2 candidates.
-- **Priority (importance ranking — the load-bearing part).** Map these label *roles* to your project's actual label names (defaults shown; override in `method.config.md` if your labels differ). Linear priority ints: Urgent 1, High 2, Normal 3, Low 4.
-
-  | Signal on the issue | Floor |
-  |---|---|
-  | `Client Request` label | **High (2)** |
-  | `Bug` + `Client Request` | **High (2)** |
-  | declares it **blocks** another open issue | inherit the blocked issue's priority, min **Normal (3)** |
-  | `Bug` (alone) | **Normal (3)** |
-  | `Feature` / `Improvement`, no urgency signal | **Low (4)** |
-  | none of the above | **Low (4)** |
-
-  **Never lower an existing non-zero priority** — only fill `0`, or raise per a signal above. The catch-all floor is **Low**, not Normal: an item with no importance signal is *Low until proven otherwise*, so it doesn't get slated for speccing (and surfaced by `pk next`) just for existing. `Normal+` should mean "a signal said this matters."
+- **Priority (importance ranking — the load-bearing part).** Apply the **priority-floor table in `sop/Linear_SOP.md § Filing a follow-up issue → Priority floors`** — the one canonical copy, shared with every filer, so a floor changed there changes at creation and at the sweep together. This skill does not carry its own table (it did until v4.37.0; two copies is how the filers and the janitor drift apart). The rules that travel with it: **never lower an existing non-zero priority** — only fill `0` or raise per a signal; the catch-all is **Low**, so `Normal+` means "a signal said this matters."
 - **State (for Triage), by the priority resolved above — importance, not difficulty:** `Normal (3)` or higher → **`Needs Spec`** (important enough to slate for speccing, so `pk next` surfaces it); `Low (4)` → **`Backlog`** (homed and prioritized, but not on the spec lane yet). `tier:*` no longer routes state — an important item must not wait in Backlog for lack of a size label, and a low one must not jump the queue for having one. **Exception — bundles:** if the body visibly packs several distinct asks (raw feedback often does: "grid lines + header parity + column-hide + logo"), route it to **`Backlog`** regardless of priority and flag `/brainstorm-review` to split + disposition first — `Needs Spec` is for one spec-able thing, not a four-ask pile.
 
 ### Phase 4 — Manifest (single confirm)
@@ -108,16 +100,18 @@ Print ONE table, **sorted by inferred priority descending** so important follow-
 ```
 ## /linear-hygiene — {N} issues drifting
 
-| Issue | Drift | → Home | → Priority | → State | Title |
-|-------|-------|--------|-----------|---------|-------|
-| POC-232 | ⬛🔶 | (no project) · Area: Security | Normal | Needs Spec | Compare removed-block… |
-| POC-241 | 🔶⚪ | (no project) · Area: Platform | Low | Backlog | Tidy footer spacing… |
-| POC-244 | 🏚️ | I3.P2. Access truth — in lane scope | Normal | Needs Spec | Admin scope check… |
-| POC-250 | 🅿️ | Backlog + `Parked` label | — | Backlog | Deferred export idea… |
+| Issue | Drift | → Home | → Priority | → State | Filer | Title |
+|-------|-------|--------|-----------|---------|-------|-------|
+| POC-232 | ⬛🔶 | (no project) · Area: Security | Normal | Needs Spec | /verify ← POC-230 | Compare removed-block… |
+| POC-241 | 🔶⚪ | (no project) · Area: Platform | Low | Backlog | — | Tidy footer spacing… |
+| POC-244 | 🏚️ | I3.P2. Access truth — in lane scope | Normal | Needs Spec | /work ← POC-240 R2 | Admin scope check… |
+| POC-250 | 🅿️ | Backlog + `Parked` label | — | Backlog | — | Deferred export idea… |
 | ...
 
 ⚠️ Needs your pick: POC-NNN → [Area: Security | Area: Budget Editor]
 ```
+
+**Filer** is read off the body's `Source:` line (the intake contract's first line) — the parent ID plus whatever the filer appended (`R<N>`, `postmortem`, `PR #n finding #k`, `review improvement #N`) names the skill that filed it. `—` means no `Source:` line: either external input (a human, `/brainstorm`) or a filer that skipped the contract entirely, which is itself the finding. A filer that shows up here twice is a skill to fix, not an issue to sweep.
 
 Then, **only if Phase 2b found anything**, a second block — advisory, not part of the "go":
 
@@ -179,7 +173,7 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 - **Don't lower an existing priority** — only fill `0` or raise per a signal.
 - **Don't guess a project when confidence is low** — surface the top-2 candidates instead.
 - **Don't pull full board descriptions into context** — minimal fields board-wide, bodies only for the drift subset (Phase 1/2).
-- **Don't write in `--check` mode** — it's read-only by contract (`/pk-exit` depends on this).
+- **Don't write in `--check` mode** — it's read-only by contract (the session-end `--check --session` run relies on this, and so would any future `/pk-exit` hook).
 - **Don't couple `Area:` labels to lane membership — in either direction.** Area says *what domain this is*; the project says *which batch it's in*. They are orthogonal, and each inference is wrong on its own:
   - **Never remove or change an `Area:` label because of a lane move.** Area classification persists through project membership — an issue cut into a lane keeps the label it was triaged with, and that's what makes the `Area: * — backlog` views honest.
   - **Never infer an `Area:` label from the lane an issue sits in.** A lane can legitimately mix areas.
@@ -192,10 +186,11 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 
 - 🔗 **Isolated → relation linking** (body references a parent but no `blocked-by`/`relates` relation exists). Uses `mcp__linear-server__linear_createIssueRelation` — **confirmed present** on `@tacticlaunch/mcp-linear` (already called by `/roadmap-create`); deferred only to keep this pass scoped to tool-name correctness.
 - 🧹 **Strip stale labels.** Uses `mcp__linear-server__linear_removeIssueLabel` — **confirmed present**; deferred for the same reason.
-- **`--session` mode** — limit to issues `createdAt >= session start`, to catch only the current session's follow-ups.
+- ~~**`--session` mode**~~ — shipped v4.37.0 (see Modes).
 
 ## Related
 
+- `sop/Linear_SOP.md § Filing a follow-up issue` — the intake contract the filers write to; this skill's Phase 3 is that contract applied after the fact.
 - `/brainstorm-review` — Now/Later/Kill **disposition** (Triage/Ideas only); this skill is placement across all open states.
 - `/roadmap-review` — full-board plan-vs-requirements audit against the Linear-native initiative surface (heavyweight).
-- `/pk-exit` — calls `/linear-hygiene --check` to surface drift while context is warm at session close.
+- `/pk-exit` — does **not** call this skill (it writes the session log and stops). Run `/linear-hygiene --check --session` just before it, while context is warm, to check this session's filings against the intake contract.

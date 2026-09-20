@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.33.0** — Last updated: 2026-09-02  *(**v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.** Serial calls, ~50 per page, wait once / retry once / then stop; the error is HTTP 400 `RATELIMITED`, not 429. Anchor: SiteLine 2026-08-31. Carries v4.30.0 — the legacy planning layer is gone.)*
+**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — § Filing a follow-up issue: the intake contract every mid-flow filer writes to.** Parent's `Area:` inherited, Type label, the priority-floor table (canonical here; `/linear-hygiene` cites it), state by priority — never Triage — a `Source:` first line and a relation, in one create call. Carries v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -286,6 +286,46 @@ fix(auth): resolve session timeout ({PREFIX}-10)
 ```
 
 The issue prefix is defined in your project's `method.config.md`.
+
+---
+
+## Filing a follow-up issue (the intake contract)
+
+**v4.37.0.** Every skill that spins off an issue mid-flow — `/work`'s risk-fallback follow-up, `/verify`'s scope-cut, `/pk-bug`'s recurrence prevention, `/02-light-spec-revise`'s "defer to follow-up", `/pr-fix`'s deferred findings — files it to **this** contract. It is the placement `/linear-hygiene` would otherwise apply a session later, done at creation by the one party that already has the context: the filer. The janitor is the backstop, not the routine.
+
+**Why it lives here and nowhere else.** The priority-floor table below used to live only inside `/linear-hygiene` Phase 3, so no filer could cite it without a second copy, and every filer said "file a follow-up issue" with no contract at all. The result was structural: follow-ups landed with no project, no `Area:`, priority 0 and state Triage — every drift class the sweep exists to catch — then accumulated until the next sweep. (Anchor: SiteLine, 2026-09-20 — assessing a third-party planning tool for the intake problem and finding the inflow was our own filers.)
+
+Fill every field. Create the issue through the project's Linear route (`mcp__linear-server__linear_createIssue`, or the API where the project has ruled that) with everything set **in the one create call** — a second write to fix placement is what re-ranks `sortOrder` (§ API gotchas).
+
+| Field | Rule |
+|---|---|
+| **`Source:` line** | The body's first line is `Source: <PARENT-ID>` (add `R<N>`, the finding number, or the AC it defers, after it). This is the literal `/linear-hygiene` Phase 3 greps for parent inference — omit it and the janitor has to guess. |
+| **Area label** | **Inherit the parent's `Area:` label.** A follow-up is related to its parent by construction, so the parent's Area is the highest-confidence source there is — never keyword-match when the parent already carries one. Parent has none → infer from `method.config.md § Area Labels` by title/body; still ambiguous → leave it off and say so in the hand-off. Boards with no `§ Area Labels` config skip this row. |
+| **Type label** | One of the Type labels below. The priority floor keys on it, so it is not optional. |
+| **Priority** | The floor table below, from the labels you just set and the parent's own priority. **A follow-up that blocks its parent inherits the parent's priority.** Never file at 0. |
+| **State** | By the priority you resolved — **importance, not difficulty:** Normal (3) or higher → `Needs Spec` (slated, so `pk next` surfaces it); Low (4) → `Backlog`. **Never Triage** — Triage is for external input (§ Status Definitions); a filer already knows what this is. The one exception is `/work`'s risk-fallback follow-up, which is filed **Approved**: it closes a clause of an already-approved spec, so it is approved by inheritance. |
+| **Project** | **None**, unless the follow-up is inside the parent lane's *completable scope* — "could the lane still be called done with this in it?" — in which case the parent's project. "Same domain" is not scope. Never a different project, never a new one (a project is cut in `/phase-plan`, never filed into by a janitor or a filer). `/work`'s risk-fallback follow-up always takes the parent's project and milestone: it *is* the parent's remaining scope. |
+| **Relation** | `relates` to the parent; `blocks` the parent when the parent cannot close without it. A relation is what makes the follow-up visible from the parent's page and what `pk next` reads for blocked ordering. |
+| **Assignee** | The project's default assignee (`method.config.md`), as for any Claude-created issue. |
+
+### Priority floors (canonical — `/linear-hygiene` Phase 3 reads this table, it does not carry its own)
+
+Linear priority ints: Urgent 1, High 2, Normal 3, Low 4, None 0. Map the label *roles* to your project's actual names (`method.config.md` overrides).
+
+| Signal on the issue | Floor |
+|---|---|
+| `Client Request` label | **High (2)** |
+| `Bug` + `Client Request` | **High (2)** |
+| declares it **blocks** another open issue | inherit the blocked issue's priority, min **Normal (3)** |
+| `Bug` (alone) | **Normal (3)** |
+| `Feature` / `Improvement` / `Tech Debt` / `Chore` / `Research`, no urgency signal | **Low (4)** |
+| none of the above | **Low (4)** |
+
+The catch-all floor is **Low**, not Normal: an item with no importance signal is *Low until proven otherwise*, so it is not slated for speccing (and surfaced by `pk next`) just for existing. `Normal+` should mean "a signal said this matters." **Never lower an existing non-zero priority** — the floors fill `0` or raise; they never cut. `Urgent` is reserved for hotfixes and production emergencies (§ Conventions) and is never a floor.
+
+### What the filer reports
+
+The hand-off / summary names the new identifier **and its placement** — `PIPER-950 · Area: Budget Editor · Improvement · Low · Backlog · relates PIPER-940` — so the human can redirect a line on sight. Then `/linear-hygiene --session` at the end of the session is a read-only check that every issue filed this session honoured this contract, not a routine that does the placement for you.
 
 ---
 

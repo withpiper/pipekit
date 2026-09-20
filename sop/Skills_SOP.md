@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — the Model Policy roles have data.** The PIPER-412 A/B evidence sits under § Pinning models; the reviewer tier decides what ships. Carries v4.34.0 — saved workflows are a synced artifact. `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
+**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.** Carries v4.36.0 — the Model Policy roles have data. The PIPER-412 A/B evidence sits under § Pinning models; the reviewer tier decides what ships. Carries v4.34.0 — saved workflows are a synced artifact. `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
 
 ---
 
@@ -37,7 +37,7 @@ These skills work across any project that follows the method. They read `method.
 | `/roadmap-review` | Pre-pipeline health check (Stage 0 gate) | Stage 0 → Stage 1 gate |
 | `/brainstorm` | Feature-level feasibility exploration | Stage 1: Spec |
 | `/brainstorm-review` | Triage untriaged Linear issues | Stage 1: Spec |
-| `/linear-hygiene` | Fast placement janitor — homes orphaned / untriaged / unprioritized issues across all open states (placement, not disposition). Propose-then-apply; `--check` is read-only. | Anytime (board maintenance) |
+| `/linear-hygiene` | Placement janitor — homes orphaned / untriaged / unprioritized issues across all open states (placement, not disposition). The backstop since v4.37.0: filers place follow-ups at creation per `sop/Linear_SOP.md § Filing a follow-up issue`. Propose-then-apply; `--check` is read-only; `--session` scopes to this session's issues. | Anytime (board maintenance); `--check --session` at session end |
 | `/light-spec` | Structured spec generation with auto-cycled agent review (Phase 6 invokes `pk spec-cycle` + `/light-spec-revise` internally, max 3 passes). v2.7.0+: publishes to the configured `Spec ready state` (not a hardcoded `Specced`), so two-state boards (e.g. `Needs Spec → Approved`) work. | Stage 1: Spec |
 | `/light-spec-revise` | Apply Spec Review Agent feedback surgically; detect stalemate loops. Usually invoked by `/light-spec` Phase 6, can also run standalone. | Stage 1: Spec |
 | `pk spec-cycle <ID>` | Trigger Spec Review Agent v5, poll Linear for verdict, transition to Approved on Pass. Bash-side helper used by `/light-spec`'s cycle — keeps polling out of Claude's context. | Stage 1: Spec |

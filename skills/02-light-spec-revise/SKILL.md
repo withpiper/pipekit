@@ -132,7 +132,7 @@ Parse bulleted lists (`*` or `-` prefix) into per-item strings.
    | Label | Description |
    |---|---|
    | `Apply (Recommended)` (or label adjusted to recommendation) | Why this improvement is worth folding in + what it changes in the spec. |
-   | `Defer to follow-up issue` | Skip in this spec; capture as a follow-up Linear issue if the improvement is meaningful but out of scope. |
+   | `Defer to follow-up issue` | Skip in this spec; capture as a follow-up Linear issue if the improvement is meaningful but out of scope — filed to `sop/Linear_SOP.md § Filing a follow-up issue` (`Source: <ISSUE-ID> review improvement #N`, the parent's `Area:` label, a Type label, priority from the floor table, state by that priority, `relates` to the parent), placement named back to the user. |
    | `Drop` | Reject the suggestion; note rationale in spec's Notes section. |
 
    For each improvement, the recommendation defaults to **Apply** unless the improvement contradicts an existing decision. Reasoning lives in the description.
