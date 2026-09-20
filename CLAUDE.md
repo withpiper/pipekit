@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.** A rate-limited opus review is retried on opus; a lower-tier or skipped run is a flag even with zero findings, and the reality-check names the tier that ran. Anything cited must be a `==> $` block in this run's `evidence.txt`. `/pr-security-review` reads wrapped `Keywords:` lines. Carries v4.35.0 — the commit-format check blocks instead of nudging (PreToolUse deny + `pk ship` refusal). Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
+**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -95,7 +95,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/repo-security-review` | Periodic **whole-repo** security audit — area sweep, adversarial verification, score report. Portable framework; audit areas in `resources/repo-security-areas.md`. Renamed from `/security-review` in v4.31.0 (built-in collision). |
 | `/pk-bug` | Bug pipeline: reproduce → regression-test-first → fix → ship → postmortem. |
 | `/pk-express` | Idea→Draft-PR autopilot for Quick/Standard-tier WITs; stops at attention gates. |
-| `/linear-hygiene` | Classifies unclassified/untriaged issues (placement, not disposition) and flags board-shape drift — pool smell, spent lanes, walk-skip hazards. Never creates a project. |
+| `/linear-hygiene` | Classifies unclassified/untriaged issues (placement, not disposition) and flags board-shape drift — pool smell, spent lanes, walk-skip hazards. Never creates a project. The backstop since v4.37.0: mid-flow filers place follow-ups at creation per `sop/Linear_SOP.md § Filing a follow-up issue`; `--session` checks this session's filings. |
 | `/pipekit-help` | Recommends the next pipeline step from project state. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what shipped. |
 | `/release-changelog` | Draft CHANGELOG entry from commits between tags. |

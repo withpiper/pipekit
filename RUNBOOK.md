@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.36.0** — Last updated: 2026-09-02  *(**v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.** A rate-limited opus review is retried on opus; a lower-tier or skipped run is a flag even with zero findings, and the reality-check names the tier that ran. Anything cited must be a `==> $` block in this run's `evidence.txt`. `/pr-security-review` reads wrapped `Keywords:` lines. Carries v4.35.0 — the commit-format check blocks instead of nudging (PreToolUse deny + `pk ship` refusal). Carries v4.34.0 — `/work` executes on the saved `pk-execute` workflow.)*
+**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.36.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.37.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -409,7 +409,7 @@ The two loops above run **per issue**. These run *between* issues, on a cadence 
 
 | Skill | Job | Run when |
 |---|---|---|
-| `/linear-hygiene` | **Placement janitor** — homes the orphaned (no project), Triage-stuck, and unprioritized follow-ups the loop spins off. Propose-then-apply; `--check` is read-only (what `/pk-exit` calls). Placement only — never disposition, and **never touches `Roadmap: *` labels**. | After `pk done`, before a phase, or when follow-ups have piled up. |
+| `/linear-hygiene` | **Placement janitor, now the backstop** — since v4.37.0 the filers place follow-ups at creation (`sop/Linear_SOP.md § Filing a follow-up issue`); this homes whatever still lands orphaned (no project), Triage-stuck, or unprioritized, and names the filer that missed. Propose-then-apply; `--check` is read-only; `--session` scopes to issues filed this session. Placement only — never disposition, and **never touches `Roadmap: *` labels**. | `--check --session` at session end; the full sweep after `pk done`, before a phase, or when follow-ups have piled up. |
 | `/brainstorm-review` | **Disposition** — Now / Later / Kill verdict on the Triage + Ideas backlog. Scope-reduces "Now" items; parks "Later" with a re-check trigger. | When the brainstorm backlog stacks up; before `/phase-plan`. |
 | `/roadmap-review` | **Health audit** — Stage 0 gate + ongoing checks: completeness, dependencies, ordering, spec coverage, doc freshness, plus the optional **roadmap-progress** (checkbox ↔ Linear `Done`) and **phase-label-layer** checks. Reports which skill to run for each gap. | Before speccing a new initiative; at initiative start; monthly. |
 | `/phase-plan` | **Advance the roadmap** — select the next execution batch and promote its issues to Needs Spec (which feeds the spec loop). | When the current sub-phase is closing. |
