@@ -50,6 +50,14 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v4.37.0 — 2026-09-20
+
+> **Follow-ups are placed at creation, not swept a session later.** Five skills spin off Linear issues mid-flow — `/work` (risk-fallback), `/verify` (scope-cut), `/pk-bug` (recurrence prevention), `/pr-fix` (deferred findings), `/02-light-spec-revise` (defer to follow-up) — and four of them said only "file a follow-up issue." The priority-floor table lived inside `/linear-hygiene` alone, so no filer could cite it without a second copy. The structural result was that every follow-up landed with no `Area:`, priority 0 and state Triage — each drift class the sweep exists to catch — then waited for the next sweep. Surfaced on SiteLine, 2026-09-20, while assessing a third-party planning tool for the intake problem: the inflow was our own filers.
+>
+> **One contract, in the SOP.** `sop/Linear_SOP.md § Filing a follow-up issue` is now the canonical placement every filer writes to, in the one create call: a `Source: <PARENT-ID>` first line (the literal the janitor already greps for), the **parent's `Area:` label inherited** (a follow-up is related by construction — no keyword guessing), a Type label, priority from the floor table, state by that priority (Normal+ → `Needs Spec`, Low → `Backlog`, **never Triage** — that state is for external input), no project unless inside the parent lane's completable scope, and a `relates`/`blocks` relation. `/work`'s risk-fallback keeps its Approved/same-project exception, stated as an exception. The floor table moves to the SOP; `/linear-hygiene` Phase 3 cites it and no longer carries a copy.
+>
+> **`/linear-hygiene` is the backstop, and it names the filer.** The manifest gains a Filer column read off the `Source:` line, so a drifting issue is evidence of which skill missed the contract rather than a thing to sweep forever. `--session` (the deferred v2 item) ships: Phase 1 filtered server-side to `createdAt >=` the newest `Logs/Sessions/` file's mtime (the previous exit log ≈ this session's start; 24h fallback), cutoff printed in the header, 2b/2c skipped. `--check --session` at session end is the contract check.
+
 ## v4.36.0 — 2026-09-02
 
 > **`/verify` holds its adversarial tier.** Step 5a ran the antagonistic reviewer "on the plan-review tier" and said nothing about what to do when that run dies. On SiteLine PIPER-412 the opus run was killed by an API rate limit, the session re-ran it on sonnet, got three findings, and reported Pass-with-flags — and the two defects that decided the ship (the new cells never `ROUND` while every cached value is cent-rounded; a multiplier the spec excludes) were both missed. The identical diff on opus surfaced them in cycle one. Now: retry on the same tier first; a lower-tier or skipped run is a flag in its own right even with zero findings (Flag check E), and the reality-check's Antagonistic section names the tier that actually ran.
