@@ -340,7 +340,7 @@ The trade-off Path A asks you to absorb:
 
 **The load-bearing pre-flight check:** confirm `seed.sql` auto-runs on a Supabase branch DB BEFORE investing in the seed design. Open a throwaway PR with a sentinel insert in `seed.sql` (e.g., `INSERT INTO public.config_health_check (key, value) VALUES ('seed_ran', now())`); check whether that row exists in the branch DB after provisioning. If yes, you have the hook you need. If no, your Vercel-Supabase integration version / plan doesn't run seed automatically — Path A requires a CI workflow to bridge the gap, or you fall back to Path B.
 
-Full walkthrough: `resources/supabase-branch-db-seed-strategy.md`.
+Full walkthrough: `resources/supabase-branch-db-seed-strategy.md` (in the Pipekit repo; `resources/` is not synced).
 
 ##### Path B — Decommission branch DBs (fallback)
 
@@ -367,7 +367,7 @@ Substitution model: rs-vault pattern (recommended setup row in the table above) 
 
 **Asymmetric reinstatement cost:** decommissioning is fast (Vercel toggle + workflow removal). Reinstatement requires re-verifying the Vercel-Supabase integration's permissions, re-testing sync workflows on a fresh PR, and possibly re-granting Supabase project access. Before you decommission, verify reinstatement is one-toggle by flipping the integration off and immediately back on against a throwaway test PR. If that round-trip is clean, you've proven low-cost reinstatement. If reinstatement is finicky on your specific Vercel + Supabase plan configuration, Path A's tradeoff calculus shifts further in Path A's favor.
 
-Full walkthrough: `resources/supabase-branch-db-decommission.md`.
+Full walkthrough: `resources/supabase-branch-db-decommission.md` (in the Pipekit repo; `resources/` is not synced).
 
 #### Three-tier specifics (dev → beta → main)
 
