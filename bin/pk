@@ -209,8 +209,12 @@ pk_linear_gql() {
   case "${query#"${query%%[![:space:]]*}"}" in
     mutation*) pk_linear_guard || return 1 ;;
   esac
-  curl -sS -X POST https://api.linear.app/graphql \
-    -H "Authorization: $key" \
+  # Authorization travels via stdin (-H @-), never as a curl argv token — ps(1)
+  # shows the full command line of any process to any local user, so a token
+  # passed as -H "Authorization: $key" is readable system-wide for the call's
+  # lifetime. `-H @-` (curl 7.55.0+) reads one header per line from stdin.
+  printf 'Authorization: %s\n' "$key" | curl -sS -X POST https://api.linear.app/graphql \
+    -H @- \
     -H "Content-Type: application/json" \
     --data "$(jq -n --arg q "$query" --argjson v "$variables" '{query:$q, variables:$v}')"
 }

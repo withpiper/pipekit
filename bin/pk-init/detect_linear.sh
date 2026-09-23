@@ -16,8 +16,10 @@ if [ -z "$key" ]; then
   echo "$out"; exit 0
 fi
 
-resp=$(curl -sS -X POST https://api.linear.app/graphql \
-  -H "Authorization: $key" \
+# Authorization travels via stdin (-H @-), never as a curl argv token — see
+# bin/pk pk_linear_gql for the same fix and its rationale.
+resp=$(printf 'Authorization: %s\n' "$key" | curl -sS -X POST https://api.linear.app/graphql \
+  -H @- \
   -H "Content-Type: application/json" \
   -d '{"query":"{ teams { nodes { id key name } } }"}' 2>/dev/null || echo '{}')
 
