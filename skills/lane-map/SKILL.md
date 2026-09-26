@@ -22,8 +22,9 @@ Artifact URL: `method.config.md § Lane map URL`. Blank until this skill has pub
 1. **Read the current initiative's board.** Per-initiative query, lean fields only — never `linear_getIssueById` (see SOP § Read discipline).
 2. **Reconcile before rendering.** Check for misfiled follow-ups, stale run-order stamps, or wrong cycle membership against the current initiative — fix these in Linear first, don't render around them.
 3. **Compute the frontier.** One chip per active lane's run-order head (SOP § Frontier rule; `sop/Linear_SOP.md § Board shapes` for what a head is — don't restate that rule here). Flag any head that isn't build-ready.
-4. **Apply this project's curation** (below) — parallel-safe groupings, collision notes, icon assignments.
-5. **Publish.** Load the `artifact-design` skill (and `artifact-capabilities` if wiring the live `mcp` path) before writing HTML. Redeploy to the URL configured above rather than minting a new one; keep the favicon stable across republishes.
+4. **Read and render focus tiers.** Fetch project `priority` with the lanes; A/B/C badge focus-lane heads and sort them first in the frontier; render the header strip and per-lane picker that write `save_project` (SOP § Focus tiers). When ≥2 focus-lane heads are Approved, add the runner line under the frontier.
+5. **Apply this project's curation** (below) — parallel-safe groupings, collision notes, icon assignments.
+6. **Publish.** Load the `artifact-design` skill (and `artifact-capabilities` if wiring the live `mcp` path) before writing HTML. Redeploy to the URL configured above rather than minting a new one; keep the favicon stable across republishes.
 
 ## Project curation — edit freely, sync will never touch this file
 

@@ -326,17 +326,21 @@ unit_annotate()  { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_annotate_block
 unit_flat()      { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_flat_render ); }
 unit_ready()     { ( cd "$REPO_ROOT" && source "$PK" && pk_first_ready_id ); }
 
-# Blocker In Progress → blocked; blocker Done → ready; Canceled → ready; none → ready.
+# Blocker In Progress → blocked; Done/Canceled → ready; none → ready. A merged
+# blocker parked in a post-merge "In <Env>" state is ready too (its code is on the
+# base branch already); "In Progress" is the one "In " state that still blocks.
 DEP_IN='[
   {"identifier":"A","title":"open blocker","priority":1,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X1","state":{"name":"In Progress"}}}]}},
   {"identifier":"B","title":"done blocker","priority":3,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X2","state":{"name":"Done"}}}]}},
   {"identifier":"C","title":"cancelled blocker","priority":3,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X3","state":{"name":"Canceled"}}}]}},
-  {"identifier":"D","title":"no relations","priority":4,"inverseRelations":{"nodes":[]}}
+  {"identifier":"D","title":"no relations","priority":4,"inverseRelations":{"nodes":[]}},
+  {"identifier":"E","title":"merged blocker","priority":3,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X5","state":{"name":"In Beta"}}}]}},
+  {"identifier":"F","title":"uat blocker","priority":3,"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"X6","state":{"name":"UAT"}}}]}}
 ]'
 ann=$(printf '%s' "$DEP_IN" | unit_annotate)
 v=$(printf '%s' "$ann" | jq -c '[.[] | {id:.identifier, blocked:.blocked}]')
-[ "$v" = '[{"id":"A","blocked":true},{"id":"B","blocked":false},{"id":"C","blocked":false},{"id":"D","blocked":false}]' ] \
-  && ok "annotate: open blocker→blocked; Done/Canceled/none→ready" \
+[ "$v" = '[{"id":"A","blocked":true},{"id":"B","blocked":false},{"id":"C","blocked":false},{"id":"D","blocked":false},{"id":"E","blocked":false},{"id":"F","blocked":true}]' ] \
+  && ok "annotate: In Progress/UAT blocker→blocked; Done/Canceled/In <Env>/none→ready" \
   || fail "annotate: blocked detection" "got $v"
 
 # Only the UNFINISHED blocker is listed (a "related" relation is ignored, a Done blocker dropped).
@@ -360,14 +364,88 @@ v=$(printf '%s' '[{"identifier":"Z","priority":1,"inverseRelations":{"nodes":[{"
 out=$(printf '%s' "$ann" | unit_flat)
 exp='  B — done blocker
   C — cancelled blocker
+  E — merged blocker
   D — no relations
-  A — open blocker  ⛔ blocked by X1'
+  A — open blocker  ⛔ blocked by X1
+  F — uat blocker  ⛔ blocked by X6'
 [ "$out" = "$exp" ] && ok "flat render: ready-first, blocked sunk + tagged" || fail "flat render" "got:
 $out"
 
 # Fail-safe: an issue with NO inverseRelations field at all → ready, no crash.
 v=$(printf '%s' '[{"identifier":"N","priority":2}]' | unit_annotate | jq -c '.[0].blocked')
 [ "$v" = "false" ] && ok "annotate: absent inverseRelations → ready (fail-safe)" || fail "annotate: absent relations" "got $v"
+
+# ── Unit tests: focus lanes (sourced) ────────────────────────────────────────
+# pk_focus_lanes_json maps Linear PROJECT priority 1/2/3 → tier A/B/C (0/4 = not
+# in focus), drops completed/canceled projects, orders A,B,C and flags a tier
+# held by two lanes as dup (kept, never hidden). Tags parse both P<N>. and
+# I<N>.P<N>. names; pk_focus_lane_match backs `pk next --lane`.
+
+echo "== focus lanes (sourced) =="
+
+unit_lanes()   { ( cd "$REPO_ROOT" && source "$PK" && pk_focus_lanes_json ); }
+unit_lane_m()  { ( cd "$REPO_ROOT" && source "$PK" && pk_focus_lane_match "$1" ); }
+unit_strip()   { ( cd "$REPO_ROOT" && source "$PK" && pk_focus_strip ); }
+unit_support() { ( cd "$REPO_ROOT" && source "$PK" && pk_focus_supporting_json "$1" ); }
+
+FOCUS_FIX='{"data":{"initiatives":{"nodes":[
+  {"name":"i5. Build","status":"Active","projects":{"nodes":[
+    {"id":"c","name":"I5.P1. Medium lane","state":"started","priority":3},
+    {"id":"a","name":"P2. Urgent lane","state":"planned","priority":1},
+    {"id":"b","name":"I5.P3. High lane","state":"backlog","priority":2},
+    {"id":"x","name":"I5.P4. Done but urgent","state":"completed","priority":1},
+    {"id":"y","name":"I5.P5. Low","state":"planned","priority":4},
+    {"id":"z","name":"I5.P6. None","state":"planned","priority":0}]}},
+  {"name":"Theme","status":"Active","projects":{"nodes":[{"id":"t","name":"P3. Theme lane","state":"planned","priority":3}]}}
+]}}}'
+
+v=$(printf '%s' "$FOCUS_FIX" | unit_lanes | jq -c 'map([.tier, .tag])')
+[ "$v" = '[["A","I5.P2"],["B","I5.P3"],["C","I5.P1"],["C","P3"]]' ] \
+  && ok "focus: priority→tier, ordered A,B,C; completed/Low/None excluded; P2.→I5.P2, I5.P3.→I5.P3, theme P3.→P3" \
+  || fail "focus: lanes derivation" "got $v"
+
+v=$(printf '%s' "$FOCUS_FIX" | unit_lanes | jq -c 'map(.dup)')
+[ "$v" = '[false,false,true,true]' ] && ok "focus: dup flagged only on the shared tier (C), both kept" || fail "focus: dup flag" "got $v"
+
+v=$(printf '%s' '{"data":{"initiatives":{"nodes":[{"name":"i1. X","status":"Active","projects":{"nodes":[{"id":"p","name":"I1.P1. Y","state":"planned","priority":0}]}}]}}}' | unit_lanes)
+[ "$v" = '[]' ] && ok "focus: no prioritized project → [] (pk next output unchanged)" || fail "focus: no lanes" "got $v"
+
+v=$(printf '%s' '' | unit_lanes 2>/dev/null || true)
+[ -z "$v" ] || [ "$v" = '[]' ] && ok "focus: empty input → no crash" || fail "focus: empty input" "got '$v'"
+
+# --lane matcher: case-insensitive, trailing dot tolerated, bare P<N> matches the
+# I<N>.P<N> tag; a Low-priority lane is still pinnable; unknown tag → [].
+v=$(printf '%s' "$FOCUS_FIX" | unit_lane_m "i5.p5." | jq -c 'map([.tier, .tag, .dup])')
+[ "$v" = '[["A","I5.P5",false]]' ] && ok "lane match: i5.p5. → I5.P5 as sole tier A (priority ignored)" || fail "lane match: exact" "got $v"
+v=$(printf '%s' "$FOCUS_FIX" | unit_lane_m "P2" | jq -c 'map(.tag)')
+[ "$v" = '["I5.P2"]' ] && ok "lane match: bare P2 matches I5.P2" || fail "lane match: bare P" "got $v"
+v=$(printf '%s' "$FOCUS_FIX" | unit_lane_m "I9.P9")
+[ "$v" = '[]' ] && ok "lane match: unknown tag → [] (caller errors)" || fail "lane match: unknown" "got $v"
+v=$(printf '%s' "$FOCUS_FIX" | unit_lane_m "I5.P4")
+[ "$v" = '[]' ] && ok "lane match: completed project not pinnable" || fail "lane match: completed" "got $v"
+
+# pk status strip.
+v=$(printf '%s' '[{"tier":"A","tag":"I8.P6"},{"tier":"C","tag":"I8.P5"},{"tier":"C","tag":"I8.P7"}]' | unit_strip)
+[ "$v" = 'Focus  A I8.P6 · B — · C I8.P5+I8.P7' ] && ok "focus strip: A/B/C with — for empty tier, + for dup" || fail "focus strip" "got '$v'"
+v=$(printf '%s' '[]' | unit_strip)
+[ -z "$v" ] && ok "focus strip: no lanes → no line" || fail "focus strip: empty" "got '$v'"
+
+# Supporting group: open blockers of lane issues, deduped, tier = best tier they
+# unblock, blockers inside a focus lane excluded, Done blockers excluded.
+SUP_IN='[
+  {"identifier":"L1","laneTier":"B","inverseRelations":{"nodes":[
+    {"type":"blocks","issue":{"identifier":"S1","title":"shared blocker","priority":3,"state":{"name":"Approved"},"project":{"name":"I8.P2. Other"}}},
+    {"type":"blocks","issue":{"identifier":"S2","title":"in-lane blocker","priority":1,"state":{"name":"Approved"},"project":{"name":"I8.P6. Lane"}}},
+    {"type":"related","issue":{"identifier":"R1","title":"related only","priority":1,"state":{"name":"Approved"},"project":null}}]}},
+  {"identifier":"L2","laneTier":"A","inverseRelations":{"nodes":[
+    {"type":"blocks","issue":{"identifier":"S1","title":"shared blocker","priority":3,"state":{"name":"Approved"},"project":{"name":"I8.P2. Other"}}},
+    {"type":"blocks","issue":{"identifier":"S3","title":"done blocker","priority":1,"state":{"name":"Done"},"project":null}},
+    {"type":"blocks","issue":{"identifier":"S4","title":"orphan blocker","priority":2,"state":{"name":"Needs Spec"},"project":null}}]}}
+]'
+v=$(printf '%s' "$SUP_IN" | unit_support '["I8.P6. Lane"]' | jq -c 'map([.identifier, .tier])')
+[ "$v" = '[["S4","A"],["S1","A"]]' ] \
+  && ok "supporting: deduped, inherits best tier (S1: B+A→A), in-lane/Done/related excluded, priority-sorted" \
+  || fail "supporting" "got $v"
 
 # ── Unit tests: pk portfolio runway render (sourced) ─────────────────────────
 # pk_runway_render groups issues by their P<N>. project (ordered by P<N>). Within
