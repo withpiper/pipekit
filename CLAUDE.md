@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
+**v4.38.0** — Last updated: 2026-09-27  *(**v4.38.0 — focus lanes: `pk next` and `pk status` lead with what you are driving.** A lane's tier is its Linear **project priority** (Urgent/High/Medium → A/B/C), set from the lane-map page; `pk next` prints the focus lanes, then the blockers that support them, then the rest of the board, and `--lane` pins one for a run. `pk sessions` lists every live Claude session across front ends, waiting first. A blocker merged into an `In <Env>` state no longer blocks. `/work` takes `>>` plan annotations; `/verify` records measurements. Carries v4.37.0 — follow-ups are placed at creation.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -72,7 +72,8 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 
 | Command | Purpose |
 |---------|---------|
-| `pk next` | What's next, read live from Linear — derives the current initiative, groups issues by status with per-group hints. |
+| `pk next` | What's next, read live from Linear — derives the current initiative, groups issues by status with per-group hints. Focus lanes first (v4.38.0: Linear project priority 1/2/3 → tier A/B/C, then Supporting blockers, then the rest of the board); `--lane <TAG>` pins one lane as tier A for the run. |
+| `pk sessions` | Every live Claude Code session on this machine, read from transcript tails — `waiting` / `waiting?` / `working`, waiting first, with what each is asking. `pk next` and `pk status` lead with a one-line count when another session is waiting. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
 | `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, hands it to the saved `pk-execute` workflow as data — one agent per task, verify before commit, expected-HEAD threading, optional disjoint-file parallel waves with an integration step — and writes the SUMMARY from the structured results. |
 | `/verify` | Pre-deploy gate. |

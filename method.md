@@ -1,6 +1,6 @@
 # Pipekit
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
+**v4.38.0** — Last updated: 2026-09-27  *(**v4.38.0 — focus lanes: `pk next` and `pk status` lead with what you are driving.** A lane's tier is its Linear **project priority** (Urgent/High/Medium → A/B/C), set from the lane-map page; `pk next` prints the focus lanes, then the blockers that support them, then the rest of the board, and `--lane` pins one for a run. `pk sessions` lists every live Claude session across front ends, waiting first. A blocker merged into an `In <Env>` state no longer blocks. `/work` takes `>>` plan annotations; `/verify` records measurements. Carries v4.37.0 — follow-ups are placed at creation.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
@@ -383,6 +383,26 @@ or dependency reaches for one. The boundaries below make ownership explicit.
    4. **Strategy-sync nudge** — after a milestone ships, `/strategy-sync` is prompted via `/pk-exit` + convention.
    5. **Pipekit-side ephemeral state** lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds the `pending-strategy-sync` marker and per-issue pipeline-state records consumed by `pk *` commands. Out-of-repo by design — v1.6.0 placed these at `.pipekit/`, where an active-plan file-guard hook silently blocked writes (#13); the relocation made writes succeed unconditionally.
 5. **When drift is suspected, stop and reconcile.** Symptoms: a plan references a Linear issue that doesn't exist; a Linear issue has no corresponding plan. Resolve the mismatch before continuing — drift compounds.
+
+### Focus lanes (v4.38.0)
+
+The roadmap walk answers "what is the next lane in order?"; focus lanes answer "which lanes am I actually driving this week?" The tier lives in Linear's **project priority** field on the `I{N}.P{N}.` project — no new config key, no committed file:
+
+| Project priority | Tier |
+|---|---|
+| 1 (Urgent) | **A** |
+| 2 (High) | **B** |
+| 3 (Medium) | **C** |
+| 0 (None) / 4 (Low) | not in focus |
+
+`pk next` presents focus lanes first (A, B, C — each with its In Progress / Approved / Needs Spec, blockers annotated), then a **Supporting** group (issues anywhere on the board that block a focus-lane issue, tagged `↳ A/B/C` with the tier they inherit), then the roadmap walk unchanged under **Rest of board**. Nothing is hidden. `pk status` prefixes its output with a strip: `Focus  A I8.P6 · B I8.P5 · C —`. With no prioritized project, both commands read exactly as before. `pk next --lane I8.P6` pins one lane as the sole tier A for that run, ignoring priorities.
+
+**Policy.** **A** takes every free slot. **B** is worked only when A is stalled (all blocked, or nothing specced). **C** only when both are. Supporting work inherits the tier of what it unblocks — it is not a fourth queue. Re-tier at lane completion or at `/phase-plan`, not daily; **max three** focus lanes, and a tier held by two projects is a warning `pk next` prints, not a state it resolves. The picker is the lane-map artifact (`/lane-map`): decide the tiers there, write them to Linear, and let `pk next` read them back.
+
+### Sessions across front ends
+
+Linear says what the work is; it does not say which of your running sessions has stopped and is waiting for you. `pk sessions` answers that from the transcripts Claude Code already writes under `~/.claude/projects/` — one view across terminal, desktop app and IDE, with no daemon and no app dependency. Each session reads `waiting` (the turn ended, or an away summary was written — its text is shown as the ask), `waiting?` (a tool call has gone unanswered for more than 45s: a permission prompt or a long tool — the transcript does not record which), or `working`; `--all` adds `stale`. The issue is parsed from the session's branch or working directory, so a worktree session lists under its issue id.
+`pk next` and `pk status` lead with one line — `2 sessions are waiting on you → pk sessions` — when a session other than the current one is waiting, and print nothing otherwise. The scan is read-only, tail-only, and never fails its caller.
 
 ### Known Drift Risks
 

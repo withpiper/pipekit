@@ -9,6 +9,7 @@
 # Subcommands:
 #   pk next                 — what should I do now? (Linear + git → next command)
 #   pk status               — quick triage of in-flight + UAT + Approved
+#   pk sessions             — live Claude Code sessions on this machine, waiting first
 #   pk portfolio            — cross-initiative map: all i<N>. + active runway
 #   pk branch <ID>          — create worktree+branch, Linear → In Progress
 #   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
@@ -31,7 +32,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.37.0"
+PK_VERSION="4.38.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -376,8 +377,98 @@ pk_issue_show_render() {
 
 # Raw initiatives query. Empty on no-key / error (so callers fall back cleanly).
 pk_linear_initiatives_json() {
-  local q='query { initiatives(first: 50) { nodes { id name status projects(first: 50) { nodes { id name state } } } } }'
+  local q='query { initiatives(first: 50) { nodes { id name status projects(first: 50) { nodes { id name state priority } } } } }'
   pk_linear_gql "$q" '{}' 2>/dev/null
+}
+
+# ── Focus lanes (v4.38.0) ─────────────────────────────────────────────────────
+# A focus lane is a live I<N>.P<N>. project whose Linear *project priority* is
+# 1/2/3 (Urgent/High/Medium → tier A/B/C). Priority 0 (none) or 4 (Low) = not in
+# focus. pk next/pk status present focus lanes first; the roadmap walk stays the
+# fallback and is never hidden. All helpers here are pure jq (smoke-covered).
+
+# Every live prefixed project as {id, name, tag, priority} (stdin: initiatives
+# JSON). tag = the I<N>.P<N> prefix without its trailing dot, uppercased, so
+# `--lane i8.p6` and `--lane I8.P6` both match. A bare P<N>. project borrows its
+# initiative's number (i8. + P6. → I8.P6) so tags stay unambiguous across
+# initiatives; a project under an unprefixed theme keeps a bare P<N> tag.
+# Projects are unique by id (Linear allows one project in several initiatives).
+pk_lane_projects_json() {
+  jq -c '
+    [ (.data.initiatives.nodes // [])[]
+      | (.name | if test("^[iI][0-9]+\\.") then (capture("^[iI](?<n>[0-9]+)\\.") | .n) else null end) as $inum
+      | (.projects.nodes // [])[]
+      | select(.name | test("^([iI][0-9]+\\.)?[pP][0-9]+\\."))
+      | select(.state != "completed" and .state != "canceled")
+      | (.name | capture("^([iI](?<i>[0-9]+)\\.)?[pP](?<p>[0-9]+)\\.")) as $c
+      | { id, name, priority: (.priority // 0),
+          tag: ( (($c.i // $inum) | if . == null then "" else "I\(.)." end) + "P\($c.p)" ) } ]
+    | unique_by(.id)
+  '
+}
+
+# Focus lanes in tier order (stdin: initiatives JSON) → array of
+# {tier, id, name, tag, dup}. dup is true on every lane of a tier that holds
+# more than one project — pk warns, but keeps both (never hides a lane).
+pk_focus_lanes_json() {
+  pk_lane_projects_json | jq -c '
+    def tnum: capture("(^|\\.)P(?<n>[0-9]+)$") | .n | tonumber;
+    def inum: if test("^I[0-9]+\\.") then (capture("^I(?<n>[0-9]+)\\.") | .n | tonumber) else 9999 end;
+    map(select(.priority >= 1 and .priority <= 3)
+        | .tier = (if .priority == 1 then "A" elif .priority == 2 then "B" else "C" end))
+    | sort_by([.tier, (.tag | inum), (.tag | tnum)])
+    | (group_by(.tier) | map(select(length > 1) | .[0].tier)) as $dups
+    | map({tier, id, name, tag, dup: (.tier as $t | $dups | index($t) != null)})
+  '
+}
+
+# `pk next --lane <TAG>`: the one live project whose tag equals <TAG>
+# (case-insensitive; a bare `P6` also matches `I8.P6`) as a single tier-A lane,
+# ignoring Linear priorities. Empty array when nothing matches. stdin: initiatives JSON.
+pk_focus_lane_match() {
+  pk_lane_projects_json | jq -c --arg want "$1" '
+    ($want | ascii_upcase | sub("\\.$"; "")) as $w
+    | [ .[] | select(.tag == $w or (.tag | endswith("." + $w))) ]
+    | .[0:1] | map({tier: "A", id, name, tag, dup: false})
+  '
+}
+
+# One-line strip for pk status (stdin: focus lanes JSON):
+#   Focus  A I8.P6 · B I8.P5 · C —
+# Empty output when there is no focus lane, so the caller can omit the line.
+pk_focus_strip() {
+  jq -r '
+    if length == 0 then empty else . as $lanes
+      | "Focus  " + ( ["A","B","C"] | map(. as $t
+        | ([ $lanes[] | select(.tier == $t) | .tag ] | if length == 0 then "—" else join("+") end)
+        | "\($t) \(.)") | join(" · ") )
+    end
+  '
+}
+
+# Supporting work for pk next (stdin: the focus lanes' issue arrays concatenated,
+# each issue carrying .laneTier). Emits the unique open blockers of those issues
+# — read off the inverseRelations the lane queries already fetch, so no second
+# network round-trip — each tagged with the best tier it unblocks. Blockers that
+# themselves sit in a focus lane are excluded (they are already listed there).
+# Args: $1 = JSON array of focus-lane project names.
+pk_focus_supporting_json() {
+  jq -c --argjson lanes "${1:-[]}" "$PK_JQ_BLOCKER_CLOSED"'
+    [ .[] | .laneTier as $t
+      | (.inverseRelations.nodes // [])[]
+      | select(.type == "blocks")
+      | select((.issue.state.name // "") | blocker_closed | not)
+      | (.issue.project.name // "") as $pn
+      | select(($lanes | index($pn)) == null)
+      | .issue + {tier: $t} ]
+    | group_by(.identifier)
+    | map(.[0] + {tier: (map(.tier) | min)})
+    | sort_by([.tier, (if (.priority // 0) == 0 then 5 else .priority end)])
+  '
+}
+
+pk_focus_supporting_render() {
+  jq -r '.[] | "  ↳ \(.tier)  \(.identifier) — \(.title // "")  (\(.state.name // "?") · \(.project.name // "no project"))"'
 }
 
 # Derive "<phase-name>\t<project-id>" from a Linear initiatives response.
@@ -464,17 +555,27 @@ pk_issues_group_render() {
   '
 }
 
+# A blocker stops blocking once it is MERGED, not once it is Done: on a multi-tier
+# ladder an issue sits in "In <Env>" for days while its code is already on the
+# integration branch the dependent forks from. So closed = Done/Canceled/Duplicate
+# or any post-merge "In <Env>" state (the v2.5.0 naming pk_state_rank ranks ≥ 11);
+# "In Progress" is the one "In " state that is pre-merge and stays open. Whether a
+# blocker must also reach prod first is pk promote's concern, not the start gate's.
+# Shared as a jq prelude because the annotate helpers are pure jq.
+PK_JQ_BLOCKER_CLOSED='def blocker_closed: (. == "Done" or . == "Canceled" or . == "Duplicate" or (. != "In Progress" and test("^In ")));'
+
 # Annotate each issue (stdin: array enriched with inverseRelations) with
 # .blockerIds (its UNFINISHED blockers) and .blocked. A blocker is a Linear
 # inverseRelation of type "blocks" whose .issue (the blocking side) is not yet
-# Done/Canceled. Fail-safe: missing/unknown relations → no blockers (an issue is
-# never falsely blocked, and bad data never crashes the pick). Pure (no network).
+# closed per blocker_closed above. Fail-safe: missing/unknown relations → no
+# blockers (an issue is never falsely blocked, and bad data never crashes the
+# pick). Pure (no network).
 pk_issues_annotate_blocked() {
-  jq '
+  jq "$PK_JQ_BLOCKER_CLOSED"'
     def open_blockers:
       [ (.inverseRelations.nodes // [])[]
         | select(.type == "blocks")
-        | select((.issue.state.name // "") | (. != "Done" and . != "Canceled"))
+        | select((.issue.state.name // "") | blocker_closed | not)
         | .issue.identifier ];
     map(.blockerIds = open_blockers | .blocked = ((.blockerIds | length) > 0))
   '
@@ -587,7 +688,7 @@ pk_linear_issues_in_state_project() {
     pk_linear_issues_in_state "$state"
     return $?
   fi
-  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority updatedAt state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
+  local q='query($team: String!, $state: String!, $project: ID!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}, project: {id: {eq: $project}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority updatedAt state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier title priority state { name } project { name } } } } } } }'
   # Most-important-first (orderBy: updatedAt is the API-side tiebreak; the jq
   # sort in pk_issues_priority_sort is the importance ranking on top of it).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" --arg project "$project_id" '{team:$team, state:$state, project:$project}')" \
@@ -603,7 +704,7 @@ pk_linear_issues_in_state() {
     echo "ERROR: Team name not set in method.config.md" >&2
     return 1
   fi
-  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority updatedAt state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } } } } }'
+  local q='query($team: String!, $state: String!) { issues(filter: {team: {name: {eq: $team}}, state: {name: {eq: $state}}}, orderBy: updatedAt, first: 25) { nodes { identifier title priority updatedAt state { name } project { name } inverseRelations(first: 20) { nodes { type issue { identifier title priority state { name } project { name } } } } } } }'
   # Most-important-first (see pk_linear_issues_in_state_project for the rationale).
   pk_linear_gql "$q" "$(jq -n --arg team "$team" --arg state "$state" '{team:$team, state:$state}')" \
     | jq -r '.data.issues.nodes // []' | pk_issues_priority_sort
@@ -1650,7 +1751,234 @@ pk_warn_if_conflicting() {
 # Subcommands
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Sessions across front ends ────────────────────────────────────────────────
+# `pk sessions` lists every live Claude Code session on this machine from the
+# transcripts Claude Code already writes (<projects>/<slug>/<sessionId>.jsonl) —
+# terminal, desktop app and IDE sessions alike, no daemon and no app dependency.
+# Read-only, and only ever the last PK_SESSIONS_TAIL_BYTES of a transcript.
+# A permission wait is not recorded in the transcript, so an unanswered tool
+# call that has gone quiet is reported as `waiting?`, never as a certainty.
+
+PK_SESSIONS_TAIL_BYTES=262144
+PK_SESSIONS_QUIET_SECS=45
+
+pk_sessions_root() {
+  printf '%s\n' "${PK_CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
+}
+
+# The session this pk runs inside, if any. Claude Code exports
+# CLAUDE_CODE_SESSION_ID; CLAUDE_SESSION_ID is honoured first as the override.
+pk_sessions_current_id() {
+  printf '%s\n' "${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}"
+}
+
+# File mtime as epoch seconds (BSD stat, then GNU). Empty when unreadable.
+pk_file_mtime() {
+  # GNU first. `stat -f` is BSD's format flag but GNU's --file-system: there it
+  # fails on the "%m" operand AND prints a filesystem block for the real path to
+  # stdout, so a BSD-first chain hands GNU callers garbage followed by the mtime.
+  # BSD rejects -c outright with nothing on stdout, so this order is clean on both.
+  stat -c %Y -- "$1" 2>/dev/null || stat -f %m -- "$1" 2>/dev/null || true
+}
+
+# Sort order shared by the text and --json outputs: waiting → waiting? → working
+# → stale → closed, then most recently touched first.
+PK_JQ_SESSIONS_SORT='def state_rank: {"waiting": 0, "waiting?": 1, "working": 2, "stale": 3, "closed": 4}[.] // 5;
+  def sessions_sort: sort_by([(.state | state_rank), .age_secs]);'
+
+# One transcript → one JSON object. Args: path, now (epoch), window seconds
+# (optional; 0 = never stale). Reads the tail only; a first line cut mid-object
+# and any line that is not a JSON object are dropped by `fromjson?`. Unknown
+# line types fall through the event filter untouched.
+#   state  waiting   last event is an assistant end_turn, or an away_summary
+#          waiting?  last event is an assistant tool call with no tool_result
+#                    after it, and the file has been quiet > PK_SESSIONS_QUIET_SECS
+#          working   anything else
+#          stale     mtime older than the window (overrides the above)
+#   ask    the away_summary written since the last user turn — an older one
+#          describes a question that was already answered.
+pk_sessions_scan_file() {
+  local path="$1" now="$2" window="${3:-0}" mtime sid slug
+  mtime=$(pk_file_mtime "$path")
+  [ -n "$mtime" ] || return 1
+  sid=$(basename -- "$path" .jsonl)
+  slug=$(basename -- "$(dirname -- "$path")")
+  tail -c "$PK_SESSIONS_TAIL_BYTES" -- "$path" | jq -Rnc \
+    --arg sid "$sid" --arg slug "$slug" \
+    --argjson age "$((now - mtime))" --argjson window "$window" \
+    --argjson quiet "$PK_SESSIONS_QUIET_SECS" '
+    def kinds: (.message.content | if type == "array" then map(.type? // "") else [] end);
+    def human: if . < 60 then "\(.)s" elif . < 3600 then "\(. / 60 | floor)m"
+               elif . < 86400 then "\(. / 3600 | floor)h" else "\(. / 86400 | floor)d" end;
+    def clip($n): if length > $n then .[0:$n] + "…" else . end;
+    [ inputs | fromjson? | select(type == "object") | select(.isSidechain != true) ] as $lines
+    # Meaningful events: the conversation itself plus the away summary. Titles,
+    # attachments, mode changes, snapshots and hook/duration system lines trail
+    # a finished turn and say nothing about who moves next.
+    | [ $lines | to_entries[]
+        | select(.value.type == "user" or .value.type == "assistant"
+                 or (.value.type == "system" and .value.subtype == "away_summary")) ] as $ev
+    | ($ev | last | .value) as $last
+    | ([ $ev[] | select(.value.type == "user") | .key ] | last // -1) as $last_user
+    | ([ $ev[] | select(.value.type == "system" and .key > $last_user) | .value.content
+         | select(type == "string") ] | last // "") as $away
+    | ([ $lines[] | select(.cwd != null) ] | last // {}) as $ctx
+    | ($ctx.cwd // "") as $cwd | ($ctx.gitBranch // "") as $branch
+    | ( if $last == null then "working"
+        elif $last.type == "system" then "waiting"
+        elif $last.type == "assistant" and $last.message.stop_reason == "end_turn" then "waiting"
+        elif $last.type == "assistant" and $age > $quiet
+             and ($last.message.stop_reason == "tool_use" or ($last | kinds | index("tool_use")) != null)
+          then "waiting?"
+        else "working" end ) as $live
+    | (if $window > 0 and $age > $window then "stale" else $live end) as $state
+    | { sessionId: $sid, project: $slug, cwd: $cwd, branch: $branch,
+        issue: ( [ ($branch, $cwd) | match("[A-Z]+-[0-9]+")? | .string ] | first
+                 // ($cwd | sub("/+$"; "") | split("/") | last)
+                 // "" | if . == "" then $slug else . end ),
+        state: $state, age_secs: $age, age: ($age | if . < 0 then 0 else . end | human),
+        ask: ( if $state == "waiting" then
+                 ($away | gsub("\\s+"; " ") | sub(" ?\\(disable recaps in /config\\)$"; "")
+                  | sub("^ "; "") | clip(90))
+               else "" end ),
+        title: ( [ $lines[] | select(.type == "custom-title") | .customTitle // empty ] | last
+                 // ([ $lines[] | select(.type == "ai-title") | .aiTitle // empty ] | last)
+                 // "" ) }
+  '
+}
+
+# Every candidate transcript → sorted JSON array. Args: window minutes, "all"
+# (optional) to widen the candidates to 7 days and mark the rest stale.
+# Subagent transcripts live one directory deeper and are not sessions.
+# Working directories of the Claude Code processes running right now, as a JSON
+# object {cwd: count}. A transcript cannot say whether its session is still open:
+# one closed after a finished turn ends on the same end_turn as one still waiting
+# on you, and a list where every row is "waiting" is no signal. The process table
+# can. Matches the CLI (`claude`), the npm shim (`claude.exe`) and the desktop
+# app's bundled binary (…/claude-code/<version>/…/claude) by executable name.
+# Emits {} when ps/lsof cannot answer or nothing matched; callers read {} as
+# "unknown" and leave every state alone (fail open, never hide a live session).
+pk_sessions_live_cwds() {
+  local pids
+  command -v lsof >/dev/null 2>&1 || { echo '{}'; return 0; }
+  pids=$(ps -axo pid=,comm= 2>/dev/null | awk '
+    { pid = $1; $1 = ""; sub(/^ +/, "") }
+    $0 ~ /(^|\/)claude(\.exe)?$/ { print pid }' | paste -sd, -)
+  [ -n "$pids" ] || { echo '{}'; return 0; }
+  lsof -a -d cwd -p "$pids" -Fn 2>/dev/null | sed -n 's/^n//p' \
+    | jq -Rsc 'split("\n") | map(select(. != "")) | group_by(.)
+               | map({key: .[0], value: length}) | from_entries' 2>/dev/null \
+    || echo '{}'
+}
+
+# Sessions array on stdin + a {cwd: count} map ($1) → the same array with every
+# session that has no running process marked "closed". Per cwd the N most
+# recently written transcripts are the live ones: two sessions can share a
+# worktree, and one process there means the older transcript is a closed session.
+# Pure (no process access) so the smoke suite covers it.
+pk_sessions_apply_liveness() {
+  local live="${1:-}"
+  [ -n "$live" ] || live='{}'
+  jq -c --argjson live "$live" '
+    if ($live | length) == 0 then .
+    else
+      group_by(.cwd)
+      | map( sort_by(.age_secs) as $g
+             | ($live[$g[0].cwd] // 0) as $n
+             | [ range(0; $g | length) as $i
+                 | $g[$i] | if $i < $n then . else (.state = "closed" | .ask = "") end ] )
+      | add // []
+    end'
+}
+
+pk_sessions_scan() {
+  local minutes="$1" all="${2:-}" root now f window=0
+  root=$(pk_sessions_root)
+  [ -d "$root" ] || { echo "[]"; return 0; }
+  now=$(date +%s)
+  if [ "$all" = "all" ]; then
+    window=$((minutes * 60))
+    set -- -mtime -7
+  else
+    set -- -mmin "-$minutes"
+  fi
+  find "$root" -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' "$@" 2>/dev/null \
+    | while IFS= read -r f; do
+        pk_sessions_scan_file "$f" "$now" "$window" 2>/dev/null || true
+      done \
+    | jq -sc '.' \
+    | pk_sessions_apply_liveness "${PK_SESSIONS_LIVE_CWDS:-$(pk_sessions_live_cwds)}" \
+    | jq -c --arg all "$all" "$PK_JQ_SESSIONS_SORT"'
+        (if $all == "all" then . else map(select(.state != "closed")) end) | sessions_sort'
+}
+
+# Sessions JSON array on stdin → text. Arg: the header's window label.
+pk_sessions_render() {
+  jq -r --arg label "${1:-last 60 min}" "$PK_JQ_SESSIONS_SORT"'
+    def rpad($n): . + (" " * ([$n - length, 0] | max));
+    def lpad($n): (" " * ([$n - length, 0] | max)) + .;
+    sessions_sort
+    | ([ .[] | select(.state == "waiting" or .state == "waiting?") ] | length) as $w
+    | ([ .[] | .issue[0:28] | length ] | max // 0) as $iw
+    | ([ .[] | .age | length ] | max // 0) as $aw
+    | ([ .[] | select(.state != "closed" and .state != "stale") ] | length) as $n
+    | if length == 0 then "No live sessions (\($label))."
+      else
+        "\($n) live session\(if $n == 1 then "" else "s" end) (\($label))"
+          + (if $w > 0 then " — \($w) waiting on you" else "" end),
+        "",
+        ( .[] | (.state | rpad(8)) + "  " + (.issue[0:28] | rpad($iw)) + "  " + (.age | lpad($aw)) + "  "
+            + ( if .state == "waiting" and .ask != "" then "\"\(.ask)\""
+                elif .state == "waiting?" then "unanswered tool call (permission?)"
+                else .title end )
+          | sub(" +$"; "") )
+      end
+  '
+}
+
+# Cross-link for pk next / pk status: one line plus a blank when another session
+# is waiting, nothing otherwise. Orientation only — it must never fail or slow
+# its caller, so the scan is capped to the last hour and every error is dropped.
+pk_sessions_crosslink() {
+  local self n
+  self=$(pk_sessions_current_id)
+  n=$(pk_sessions_scan 60 2>/dev/null | jq -r --arg self "$self" \
+    '[ .[] | select(.state == "waiting" or .state == "waiting?") | select(.sessionId != $self) ] | length' 2>/dev/null) || return 0
+  case "$n" in ''|0|*[!0-9]*) return 0 ;; esac
+  if [ "$n" = "1" ]; then
+    echo "1 session is waiting on you → pk sessions"
+  else
+    echo "$n sessions are waiting on you → pk sessions"
+  fi
+  echo ""
+}
+
+cmd_sessions() {
+  local minutes=60 all="" json=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --minutes) minutes="${2:-}"; shift; [ $# -gt 0 ] && shift ;;
+      --minutes=*) minutes="${1#--minutes=}"; shift ;;
+      --all) all="all"; shift ;;
+      --json) json=1; shift ;;
+      *) echo "Unknown option: $1" >&2; return 1 ;;
+    esac
+  done
+  case "$minutes" in
+    ''|*[!0-9]*|0) echo "ERROR: --minutes needs a positive whole number, e.g. --minutes 120" >&2; return 1 ;;
+  esac
+  local sessions label="last $minutes min"
+  sessions=$(pk_sessions_scan "$minutes" "$all")
+  [ "$all" = "all" ] && label="last 7 days; stale = quiet > $minutes min"
+  if [ "$json" = "1" ]; then
+    printf '%s\n' "$sessions"
+  else
+    printf '%s' "$sessions" | pk_sessions_render "$label"
+  fi
+}
+
 cmd_next() {
+  pk_sessions_crosslink || true
   local current
   current=$(pk_current_branch)
   local issue
@@ -1694,11 +2022,119 @@ cmd_next() {
     echo "Switch to $integration first:  git checkout $integration"
     return 0
   fi
-  # Phase-aware mode: Linear initiatives (i<N>./P<N>.). One fetch via
-  # pk_phase_context. Falls back to "next Approved anywhere" when the board
-  # carries no live i<N>. initiative.
+  # --lane <TAG>: treat that live project as the sole tier-A focus lane for this
+  # run, ignoring Linear project priorities.
+  local lane_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --lane) lane_arg="${2:-}"; [ -z "$lane_arg" ] && { echo "ERROR: --lane needs a tag, e.g. --lane I8.P6" >&2; return 1; }; shift 2 ;;
+      --lane=*) lane_arg="${1#--lane=}"; shift ;;
+      *) echo "Unknown option: $1" >&2; return 1 ;;
+    esac
+  done
+  # One initiatives fetch drives the focus lanes AND the roadmap walk below.
+  local init_json lanes
+  init_json=$(pk_linear_initiatives_json)
+  if [ -n "$lane_arg" ]; then
+    lanes=$(printf '%s' "$init_json" | pk_focus_lane_match "$lane_arg")
+    if [ "$(printf '%s' "$lanes" | jq 'length')" = "0" ]; then
+      echo "ERROR: --lane $lane_arg matches no live I<N>.P<N>. project. Live lanes:" >&2
+      printf '%s' "$init_json" | pk_lane_projects_json | jq -r 'sort_by(.name)[] | "  \(.tag)  \(.name)"' >&2
+      return 1
+    fi
+  else
+    lanes=$(printf '%s' "$init_json" | pk_focus_lanes_json)
+  fi
+  if [ "$(printf '%s' "$lanes" | jq 'length')" -gt 0 ]; then
+    pk_next_focus_lanes "$current" "$lanes"
+    echo "Rest of board"
+    echo "─────────────"
+  fi
+  pk_next_rest_of_board "$current" "$init_json"
+}
+
+# Focus-lane block for pk next: each lane in tier order with its In Progress /
+# Approved / Needs Spec issues (blocked annotation intact), the suggested next
+# action from the first lane — A, then B, then C — holding a ready Approved
+# issue, then the Supporting group (open blockers of focus-lane issues, tagged
+# with the tier they inherit). Args: current-branch, focus lanes JSON.
+pk_next_focus_lanes() {
+  local current="$1" lanes="$2"
+  echo "On $current — Focus lanes (Linear project priority → tier)"
+  echo ""
+  local dup_tiers
+  dup_tiers=$(printf '%s' "$lanes" | jq -r '[.[] | select(.dup) | .tier] | unique | .[]')
+  local t
+  for t in $dup_tiers; do
+    echo "⚠ two lanes are tier $t — fix in Linear or the lane map"
+  done
+  [ -n "$dup_tiers" ] && echo ""
+  local all="[]" next_id="" next_tier="" ready_total=0
+  local n i tier id name tag in_progress approved needs_spec ip_count ap_count ns_count
+  n=$(printf '%s' "$lanes" | jq 'length')
+  for ((i = 0; i < n; i++)); do
+    tier=$(printf '%s' "$lanes" | jq -r ".[$i].tier")
+    id=$(printf '%s' "$lanes" | jq -r ".[$i].id")
+    name=$(printf '%s' "$lanes" | jq -r ".[$i].name")
+    echo "$tier · $name"
+    in_progress=$(pk_linear_issues_in_state_project "In Progress" "$id" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
+    approved=$(pk_linear_issues_in_state_project "Approved" "$id" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
+    needs_spec=$(pk_linear_issues_in_state_project "Needs Spec" "$id" 2>/dev/null | pk_issues_annotate_blocked || echo "[]")
+    ip_count=$(echo "$in_progress" | jq 'length')
+    ap_count=$(echo "$approved" | jq 'length')
+    ns_count=$(echo "$needs_spec" | jq 'length')
+    if [ "$ip_count" -gt 0 ]; then
+      echo "  In Progress ($ip_count):"
+      echo "$in_progress" | pk_issues_flat_render | sed 's/^/  /'
+    fi
+    if [ "$ap_count" -gt 0 ]; then
+      echo "  Approved ($ap_count):"
+      echo "$approved" | pk_issues_flat_render | sed 's/^/  /'
+      ready_total=$((ready_total + $(echo "$approved" | jq '[.[] | select(.blocked | not)] | length')))
+      if [ -z "$next_id" ]; then
+        next_id=$(echo "$approved" | pk_first_ready_id)
+        [ -n "$next_id" ] && next_tier="$tier"
+      fi
+    fi
+    if [ "$ns_count" -gt 0 ]; then
+      echo "  Needs Spec ($ns_count):"
+      echo "$needs_spec" | pk_issues_flat_render | sed 's/^/  /'
+    fi
+    if [ "$ip_count" = "0" ] && [ "$ap_count" = "0" ] && [ "$ns_count" = "0" ]; then
+      echo "  (no In Progress / Approved / Needs Spec issues — lane spent? re-tier or /phase-plan)"
+    fi
+    echo ""
+    all=$(jq -n --argjson a "$all" --argjson b "$in_progress" --argjson c "$approved" --argjson d "$needs_spec" --arg t "$tier" \
+      '$a + (($b + $c + $d) | map(.laneTier = $t))')
+  done
+  if [ -n "$next_id" ]; then
+    echo "Run:  pk branch $next_id   (focus $next_tier)"
+  else
+    echo "No focus lane has a ready Approved issue — spec one (/light-spec) or clear its blockers."
+  fi
+  if [ "$ready_total" -ge 2 ]; then
+    echo "$ready_total focus-lane issues are build-ready and unblocked → /06-linear-todo-runner --dry-run"
+  fi
+  echo ""
+  local supporting sup_count
+  supporting=$(printf '%s' "$all" | pk_focus_supporting_json "$(printf '%s' "$lanes" | jq -c 'map(.name)')")
+  sup_count=$(printf '%s' "$supporting" | jq 'length')
+  if [ "$sup_count" -gt 0 ]; then
+    echo "Supporting (blocks a focus lane) ($sup_count):"
+    printf '%s' "$supporting" | pk_focus_supporting_render
+    echo ""
+  fi
+}
+
+# The pre-focus pk next body, unchanged: the roadmap walk's current initiative
+# with its In Progress / Approved / Needs Spec, else the global "next Approved
+# anywhere" read. Args: current-branch, initiatives JSON.
+pk_next_rest_of_board() {
+  local current="$1" init_json="$2"
+  # Phase-aware mode: Linear initiatives (i<N>./P<N>.). Falls back to "next
+  # Approved anywhere" when the board carries no live i<N>. initiative.
   local phase_ctx phase_name phase_project
-  phase_ctx=$(pk_phase_context)
+  phase_ctx=$(pk_native_phase_context "$init_json")
   phase_name=$(printf '%s' "$phase_ctx" | cut -f1)
   phase_project=$(printf '%s' "$phase_ctx" | cut -f2)
 
@@ -1796,11 +2232,18 @@ cmd_status() {
     return 1
   fi
   pk_require_linear_key || return 1
+  pk_sessions_crosslink || true
+  # One initiatives fetch drives the focus strip and the roadmap walk.
+  local init_json focus
+  init_json=$(pk_linear_initiatives_json)
+  # Focus strip (v4.38.0) — omitted entirely when no project carries priority 1-3.
+  focus=$(printf '%s' "$init_json" | pk_focus_lanes_json | pk_focus_strip)
+  [ -n "$focus" ] && echo "$focus"
   echo "── Linear: $team ──"
   # Roadmap walk (Linear initiatives) when migrated to the native phase surface.
   # Silent when no i<N>. initiatives exist (un-migrated project / no Linear key).
   local roadmap
-  roadmap=$(pk_native_roadmap_summary "$(pk_linear_initiatives_json)")
+  roadmap=$(pk_native_roadmap_summary "$init_json")
   if [ -n "$roadmap" ]; then
     echo ""
     echo "Roadmap (i<N>. initiatives → current P<N>. project):"
@@ -3835,8 +4278,9 @@ cmd_help() {
 pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
 
 Subcommands:
-  pk next                         What should I do now?
+  pk next [--lane <TAG>]          What should I do now? Focus lanes (project priority 1/2/3 → tier A/B/C) first, then Supporting, then the rest of the board. --lane I8.P6 pins that lane as tier A for this run.
   pk status                       Quick triage of the Linear board + worktrees
+  pk sessions [--minutes N] [--all] [--json]   Every live Claude Code session on this machine, read from its transcript tail: waiting / waiting? (unanswered tool call) / working, with what each is asking. Default window 60 min; --all widens to 7 days and marks the rest stale.
   pk issue show <ID> [--fields a,b,c] [--comments] [--json]   Lean issue read via the GraphQL path — compact text (default: id,title,state,labels); comments OFF by default. The low-token alternative to MCP getIssueById, whose result drags the whole comment thread into the session as a sticky payload.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
@@ -4124,6 +4568,7 @@ main() {
   case "$sub" in
     next)     cmd_next "$@" ;;
     status)   cmd_status "$@" ;;
+    sessions) cmd_sessions "$@" ;;
     issue)    cmd_issue "$@" ;;
     portfolio) cmd_portfolio "$@" ;;
     branch)   cmd_branch "$@" ;;

@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.29.1** — Last updated: 2026-08-03  *(Snapshot-vs-live softened from a binary choice to a decision with a documented hybrid option: curation stays authored, a live overlay can reconcile onto it loudly (append+flag uncurated-active, fold uncurated-done, mark curated-but-gone stale) instead of the map picking a side — this is also the staleness signal for free, no timestamp check needed. Plus an artifact gotcha: declaring `mcp` on a publicly-shared artifact 422s; un-share first via the claude.ai UI, no tool-level path. Sourced from SiteLine's `Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md`.)*
+**v4.38.0** — Last updated: 2026-09-27  *(§ Focus tiers: a lane's tier is its Linear project priority (Urgent/High/Medium → A/B/C) and the map is the picker — header strip and per-lane control write `save_project` through the connector, focus-lane heads are badged and sorted first, and ≥2 Approved focus heads print the `/06-linear-todo-runner --dry-run` line. The policy itself lives in `method.md § Focus lanes`. Anchor: SiteLine, 2026-09-26 — the picker was first added to the published page only; the tracked source had to be ported (SiteLine#1177) before a `/lane-map` re-run would have reverted it.)*
 
 ---
 
@@ -26,6 +26,14 @@ A map is also **per-board, not per-repo** — two repos on one Linear workspace 
 ## Frontier rule
 
 The frontier is **run-order heads only** — one chip per active lane, flagged when the head issue is not build-ready. Queued-approved work is named in the lane's caption, not promoted into the frontier strip; promoting it would imply a parallel-startability the run order doesn't support. For what makes an issue the "head" of its lane, and why cycle membership cannot substitute for it, see `Linear_SOP.md § Board shapes` and `/linear-hygiene`. Don't restate that rule here or in the scaffolded skill — a fact restated in prose across files survives "fixed everywhere" commits that a line-anchored grep can't catch (`.claude/rules/pipekit-tooling.md` § Enumerate the Surface Before Claiming Behavior, PIPER-486 anchor).
+
+## Focus tiers — the map is the picker
+
+A lane's focus tier is its Linear **project priority**: Urgent = **A**, High = **B**, Medium = **C**; None and Low mean "not in focus". The tier lives in Linear, never in the page or `method.config.md`, so `pk next`, `pk status` and the map read one truth and Linear's own project list shows it with no tooling. What the tiers *mean* — which lane gets a free slot, when B and C are allowed to start, how supporting work inherits a tier, when to re-tier — is defined once in `method.md § Focus lanes`; don't restate it here or in the scaffolded skill.
+
+The map is where tiers get set. Render a picker in two places: a header strip (`Focus  A: … · B: … · C: …`, one select per tier listing every live lane across all initiatives) and a per-lane `A B C –` control in the lane rail. Both write `save_project(id, priority)` through the Linear connector with the viewer's credentials; a tier is exclusive, so assigning it clears the previous holder first and offers an undo. Never show a tier the write didn't confirm — re-read projects after every write and render from that. The connector manifest must name `save_project` alongside the read tools; a declaring page is organization-internal, which a lane map already is.
+
+Tiers change what the frontier says: focus-lane heads carry an A/B/C badge and sort first, and when two or more focus-lane heads are Approved the frontier says so in one line and points at `/06-linear-todo-runner --dry-run`. That line is the answer to "when do I use the runner" — it belongs on the surface where the decision is made, not in a skill description.
 
 ## Board first, then the map
 

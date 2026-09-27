@@ -652,6 +652,18 @@ Then **append** the sections below to that file (these are yours to render — t
 
 (Reconstruct rows from `==> $ ...` / `exit:` / `duration:` triplets in evidence.txt. Line anchors point to the `==>` row of each command.)
 
+## Measurements
+
+<One record per AC verdict that rests on a NUMBER — a count, a timing, a query
+ result, a diff size — or "none". A number quoted without its query is a claim;
+ with it, the claim is re-runnable by anyone, later, verbatim.>
+
+- claim: <plain English, one sentence — "the seeded fixture has 5 out-of-scope projects and the RPC returns 0 of them">
+  command: `<the exact command or query that produced it>`
+  result: <the number(s), verbatim>
+  caveats: <what would make this number lie — fixture-dependent, wall-clock, env-specific — or "none">
+  anchor: evidence.txt:L<line>
+
 ## QA verdict
 
 <inline contents of `$VERIFY_DIR/qa-verdict.md`, or "Not run.">
