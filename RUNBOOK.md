@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
+**v4.38.0** — Last updated: 2026-09-27  *(**v4.38.0 — focus lanes: `pk next` and `pk status` lead with what you are driving.** A lane's tier is its Linear **project priority** (Urgent/High/Medium → A/B/C), set from the lane-map page; `pk next` prints the focus lanes, then the blockers that support them, then the rest of the board, and `--lane` pins one for a run. `pk sessions` lists every live Claude session across front ends, waiting first. A blocker merged into an `In <Env>` state no longer blocks. `/work` takes `>>` plan annotations; `/verify` records measurements. Carries v4.37.0 — follow-ups are placed at creation.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v4.37.0                (or latest tag)
+1. ./scripts/sync-method.sh v4.38.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -430,8 +430,9 @@ If `method.config.md § Phase Label Layer` is configured, the board mirrors `ROA
 
 | # | Step | Command (global) | Command (repo-local) | Where | Auth |
 |---|---|---|---|---|---|
-| 1 | Find next (initiative-aware) | `pk next` | `./bin/pk next` | parent, dev | derives initiative from Linear (`i{N}.`/`I{N}.P{N}.`) |
-| 1 | Quick status | `pk status` | `./bin/pk status` | parent | reads Linear (full board, unscoped) |
+| 1 | Find next (focus lanes, then initiative-aware) | `pk next` | `./bin/pk next` | parent, dev | focus lanes first — Linear project priority Urgent/High/Medium = tier A/B/C (v4.38.0), then their blockers, then the initiative walk (`i{N}.`/`I{N}.P{N}.`); `--lane <TAG>` pins one lane |
+| 1 | Quick status | `pk status` | `./bin/pk status` | parent | reads Linear (full board, unscoped); leads with the `Focus  A … · B … · C …` strip |
+| 1 | Who is waiting on me | `pk sessions` | `./bin/pk sessions` | anywhere | live Claude sessions from transcript tails, waiting first; no Linear read (v4.38.0) |
 | 2 | Branch | `pk branch <ID>` | `./bin/pk branch <ID>` | parent, dev | writes Linear (In Progress) |
 | 3 | Plan + execute | `/work <ID>` | — (skill) | worktree | reads Linear |
 | 3 | (Variant) | `/work <ID> --deep` | — (skill) | worktree | reads Linear; spawns 2 grounding agents |

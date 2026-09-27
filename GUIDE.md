@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — follow-ups are placed at creation, not swept a session later.** `sop/Linear_SOP.md § Filing a follow-up issue` is the one intake contract every mid-flow filer (`/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise`) writes to: the parent's `Area:`, a Type label, the priority-floor table (canonical there now — `/linear-hygiene` cites it instead of carrying a copy), state by priority, a `Source:` line and a relation, all in one create call. `/linear-hygiene` is the backstop, gains `--session`, and names the filer that missed. Carries v4.36.0 — `/verify` holds its adversarial tier and cites only this run's evidence.)*
+**v4.38.0** — Last updated: 2026-09-27  *(**v4.38.0 — focus lanes: `pk next` and `pk status` lead with what you are driving.** A lane's tier is its Linear **project priority** (Urgent/High/Medium → A/B/C), set from the lane-map page; `pk next` prints the focus lanes, then the blockers that support them, then the rest of the board, and `--lane` pins one for a run. `pk sessions` lists every live Claude session across front ends, waiting first. A blocker merged into an `In <Env>` state no longer blocks. `/work` takes `>>` plan annotations; `/verify` records measurements. Carries v4.37.0 — follow-ups are placed at creation.)*
 
 ---
 
@@ -507,6 +507,8 @@ After agent review passes, you review the spec in Linear. This is where product 
 **Output:** Worktree + feature branch + Linear → In Progress
 
 `pk next` is initiative-aware (v2.1.0+): it **derives the current initiative live from the Linear hierarchy** — the lowest-numbered `i{N}.` Initiative that isn't `Completed`, then its lowest-numbered open `P{N}.` Project (by numeric name prefix, `P2` before `P10`; Linear's `sortOrder` is never used) — and groups that initiative's Linear results by status (In Progress / Approved / Needs Spec) with per-group hints. Falls back to global "next Approved" when no initiative context.
+
+**Focus lanes lead the output (v4.38.0).** The walk answers "what comes next in release order"; it cannot answer "what am I driving this week". When any live project carries a Linear **project priority** of Urgent, High or Medium, `pk next` prints those lanes first as tiers A, B and C, then a **Supporting** group (open blockers of focus-lane issues, tagged with the tier they inherit), then the walk above under **Rest of board**. Tiers are set from the lane-map page, which writes the priority to Linear; `pk next --lane I8.P6` pins a lane for one run. A blocker counts as closed once it is merged — Done, Canceled, Duplicate, or any post-merge `In <Env>` state. Policy in `method.md § Focus lanes`.
 
 `pk branch <ID>` is mechanical setup — idempotent against Linear+git ground truth. It creates the worktree, the branch, and transitions Linear:
 
@@ -1144,7 +1146,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
-| Find next | `pk next` | Initiative-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
+| Find next | `pk next` | Focus lanes first (tier A/B/C = Linear project priority), then initiative-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
 | Branch | `pk branch <ID>` | Worktree + feature branch + Linear → In Progress (idempotent) |
 | Work | `/work <ID>` | Plan + execute on native-on-Workflow. Verdict gate before code. |
 | Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
@@ -1195,7 +1197,8 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 
 | Command / Skill | Invocation | What It Does |
 |-----------------|------------|-------------|
-| Status | `pk status` | Full unscoped Linear board view |
+| Status | `pk status` | Full unscoped Linear board view, led by the focus strip |
+| Sessions | `pk sessions` | Live Claude sessions across every front end, waiting first, with what each is asking for |
 | Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence), **upstream-staleness check** (v3.1.0 — warns when the synced Pipekit lags the method repo's latest release; offline-soft) |
 | Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
 | Sync Linear | `/sync-linear` | Reconcile strategy-doc / requirement drift against the Linear initiative hierarchy |

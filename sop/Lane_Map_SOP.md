@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.29.1** — Last updated: 2026-08-03  *(Snapshot-vs-live softened from a binary choice to a decision with a documented hybrid option: curation stays authored, a live overlay can reconcile onto it loudly (append+flag uncurated-active, fold uncurated-done, mark curated-but-gone stale) instead of the map picking a side — this is also the staleness signal for free, no timestamp check needed. Plus an artifact gotcha: declaring `mcp` on a publicly-shared artifact 422s; un-share first via the claude.ai UI, no tool-level path. Sourced from SiteLine's `Pipekit_Handover_LaneMap_Live_2026.08.03_v1.md`.)*
+**v4.38.0** — Last updated: 2026-09-27  *(§ Focus tiers: a lane's tier is its Linear project priority (Urgent/High/Medium → A/B/C) and the map is the picker — header strip and per-lane control write `save_project` through the connector, focus-lane heads are badged and sorted first, and ≥2 Approved focus heads print the `/06-linear-todo-runner --dry-run` line. The policy itself lives in `method.md § Focus lanes`. Anchor: SiteLine, 2026-09-26 — the picker was first added to the published page only; the tracked source had to be ported (SiteLine#1177) before a `/lane-map` re-run would have reverted it.)*
 
 ---
 
