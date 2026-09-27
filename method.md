@@ -399,6 +399,11 @@ The roadmap walk answers "what is the next lane in order?"; focus lanes answer "
 
 **Policy.** **A** takes every free slot. **B** is worked only when A is stalled (all blocked, or nothing specced). **C** only when both are. Supporting work inherits the tier of what it unblocks — it is not a fourth queue. Re-tier at lane completion or at `/phase-plan`, not daily; **max three** focus lanes, and a tier held by two projects is a warning `pk next` prints, not a state it resolves. The picker is the lane-map artifact (`/lane-map`): decide the tiers there, write them to Linear, and let `pk next` read them back.
 
+### Sessions across front ends
+
+Linear says what the work is; it does not say which of your running sessions has stopped and is waiting for you. `pk sessions` answers that from the transcripts Claude Code already writes under `~/.claude/projects/` — one view across terminal, desktop app and IDE, with no daemon and no app dependency. Each session reads `waiting` (the turn ended, or an away summary was written — its text is shown as the ask), `waiting?` (a tool call has gone unanswered for more than 45s: a permission prompt or a long tool — the transcript does not record which), or `working`; `--all` adds `stale`. The issue is parsed from the session's branch or working directory, so a worktree session lists under its issue id.
+`pk next` and `pk status` lead with one line — `2 sessions are waiting on you → pk sessions` — when a session other than the current one is waiting, and print nothing otherwise. The scan is read-only, tail-only, and never fails its caller.
+
 ### Known Drift Risks
 
 | Risk | Trigger | Mitigation |

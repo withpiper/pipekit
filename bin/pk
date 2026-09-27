@@ -9,6 +9,7 @@
 # Subcommands:
 #   pk next                 — what should I do now? (Linear + git → next command)
 #   pk status               — quick triage of in-flight + UAT + Approved
+#   pk sessions             — live Claude Code sessions on this machine, waiting first
 #   pk portfolio            — cross-initiative map: all i<N>. + active runway
 #   pk branch <ID>          — create worktree+branch, Linear → In Progress
 #   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
@@ -1750,7 +1751,230 @@ pk_warn_if_conflicting() {
 # Subcommands
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Sessions across front ends ────────────────────────────────────────────────
+# `pk sessions` lists every live Claude Code session on this machine from the
+# transcripts Claude Code already writes (<projects>/<slug>/<sessionId>.jsonl) —
+# terminal, desktop app and IDE sessions alike, no daemon and no app dependency.
+# Read-only, and only ever the last PK_SESSIONS_TAIL_BYTES of a transcript.
+# A permission wait is not recorded in the transcript, so an unanswered tool
+# call that has gone quiet is reported as `waiting?`, never as a certainty.
+
+PK_SESSIONS_TAIL_BYTES=262144
+PK_SESSIONS_QUIET_SECS=45
+
+pk_sessions_root() {
+  printf '%s\n' "${PK_CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
+}
+
+# The session this pk runs inside, if any. Claude Code exports
+# CLAUDE_CODE_SESSION_ID; CLAUDE_SESSION_ID is honoured first as the override.
+pk_sessions_current_id() {
+  printf '%s\n' "${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}"
+}
+
+# File mtime as epoch seconds (BSD stat, then GNU). Empty when unreadable.
+pk_file_mtime() {
+  stat -f %m -- "$1" 2>/dev/null || stat -c %Y -- "$1" 2>/dev/null || true
+}
+
+# Sort order shared by the text and --json outputs: waiting → waiting? → working
+# → stale → closed, then most recently touched first.
+PK_JQ_SESSIONS_SORT='def state_rank: {"waiting": 0, "waiting?": 1, "working": 2, "stale": 3, "closed": 4}[.] // 5;
+  def sessions_sort: sort_by([(.state | state_rank), .age_secs]);'
+
+# One transcript → one JSON object. Args: path, now (epoch), window seconds
+# (optional; 0 = never stale). Reads the tail only; a first line cut mid-object
+# and any line that is not a JSON object are dropped by `fromjson?`. Unknown
+# line types fall through the event filter untouched.
+#   state  waiting   last event is an assistant end_turn, or an away_summary
+#          waiting?  last event is an assistant tool call with no tool_result
+#                    after it, and the file has been quiet > PK_SESSIONS_QUIET_SECS
+#          working   anything else
+#          stale     mtime older than the window (overrides the above)
+#   ask    the away_summary written since the last user turn — an older one
+#          describes a question that was already answered.
+pk_sessions_scan_file() {
+  local path="$1" now="$2" window="${3:-0}" mtime sid slug
+  mtime=$(pk_file_mtime "$path")
+  [ -n "$mtime" ] || return 1
+  sid=$(basename -- "$path" .jsonl)
+  slug=$(basename -- "$(dirname -- "$path")")
+  tail -c "$PK_SESSIONS_TAIL_BYTES" -- "$path" | jq -Rnc \
+    --arg sid "$sid" --arg slug "$slug" \
+    --argjson age "$((now - mtime))" --argjson window "$window" \
+    --argjson quiet "$PK_SESSIONS_QUIET_SECS" '
+    def kinds: (.message.content | if type == "array" then map(.type? // "") else [] end);
+    def human: if . < 60 then "\(.)s" elif . < 3600 then "\(. / 60 | floor)m"
+               elif . < 86400 then "\(. / 3600 | floor)h" else "\(. / 86400 | floor)d" end;
+    def clip($n): if length > $n then .[0:$n] + "…" else . end;
+    [ inputs | fromjson? | select(type == "object") | select(.isSidechain != true) ] as $lines
+    # Meaningful events: the conversation itself plus the away summary. Titles,
+    # attachments, mode changes, snapshots and hook/duration system lines trail
+    # a finished turn and say nothing about who moves next.
+    | [ $lines | to_entries[]
+        | select(.value.type == "user" or .value.type == "assistant"
+                 or (.value.type == "system" and .value.subtype == "away_summary")) ] as $ev
+    | ($ev | last | .value) as $last
+    | ([ $ev[] | select(.value.type == "user") | .key ] | last // -1) as $last_user
+    | ([ $ev[] | select(.value.type == "system" and .key > $last_user) | .value.content
+         | select(type == "string") ] | last // "") as $away
+    | ([ $lines[] | select(.cwd != null) ] | last // {}) as $ctx
+    | ($ctx.cwd // "") as $cwd | ($ctx.gitBranch // "") as $branch
+    | ( if $last == null then "working"
+        elif $last.type == "system" then "waiting"
+        elif $last.type == "assistant" and $last.message.stop_reason == "end_turn" then "waiting"
+        elif $last.type == "assistant" and $age > $quiet
+             and ($last.message.stop_reason == "tool_use" or ($last | kinds | index("tool_use")) != null)
+          then "waiting?"
+        else "working" end ) as $live
+    | (if $window > 0 and $age > $window then "stale" else $live end) as $state
+    | { sessionId: $sid, project: $slug, cwd: $cwd, branch: $branch,
+        issue: ( [ ($branch, $cwd) | match("[A-Z]+-[0-9]+")? | .string ] | first
+                 // ($cwd | sub("/+$"; "") | split("/") | last)
+                 // "" | if . == "" then $slug else . end ),
+        state: $state, age_secs: $age, age: ($age | if . < 0 then 0 else . end | human),
+        ask: ( if $state == "waiting" then
+                 ($away | gsub("\\s+"; " ") | sub(" ?\\(disable recaps in /config\\)$"; "")
+                  | sub("^ "; "") | clip(90))
+               else "" end ),
+        title: ( [ $lines[] | select(.type == "custom-title") | .customTitle // empty ] | last
+                 // ([ $lines[] | select(.type == "ai-title") | .aiTitle // empty ] | last)
+                 // "" ) }
+  '
+}
+
+# Every candidate transcript → sorted JSON array. Args: window minutes, "all"
+# (optional) to widen the candidates to 7 days and mark the rest stale.
+# Subagent transcripts live one directory deeper and are not sessions.
+# Working directories of the Claude Code processes running right now, as a JSON
+# object {cwd: count}. A transcript cannot say whether its session is still open:
+# one closed after a finished turn ends on the same end_turn as one still waiting
+# on you, and a list where every row is "waiting" is no signal. The process table
+# can. Matches the CLI (`claude`), the npm shim (`claude.exe`) and the desktop
+# app's bundled binary (…/claude-code/<version>/…/claude) by executable name.
+# Emits {} when ps/lsof cannot answer or nothing matched; callers read {} as
+# "unknown" and leave every state alone (fail open, never hide a live session).
+pk_sessions_live_cwds() {
+  local pids
+  command -v lsof >/dev/null 2>&1 || { echo '{}'; return 0; }
+  pids=$(ps -axo pid=,comm= 2>/dev/null | awk '
+    { pid = $1; $1 = ""; sub(/^ +/, "") }
+    $0 ~ /(^|\/)claude(\.exe)?$/ { print pid }' | paste -sd, -)
+  [ -n "$pids" ] || { echo '{}'; return 0; }
+  lsof -a -d cwd -p "$pids" -Fn 2>/dev/null | sed -n 's/^n//p' \
+    | jq -Rsc 'split("\n") | map(select(. != "")) | group_by(.)
+               | map({key: .[0], value: length}) | from_entries' 2>/dev/null \
+    || echo '{}'
+}
+
+# Sessions array on stdin + a {cwd: count} map ($1) → the same array with every
+# session that has no running process marked "closed". Per cwd the N most
+# recently written transcripts are the live ones: two sessions can share a
+# worktree, and one process there means the older transcript is a closed session.
+# Pure (no process access) so the smoke suite covers it.
+pk_sessions_apply_liveness() {
+  local live="${1:-}"
+  [ -n "$live" ] || live='{}'
+  jq -c --argjson live "$live" '
+    if ($live | length) == 0 then .
+    else
+      group_by(.cwd)
+      | map( sort_by(.age_secs) as $g
+             | ($live[$g[0].cwd] // 0) as $n
+             | [ range(0; $g | length) as $i
+                 | $g[$i] | if $i < $n then . else (.state = "closed" | .ask = "") end ] )
+      | add // []
+    end'
+}
+
+pk_sessions_scan() {
+  local minutes="$1" all="${2:-}" root now f window=0
+  root=$(pk_sessions_root)
+  [ -d "$root" ] || { echo "[]"; return 0; }
+  now=$(date +%s)
+  if [ "$all" = "all" ]; then
+    window=$((minutes * 60))
+    set -- -mtime -7
+  else
+    set -- -mmin "-$minutes"
+  fi
+  find "$root" -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' "$@" 2>/dev/null \
+    | while IFS= read -r f; do
+        pk_sessions_scan_file "$f" "$now" "$window" 2>/dev/null || true
+      done \
+    | jq -sc '.' \
+    | pk_sessions_apply_liveness "${PK_SESSIONS_LIVE_CWDS:-$(pk_sessions_live_cwds)}" \
+    | jq -c --arg all "$all" "$PK_JQ_SESSIONS_SORT"'
+        (if $all == "all" then . else map(select(.state != "closed")) end) | sessions_sort'
+}
+
+# Sessions JSON array on stdin → text. Arg: the header's window label.
+pk_sessions_render() {
+  jq -r --arg label "${1:-last 60 min}" "$PK_JQ_SESSIONS_SORT"'
+    def rpad($n): . + (" " * ([$n - length, 0] | max));
+    def lpad($n): (" " * ([$n - length, 0] | max)) + .;
+    sessions_sort
+    | ([ .[] | select(.state == "waiting" or .state == "waiting?") ] | length) as $w
+    | ([ .[] | .issue[0:28] | length ] | max // 0) as $iw
+    | ([ .[] | .age | length ] | max // 0) as $aw
+    | ([ .[] | select(.state != "closed" and .state != "stale") ] | length) as $n
+    | if length == 0 then "No live sessions (\($label))."
+      else
+        "\($n) live session\(if $n == 1 then "" else "s" end) (\($label))"
+          + (if $w > 0 then " — \($w) waiting on you" else "" end),
+        "",
+        ( .[] | (.state | rpad(8)) + "  " + (.issue[0:28] | rpad($iw)) + "  " + (.age | lpad($aw)) + "  "
+            + ( if .state == "waiting" and .ask != "" then "\"\(.ask)\""
+                elif .state == "waiting?" then "unanswered tool call (permission?)"
+                else .title end )
+          | sub(" +$"; "") )
+      end
+  '
+}
+
+# Cross-link for pk next / pk status: one line plus a blank when another session
+# is waiting, nothing otherwise. Orientation only — it must never fail or slow
+# its caller, so the scan is capped to the last hour and every error is dropped.
+pk_sessions_crosslink() {
+  local self n
+  self=$(pk_sessions_current_id)
+  n=$(pk_sessions_scan 60 2>/dev/null | jq -r --arg self "$self" \
+    '[ .[] | select(.state == "waiting" or .state == "waiting?") | select(.sessionId != $self) ] | length' 2>/dev/null) || return 0
+  case "$n" in ''|0|*[!0-9]*) return 0 ;; esac
+  if [ "$n" = "1" ]; then
+    echo "1 session is waiting on you → pk sessions"
+  else
+    echo "$n sessions are waiting on you → pk sessions"
+  fi
+  echo ""
+}
+
+cmd_sessions() {
+  local minutes=60 all="" json=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --minutes) minutes="${2:-}"; shift; [ $# -gt 0 ] && shift ;;
+      --minutes=*) minutes="${1#--minutes=}"; shift ;;
+      --all) all="all"; shift ;;
+      --json) json=1; shift ;;
+      *) echo "Unknown option: $1" >&2; return 1 ;;
+    esac
+  done
+  case "$minutes" in
+    ''|*[!0-9]*|0) echo "ERROR: --minutes needs a positive whole number, e.g. --minutes 120" >&2; return 1 ;;
+  esac
+  local sessions label="last $minutes min"
+  sessions=$(pk_sessions_scan "$minutes" "$all")
+  [ "$all" = "all" ] && label="last 7 days; stale = quiet > $minutes min"
+  if [ "$json" = "1" ]; then
+    printf '%s\n' "$sessions"
+  else
+    printf '%s' "$sessions" | pk_sessions_render "$label"
+  fi
+}
+
 cmd_next() {
+  pk_sessions_crosslink || true
   local current
   current=$(pk_current_branch)
   local issue
@@ -2004,6 +2228,7 @@ cmd_status() {
     return 1
   fi
   pk_require_linear_key || return 1
+  pk_sessions_crosslink || true
   # One initiatives fetch drives the focus strip and the roadmap walk.
   local init_json focus
   init_json=$(pk_linear_initiatives_json)
@@ -4051,6 +4276,7 @@ pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
 Subcommands:
   pk next [--lane <TAG>]          What should I do now? Focus lanes (project priority 1/2/3 → tier A/B/C) first, then Supporting, then the rest of the board. --lane I8.P6 pins that lane as tier A for this run.
   pk status                       Quick triage of the Linear board + worktrees
+  pk sessions [--minutes N] [--all] [--json]   Every live Claude Code session on this machine, read from its transcript tail: waiting / waiting? (unanswered tool call) / working, with what each is asking. Default window 60 min; --all widens to 7 days and marks the rest stale.
   pk issue show <ID> [--fields a,b,c] [--comments] [--json]   Lean issue read via the GraphQL path — compact text (default: id,title,state,labels); comments OFF by default. The low-token alternative to MCP getIssueById, whose result drags the whole comment thread into the session as a sticky payload.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
@@ -4338,6 +4564,7 @@ main() {
   case "$sub" in
     next)     cmd_next "$@" ;;
     status)   cmd_status "$@" ;;
+    sessions) cmd_sessions "$@" ;;
     issue)    cmd_issue "$@" ;;
     portfolio) cmd_portfolio "$@" ;;
     branch)   cmd_branch "$@" ;;

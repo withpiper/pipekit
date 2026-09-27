@@ -2447,6 +2447,172 @@ else
   ok "shipped-detect: the --force audit comment is not a ship record"
 fi
 
+# ── Unit tests: pk sessions (sourced) ────────────────────────────────────────
+# pk sessions reads Claude Code transcript tails. The fixtures live under a temp
+# projects root (PK_CLAUDE_PROJECTS_DIR), never the real ~/.claude/projects.
+# Slug directories start with a dash, as the real ones do. The scan helper takes
+# `now` as an argument, so file age is pinned by a fixed mtime plus an offset.
+
+echo "== pk sessions (sourced) =="
+
+# Fixture transcripts have no running process behind them. {} is the "process
+# table could not answer" value, which leaves every state alone — the liveness
+# filter itself is covered directly below.
+export PK_SESSIONS_LIVE_CWDS='{}'
+
+unit_sess_live() { ( cd "$REPO_ROOT" && source "$PK" && pk_sessions_apply_liveness "$1" ); }
+LIVE_IN='[
+  {"sessionId":"a","cwd":"/w/one","state":"waiting","age_secs":30,"ask":"verdict?"},
+  {"sessionId":"b","cwd":"/w/one","state":"waiting","age_secs":900,"ask":"older"},
+  {"sessionId":"c","cwd":"/w/two","state":"waiting","age_secs":60,"ask":"q"},
+  {"sessionId":"d","cwd":"/w/three","state":"working","age_secs":5,"ask":""}
+]'
+# One process in /w/one → the newer transcript is live, the older is closed;
+# /w/two has no process → closed; /w/three has one → untouched.
+v=$(printf '%s' "$LIVE_IN" | unit_sess_live '{"/w/one":1,"/w/three":1}' | jq -c 'sort_by(.sessionId) | map([.sessionId,.state,.ask])')
+[ "$v" = '[["a","waiting","verdict?"],["b","closed",""],["c","closed",""],["d","working",""]]' ] \
+  && ok "sessions liveness: newest transcript per live process stays, the rest close" \
+  || fail "sessions liveness" "got $v"
+v=$(printf '%s' "$LIVE_IN" | unit_sess_live '{"/w/one":2}' | jq -c '[.[] | select(.cwd=="/w/one") | .state]')
+[ "$v" = '["waiting","waiting"]' ] \
+  && ok "sessions liveness: two processes in one worktree keep both sessions" \
+  || fail "sessions liveness: shared worktree" "got $v"
+v=$(printf '%s' "$LIVE_IN" | unit_sess_live '{}' | jq -c '[.[].state]')
+[ "$v" = '["waiting","waiting","waiting","working"]' ] \
+  && ok "sessions liveness: unknown process table ({}) leaves every state alone" \
+  || fail "sessions liveness: fail-open" "got $v"
+
+SESS_ROOT=$(mktemp -d)
+SESS_DIR="$SESS_ROOT/-Users-t-Projects-app"
+mkdir -p "$SESS_DIR"
+
+unit_sess_scan()   { ( cd "$REPO_ROOT" && source "$PK" && pk_sessions_scan_file "$@" ); }
+unit_sess_render() { ( cd "$REPO_ROOT" && source "$PK" && pk_sessions_render "$@" ); }
+unit_sess_link()   { ( cd "$REPO_ROOT" && source "$PK" && PK_CLAUDE_PROJECTS_DIR="$SESS_ROOT" CLAUDE_SESSION_ID="${1:-}" CLAUDE_CODE_SESSION_ID="" pk_sessions_crosslink ); }
+sess_mtime()       { stat -f %m -- "$1" 2>/dev/null || stat -c %Y -- "$1"; }
+
+S_META='"cwd":"/Users/t/Projects/app/.worktrees/PK-12-thing","gitBranch":"feature/PK-12-thing","isSidechain":false'
+S_USER='{"type":"user",'"$S_META"',"message":{"role":"user","content":"go"}}'
+S_TOOL='{"type":"assistant",'"$S_META"',"message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Bash"}]}}'
+S_RESULT='{"type":"user",'"$S_META"',"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1"}]}}'
+S_END='{"type":"assistant",'"$S_META"',"message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}'
+
+# waiting: end_turn, followed by the trailing lines a finished turn really
+# leaves (hook summary, duration, title, snapshot) plus types pk has never seen.
+{
+  echo 'ntent":[{"type":"text","text":"cut mid-object by the tail"}]}}'
+  echo "$S_USER"; echo "$S_TOOL"; echo "$S_RESULT"; echo "$S_END"
+  echo '{"type":"system","subtype":"stop_hook_summary",'"$S_META"'}'
+  echo '{"type":"system","subtype":"turn_duration",'"$S_META"'}'
+  echo '{"type":"ai-title","aiTitle":"Auto title","sessionId":"s-wait"}'
+  echo '{"type":"custom-title","customTitle":"Named by hand","sessionId":"s-wait"}'
+  echo '{"type":"file-history-snapshot","snapshot":{}}'
+  echo '{"type":"never-seen-before","payload":[1,2]}'
+  echo '["not","an","object"]'
+  echo 'not json at all'
+} > "$SESS_DIR/s-wait.jsonl"
+
+# waiting via away_summary, with the ask; ai-title only; main checkout (no id).
+{
+  echo '{"type":"user","cwd":"/Users/t/Projects/app","gitBranch":"main","message":{"role":"user","content":"go"}}'
+  echo '{"type":"assistant","cwd":"/Users/t/Projects/app","gitBranch":"main","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"plan"}]}}'
+  echo '{"type":"ai-title","aiTitle":"Auto title","sessionId":"s-away"}'
+  echo '{"type":"system","subtype":"away_summary","cwd":"/Users/t/Projects/app","gitBranch":"main","content":"The plan is written.\n  Next I need your verdict: proceed or revise. (disable recaps in /config)"}'
+} > "$SESS_DIR/s-away.jsonl"
+
+# An away_summary from before the latest user turn is an answered question.
+{
+  echo '{"type":"system","subtype":"away_summary",'"$S_META"',"content":"Old question"}'
+  echo "$S_USER"; echo "$S_END"
+} > "$SESS_DIR/s-answered.jsonl"
+
+{ echo "$S_USER"; echo "$S_TOOL"; } > "$SESS_DIR/s-tool.jsonl"
+{ echo "$S_USER"; echo "$S_TOOL"; echo "$S_RESULT"; } > "$SESS_DIR/s-work.jsonl"
+# A subagent's lines never decide the parent session's state.
+{ echo "$S_USER"; echo "$S_TOOL"; echo "$S_RESULT"
+  echo '{"type":"assistant","isSidechain":true,"message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"sub"}]}}'
+} > "$SESS_DIR/s-side.jsonl"
+
+touch -t 202601010000.00 "$SESS_DIR"/*.jsonl
+SESS_T0=$(sess_mtime "$SESS_DIR/s-wait.jsonl")
+
+sess_field() { # file, age-offset, jq-filter [, window]
+  unit_sess_scan "$SESS_DIR/$1.jsonl" "$((SESS_T0 + $2))" "${4:-0}" | jq -r "$3"
+}
+sess_expect() { # name, got, want
+  if [ "$2" = "$3" ]; then ok "$1"; else fail "$1" "want '$3', got '$2'"; fi
+}
+
+sess_expect "sessions: end_turn is waiting"                 "$(sess_field s-wait 10 .state)" "waiting"
+sess_expect "sessions: unknown line types are ignored"      "$(sess_field s-wait 10 '.state + "/" + .sessionId')" "waiting/s-wait"
+sess_expect "sessions: a partial first line is tolerated"   "$(sess_field s-wait 10 '.cwd')" "/Users/t/Projects/app/.worktrees/PK-12-thing"
+sess_expect "sessions: custom-title beats ai-title"         "$(sess_field s-wait 10 .title)" "Named by hand"
+sess_expect "sessions: ai-title when there is no custom"    "$(sess_field s-away 10 .title)" "Auto title"
+sess_expect "sessions: issue id parsed from the branch"     "$(sess_field s-wait 10 .issue)" "PK-12"
+sess_expect "sessions: no id falls back to the cwd's name"  "$(sess_field s-away 10 .issue)" "app"
+sess_expect "sessions: away_summary is waiting"             "$(sess_field s-away 10 .state)" "waiting"
+sess_expect "sessions: ask is the away_summary, collapsed"  "$(sess_field s-away 10 .ask)" "The plan is written. Next I need your verdict: proceed or revise."
+sess_expect "sessions: an answered away_summary is no ask"  "$(sess_field s-answered 10 '.state + "/" + .ask')" "waiting/"
+sess_expect "sessions: quiet unanswered tool call is waiting?" "$(sess_field s-tool 300 .state)" "waiting?"
+sess_expect "sessions: a fresh tool call is working"        "$(sess_field s-tool 10 .state)" "working"
+sess_expect "sessions: tool_result last is working"         "$(sess_field s-work 300 .state)" "working"
+sess_expect "sessions: sidechain lines do not decide state" "$(sess_field s-side 300 .state)" "working"
+sess_expect "sessions: older than the window is stale"      "$(sess_field s-wait 7200 .state 3600)" "stale"
+sess_expect "sessions: age is human-readable"               "$(sess_field s-wait 20 .age)/$(sess_field s-wait 720 .age)/$(sess_field s-wait 10800 .age)" "20s/12m/3h"
+
+LONG_ASK=$(printf 'x%.0s' $(seq 1 200))
+echo '{"type":"system","subtype":"away_summary",'"$S_META"',"content":"'"$LONG_ASK"'"}' > "$SESS_DIR/s-long.jsonl"
+touch -t 202601010000.00 "$SESS_DIR/s-long.jsonl"
+sess_expect "sessions: ask is clipped to 90 chars"          "$(sess_field s-long 10 '.ask | length')" "91"
+
+SESS_RENDER=$(printf '%s' '[
+  {"state":"stale","issue":"PK-9","age":"3h","age_secs":10800,"ask":"","title":"Old one"},
+  {"state":"working","issue":"app","age":"1m","age_secs":60,"ask":"","title":"Focus lanes"},
+  {"state":"working","issue":"PK-3","age":"20s","age_secs":20,"ask":"","title":"Table"},
+  {"state":"waiting?","issue":"PK-2","age":"4m","age_secs":240,"ask":"","title":"Ignored"},
+  {"state":"waiting","issue":"PK-1","age":"12m","age_secs":720,"ask":"Next I need your verdict","title":"T"}
+]' | unit_sess_render "last 60 min")
+sess_expect "sessions render: header counts live rows (not stale) and both waiting states" \
+  "$(printf '%s\n' "$SESS_RENDER" | sed -n 1p)" "4 live sessions (last 60 min) — 2 waiting on you"
+sess_expect "sessions render: waiting → waiting? → working → stale, then age" \
+  "$(printf '%s\n' "$SESS_RENDER" | sed -n '3,$p' | awk '{print $2}' | tr '\n' ' ')" "PK-1 PK-2 PK-3 app PK-9 "
+sess_expect "sessions render: waiting row quotes the ask" \
+  "$(printf '%s\n' "$SESS_RENDER" | sed -n 3p)" 'waiting   PK-1  12m  "Next I need your verdict"'
+sess_expect "sessions render: waiting? row names the unanswered tool call" \
+  "$(printf '%s\n' "$SESS_RENDER" | sed -n 4p)" 'waiting?  PK-2   4m  unanswered tool call (permission?)'
+sess_expect "sessions render: empty array" "$(printf '[]' | unit_sess_render "last 60 min")" "No live sessions (last 60 min)."
+
+# Cross-link and the command itself walk the real clock, so age the fixtures
+# relative to now: two waiting (s-wait, s-away), one waiting? (s-tool, 5 min
+# quiet), one working (s-work).
+rm -f "$SESS_DIR/s-answered.jsonl" "$SESS_DIR/s-side.jsonl" "$SESS_DIR/s-long.jsonl"
+touch "$SESS_DIR/s-wait.jsonl" "$SESS_DIR/s-away.jsonl" "$SESS_DIR/s-work.jsonl"
+touch -t "$(date -v-5M +%Y%m%d%H%M.%S 2>/dev/null || date -d '5 minutes ago' +%Y%m%d%H%M.%S)" "$SESS_DIR/s-tool.jsonl"
+mkdir -p "$SESS_DIR/s-wait/subagents"
+echo "$S_END" > "$SESS_DIR/s-wait/subagents/agent-1.jsonl"
+
+sess_expect "sessions cross-link: counts waiting + waiting?" \
+  "$(unit_sess_link | sed -n 1p)" "3 sessions are waiting on you → pk sessions"
+sess_expect "sessions cross-link: one line and a blank" "$(unit_sess_link | wc -l | tr -d ' ')" "2"
+sess_expect "sessions cross-link: the current session is excluded" \
+  "$(unit_sess_link s-wait | sed -n 1p)" "2 sessions are waiting on you → pk sessions"
+
+rm -f "$SESS_DIR/s-wait.jsonl" "$SESS_DIR/s-away.jsonl" "$SESS_DIR/s-tool.jsonl"
+sess_expect "sessions cross-link: silent when nobody waits" "$(unit_sess_link | wc -c | tr -d ' ')" "0"
+if ( cd "$REPO_ROOT" && source "$PK" && PK_CLAUDE_PROJECTS_DIR="$SESS_ROOT/missing" pk_sessions_crosslink ) >/dev/null 2>&1; then
+  ok "sessions cross-link: a missing projects dir never fails the caller"
+else
+  fail "sessions cross-link: missing projects dir" "returned non-zero"
+fi
+
+make_fixture
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_CLAUDE_PROJECTS_DIR="$SESS_ROOT" "$PK" sessions --json 2>&1)
+sess_expect "pk sessions --json: subagent transcripts are not sessions" \
+  "$(printf '%s' "$RUN_OUT" | jq -r 'map(.sessionId) | join(",")')" "s-work"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_CLAUDE_PROJECTS_DIR="$SESS_ROOT" "$PK" sessions --minutes nope 2>&1); RUN_CODE=$?
+if [ $RUN_CODE -ne 0 ]; then ok "pk sessions: a non-numeric --minutes is refused"; else fail "pk sessions: --minutes nope" "exit 0"; fi
+rm -rf "$FIXTURE" "$SESS_ROOT"; FIXTURE=""
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo

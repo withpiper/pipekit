@@ -73,6 +73,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | Command | Purpose |
 |---------|---------|
 | `pk next` | What's next, read live from Linear — derives the current initiative, groups issues by status with per-group hints. Focus lanes first (v4.38.0: Linear project priority 1/2/3 → tier A/B/C, then Supporting blockers, then the rest of the board); `--lane <TAG>` pins one lane as tier A for the run. |
+| `pk sessions` | Every live Claude Code session on this machine, read from transcript tails — `waiting` / `waiting?` / `working`, waiting first, with what each is asking. `pk next` and `pk status` lead with a one-line count when another session is waiting. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
 | `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, hands it to the saved `pk-execute` workflow as data — one agent per task, verify before commit, expected-HEAD threading, optional disjoint-file parallel waves with an integration step — and writes the SUMMARY from the structured results. |
 | `/verify` | Pre-deploy gate. |
