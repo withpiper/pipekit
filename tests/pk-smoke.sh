@@ -2489,7 +2489,8 @@ mkdir -p "$SESS_DIR"
 unit_sess_scan()   { ( cd "$REPO_ROOT" && source "$PK" && pk_sessions_scan_file "$@" ); }
 unit_sess_render() { ( cd "$REPO_ROOT" && source "$PK" && pk_sessions_render "$@" ); }
 unit_sess_link()   { ( cd "$REPO_ROOT" && source "$PK" && PK_CLAUDE_PROJECTS_DIR="$SESS_ROOT" CLAUDE_SESSION_ID="${1:-}" CLAUDE_CODE_SESSION_ID="" pk_sessions_crosslink ); }
-sess_mtime()       { stat -f %m -- "$1" 2>/dev/null || stat -c %Y -- "$1"; }
+# GNU first: on GNU, `stat -f` is --file-system and prints to stdout before failing.
+sess_mtime()       { stat -c %Y -- "$1" 2>/dev/null || stat -f %m -- "$1"; }
 
 S_META='"cwd":"/Users/t/Projects/app/.worktrees/PK-12-thing","gitBranch":"feature/PK-12-thing","isSidechain":false'
 S_USER='{"type":"user",'"$S_META"',"message":{"role":"user","content":"go"}}'
