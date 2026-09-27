@@ -142,11 +142,16 @@ One screen:
 **Standard / Heavy:** print the plan, then ask exactly:
 
 ```
+Plan file: .pk-work/<ISSUE-ID>-PLAN.md  (add `>>` lines under a task, then answer `revise`)
+
 Verdict?
   proceed                  — execute the plan as written
   revise: <feedback>       — edit and re-present
+  revise                   — apply my `>>` annotations from the plan file
   abort                    — stop, do nothing
 ```
+
+**Annotate the file instead of typing feedback.** Before printing the plan on Standard / Heavy, materialize it to `.pk-work/<ISSUE-ID>-PLAN.md` in the Step 5.0 format (Step 5.0 then regenerates from the approved plan rather than writing it fresh). Point the user at the path under the verdict prompt. Feedback can then go where it applies: a line beginning `>>` placed directly under the task or bullet it concerns. A bare `revise` (no `<feedback>`) means "read my annotations": collect every `>>` line with the `## T<n>` it sits under, strip them from the file, fold them in as the feedback, and continue exactly as `revise: <feedback>` below. Three `>>` lines under three tasks are one revision, not three. A plan that came back with no `>>` lines and no inline feedback is re-asked, not re-planned.
 
 `proceed` → Step 5. `revise:` → fold the feedback in, re-print, re-ask, counting revisions. `abort` → exit without changing state. After three revisions refuse a fourth: `Plan has been revised 3 times. The spec is likely the problem, not the plan. Stopping to prevent waste.` and recommend `pk delegate <ISSUE-ID> "the plan keeps revising on <area>. Refine the spec to clarify <X>."`
 
@@ -156,7 +161,7 @@ The executor contract is: a PLAN artifact, one atomic commit per task with verif
 
 ### Step 5.0 — Materialize the PLAN artifact
 
-Convert the plan into a task DAG at `.pk-work/<ISSUE-ID>-PLAN.md` (`.pk-work/` is gitignored; `mkdir -p .pk-work` first). This is the contract the workflow consumes and `/review-plan` reads.
+Convert the plan into a task DAG at `.pk-work/<ISSUE-ID>-PLAN.md` (`.pk-work/` is gitignored; `mkdir -p .pk-work` first). On Standard / Heavy the file already exists from Step 4; overwrite it from the *approved* plan so no `>>` annotation survives into the contract. This is the contract the workflow consumes and `/review-plan` reads.
 
 ```
 # PLAN — <ISSUE-ID> <title>
