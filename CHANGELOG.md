@@ -50,6 +50,12 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v5.0.1 — 2026-10-10
+
+> **`/tpm` on a shared board.** The first real portfolio is SiteLine + Piper, and they are one Linear team (`PIPER`, same `Team ID`) with two codebases. v5.0.0's preflight read and wrote the board from inside each portfolio repo, which on a shared board reads the same issues twice and runs `pk` inside the sibling with the primary's key loaded — a session's direnv env does not follow a `cd`. Now each sibling's `Team ID` is compared with the primary's: same team → the board is read once and written once, from the primary, and the sibling contributes only its worktrees, open PRs and live sessions; a different team → the sibling is read from inside it under its own key recipe, which `pk` prints when the key is missing. `Portfolio repos` in the template and `sop/TPM_SOP.md` say the same thing.
+>
+> **`pk next` nudges a runbook that was never agreed.** The synced skeleton's `tpm:begin · agreed YYYY-MM-DD` marker carries no date, and the staleness check treated "no date" as nothing to say — the one case where silence hides the gap. It now prints `runbook: no agreement yet → /tpm`; a dated marker behaves exactly as before. (Under `pipefail` the no-match `grep` had been aborting the function before that branch could run; smoke 424 → 425.)
+
 ## v5.0.0 — 2026-10-10
 
 > **Why a major.** The default Linear route for every skill changes from the MCP to the API (`Linear transport: api`; a project that wants the MCP opts back in), three public surfaces go away (`/lane-map`, the `Lane map URL` key, `pipekit/RUNBOOK.md` — migrated to `engineering/RUNBOOK.md` by the next sync), and the daily loop gains a layer above it: `/tpm`, the one runbook, and `pk next`'s staleness nudge. v4.0.0 marked the native executor; v5.0.0 marks API-native Linear plus the TPM layer. Nothing a consumer runs breaks on sync — the migration is automatic and the daily-loop verbs are unchanged.

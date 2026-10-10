@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
+**v5.0.1** — Last updated: 2026-10-10  *(**v5.0.1 — `Portfolio repos`: a sibling on the same `Team ID` shares the board and contributes only its in-flight state. Carries v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -352,7 +352,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Portfolio staleness days** | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
 | **Runbook path** | path | `engineering/RUNBOOK.md` | The one runbook: `/tpm` writes its `Now` block, `sync-method.sh` writes the `How we run` block, you own the rest (`sop/TPM_SOP.md § The runbook block`). `pk next` reads the block's `agreed` date for the staleness nudge. |
 | **Runbook primary** | relative repo path, or blank | (blank = this repo) | `/tpm` — in a multi-repo portfolio, the repo whose runbook holds the full `Now` block; every other repo's block holds a one-line pointer to it. Set it in the *non*-primary repos (e.g. `../SiteLine`). |
-| **Portfolio repos** | comma-separated relative paths | (blank) | `/tpm` — sibling repos read and written in the same session, each from inside its own directory with its own `method.config.md` and API key (e.g. `../piper`). |
+| **Portfolio repos** | comma-separated relative paths | (blank) | `/tpm` — sibling repos reconciled in the same session (e.g. `../piper`). A sibling with the **same `Team ID`** shares this board: it is never read or written through `pk`; only its worktrees, PRs and sessions are read. A sibling with its own board is read and written from inside it, under its own `method.config.md` and key recipe. |
 | **Weekly capacity days** | number | `6` | `/tpm` — the week the capacity arithmetic divides by (`sop/TPM_SOP.md § Capacity`). |
 | **Tier effort days** | `Quick: 0.5, Standard: 2, Heavy: 4` | that | `/tpm` — coarse effort per `tier:*` label; unsized issues are flagged, never guessed. |
 | **Runbook stale days** | integer | `7` | `pk next` — prints `runbook agreed Nd ago → /tpm` once the runbook's agreed date is older than this. |

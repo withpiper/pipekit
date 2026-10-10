@@ -3406,6 +3406,9 @@ write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 0)"
 v=$(unit_nudge); [ -z "$v" ] && ok "nudge: fresh agreement → nothing" || fail "nudge: fresh" "got '$v'"
 printf '# Runbook\n\nno marker here\n' > "$FIXTURE/engineering/RUNBOOK.md"
 v=$(unit_nudge); [ -z "$v" ] && ok "nudge: missing marker → nothing" || fail "nudge: no marker" "got '$v'"
+printf '# Runbook\n\n<!-- tpm:begin · agreed YYYY-MM-DD · derived from Linear · written by /tpm, regenerate don\x27t edit -->\n_(no agreement yet — run /tpm)_\n<!-- tpm:end -->\n' > "$FIXTURE/engineering/RUNBOOK.md"
+v=$(unit_nudge); code=$?
+[ $code -eq 0 ] && [ "$v" = "runbook: no agreement yet → /tpm" ] && ok "nudge: synced skeleton (marker, no date) → no-agreement line (v5.0.1)" || fail "nudge: skeleton" "exit $code, got '$v'"
 write_runbook "$FIXTURE/engineering/RUNBOOK.md" "2026-13-45"
 v=$(unit_nudge); code=$?
 [ $code -eq 0 ] && [ -z "$v" ] && ok "nudge: unparsable date → nothing, exit 0" || fail "nudge: bad date" "exit $code, got '$v'"
