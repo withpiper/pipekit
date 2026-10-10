@@ -3486,7 +3486,7 @@ cmd_done() {
 
   # Build the Linear close comment from git directly (v2.1.2+).
   # Per-branch journals were retired — git log is the source of truth.
-  local merge_base commits diffstat range=""
+  local merge_base="" commits="" diffstat="" range=""
   if [ -n "$pr_json" ]; then
     # No local ref, so the PR's merge commit is the anchor: ^1 is the base it
     # landed on, ^2 the branch head. Squash is off in consuming repos, so merges

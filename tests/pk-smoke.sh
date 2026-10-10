@@ -1819,7 +1819,7 @@ case "$GD_OUT" in
         grep -q "pulls/9/commits" "$GH_LOG" && [ $GD_RC -eq 0 ] \
           && ok "done: unfetched merge takes the commit list from GitHub (first lines only), no diffstat" \
           || fail "done: unfetched merge takes the commit list from GitHub" "rc=$GD_RC gh=$(cat "$GH_LOG")" ;;
-      *) fail "done: unfetched merge takes the commit list from GitHub" "body: ${GD_BODY:-<no commentCreate>}" ;;
+      *) fail "done: unfetched merge takes the commit list from GitHub" "body: ${GD_BODY:-<no commentCreate>} rc=$GD_RC out=$GD_OUT" ;;
     esac ;;
   *) fail "done: unfetched merge announces the GitHub commit list" "rc=$GD_RC out=$GD_OUT" ;;
 esac
