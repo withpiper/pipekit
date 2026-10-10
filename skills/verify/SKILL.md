@@ -192,6 +192,51 @@ The check is one question: **would this test still pass against the code before 
 
 **Anchor — SiteLine, 2026-07-29/30.** PIPER-491 cited two assertions as security evidence that could not fail (one fixture seeded only in-scope projects; one compared two identical computations through a seam the fix had deleted) — and then made the *same* vacuous-fixture mistake again on `clientInfo` in the very pass writing that lesson up. PIPER-497 shipped four separate vacuous assertions before mutation checks caught them. Where the discipline was applied first, it paid immediately: PIPER-164's guard, authored red-first, failed on exactly its 5 divergent sites and exposed a resolver hole that would have silently exempted a CORS-granting function.
 
+### Step 3.6 — A mocked model cannot violate the provider's limits
+
+A suite that mocks the model is Step 3.5's fixture that cannot violate, at the API boundary: the provider's schema limits, and its refusals of a schema it will not accept, live only on the real API. So a new or changed AI extraction call needs a **real-API harness run** recorded in this run's evidence. `/verify` is the last automated gate before `pk promote` carries the diff toward beta, so the record is required here.
+
+**Trigger.** The diff (committed, `origin/$INTEGRATION...HEAD`) changes a file that holds a structured-output or tool-schema marker, or a path matching the project's `AI extraction paths`. The marker grep reads the whole changed file, not only its changed lines, because the anchor's defect was a union added *inside* an existing schema. Markdown, tests and `Logs/` / `Reports/` are excluded from it, since a test that mocks the call is not the call. An extraction prompt, a schema file kept apart from the call, or a call that parses free-text JSON with no schema carries no marker; a project covers those by declaring the path. A project with no AI extraction call never matches and pays nothing.
+
+Run this block in its own Bash call, with `GATE_RC` set to Step 3's result and a timeout long enough for the harness.
+
+```bash
+AI_MARKERS='input_schema|inputSchema|tool_choice|toolChoice|response_format|responseFormat|json_schema|jsonSchema|output_format|output_config|responseSchema|response_schema|outputFormat|outputConfig|responseJsonSchema|functionDeclarations|with_structured_output|response_model|generateObject|streamObject|Output\.object'
+AI_PATHS=$(pk config "AI extraction paths" "")    # ERE: prompts, schema files, schema-less calls
+HARNESS=$(pk config "Real-API harness" "")        # the project's command; none declared → none run
+DIFF_FILES=$(git -c core.quotePath=false diff --name-only --diff-filter=d "origin/$INTEGRATION...HEAD" 2>/dev/null)
+AI_CHANGED=$(printf '%s\n' "$DIFF_FILES" \
+  | grep -vE '\.md$|(^|/)(tests?|__tests__|__mocks__|spec|fixtures|e2e)/|\.(test|spec)\.|(^|/)test_[^/]*$|_test\.[a-z]+$|^(Logs|Reports)/' \
+  | while IFS= read -r f; do grep -qE "$AI_MARKERS" "$f" 2>/dev/null && echo "$f"; done)
+if [ -n "$AI_PATHS" ]; then
+  AI_CHANGED=$(printf '%s\n%s\n' "$AI_CHANGED" "$(printf '%s\n' "$DIFF_FILES" | grep -E "$AI_PATHS")" | grep -v '^$' | sort -u)
+fi
+
+REAL_API_MARK=".pk-work/${ISSUE}.real-api-flag"   # read by Flag check G in a later shell
+mkdir -p .pk-work && rm -f "$REAL_API_MARK"
+if [ -n "$AI_CHANGED" ] && [ "${GATE_RC:-0}" = "0" ]; then
+  if [ -z "$HARNESS" ]; then
+    echo "AI extraction call changed ($(echo "$AI_CHANGED" | tr '\n' ' ')) and no Real-API harness is declared in method.config.md" > "$REAL_API_MARK"
+  else
+    HLOG=$(mktemp "${TMPDIR:-/tmp}/pk-real-api.XXXXXX")   # 0600; real payloads stay out of every committed file
+    start=$(date +%s)
+    PK_AI_CHANGED="$AI_CHANGED" bash -c "$HARNESS" > "$HLOG" 2>&1
+    HARNESS_RC=$?
+    RECORD="real-api-run: harness=$HARNESS · date=$(date -u +%Y-%m-%dT%H:%MZ) · result=$([ "$HARNESS_RC" = 0 ] && echo pass || echo fail) (exit $HARNESS_RC) · sha=$(git rev-parse HEAD)"
+    echo "$RECORD  (output: $HLOG)"
+    if [ "$TIER" != "quick" ]; then
+      printf '==> $ %s\n(output withheld: %s)\nexit: %d\nduration: %ds\n%s\n\n' \
+        "$HARNESS" "$HLOG" "$HARNESS_RC" "$(($(date +%s) - start))" "$RECORD" >> "$VERIFY_DIR/evidence.txt"
+    fi
+    if [ "$HARNESS_RC" != "0" ]; then GATE_RC=$HARNESS_RC; fi
+  fi
+fi
+```
+
+The `real-api-run:` line is the evidence format (harness, run date, result, sha); cite it in reality-check.md § Measurements. Its output stays in `$HLOG` and is never quoted into `evidence.txt`, `reality-check.md`, Linear or the PR (a real run carries real documents); on a failure, read it locally, then delete it. The harness receives the changed files as `PK_AI_CHANGED` and must cover every extraction call it could name there; it must exit non-zero on any input it failed to parse, and on a run that could not reach the API (no key, no network); 0 on a skip is not a pass. A failing run is a red gate leg: the status is NEEDS WORK, as for a gate failure above, except that the hand-off prints the `real-api-run:` record and the log path instead of the output's last lines. A flake is re-run, not accepted. With no harness declared, `/verify` does not invent one: Flag check G surfaces the gap. Like every leg, the harness re-runs at each new sha (Step 9).
+
+**Anchor — Piper PIPER-1042, 2026-10-04.** Every quote upload failed with a 422 because the extraction schema carried 17 union parameters against Anthropic's limit of 16. Every test mocked the model, so nothing counted unions until the first real-API harness run, after the feature had shipped.
+
 Continue to step 4 only if QA is enabled.
 
 ## Step 4 — QA review subagent (if QA enabled)
@@ -595,9 +640,23 @@ echo "FLAG: security gate — ${SECGATE_VERDICT} — categories: ${SECGATE_MATCH
 
 A `PASS` with **no category matched** is the common, cheap case — emit no flag (the gate ran and found nothing sensitive), but **still write the sentinel**. Only a category match (whether the verdict is FAIL, WARNINGS, or even a clean PASS the user should see) surfaces a flag. Like every other flag, a security-gate FAIL **pauses auto-ship** (Step 9) for the user to RECONCILE; it does **not** auto-downgrade the `/verify` status. As of v4.17.0 the gate is **hard** at the `pk ship` seam: no HEAD-matching PASS sentinel on an armed project → ship refuses (`--force` / `PK_SECGATE_BYPASS=1` escape).
 
+### Flag check G — AI extraction call with no real-API run
+
+Step 3.6 fired and no harness is declared:
+
+```bash
+REAL_API_MARK=".pk-work/${ISSUE}.real-api-flag"
+if [ -s "$REAL_API_MARK" ]; then
+  echo "FLAG: no real-API run — $(cat "$REAL_API_MARK")"
+  [ "$TIER" != "quick" ] && printf 'FLAG: no real-API run: %s\n' "$(cat "$REAL_API_MARK")" >> "$VERIFY_DIR/evidence.txt"
+fi
+```
+
+Clear it by declaring the project's harness (`Real-API harness`) and re-running `/verify`. Accepting it instead means shipping a call that has never met the real API: the accept note must carry the harness name, date and result of a hand run, or say none was made. A marker match that is not an extraction call (an unrelated `response_format`) is accepted in one line.
+
 ### Tally
 
-After all six checks, count flags:
+After all seven checks, count flags:
 
 ```bash
 FLAG_COUNT=<sum of flags surfaced above>
@@ -736,7 +795,7 @@ For `tier:quick` this minimal sentinel is the **only** file written — `evidenc
 
 **Status logic:**
 
-- Gate red → NEEDS WORK (no `verify-complete.md`)
+- Gate red, including a failed Step 3.6 real-API run → NEEDS WORK (no `verify-complete.md`)
 - QA ran and Verdict == Fail → NEEDS WORK (no `verify-complete.md`)
 - Otherwise (gate green AND no QA-Fail) → PASS (write `verify-complete.md`)
 
@@ -780,7 +839,7 @@ The hand-off, the reality-check, and any Linear or PR text written from them may
 Auto-ship fires when **all three** conditions hold:
 
 1. The verdict is **Pass** (gate green; QA Pass if QA ran).
-2. The flag tally from Step 6 is **zero** (no migration files, no QA Pass-with-non-empty sub-sections, no `--qa` force, no `/work` advisory marker, no antagonistic findings, no matched security category).
+2. The flag tally from Step 6 is **zero** (no migration files, no QA Pass-with-non-empty sub-sections, no `--qa` force, no `/work` advisory marker, no antagonistic findings, no matched security category, no AI extraction change lacking a real-API run).
 3. This skill was invoked with the `--auto-ship` argument (passed via the Skill tool's `args` parameter by `/work`'s Step 7 rollover).
 
 Behavior:
@@ -835,6 +894,7 @@ If `--auto-ship` is **not** in this skill's args (standalone `/verify` invocatio
 | No `tier:` label, or Linear unreachable | Step 0 defaults to `tier:standard` and prints a visible warning that it's guessing — evidence layer still written. |
 | Session resumed mid-run (context compacted, scratchpad gone) | Re-run from Step 2. Nothing from before the resume is evidence at this sha — see Step 9. |
 | Adversarial subagent dies (rate limit, timeout) | Retry on the same tier twice; a lower-tier or skipped run is flagged as such (Step 5a, Flag check E). |
+| AI extraction call changed, no `Real-API harness` declared | Flag (Flag check G), never an invented command. Declared but fails or cannot reach the API → red leg, NEEDS WORK (Step 3.6). |
 
 ## When NOT to use
 

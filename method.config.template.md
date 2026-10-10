@@ -366,6 +366,16 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
      | **Skip rules** | `pipekit-cmux, pipekit-migrations` | (none — all five rules sync) | `scripts/sync-method.sh` (v4.21.0+) — canonical-rule opt-out; see `.claude/rules/README.md` § Opting out |
 -->
 
+<!-- Optional — the real-API gate for AI extraction calls (`/verify` Step 3.6).
+     Same inert-while-indented convention as above: a verbatim copy must not
+     hand `/verify` a placeholder to execute. To opt in, copy the rows into the
+     table above WITHOUT the leading spaces and replace the example value, or set them in the `Key: value`
+     block form, which an `AI extraction paths` alternation (`a|b`) needs: the
+     table form splits on `|`. Projects with no extraction call skip both.
+     | **Real-API harness** | e.g. `npm run harness:quotes` | (blank → Flag check G, never an invented command) | `/verify` Step 3.6 — run against the real API when the diff changes an AI extraction call. Gets the changed files as `PK_AI_CHANGED`; must exit non-zero on any input it failed to parse and on a run that could not reach the API. Written verbatim into the committed `evidence.txt`, so no inline secrets, and no backticks (`pk config` strips them). |
+     | **AI extraction paths** | ERE, e.g. `prompts/ai-quote-import\.md$` | (blank → schema-marker grep only) | `/verify` Step 3.6 — extraction inputs the marker grep cannot see: prompts, schema files kept apart from the call, calls that parse free-text JSON with no schema. |
+-->
+
 ### Example (rs-vault)
 
 ```
