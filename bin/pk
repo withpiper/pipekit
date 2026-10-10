@@ -1592,6 +1592,46 @@ EOF
   return 1
 }
 
+# When pk_branch_for_issue finds nothing, the PR can still answer: GitHub keeps
+# a merged PR's head ref NAME after delete-branch-on-merge removes the branch
+# from origin, and the name is all the merge check and the ship record need.
+# Echoes one compact JSON object — {number, state, url, headRefName,
+# headRefOid, mergeCommit:{oid}, mergedAt} — for the PR whose head matches
+# <prefix>/<ID>-*, or nothing. A merged PR outranks a closed or open one (the
+# caller refuses on those), and among merged PRs the newest mergedAt wins, so a
+# follow-up fix/ PR beats the feature/ PR it followed — the same newest-wins
+# rule as the branch resolver.
+#
+# One GraphQL search, not one per prefix: `head:` is an anchored-prefix
+# qualifier (measured 2026-10-10 on ethan-piper/SiteLine, gh 2.102.0:
+# `head:feature/PIPER-10` listed every feature/PIPER-10xx PR, `head:PIPER-1086`
+# and `head:feature/PIPER-108-` listed none) and several head: terms in one
+# query OR together. The jq filter re-applies the exact globs so a looser
+# server-side match can never hand back someone else's branch. Searching is
+# the one thing REST cannot do here — search/issues returns no head ref — so
+# this is the rare GraphQL call in a REST-first file, and it only runs when
+# both local and remote lookups have already missed.
+pk_gh_pr_for_issue() {
+  local id="$1" slug p q="" globs out
+  [ -n "$id" ] || return 1
+  slug=$(pk_gh_repo_slug) || return 1
+  [ -n "$slug" ] || return 1
+  for p in "${PK_BRANCH_PREFIX_LIST[@]}"; do
+    q="${q}${q:+ }head:${p}/${id}-"
+  done
+  globs=$(printf '%s\n' "${PK_BRANCH_PREFIX_LIST[@]}" | jq -R --arg id "$id" '. + "/" + $id + "-"' | jq -sc .)
+  if ! out=$(gh pr list -R "$slug" --state all --limit 50 --search "$q" \
+      --json number,state,url,headRefName,headRefOid,mergeCommit,mergedAt 2>/dev/null); then
+    echo "⚠ gh pr list failed — GitHub PRs for ${id} could not be searched." >&2
+    return 1
+  fi
+  [ -n "$out" ] || return 1
+  printf '%s' "$out" | jq -c --argjson pre "$globs" '
+    [ .[]? | select(.headRefName as $h | any($pre[]; . as $p | $h | startswith($p))) ] as $all
+    | ([ $all[] | select(.state == "MERGED") ] | max_by(.mergedAt)) // $all[0] // empty
+  ' 2>/dev/null
+}
+
 pk_worktree_path() {
   local id="$1"
   local root
@@ -3291,6 +3331,10 @@ cmd_done() {
 
   local current
   local issue
+  # Set only when the branch was resolved from a merged GitHub PR (below). The
+  # ref-based steps — drift head, commit range, PR URL — read these instead of
+  # a local ref that no longer exists; empty means the ordinary branch path.
+  local pr_json="" pr_number="" pr_state="" pr_head_oid="" pr_merge_sha="" pr_url_done=""
   if [ -n "$id" ]; then
     # Explicit ID — resolve the branch by glob. This is the supported path:
     # pk done is meant to run from the parent repo (so it can delete the
@@ -3301,10 +3345,35 @@ cmd_done() {
     issue="$id"
     current=$(pk_branch_for_issue "$id") || current=""
     if [ -z "$current" ]; then
-      echo "ERROR: no branch found for ${id} — searched $(pk_branch_search_hint "$id") locally and on origin." >&2
-      return 1
-    fi
-    if ! git show-ref --verify --quiet "refs/heads/${current}" 2>/dev/null; then
+      # Neither local nor on origin. With delete-branch-on-merge the branch is
+      # gone before pk done runs whenever the PR merged outside `pk done --merge`
+      # — and before this fallback the command returned here, so the issue sat
+      # In Progress with no Shipped record and nothing saying so (SiteLine
+      # PIPER-1086/1128/1142, 2026-10-09). GitHub still has the PR under its
+      # head name.
+      pr_json=$(pk_gh_pr_for_issue "$id") || pr_json=""
+      if [ -z "$pr_json" ]; then
+        echo "ERROR: no branch found for ${id} — searched $(pk_branch_search_hint "$id") locally, on origin, and among GitHub PRs." >&2
+        return 1
+      fi
+      current=$(printf '%s' "$pr_json" | jq -r '.headRefName // empty')
+      pr_number=$(printf '%s' "$pr_json" | jq -r '.number // empty')
+      pr_state=$(printf '%s' "$pr_json" | jq -r '.state // empty')
+      if [ "$pr_state" != "MERGED" ]; then
+        # Same first line as the post-merge check below. The usual options do
+        # not apply: there is no branch left to merge, and never transition an
+        # issue on a closed PR.
+        echo "ERROR: PR for $current is not merged (state: ${pr_state:-NOT_FOUND})" >&2
+        echo "  PR #${pr_number} is ${pr_state}, and its branch is gone locally and on origin — nothing to merge." >&2
+        echo "  If the work should still ship, restore the branch from the PR and open a new one." >&2
+        return 1
+      fi
+      pr_head_oid=$(printf '%s' "$pr_json" | jq -r '.headRefOid // empty')
+      pr_merge_sha=$(printf '%s' "$pr_json" | jq -r '.mergeCommit.oid // empty')
+      pr_url_done=$(printf '%s' "$pr_json" | jq -r '.url // empty')
+      echo "ℹ $current resolved from merged PR #${pr_number} on GitHub — the branch is gone locally and on origin,"
+      echo "  so there is no worktree or local branch to clean up."
+    elif ! git show-ref --verify --quiet "refs/heads/${current}" 2>/dev/null; then
       # Nothing local to remove or delete, and merge_base/commits below come out
       # empty because the branch is not a local ref. Say so rather than posting a
       # thinner ship record without explanation.
@@ -3365,18 +3434,25 @@ cmd_done() {
   # anchor commit on the integration branch). If the PR is already merged,
   # this is a clean no-op courtesy of gh's idempotent behavior.
   if $do_merge; then
-    echo "Merging PR for $current..."
-    if ! gh pr merge "$current" --merge 2>&1; then
-      echo "ERROR: gh pr merge failed. Resolve (conflicts? failing CI? not approved?) and rerun." >&2
-      return 1
+    if [ -n "$pr_json" ]; then
+      # Resolved from a merged PR: there is no branch for gh to merge by name,
+      # and failing here would strand the issue exactly as the missing fallback did.
+      echo "PR #${pr_number} is already merged — nothing for --merge to do."
+    else
+      echo "Merging PR for $current..."
+      if ! gh pr merge "$current" --merge 2>&1; then
+        echo "ERROR: gh pr merge failed. Resolve (conflicts? failing CI? not approved?) and rerun." >&2
+        return 1
+      fi
     fi
   fi
 
   # Verify PR is merged. In the v2.5.0 model, pk done's primary job IS
   # confirming the merge happened — without it, the In <FirstEnv> state
   # transition would be a lie (code wouldn't actually be on the first env).
-  local pr_state
-  pr_state=$(pk_gh_pr_view "$current" | jq -r '.state // empty')
+  # A PR-resolved branch already proved MERGED above from the search result;
+  # re-asking by head name would only add a call (and a fork head would miss).
+  [ -n "$pr_json" ] || pr_state=$(pk_gh_pr_view "$current" | jq -r '.state // empty')
   if [ "$pr_state" != "MERGED" ]; then
     echo "ERROR: PR for $current is not merged (state: ${pr_state:-NOT_FOUND})" >&2
     echo "  Options:" >&2
@@ -3391,7 +3467,11 @@ cmd_done() {
   # belongs on the Linear issue where a postmortem or an auditor will find it,
   # not only in a terminal someone already closed.
   local _dhead _ddrift
-  _dhead=$(git rev-parse "$current" 2>/dev/null || echo "")
+  if [ -n "$pr_json" ]; then
+    _dhead="$pr_head_oid"
+  else
+    _dhead=$(git rev-parse "$current" 2>/dev/null || echo "")
+  fi
   # pk done ALWAYS runs from the parent repo, so the branch ref is not optional
   # here — without it this report could never fire. And the class list comes from
   # pk_verify_drift_blocks rather than being restated: duplicating it is what let
@@ -3406,25 +3486,42 @@ cmd_done() {
 
   # Build the Linear close comment from git directly (v2.1.2+).
   # Per-branch journals were retired — git log is the source of truth.
-  local merge_base commits diffstat pr_url_done
-  merge_base=$(git merge-base "$current" "$(pk_integration_branch)" 2>/dev/null || echo "")
-  if [ -n "$merge_base" ]; then
+  local merge_base commits diffstat range=""
+  if [ -n "$pr_json" ]; then
+    # No local ref, so the PR's merge commit is the anchor: ^1 is the base it
+    # landed on, ^2 the branch head. Squash is off in consuming repos, so merges
+    # are real merge commits; a squash or rebase merge has no ^2 and takes the
+    # GitHub path below instead of a wrong range.
+    if [ -n "$pr_merge_sha" ] && git rev-parse --verify --quiet "${pr_merge_sha}^2" >/dev/null 2>&1; then
+      range="${pr_merge_sha}^1..${pr_merge_sha}^2"
+    fi
+  else
+    merge_base=$(git merge-base "$current" "$(pk_integration_branch)" 2>/dev/null || echo "")
+    [ -n "$merge_base" ] && range="${merge_base}..${current}"
+  fi
+  if [ -n "$range" ]; then
     # Use awk instead of `head -20` — awk reads the full stream so git log
     # never gets SIGPIPE. Under `set -o pipefail`, head's early-exit kills
     # git log mid-stream and the pipeline returns 141, silently aborting
     # cmd_done with no output (RS-80 in rs-vault, 2026-05-05).
-    commits=$(git log "${merge_base}..${current}" --pretty=format:'- %h %s' 2>/dev/null | awk 'NR<=20')
-    diffstat=$(git diff --shortstat "${merge_base}..${current}" 2>/dev/null | sed 's/^[[:space:]]*//')
+    commits=$(git log "$range" --pretty=format:'- %h %s' 2>/dev/null | awk 'NR<=20')
+    diffstat=$(git diff --shortstat "$range" 2>/dev/null | sed 's/^[[:space:]]*//')
+  elif [ -n "$pr_json" ]; then
+    # Merge not fetched yet (the parent usually has not pulled right after a UI
+    # merge). The PR's own commit list is a REST read; a diffstat is not.
+    commits=$(gh api "repos/$(pk_gh_repo_slug)/pulls/${pr_number}/commits" 2>/dev/null \
+      | jq -r '.[]? | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' 2>/dev/null | awk 'NR<=20')
+    echo "  Merge commit ${pr_merge_sha:0:8} is not local — commit list comes from GitHub; diffstat and migration check skipped."
   fi
-  pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
+  [ -n "$pr_json" ] || pr_url_done=$(pk_gh_pr_view "$current" | jq -r '.url // empty')
 
   # Migration check — non-blocking. Runs if the merge contains .sql files in
   # the configured migration dir (method.config.md → "Migration dir").
   local migration_dir
   migration_dir=$(pk_config "Migration dir" "supabase/migrations/")
-  if [ -n "$migration_dir" ] && [ -n "$merge_base" ]; then
+  if [ -n "$migration_dir" ] && [ -n "$range" ]; then
     local new_migrations migration_count
-    new_migrations=$(git diff --name-only "${merge_base}..${current}" 2>/dev/null \
+    new_migrations=$(git diff --name-only "$range" 2>/dev/null \
       | grep "^${migration_dir}" | grep "\.sql$" || true)
     if [ -n "$new_migrations" ]; then
       migration_count=$(echo "$new_migrations" | wc -l | tr -d ' ')

@@ -1654,6 +1654,205 @@ git -C "$FIXTURE" worktree remove --force "$WT_DIR" 2>/dev/null
 cleanup
 FIXTURE=""
 
+# ── CLI tests: pk done after delete-branch-on-merge (SiteLine, 2026-10-09) ────
+# A PR merged in the GitHub UI on a repo with delete-branch-on-merge leaves no
+# branch locally or on origin by the time pk done runs. The resolver only knew
+# those two places, so pk done errored "no branch found" before the merge check
+# ever ran, and the issue sat In Progress with no Shipped record and nothing
+# saying so (PIPER-1086/1128/1142). GitHub still has the merged PR under its
+# head name. These tests stub gh with the REAL `gh pr list --json` shape
+# (headRefName, headRefOid, mergeCommit{oid}, mergedAt, state) and the Linear
+# write path, and assert on what reaches Linear — never on a mocked verdict.
+
+echo "== done: merged PR whose branch was deleted (delete-branch-on-merge) =="
+
+make_fixture
+write_config '```
+Team name: Eng
+Integration branch: main
+Ship environments: dev,beta,main
+```'
+
+# The exact post-UI-merge state: a real merge commit on main (squash is off in
+# consuming repos), origin holding main but NOT the branch, branch gone locally.
+gd_git() { git -C "$FIXTURE" -c user.email=t@t -c user.name=t "$@"; }
+gd_git checkout -q -b feature/GD-1-gone
+printf 'a\n' > "$FIXTURE/a.txt"; gd_git add a.txt; gd_git commit -q -m "feat(gd): add a"
+gd_git commit -q --allow-empty -m "fix(gd): tidy a"
+GD_HEAD=$(gd_git rev-parse HEAD)
+gd_git checkout -q main
+gd_git merge -q --no-ff feature/GD-1-gone -m "Merge pull request #7 from t/feature/GD-1-gone"
+GD_MERGE=$(gd_git rev-parse HEAD)
+# A merged PR whose branch is still local — the ordinary path, used as the control.
+gd_git checkout -q -b feature/GD-5-local
+gd_git commit -q --allow-empty -m "feat(gd): local five"
+gd_git checkout -q main
+gd_git merge -q --no-ff feature/GD-5-local -m "Merge pull request #5 from t/feature/GD-5-local"
+git init -q --bare "$FIXTURE/remote.git"
+gd_git remote add origin "$FIXTURE/remote.git"
+gd_git push -q origin main
+gd_git branch -D feature/GD-1-gone >/dev/null
+
+# gh pr list answers, in the shape gh 2.102.0 returns for
+# --json number,state,url,headRefName,headRefOid,mergeCommit,mergedAt.
+# GD-1: two merged PRs (newest must win) plus a decoy whose head only shares the
+# ID as a prefix (GD-10) — the glob filter must drop it even though the server
+# matched it. GD-2: closed, never merged. GD-4: merged, but the merge commit is
+# not in the local object store.
+printf '[{"headRefName":"feature/GD-10-decoy","headRefOid":"1111111111111111111111111111111111111111","mergeCommit":{"oid":"2222222222222222222222222222222222222222"},"mergedAt":"2026-10-10T09:00:00Z","number":10,"state":"MERGED","url":"https://github.com/t/r/pull/10"},
+ {"headRefName":"feature/GD-1-first","headRefOid":"3333333333333333333333333333333333333333","mergeCommit":{"oid":"4444444444444444444444444444444444444444"},"mergedAt":"2026-10-01T09:00:00Z","number":6,"state":"MERGED","url":"https://github.com/t/r/pull/6"},
+ {"headRefName":"feature/GD-1-gone","headRefOid":"%s","mergeCommit":{"oid":"%s"},"mergedAt":"2026-10-09T13:17:12Z","number":7,"state":"MERGED","url":"https://github.com/t/r/pull/7"}]\n' \
+  "$GD_HEAD" "$GD_MERGE" > "$FIXTURE/gh-GD-1.json"
+printf '[{"headRefName":"feature/GD-2-closed","headRefOid":"813e609777b7d28c4e4f2eb25dde4b062e0ba559","mergeCommit":null,"mergedAt":null,"number":8,"state":"CLOSED","url":"https://github.com/t/r/pull/8"}]\n' > "$FIXTURE/gh-GD-2.json"
+printf '[{"headRefName":"fix/GD-4-remote","headRefOid":"5555555555555555555555555555555555555555","mergeCommit":{"oid":"6666666666666666666666666666666666666666"},"mergedAt":"2026-10-09T14:00:00Z","number":9,"state":"MERGED","url":"https://github.com/t/r/pull/9"}]\n' > "$FIXTURE/gh-GD-4.json"
+# REST repos/{slug}/pulls/9/commits, trimmed to the fields pk reads.
+printf '[{"sha":"abc1234abc1234abc1234abc1234abc1234abc12","commit":{"message":"fix(gd): remote one\\n\\nbody line"}},
+ {"sha":"def5678def5678def5678def5678def5678def56","commit":{"message":"test(gd): remote two"}}]\n' > "$FIXTURE/gh-pr9-commits.json"
+
+cat > "$FIXTURE/shim/gh" <<EOF
+#!/usr/bin/env bash
+echo "gh \$*" >> "$GH_LOG"
+case "\$*" in
+  *"pr list"*"head:feature/GD-1-"*) cat "$FIXTURE/gh-GD-1.json" ;;
+  *"pr list"*"head:feature/GD-2-"*) cat "$FIXTURE/gh-GD-2.json" ;;
+  *"pr list"*"head:feature/GD-3-"*) echo '[]' ;;
+  *"pr list"*"head:feature/GD-4-"*) cat "$FIXTURE/gh-GD-4.json" ;;
+  *"pulls/9/commits"*)              cat "$FIXTURE/gh-pr9-commits.json" ;;
+esac
+exit 0
+EOF
+chmod +x "$FIXTURE/shim/gh"
+
+# Linear: log every call, answer the reads cmd_done makes (issue lookup, comment
+# thread, workflow state) and confirm the writes. The issue sits in UAT so the
+# "advance" ladder lets it move to In Dev.
+GD_GQL_LOG="$FIXTURE/gql.log"
+cat > "$FIXTURE/gd-gql-stub.sh" <<'EOF'
+pk_linear_gql() {
+  printf '%s\t%s\n' "$1" "$(printf '%s' "${2:-null}" | jq -c .)" >> "$GD_GQL_LOG"
+  case "$1" in
+    mutation*issueUpdate*)   echo '{"data":{"issueUpdate":{"success":true}}}' ;;
+    mutation*commentCreate*) echo '{"data":{"commentCreate":{"success":true}}}' ;;
+    *workflowStates*)        echo '{"data":{"workflowStates":{"nodes":[{"id":"st-in-dev","name":"In Dev"}]}}}' ;;
+    *"issue(id:"*)           echo '{"data":{"issue":{"id":"uuid-gd","state":{"name":"UAT"},"comments":{"nodes":[]}}}}' ;;
+    *) echo '{}' ;;
+  esac
+}
+EOF
+gd_done() { # $@ = pk done args → GD_OUT (combined output), GD_RC
+  : > "$GD_GQL_LOG"; : > "$GH_LOG"
+  GD_OUT=$( cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" && source "$PK" \
+    && source "$FIXTURE/gd-gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_done "$@" 2>&1 ); GD_RC=$?
+}
+# Logged mutations in order, as "name<TAB>variables" (compact JSON).
+gd_writes() { awk -F'\t' '/^mutation/ { match($1, /\{ *[A-Za-z]+/); n = substr($1, RSTART, RLENGTH); sub(/^\{ */, "", n); print n "\t" $2 }' "$GD_GQL_LOG"; }
+gd_comment_body() { gd_writes | awk -F'\t' '$1 == "commentCreate" { print $2; exit }' | jq -r '.body // empty'; }
+
+# (a) Merged PR, branch gone locally and on origin, merge commit local → the
+#     newest merged PR resolves, the Shipped comment carries PR + diffstat + the
+#     merge's own commit list (^1..^2, so no main commits), and the issue moves.
+gd_done GD-1
+case "$GD_OUT" in
+  *"resolved from merged PR #7 on GitHub"*)
+    [ $GD_RC -eq 0 ] && ok "done: deleted branch resolves from the newest merged PR (decoy and older PR skipped)" \
+      || fail "done: deleted branch resolves from merged PR" "resolved but rc=$GD_RC: $GD_OUT" ;;
+  *"no branch found"*) fail "done: deleted branch resolves from merged PR" "still branch-not-found: $(echo "$GD_OUT" | head -2)" ;;
+  *) fail "done: deleted branch resolves from merged PR" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+GD_BODY=$(gd_comment_body)
+case "$GD_BODY" in
+  "**Shipped — GD-1**"*"PR: https://github.com/t/r/pull/7"*"Diff: 1 file changed"*"**Commits:**"*"fix(gd): tidy a"*"feat(gd): add a"*)
+    case "$GD_BODY" in
+      *" init"*|*"local five"*) fail "done: Shipped comment lists only the merge's commits" "range leaked main commits: $GD_BODY" ;;
+      *) ok "done: Shipped comment carries PR URL, diffstat and the merge's commit list (merge^1..merge^2)" ;;
+    esac ;;
+  *) fail "done: Shipped comment carries PR URL, diffstat and commit list" "body: ${GD_BODY:-<no commentCreate>}" ;;
+esac
+GD_NAMES=$(gd_writes | cut -f1 | paste -sd, -)
+GD_STATE=$(gd_writes | awk -F'\t' '$1 == "issueUpdate" { print $2; exit }' | jq -r '.state // empty')
+if [ "$GD_NAMES" = "commentCreate,issueUpdate" ] && [ "$GD_STATE" = "st-in-dev" ]; then
+  ok "done: issue transitioned UAT → In Dev after the Shipped comment"
+else
+  fail "done: issue transitioned UAT → In Dev" "writes=$GD_NAMES state=$GD_STATE"
+fi
+if grep -q "pr merge" "$GH_LOG"; then
+  fail "done: no gh pr merge on a PR already known merged" "$(cat "$GH_LOG")"
+else
+  ok "done: no gh pr merge on a PR already known merged"
+fi
+
+# (b) Closed, never merged, branch gone → refuse with the not-merged wording,
+#     and nothing reaches Linear.
+gd_done GD-2
+case "$GD_OUT" in
+  *"PR for feature/GD-2-closed is not merged (state: CLOSED)"*)
+    if [ $GD_RC -ne 0 ] && [ -z "$(gd_writes)" ]; then
+      ok "done: closed unmerged PR with deleted branch refuses, no Linear write"
+    else
+      fail "done: closed unmerged PR refuses" "rc=$GD_RC writes=$(gd_writes | cut -f1 | paste -sd, -)"
+    fi ;;
+  *) fail "done: closed unmerged PR refuses with not-merged wording" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+
+# (c) No PR anywhere → the branch-not-found error, now saying GitHub was searched
+#     too, still naming the globs; nothing reaches Linear.
+gd_done GD-3
+case "$GD_OUT" in
+  *"no branch found for GD-3"*"feature/GD-3-*"*"GitHub PRs"*)
+    if [ $GD_RC -ne 0 ] && [ -z "$(gd_writes)" ]; then
+      ok "done: no branch and no PR → error names the GitHub search, no Linear write"
+    else
+      fail "done: no branch and no PR" "rc=$GD_RC writes=$(gd_writes | cut -f1 | paste -sd, -)"
+    fi ;;
+  *) fail "done: no branch and no PR → error names the GitHub search" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+
+# (d) Merged PR, merge commit NOT local (parent has not pulled yet) → the commit
+#     list comes from REST pulls/<n>/commits, diffstat is skipped and said so.
+gd_done GD-4
+GD_BODY=$(gd_comment_body)
+case "$GD_OUT" in
+  *"resolved from merged PR #9 on GitHub"*"not local — commit list comes from GitHub"*)
+    case "$GD_BODY" in
+      *"Diff:"*) fail "done: unfetched merge takes the commit list from GitHub" "diffstat claimed without a local range: $GD_BODY" ;;
+      "**Shipped — GD-4**"*"PR: https://github.com/t/r/pull/9"*"- abc1234 fix(gd): remote one"*"- def5678 test(gd): remote two"*)
+        grep -q "pulls/9/commits" "$GH_LOG" && [ $GD_RC -eq 0 ] \
+          && ok "done: unfetched merge takes the commit list from GitHub (first lines only), no diffstat" \
+          || fail "done: unfetched merge takes the commit list from GitHub" "rc=$GD_RC gh=$(cat "$GH_LOG")" ;;
+      *) fail "done: unfetched merge takes the commit list from GitHub" "body: ${GD_BODY:-<no commentCreate>}" ;;
+    esac ;;
+  *) fail "done: unfetched merge announces the GitHub commit list" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+
+# (e) --merge on the fallback path: nothing to merge by name, must not call
+#     gh pr merge and must not strand the issue.
+gd_done GD-1 --merge
+case "$GD_OUT" in
+  *"already merged — nothing for --merge to do"*)
+    if ! grep -q "pr merge" "$GH_LOG" && [ "$(gd_writes | cut -f1 | paste -sd, -)" = "commentCreate,issueUpdate" ]; then
+      ok "done --merge: already-merged PR with deleted branch skips gh pr merge and still ships"
+    else
+      fail "done --merge: already-merged PR skips gh pr merge" "gh=$(cat "$GH_LOG") writes=$(gd_writes | cut -f1 | paste -sd, -)"
+    fi ;;
+  *) fail "done --merge: already-merged PR with deleted branch" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+
+# (f) Control: a merged PR whose branch still exists never reaches the GitHub
+#     search — the ordinary path is untouched (it stops at the shim's empty
+#     pulls?head= answer, as before).
+gd_done GD-5
+if grep -q "pr list" "$GH_LOG"; then
+  fail "done: an existing branch never triggers the GitHub PR search" "$(cat "$GH_LOG")"
+else
+  case "$GD_OUT" in
+    *"PR for feature/GD-5-local is not merged (state: NOT_FOUND)"*) ok "done: an existing branch never triggers the GitHub PR search (ordinary path unchanged)" ;;
+    *) fail "done: ordinary path unchanged for an existing branch" "out=$GD_OUT" ;;
+  esac
+fi
+
+cleanup
+FIXTURE=""
+
 # ── commit-format hook ───────────────────────────────────────────────────────
 echo "== commit-format hook (templates/hooks/validate-commit.sh) =="
 
