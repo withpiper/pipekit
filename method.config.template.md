@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
+**v5.0.1** — Last updated: 2026-10-10  *(**v5.0.1 — `Portfolio repos`: a sibling on the same `Team ID` shares the board and contributes only its in-flight state. Carries v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
