@@ -2628,6 +2628,7 @@ write_config '```
 Team name: Eng
 ```'
 GQL_LOG="$FIXTURE/gql.log"; STUB_STATE="$FIXTURE/initiatives.json"; STUB_ISSUES="$FIXTURE/issues.json"
+STUB_TEAM="$FIXTURE/team.json"; STUB_SEARCH="$FIXTURE/search.json"
 cat > "$FIXTURE/gql-stub.sh" <<'EOF'
 pk_linear_gql() {
   printf '%s\t%s\n' "$1" "$(printf '%s' "${2:-null}" | jq -c .)" >> "$GQL_LOG"
@@ -2640,8 +2641,17 @@ pk_linear_gql() {
       fi
       echo '{"data":{"projectUpdate":{"success":true}}}' ;;
     mutation*issueUpdate*)         echo '{"data":{"issueUpdate":{"success":true}}}' ;;
+    mutation*issueCreate*)         echo '{"data":{"issueCreate":{"success":true,"issue":{"id":"u31","identifier":"RS-31","url":"https://linear.app/t/issue/RS-31"}}}}' ;;
     mutation*issueRelationCreate*) echo '{"data":{"issueRelationCreate":{"success":true}}}' ;;
     mutation*commentCreate*)       echo '{"data":{"commentCreate":{"success":true}}}' ;;
+    # Reads behind the v4.39.0 verbs. `teams(filter` precedes `*initiatives*`
+    # because the projects selection nests an initiatives sub-field.
+    *"teams(filter"*)   cat "$STUB_TEAM" ;;
+    *workflowStates*)   echo '{"data":{"workflowStates":{"nodes":[{"id":"s-ns","name":"Needs Spec"},{"id":"s-appr","name":"Approved"},{"id":"s-ip","name":"In Progress"}]}}}' ;;
+    *issueLabels*)      echo '{"data":{"issueLabels":{"nodes":[{"id":"l-bug","name":"bug","isGroup":false},{"id":"l-tq","name":"tier:quick","isGroup":false},{"id":"l-grp","name":"tier","isGroup":true}]}}}' ;;
+    *"issues(filter"*)  cat "$STUB_SEARCH" ;;
+    *gqlErrorFixture*)  echo '{"data":null,"errors":[{"message":"Field nope not found"}]}' ;;
+    *gqlOkFixture*)     echo '{"data":{"viewer":{"id":"me"}}}' ;;
     *initiatives*)  cat "$STUB_STATE" ;;
     *"issue(id:"*)  jq -c --arg id "$(printf '%s' "$2" | jq -r .id)" '{data:{issue:(.[$id] // null)}}' "$STUB_ISSUES" ;;
     *) echo '{}' ;;
@@ -2650,10 +2660,16 @@ pk_linear_gql() {
 EOF
 unit_focus() { ( cd "$FIXTURE" && source "$PK" && source "$FIXTURE/gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_focus "$@" 2>&1 ); }
 unit_issue() { ( cd "$FIXTURE" && source "$PK" && source "$FIXTURE/gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_issue "$@" 2>&1 ); }
+unit_project() { ( cd "$FIXTURE" && source "$PK" && source "$FIXTURE/gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_project "$@" 2>&1 ); }
+unit_gql() { ( cd "$FIXTURE" && source "$PK" && source "$FIXTURE/gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_gql "$@" ); }
 # Logged mutations in order, as "name<TAB>variables" (compact JSON).
 gql_writes() { awk -F'\t' '/^mutation/ { match($1, /\{ *[A-Za-z]+/); n = substr($1, RSTART, RLENGTH); sub(/^\{ */, "", n); print n "\t" $2 }' "$GQL_LOG"; }
 write_names() { gql_writes | cut -f1 | paste -sd, -; }
 write_vars()  { gql_writes | sed -n "${1}p" | cut -f2; }
+# Logged reads (everything that is not a mutation), same shape: "query<TAB>variables".
+gql_reads()  { awk -F'\t' '!/^[[:space:]]*mutation/ { print }' "$GQL_LOG"; }
+read_query() { gql_reads | sed -n "${1}p" | cut -f1; }
+read_vars()  { gql_reads | sed -n "${1}p" | cut -f2; }
 
 FOCUS_STATE_FIX='{"data":{"initiatives":{"nodes":[
   {"name":"i5. Build","status":"Active","projects":{"nodes":[
@@ -2751,10 +2767,14 @@ echo "== pk issue set / relate / comment (sourced, stubbed network) =="
 
 # RS-30 is already blocked by RS-28 and merely `related` to RS-29.
 cat > "$STUB_ISSUES" <<'EOF'
-{"RS-30":{"id":"u30","identifier":"RS-30","title":"Blocked one","priority":3,
-          "inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"RS-28"}},{"type":"related","issue":{"identifier":"RS-29"}}]}},
- "RS-29":{"id":"u29","identifier":"RS-29","title":"Blocker","priority":0,"inverseRelations":{"nodes":[]}},
- "RS-28":{"id":"u28","identifier":"RS-28","title":"Existing blocker","priority":2,"inverseRelations":{"nodes":[]}}}
+{"RS-30":{"id":"u30","identifier":"RS-30","title":"Blocked one","priority":3,"sortOrder":100,
+          "state":{"id":"s-appr","name":"Approved"},"project":null,"labels":{"nodes":[{"id":"l-bug","name":"bug"}]},
+          "relations":{"nodes":[{"type":"blocks","relatedIssue":{"id":"u31","identifier":"RS-31"}},{"type":"duplicate","relatedIssue":{"id":"u12","identifier":"RS-12"}}]},
+          "inverseRelations":{"nodes":[{"type":"blocks","issue":{"id":"u28","identifier":"RS-28"}},{"type":"related","issue":{"id":"u29","identifier":"RS-29"}}]}},
+ "RS-29":{"id":"u29","identifier":"RS-29","title":"Blocker","priority":0,"inverseRelations":{"nodes":[]},
+          "state":{"id":"s-ns","name":"Needs Spec"},"project":null,"labels":{"nodes":[]}},
+ "RS-28":{"id":"u28","identifier":"RS-28","title":"Existing blocker","priority":2,"inverseRelations":{"nodes":[]},
+          "state":{"id":"s-ip","name":"In Progress"},"project":{"id":"pa","name":"I5.P1. Medium lane"},"labels":{"nodes":[]}}}
 EOF
 
 : > "$GQL_LOG"
@@ -2820,6 +2840,345 @@ out=$(unit_issue bogus RS-30); code=$?
 run_pk issue
 [ $RUN_CODE -eq 0 ] && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue relate' && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue show' \
   && ok "issue: usage lists show and the new verbs" || fail "issue: usage" "exit $RUN_CODE: $RUN_OUT"
+
+# ── Unit tests: pk issue search / create / update (v4.39.0, same stub) ────────
+# The team fixture is what `teams(filter: …) { projects }` answers: the team UUID
+# plus five projects (one completed, one unprefixed, one bare P2. that borrows i5).
+
+echo "== pk issue search / create / update (sourced, stubbed network) =="
+
+cat > "$STUB_TEAM" <<'EOF'
+{"data":{"teams":{"nodes":[{"id":"team-uuid","projects":{"nodes":[
+  {"id":"pa","name":"I5.P1. Medium lane","state":"started","priority":3,"progress":0.4,"description":"Lane for medium work","initiatives":{"nodes":[{"name":"i5. Build"}]}},
+  {"id":"pb","name":"P2. Urgent lane","state":"planned","priority":1,"progress":0,"initiatives":{"nodes":[{"name":"i5. Build"}]}},
+  {"id":"pc","name":"I5.P3. High lane","state":"completed","priority":2,"progress":1,"initiatives":{"nodes":[{"name":"i5. Build"}]}},
+  {"id":"pd","name":"Ops theme","state":"backlog","priority":0,"progress":0.125,"initiatives":{"nodes":[]}},
+  {"id":"pe","name":"I6.P1. Later","state":"planned","priority":0,"progress":0,"initiatives":{"nodes":[{"name":"i6. Next"}]}}]}}]}}}
+EOF
+cat > "$STUB_SEARCH" <<'EOF'
+{"data":{"issues":{"nodes":[
+  {"id":"u30","identifier":"RS-30","title":"Blocked one","priority":3,"state":{"name":"Approved"},"project":{"id":"px","name":"I5.P2. Lanes"}},
+  {"id":"u29","identifier":"RS-29","title":"Blocker","priority":0,"state":{"name":"Needs Spec"},"project":null}]}}}
+EOF
+
+# search: title-only containsIgnoreCase, team-scoped by name (no Team ID in the
+# fixture), first:$n with the default 20, lean selection, one line per issue.
+: > "$GQL_LOG"
+out=$(unit_issue search block); code=$?
+exp='RS-30  Approved  I5.P2. Lanes  Blocked one
+RS-29  Needs Spec  —  Blocker'
+if [ $code -eq 0 ] && [ "$out" = "$exp" ] && [ -z "$(gql_writes)" ] && [ "$(read_vars 1)" = '{"n":20,"q":"block","team":"Eng"}' ] \
+   && printf '%s' "$(read_query 1)" | grep -q 'title: {containsIgnoreCase: \$q}' \
+   && printf '%s' "$(read_query 1)" | grep -q 'team: {name: {eq: \$team}}' \
+   && printf '%s' "$(read_query 1)" | grep -q 'first: \$n'; then
+  ok "issue search: issues(filter: {team, title containsIgnoreCase}, first: n=20) → identifier  state  project|—  title"
+else
+  fail "issue search: default" "exit $code, out: $out, reads: $(gql_reads)"
+fi
+printf '%s' "$(read_query 1)" | grep -q 'description' \
+  && fail "issue search: lean selection" "list selection carries description: $(read_query 1)" \
+  || ok "issue search: list selection never carries description"
+: > "$GQL_LOG"
+out=$(unit_issue search block --state approved --label bug --limit 99); code=$?
+if [ $code -eq 0 ] && [ "$(read_vars 1)" = '{"n":50,"q":"block","state":"approved","label":"bug","team":"Eng"}' ] \
+   && printf '%s' "$(read_query 1)" | grep -q 'state: {name: {eqIgnoreCase: \$state}}' \
+   && printf '%s' "$(read_query 1)" | grep -q 'labels: {name: {eqIgnoreCase: \$label}}'; then
+  ok "issue search: --state/--label filter by name; --limit is capped at 50"
+else
+  fail "issue search: filters" "exit $code, out: $out, reads: $(gql_reads)"
+fi
+: > "$GQL_LOG"
+out=$(unit_issue search lanes --project i5.p1.); code=$?
+if [ $code -eq 0 ] && printf '%s' "$(read_query 1)" | grep -q 'teams(filter' && [ "$(read_vars 2 | jq -r .project)" = "pa" ] \
+   && printf '%s' "$(read_query 2)" | grep -q 'project: {id: {eq: \$project}}'; then
+  ok "issue search: --project resolves the I5.P1 tag to its id with one projects read, then filters by id"
+else
+  fail "issue search: --project" "exit $code, out: $out, reads: $(gql_reads)"
+fi
+: > "$GQL_LOG"
+out=$(unit_issue search x --project nope); code=$?
+[ $code -ne 0 ] && [ "$out" = "ERROR: unknown project: nope (team has: I5.P1. Medium lane, P2. Urgent lane, Ops theme, I6.P1. Later)" ] && [ "$(gql_reads | wc -l | tr -d ' ')" = "1" ] \
+  && ok "issue search: unknown --project → error listing live projects, no issues read" \
+  || fail "issue search: unknown project" "exit $code, out: $out, reads: $(gql_reads)"
+: > "$GQL_LOG"
+out=$(unit_issue search block --json); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -r 'map(.identifier) | join(",")')" = "RS-30,RS-29" ] && [ "$(printf '%s' "$out" | jq -r '.[0].id + "/" + .[0].project.id')" = "u30/px" ] \
+  && printf '%s' "$(read_query 1)" | grep -q 'nodes { id identifier title priority state { name } project { id name } }' \
+  && ok "issue search: --json prints the array, with the Linear id beside identifier (and the project's id)" || fail "issue search: --json" "exit $code, out: $out, reads: $(gql_reads)"
+# A filter with no query text is a list ("all issues in state X"), not a title match.
+: > "$GQL_LOG"
+out=$(unit_issue search --state Approved); code=$?
+if [ $code -eq 0 ] && [ "$(read_vars 1)" = '{"n":20,"state":"Approved","team":"Eng"}' ] && ! printf '%s' "$(read_query 1)" | grep -q 'title:'; then
+  ok "issue search: no query text + a filter → the title clause is omitted (plain list by state/label/project)"
+else
+  fail "issue search: filter-only" "exit $code, out: $out, reads: $(gql_reads)"
+fi
+printf '%s' '{"data":{"issues":{"nodes":[]}}}' > "$STUB_SEARCH"
+out=$(unit_issue search nothing); code=$?
+[ $code -eq 0 ] && [ "$out" = "no issues match" ] && ok "issue search: empty result → 'no issues match', exit 0" || fail "issue search: empty" "exit $code, out: $out"
+out=$(unit_issue search); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q '^Usage: pk issue search' && ok "issue search: no query and no filter → usage" || fail "issue search: usage" "exit $code, out: $out"
+out=$(unit_issue search x --limit 0); code=$?
+[ $code -ne 0 ] && ok "issue search: --limit 0 refused" || fail "issue search: limit 0" "exit $code, out: $out"
+
+# create: one issueCreate(input: $input); teamId resolved from the team read when
+# Team ID is unset; names → ids with one read per kind.
+: > "$GQL_LOG"
+out=$(unit_issue create --title "New thing"); code=$?
+if [ $code -eq 0 ] && [ "$out" = "created RS-31  https://linear.app/t/issue/RS-31" ] && [ "$(write_names)" = "issueCreate" ] \
+   && [ "$(write_vars 1)" = '{"input":{"teamId":"team-uuid","title":"New thing"}}' ] \
+   && grep -q 'issueCreate(input: \$input) { success issue { id identifier url } }' "$GQL_LOG"; then
+  ok "issue create: issueCreate(input: {teamId, title}) → 'created RS-31  <url>'"
+else
+  fail "issue create: minimal" "exit $code, out: $out, writes: $(gql_writes)"
+fi
+printf 'from a file\nline two\n' > "$FIXTURE/body.md"
+: > "$GQL_LOG"
+out=$(unit_issue create --title T --state approved --label bug --label tier:quick --project I5.P1 --priority 2 --parent RS-29 --description-file "$FIXTURE/body.md"); code=$?
+exp='{"input":{"teamId":"team-uuid","title":"T","description":"from a file\nline two","stateId":"s-appr","labelIds":["l-bug","l-tq"],"projectId":"pa","priority":2,"parentId":"u29"}}'
+if [ $code -eq 0 ] && [ "$(write_vars 1 | jq -cS .)" = "$(printf '%s' "$exp" | jq -cS .)" ]; then
+  ok "issue create: every flag lands in IssueCreateInput (state/labels/project resolved, parent → UUID, description from file)"
+else
+  fail "issue create: full input" "exit $code, out: $out, writes: $(gql_writes)"
+fi
+reads_kinds=$(gql_reads | cut -f1 | sed -e 's/.*teams(filter.*/teams/' -e 's/.*workflowStates.*/states/' -e 's/.*issueLabels.*/labels/' -e 's/.*issue(id:.*/issue/' | sort | uniq -c | awk '{print $2 "=" $1}' | paste -sd, -)
+[ "$reads_kinds" = "issue=1,labels=1,states=1,teams=1" ] \
+  && ok "issue create: one read per kind (team+projects, states, labels, parent) — serial, never fanned out" \
+  || fail "issue create: read count" "got $reads_kinds; reads: $(gql_reads | cut -f1)"
+: > "$GQL_LOG"
+out=$(printf 'piped body' | unit_issue create --title T -); code=$?
+[ $code -eq 0 ] && [ "$(write_vars 1 | jq -r .input.description)" = "piped body" ] \
+  && ok "issue create: - reads the description from stdin" || fail "issue create: stdin" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue create --state Approved); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q '^Usage: pk issue create --title' && [ -z "$(gql_writes)" ] \
+  && ok "issue create: missing --title → usage, no write" || fail "issue create: no title" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_issue create --title T --state Nope); code=$?
+[ $code -ne 0 ] && [ "$out" = "ERROR: unknown state: Nope (team has: Needs Spec, Approved, In Progress)" ] && [ -z "$(gql_writes)" ] \
+  && ok "issue create: unknown state → error listing the team's states, no write" || fail "issue create: unknown state" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_issue create --title T --label tier); code=$?
+[ $code -ne 0 ] && [ "$out" = "ERROR: unknown label: tier (team has: bug, tier:quick)" ] && [ -z "$(gql_writes)" ] \
+  && ok "issue create: a group label is not applicable → unknown label, no write" || fail "issue create: group label" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_issue create --title T --parent RS-99); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q 'issue RS-99 not found' && [ -z "$(gql_writes)" ] \
+  && ok "issue create: unknown --parent → not found, no write" || fail "issue create: parent" "exit $code, out: $out"
+out=$(unit_issue create --title T --priority 9); code=$?
+[ $code -ne 0 ] && ok "issue create: priority outside 0–4 refused" || fail "issue create: priority" "exit $code, out: $out"
+out=$(unit_issue create --title T --json); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -c .)" = '{"identifier":"RS-31","id":"u31","url":"https://linear.app/t/issue/RS-31"}' ] \
+  && ok "issue create: --json prints {identifier,id,url}" || fail "issue create: --json" "exit $code, out: $out"
+
+# update: one read of the issue, ONE issueUpdate carrying only what differs.
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --state "in progress" --priority 1); code=$?
+exp='  Linear: RS-30 state Approved → In Progress
+  Linear: RS-30 priority 3 → 1'
+if [ $code -eq 0 ] && [ "$out" = "$exp" ] && [ "$(write_names)" = "issueUpdate" ] \
+   && [ "$(write_vars 1)" = '{"id":"u30","input":{"stateId":"s-ip","priority":1}}' ] \
+   && grep -q 'issueUpdate(id: \$id, input: \$input) { success }' "$GQL_LOG"; then
+  ok "issue update: issueUpdate(id, input: {stateId, priority}) with one 'old → new' line per changed field"
+else
+  fail "issue update: state+priority" "exit $code, out: $out, writes: $(gql_writes)"
+fi
+printf '%s' "$(read_query 1)" | grep -q 'description' \
+  && fail "issue update: lean read" "issue read carries description without --description-file: $(read_query 1)" \
+  || ok "issue update: the issue read skips description unless it is about to be compared"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --add-label tier:quick --remove-label bug); code=$?
+[ $code -eq 0 ] && [ "$out" = "  Linear: RS-30 labels bug → tier:quick" ] \
+  && [ "$(write_vars 1)" = '{"id":"u30","input":{"addedLabelIds":["l-tq"],"removedLabelIds":["l-bug"]}}' ] \
+  && ok "issue update: labels via IssueUpdateInput.addedLabelIds / removedLabelIds (never the full labelIds set)" \
+  || fail "issue update: labels" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --add-label bug --state Approved --priority 3 --title "Blocked one" --project none); code=$?
+[ $code -eq 0 ] && [ "$out" = "  Linear: RS-30 no changes" ] && [ -z "$(gql_writes)" ] \
+  && ok "issue update: every requested value already holds → 'no changes', no write" \
+  || fail "issue update: no changes" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --project I5.P1); code=$?
+[ $code -eq 0 ] && [ "$out" = "  Linear: RS-30 project — → I5.P1. Medium lane" ] && [ "$(write_vars 1)" = '{"id":"u30","input":{"projectId":"pa"}}' ] \
+  && ok "issue update: --project <tag> → projectId" || fail "issue update: project" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-28 --project none); code=$?
+[ $code -eq 0 ] && [ "$out" = "  Linear: RS-28 project I5.P1. Medium lane → —" ] && [ "$(write_vars 1)" = '{"id":"u28","input":{"projectId":null}}' ] \
+  && ok "issue update: --project none → projectId: null" || fail "issue update: project none" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --title "Renamed" --description-file "$FIXTURE/body.md"); code=$?
+exp='  Linear: RS-30 title Blocked one → Renamed
+  Linear: RS-30 description updated'
+[ $code -eq 0 ] && [ "$out" = "$exp" ] && [ "$(write_vars 1 | jq -cS .input)" = '{"description":"from a file\nline two","title":"Renamed"}' ] \
+  && printf '%s' "$(read_query 1)" | grep -q 'description' \
+  && ok "issue update: --title and --description-file (description read only then)" \
+  || fail "issue update: title+description" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --priority 1 --json); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -c .)" = '{"identifier":"RS-30","id":"u30","input":{"priority":1}}' ] \
+  && ok "issue update: --json prints {identifier,id,input}" || fail "issue update: --json" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q '^Usage: pk issue update <ID>' && [ -z "$(gql_reads)" ] \
+  && ok "issue update: no flags → usage, nothing read" || fail "issue update: usage" "exit $code, out: $out"
+out=$(unit_issue update RS-99 --priority 1); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q 'issue RS-99 not found' && ok "issue update: unknown issue → not found" || fail "issue update: not found" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --state Nope); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q '^ERROR: unknown state: Nope (team has: ' && [ -z "$(gql_writes)" ] \
+  && ok "issue update: unknown state → error, no write" || fail "issue update: unknown state" "exit $code, out: $out"
+out=$(unit_issue bogus RS-30); code=$?
+printf '%s\n' "$out" | grep -q 'search, create, update' && ok "issue: unknown subverb also lists search, create, update" || fail "issue: unknown subverb v4.39" "$out"
+run_pk issue
+printf '%s\n' "$RUN_OUT" | grep -q 'pk issue search <query>' && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue create --title' && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue update <ID>' \
+  && ok "issue: usage lists search, create, update" || fail "issue: usage v4.39" "$RUN_OUT"
+
+# update --sort-order: rides the same issueUpdate as projectId (a move re-ranks
+# sortOrder, so two calls would undo each other); numeric no-op check.
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --project I5.P1 --sort-order 50); code=$?
+exp='  Linear: RS-30 project — → I5.P1. Medium lane
+  Linear: RS-30 sortOrder 100 → 50'
+[ $code -eq 0 ] && [ "$out" = "$exp" ] && [ "$(write_vars 1)" = '{"id":"u30","input":{"projectId":"pa","sortOrder":50}}' ] && [ "$(write_names)" = "issueUpdate" ] \
+  && ok "issue update: --sort-order lands in the SAME issueUpdate as projectId (IssueUpdateInput.sortOrder: Float)" \
+  || fail "issue update: sort-order" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --sort-order -12.5); code=$?
+[ $code -eq 0 ] && [ "$(write_vars 1 | jq -c .input)" = '{"sortOrder":-12.5}' ] && ok "issue update: --sort-order takes a negative float" || fail "issue update: sort-order float" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --sort-order 100.0); code=$?
+[ $code -eq 0 ] && [ "$out" = "  Linear: RS-30 no changes" ] && [ -z "$(gql_writes)" ] \
+  && ok "issue update: --sort-order equal to the current value (numerically) → no changes" || fail "issue update: sort-order no-op" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue update RS-30 --sort-order abc); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q 'sort-order must be a number' && [ -z "$(gql_reads)" ] \
+  && ok "issue update: non-numeric --sort-order refused before any read" || fail "issue update: sort-order bad" "exit $code, out: $out"
+
+# show --fields relations: both relation sides, one flat list; --comments alone
+# is the full read (description rides along), an explicit --fields still wins.
+: > "$GQL_LOG"
+out=$(unit_issue show RS-30 --fields relations); code=$?
+[ $code -eq 0 ] && [ "$out" = "relations: blocked by RS-28 · blocks RS-31 · duplicate of RS-12 · related to RS-29" ] \
+  && printf '%s' "$(read_query 1)" | grep -q 'relations(first: 50) { nodes { type relatedIssue { id identifier } } } inverseRelations(first: 50) { nodes { type issue { id identifier } } }' \
+  && ok "issue show: --fields relations → 'blocked by · blocks · duplicate of · related to' from relations + inverseRelations" \
+  || fail "issue show: relations text" "exit $code, out: $out, reads: $(gql_reads)"
+out=$(unit_issue show RS-30 --fields relations --json); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -c '.relations | map(.relation + " " + .identifier + "=" + .id)')" = '["blocked by RS-28=u28","blocks RS-31=u31","duplicate of RS-12=u12","related to RS-29=u29"]' ] \
+  && [ "$(printf '%s' "$out" | jq 'has("inverseRelations")')" = "false" ] \
+  && ok "issue show: --fields relations --json → .relations is one flat array of {relation, identifier, id}" \
+  || fail "issue show: relations json" "exit $code, out: $out"
+out=$(unit_issue show RS-29 --fields relations); code=$?
+[ $code -eq 0 ] && [ "$out" = "relations: —" ] && ok "issue show: no relations → '—'" || fail "issue show: relations empty" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_issue show RS-30 --comments); code=$?
+[ $code -eq 0 ] && printf '%s' "$(read_query 1)" | grep -q ' description' && printf '%s' "$(read_query 1)" | grep -q 'comments(orderBy: createdAt)' \
+  && printf '%s' "$out" | grep -q -- '--- description ---' \
+  && ok "issue show: --comments alone implies description (the one full-content read)" || fail "issue show: --comments implies description" "exit $code, out: $out, reads: $(gql_reads)"
+: > "$GQL_LOG"
+out=$(unit_issue show RS-30 --fields id --comments); code=$?
+[ $code -eq 0 ] && printf '%s' "$(read_query 1)" | grep -q 'comments(orderBy: createdAt)' && ! printf '%s' "$(read_query 1)" | grep -q ' description' \
+  && ok "issue show: an explicit --fields still wins (--comments adds comments only)" || fail "issue show: --fields wins" "exit $code, out: $out, reads: $(gql_reads)"
+: > "$GQL_LOG"
+out=$(unit_issue show RS-30); code=$?
+[ $code -eq 0 ] && ! printf '%s' "$(read_query 1)" | grep -q ' description' && ! printf '%s' "$(read_query 1)" | grep -q 'comments(' \
+  && ok "issue show: the default read still fetches neither description nor comments" || fail "issue show: default lean" "exit $code, reads: $(gql_reads)"
+
+# ── Unit tests: pk project list (v4.39.0, same stub) ─────────────────────────
+
+echo "== pk project list (sourced, stubbed network) =="
+
+: > "$GQL_LOG"
+out=$(unit_project list); code=$?
+exp='I5.P1. Medium lane  started  tier C  40%
+P2. Urgent lane  planned  tier A  0%
+I6.P1. Later  planned  tier —  0%
+Ops theme  backlog  tier —  13%'
+if [ $code -eq 0 ] && [ "$out" = "$exp" ] && [ -z "$(gql_writes)" ] \
+   && printf '%s' "$(read_query 1)" | grep -q 'teams(filter: {name: {eq: \$team}}, first: 1)' \
+   && printf '%s' "$(read_query 1)" | grep -q 'projects(first: 250) { nodes { id name state priority progress'; then
+  ok "project list: I<N>.P<N>. walk order (bare P2. borrows i5), unprefixed last; name  state  tier  progress%; completed hidden"
+else
+  fail "project list: default" "exit $code, out:
+$out
+reads: $(gql_reads)"
+fi
+out=$(unit_project list --all); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s\n' "$out" | sed -n 3p)" = "I5.P3. High lane  completed  tier B  100%" ] && [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = "5" ] \
+  && ok "project list: --all shows completed/canceled in place" || fail "project list: --all" "exit $code, out:
+$out"
+printf '%s' "$(read_query 1)" | grep -q 'description' \
+  && fail "project list: lean text read" "text listing fetched description: $(read_query 1)" \
+  || ok "project list: the text listing (and the resolvers behind search/create/update) never fetch description"
+: > "$GQL_LOG"
+out=$(unit_project list --json); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -c 'map(.id)')" = '["pa","pb","pe","pd"]' ] && [ "$(printf '%s' "$out" | jq -c '.[0] | keys')" = '["description","id","name","priority","progress","state"]' ] \
+  && [ "$(printf '%s' "$out" | jq -r '.[0].description')" = "Lane for medium work" ] && printf '%s' "$(read_query 1)" | grep -q 'priority progress description initiatives' \
+  && ok "project list: --json prints the sorted array with id,name,state,priority,progress,description (description fetched only here)" || fail "project list: --json" "exit $code, out: $out, reads: $(gql_reads)"
+printf '%s' '{"data":{"teams":{"nodes":[{"id":"team-uuid","projects":{"nodes":[]}}]}}}' > "$STUB_TEAM.empty"
+out=$( STUB_TEAM="$STUB_TEAM.empty" unit_project list ); code=$?
+[ $code -eq 0 ] && [ "$out" = "no projects" ] && ok "project list: empty team → 'no projects', exit 0" || fail "project list: empty" "exit $code, out: $out"
+out=$(unit_project); code=$?
+[ $code -eq 0 ] && printf '%s' "$out" | grep -q '^Usage: pk project list \[--all\] \[--json\]' && ok "project: bare 'pk project' prints usage" || fail "project: usage" "exit $code, out: $out"
+out=$(unit_project bogus); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q '(list)' && ok "project: unknown subverb lists the verbs" || fail "project: unknown subverb" "exit $code, out: $out"
+
+# ── Unit tests: pk gql (v4.39.0, same stub) ──────────────────────────────────
+
+echo "== pk gql (sourced, stubbed network) =="
+
+: > "$GQL_LOG"
+out=$(unit_gql 'query { gqlOkFixture }' 2>&1); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -r .data.viewer.id)" = "me" ] && [ "$(read_query 1)" = 'query { gqlOkFixture }' ] && [ "$(read_vars 1)" = '{}' ] \
+  && ok "gql: passes the query through pk_linear_gql, pretty-prints the response" || fail "gql: ok" "exit $code, out: $out, reads: $(gql_reads)"
+: > "$GQL_LOG"
+out=$(unit_gql 'query($a: Int) { gqlOkFixture }' '{"a":1}' 2>&1); code=$?
+[ $code -eq 0 ] && [ "$(read_vars 1)" = '{"a":1}' ] && ok "gql: positional variables JSON" || fail "gql: positional vars" "exit $code, reads: $(gql_reads)"
+: > "$GQL_LOG"
+out=$(unit_gql 'query($a: Int) { gqlOkFixture }' --vars '{"a":2}' 2>&1); code=$?
+[ $code -eq 0 ] && [ "$(read_vars 1)" = '{"a":2}' ] && ok "gql: --vars <json>" || fail "gql: --vars" "exit $code, reads: $(gql_reads)"
+: > "$GQL_LOG"
+# A multi-line query spans log lines; the variables sit on the line that has the tab.
+out=$(printf 'query {\n  gqlOkFixture\n}\n' | unit_gql - '{"a":3}' 2>&1); code=$?
+[ $code -eq 0 ] && [ "$(awk -F'\t' 'NF > 1 { print $2 }' "$GQL_LOG")" = '{"a":3}' ] && grep -q '^query {$' "$GQL_LOG" && grep -q 'gqlOkFixture' "$GQL_LOG" \
+  && ok "gql: - reads the (multi-line) query from stdin; variables still positional" || fail "gql: stdin" "exit $code, out: $out, reads: $(gql_reads)"
+: > "$GQL_LOG"
+stdout=$(unit_gql 'query { gqlErrorFixture }' 2>/dev/null); code=$?
+stderr=$(unit_gql 'query { gqlErrorFixture }' 2>&1 >/dev/null)
+[ $code -ne 0 ] && [ "$stderr" = "Field nope not found" ] && [ "$(printf '%s' "$stdout" | jq -r '.errors[0].message')" = "Field nope not found" ] \
+  && ok "gql: an errors envelope → exit 1, .errors[].message on stderr, raw JSON still on stdout" \
+  || fail "gql: errors" "exit $code, stdout: $stdout, stderr: $stderr"
+: > "$GQL_LOG"
+out=$(unit_gql '' 2>&1); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q "^Usage: pk gql" && [ ! -s "$GQL_LOG" ] \
+  && ok "gql: empty query → usage, nothing sent" || fail "gql: empty" "exit $code, out: $out"
+out=$(unit_gql 2>&1); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q "^Usage: pk gql" && ok "gql: no args → usage" || fail "gql: no args" "exit $code, out: $out"
+out=$(unit_gql 'query { gqlOkFixture }' 'not json' 2>&1); code=$?
+[ $code -ne 0 ] && printf '%s' "$out" | grep -q 'variables must be a JSON object' && ok "gql: non-JSON variables refused" || fail "gql: bad vars" "exit $code, out: $out"
+: > "$GQL_LOG"
+out=$(unit_gql 'mutation { issueUpdate(id: "x", input: {priority: 1}) { success } }' 2>&1); code=$?
+[ $code -eq 0 ] && [ "$(write_names)" = "issueUpdate" ] \
+  && ok "gql: a mutation reaches pk_linear_gql unchanged (so it pays the workspace guard)" || fail "gql: mutation passthrough" "exit $code, out: $out, writes: $(gql_writes)"
+run_pk help
+printf '%s\n' "$RUN_OUT" | grep -q '^  pk project list \[--all\] \[--json\]' && printf '%s\n' "$RUN_OUT" | grep -q "^  pk gql '<query>'" \
+  && printf '%s\n' "$RUN_OUT" | grep -q '^  pk issue search <query>' && printf '%s\n' "$RUN_OUT" | grep -q '^  pk issue create --title' && printf '%s\n' "$RUN_OUT" | grep -q '^  pk issue update <ID>' \
+  && ok "help: lists issue search/create/update, project list, gql" || fail "help: v4.39 verbs" "$RUN_OUT"
+
+# ── CLI tests: the missing-key error names the op run route (v4.39.0) ─────────
+# A direnv-less shell should self-serve from the message instead of falling
+# back to an MCP: every "Linear API key not set" site carries the op run hint.
+
+echo "== missing key names the op run route =="
+
+RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" gql 'query { viewer { id } }' 2>&1); RUN_CODE=$?
+[ $RUN_CODE -ne 0 ] && printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=op-references.conf -- pk' \
+  && ok "no key: pk_linear_gql's error names op run --env-file=op-references.conf" || fail "no key: gql" "exit $RUN_CODE: $RUN_OUT"
+RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" next 2>&1); RUN_CODE=$?
+printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=op-references.conf -- pk' \
+  && ok "no key: pk_require_linear_key's error names op run" || fail "no key: next" "exit $RUN_CODE: $RUN_OUT"
+grep -c 'Linear API key not set' "$PK" | grep -qx "$(grep -c 'Linear API key not set.*op run --env-file=op-references.conf' "$PK")" \
+  && ok "no key: every 'Linear API key not set' site in bin/pk carries the op run hint" \
+  || fail "no key: sites" "$(grep -n 'Linear API key not set' "$PK" | grep -v 'op run')"
 cleanup
 
 # ── Unit tests: runbook nudge (sourced) ──────────────────────────────────────
@@ -2895,12 +3254,69 @@ cfg_has "Runbook stale days" "7" && ok "config dump: Runbook stale days defaults
 printf '%s\n' "$RUN_OUT" | grep -q '^Runbook primary:' && printf '%s\n' "$RUN_OUT" | grep -q '^Portfolio repos:' \
   && ok "config dump: Runbook primary + Portfolio repos listed (empty default)" || fail "config dump: empty-default keys" "$RUN_OUT"
 cfg_has "Integration branch" "main" && ok "config dump: existing keys unchanged" || fail "config dump: existing keys" "$RUN_OUT"
+cfg_has "Linear transport" "api" && ok "config dump: Linear transport defaults to api" || fail "config dump: Linear transport" "$RUN_OUT"
 write_config '```
 Runbook stale days: 14
 ```'
 run_pk config
 cfg_has "Runbook stale days" "14" && ok "config dump: a set TPM key overrides its default" || fail "config dump: override" "$RUN_OUT"
 cleanup
+
+# ── Skills cite only pk verbs that exist (v4.39.0) ──
+# Every backticked `pk <verb> [<sub>]` in skills/*/SKILL.md must be a case label
+# in bin/pk's top-level dispatcher — and, for `pk issue …` / `pk project …`, in
+# that sub-dispatcher — so a skill never names a verb pk does not have. The
+# labels are read from the source, not hardcoded, so a new verb needs no edit here.
+
+echo "== skills cite only pk verbs that exist =="
+
+# Case labels of `case "$<var>" in` inside function <fn>, one per line (a|b split).
+pk_case_labels() {
+  awk -v fn="$1" -v cv="$2" '
+    $0 == fn "() {" { inf = 1; next }
+    inf && /^}/ { exit }
+    inf && index($0, "case \"$" cv "\" in") { inc = 1; next }
+    inc && /^ *esac/ { exit }
+    inc && match($0, /^ *[^ )]+\)/) {
+      l = substr($0, RSTART, RLENGTH); sub(/^ */, "", l); sub(/\)$/, "", l)
+      n = split(l, a, "|"); for (i = 1; i <= n; i++) print a[i]
+    }' "$PK"
+}
+TOP_VERBS=$(pk_case_labels main sub)
+ISSUE_VERBS=$(pk_case_labels cmd_issue subverb)
+PROJECT_VERBS=$(pk_case_labels cmd_project subverb)
+printf '%s\n' "$TOP_VERBS" | grep -qx next && printf '%s\n' "$TOP_VERBS" | grep -qx gql \
+  && printf '%s\n' "$ISSUE_VERBS" | grep -qx show && printf '%s\n' "$PROJECT_VERBS" | grep -qx list \
+  && ok "skills: dispatcher labels read from bin/pk (top has next+gql, issue has show, project has list)" \
+  || fail "skills: label extraction" "top: $(printf '%s' "$TOP_VERBS" | paste -sd, -); issue: $(printf '%s' "$ISSUE_VERBS" | paste -sd, -); project: $(printf '%s' "$PROJECT_VERBS" | paste -sd, -)"
+
+# "file: pk verb" for every citation whose verb (or issue/project sub-verb) is
+# not a dispatcher label. A second word starting with - or < is not a sub-verb
+# and is excluded by the regex itself. (A function, not an inline $( case … ):
+# bash 3.2 mis-parses an unparenthesised `issue)` label inside $( ).)
+pk_cited_missing() {
+  local f skill v1 v2 _
+  for f in "$REPO_ROOT"/skills/*/SKILL.md; do
+    [ -f "$f" ] || continue
+    skill="skills/$(basename "$(dirname "$f")")/SKILL.md"
+    grep -oE '`pk [a-z][a-z-]*( [a-z][a-z-]*)?' "$f" 2>/dev/null | sed 's/^`//' | sort -u | while read -r _ v1 v2; do
+      if ! printf '%s\n' "$TOP_VERBS" | grep -qx -- "$v1"; then
+        printf '%s: pk %s\n' "$skill" "$v1"
+      elif [ -n "$v2" ]; then
+        case "$v1" in
+          (issue)   printf '%s\n' "$ISSUE_VERBS"   | grep -qx -- "$v2" || printf '%s: pk issue %s\n' "$skill" "$v2" ;;
+          (project) printf '%s\n' "$PROJECT_VERBS" | grep -qx -- "$v2" || printf '%s: pk project %s\n' "$skill" "$v2" ;;
+        esac
+      fi
+    done
+  done | sort -u
+}
+CITE_MISSING=$(pk_cited_missing)
+if [ -z "$CITE_MISSING" ]; then
+  ok "skills: every backticked pk verb in skills/*/SKILL.md is a bin/pk dispatcher label"
+else
+  fail "skills: cited pk verbs missing from bin/pk" "$CITE_MISSING"
+fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 

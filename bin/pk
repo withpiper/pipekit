@@ -11,7 +11,9 @@
 #   pk status               — quick triage of in-flight + UAT + Approved
 #   pk sessions             — live Claude Code sessions on this machine, waiting first
 #   pk focus [<TAG> <tier>] — read or set focus-lane tiers (Linear project priority)
-#   pk issue <verb> <ID>    — show / set --priority / relate --blocked-by / comment
+#   pk issue <verb> <ID>    — show / search / create / update / set --priority / relate --blocked-by / comment
+#   pk project list         — the team's projects: name · state · tier · progress
+#   pk gql '<query>' [vars] — guarded GraphQL passthrough for the long tail
 #   pk portfolio            — cross-initiative map: all i<N>. + active runway
 #   pk branch <ID>          — create worktree+branch, Linear → In Progress
 #   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
@@ -203,7 +205,7 @@ pk_linear_gql() {
   local key
   key=$(pk_linear_api_key)
   if [ -z "$key" ]; then
-    echo "ERROR: Linear API key not set. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..." >&2
+    echo "ERROR: Linear API key not set. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..., or run under \`op run --env-file=op-references.conf -- pk …\` (see .envrc)" >&2
     return 1
   fi
   # Guarded writes: any mutation must first prove the resolved token belongs to
@@ -328,6 +330,10 @@ pk_linear_issue_full() {
   # `comments` in --fields — so a field request never silently renders "(0)".
   case ",$fields," in *,comments,*) with_comments=1 ;; esac
   [ -n "$with_comments" ] && extra="$extra comments(orderBy: createdAt) { nodes { body createdAt user { displayName } } }"
+  # Both relation sides: `relations` is where this issue is the subject (it
+  # blocks / duplicates relatedIssue), `inverseRelations` where it is the object
+  # (issue blocks / duplicates it) — the reading pk_issues_annotate_blocked uses.
+  case ",$fields," in *,relations,*) extra="$extra relations(first: 50) { nodes { type relatedIssue { id identifier } } } inverseRelations(first: 50) { nodes { type issue { id identifier } } }" ;; esac
   local q="query(\$id: String!) { issue(id: \$id) { identifier title url priorityLabel state { name } assignee { displayName } project { name } labels { nodes { name } }$extra } }"
   # No 2>/dev/null: this is a user-facing read with no fallback, so pk_linear_gql's
   # "API key not set" / transport errors must surface rather than look like a
@@ -335,11 +341,22 @@ pk_linear_issue_full() {
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" | jq -c '.data.issue // empty'
 }
 
+# jq def: an issue's relations from both sides as one flat list of
+# {relation, identifier, id}, blockers first (the order a reader wants):
+# blocked by · blocks · duplicate of · duplicated by · related/similar to.
+PK_JQ_RELATIONS='def relations_list:
+    [ (.inverseRelations.nodes // [])[] | select(.type == "blocks")    | {relation: "blocked by",    identifier: .issue.identifier,        id: .issue.id} ]
+  + [ (.relations.nodes // [])[]        | select(.type == "blocks")    | {relation: "blocks",        identifier: .relatedIssue.identifier, id: .relatedIssue.id} ]
+  + [ (.relations.nodes // [])[]        | select(.type == "duplicate") | {relation: "duplicate of",  identifier: .relatedIssue.identifier, id: .relatedIssue.id} ]
+  + [ (.inverseRelations.nodes // [])[] | select(.type == "duplicate") | {relation: "duplicated by", identifier: .issue.identifier,        id: .issue.id} ]
+  + [ (.relations.nodes // [])[]        | select(.type != "blocks" and .type != "duplicate") | {relation: "\(.type) to", identifier: .relatedIssue.identifier, id: .relatedIssue.id} ]
+  + [ (.inverseRelations.nodes // [])[] | select(.type != "blocks" and .type != "duplicate") | {relation: "\(.type) to", identifier: .issue.identifier,        id: .issue.id} ];'
+
 # Pure renderer (no I/O — unit-tested in tests/pk-smoke.sh): issue object JSON on
 # stdin, fields CSV as $1 → compact aligned text. Unknown fields are surfaced,
 # never silently dropped (a typo'd --fields shouldn't look like an empty issue).
 pk_issue_show_render() {
-  jq -r --arg fields "$1" '
+  jq -r --arg fields "$1" "$PK_JQ_RELATIONS"'
     . as $i
     | [ ($fields | split(",")[] | gsub("^[ ]+|[ ]+$";"") | select(. != "")) as $k
         | if   $k=="id" or $k=="identifier" then "id:        \($i.identifier // "")"
@@ -350,6 +367,7 @@ pk_issue_show_render() {
           elif $k=="project"     then "project:   \($i.project.name // "—")"
           elif $k=="url"         then "url:       \($i.url // "")"
           elif $k=="labels"      then "labels:    \([$i.labels.nodes[]?.name] | join(", "))"
+          elif $k=="relations"   then "relations: " + ($i | relations_list | if length == 0 then "—" else (map("\(.relation) \(.identifier)") | join(" · ")) end)
           elif $k=="description" then "\n--- description ---\n\($i.description // "(none)")"
           elif $k=="comments"    then "\n--- comments (\([$i.comments.nodes[]?] | length)) ---\n" + ([$i.comments.nodes[]? | "• \(.user.displayName // "?") \(.createdAt):\n\(.body)"] | join("\n\n"))
           else "\($k): (unknown field)" end
@@ -1002,6 +1020,134 @@ pk_linear_relate_blocks() {
   pk_linear_mutation_ok "$resp" issueRelationCreate
 }
 
+# ── Linear verbs for skills (v4.39.0) ────────────────────────────────────────
+# Helpers behind pk issue search|create|update, pk project list and pk gql, so a
+# skill never needs raw curl or an MCP server. Everything rides pk_linear_gql
+# (a mutation therefore inherits pk_linear_guard); reads are serial, and no list
+# selection ever carries `description`. Field names verified against the SDK
+# schema (linear/linear packages/sdk/src/schema.graphql, 2026-10-10).
+
+# Team scope for list reads, as "<decl>\t<comparator>\t<value>": Team ID (UUID)
+# when pinned, else Team name (what pk next scopes on), else Issue prefix as the
+# team key. The comparator splices into a TeamFilter: `team: {<comparator>}`.
+pk_linear_team_scope() {
+  local v
+  v=$(pk_team_id)
+  if [ -n "$v" ]; then printf '$team: ID!\tid: {eq: $team}\t%s\n' "$v"; return 0; fi
+  v=$(pk_team_name)
+  if [ -n "$v" ]; then printf '$team: String!\tname: {eq: $team}\t%s\n' "$v"; return 0; fi
+  v=$(pk_issue_prefix)
+  if [ -n "$v" ]; then printf '$team: String!\tkey: {eq: $team}\t%s\n' "$v"; return 0; fi
+  echo "ERROR: Team name not set in method.config.md" >&2
+  return 1
+}
+
+# A team-scoped read: @TEAM_DECL@ / @TEAM_CMP@ in the query are replaced by the
+# scope's variable declaration and comparator, and `team` joins the variables.
+# A GraphQL-level error is surfaced here, so a resolver never mistakes a bad
+# filter for an empty team. Args: query template, variables JSON (optional).
+pk_linear_team_gql() {
+  local scope decl cmp val q vars resp
+  scope=$(pk_linear_team_scope) || return 1
+  decl=$(printf '%s' "$scope" | cut -f1)
+  cmp=$(printf '%s' "$scope" | cut -f2)
+  val=$(printf '%s' "$scope" | cut -f3)
+  q=${1//@TEAM_DECL@/$decl}
+  q=${q//@TEAM_CMP@/$cmp}
+  vars="${2:-}"
+  [ -z "$vars" ] && vars='{}'
+  resp=$(pk_linear_gql "$q" "$(printf '%s' "$vars" | jq -c --arg team "$val" '. + {team: $team}')") || return 1
+  if printf '%s' "$resp" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+    echo "ERROR: Linear: $(printf '%s' "$resp" | jq -r '.errors[0].extensions.userPresentableMessage // .errors[0].message')" >&2
+    return 1
+  fi
+  printf '%s' "$resp"
+}
+
+# The team's workflow states, one read: [{id,name}].
+pk_linear_states_json() {
+  pk_linear_team_gql 'query(@TEAM_DECL@) { workflowStates(filter: {team: {@TEAM_CMP@}}, first: 50) { nodes { id name } } }' \
+    | jq -c '[ .data.workflowStates.nodes[]? | {id, name} ]'
+}
+
+# Workspace-level + team labels, one read: [{id,name}]. Group labels are left
+# out — Linear refuses them on an issue, so matching one would only defer the error.
+pk_linear_labels_json() {
+  pk_linear_team_gql 'query(@TEAM_DECL@) { issueLabels(filter: {or: [{team: {null: true}}, {team: {@TEAM_CMP@}}]}, first: 250) { nodes { id name isGroup } } }' \
+    | jq -c '[ .data.issueLabels.nodes[]? | select(.isGroup | not) | {id, name} ]'
+}
+
+# The team's projects, one read: {team: <uuid>, projects: [{id,name,state,
+# priority,progress,description,initiatives}]}. Carries the team UUID so issue
+# create needs no second lookup when Team ID is unset. Linear caps a page at
+# 250. description is fetched only on request ($1 = "1": pk project list --json
+# reads it); the resolvers behind search/create/update stay lean.
+pk_linear_team_projects_json() {
+  local extra=""
+  [ "${1:-}" = "1" ] && extra=" description"
+  pk_linear_team_gql "query(@TEAM_DECL@) { teams(filter: {@TEAM_CMP@}, first: 1) { nodes { id projects(first: 250) { nodes { id name state priority progress$extra initiatives(first: 5) { nodes { name } } } } } } }" \
+    | jq -c '(.data.teams.nodes[0] // {}) | {team: (.id // ""), projects: [ .projects.nodes[]? | {id, name, state, priority: (.priority // 0), progress: (.progress // 0), description, initiatives: (.initiatives // {nodes: []})} ]}'
+}
+
+# jq defs shared by the project verbs. project_tag mirrors pk_lane_projects_json:
+# the I<N>.P<N> prefix of a project name (a bare P<N>. borrows its initiative's
+# number), "" when unprefixed. project_sort orders prefixed projects by I then P
+# — the order pk portfolio / pk status walk — and unprefixed ones after, by name.
+PK_JQ_PROJECT_TAG='
+  def project_tag:
+    (.name | [capture("^([iI](?<i>[0-9]+)\\.)?[pP](?<p>[0-9]+)\\.")] | .[0]) as $c
+    | ([ (.initiatives.nodes // [])[] | .name | capture("^[iI](?<n>[0-9]+)\\.") | .n ] | .[0]) as $inum
+    | if $c == null then "" else ((($c.i // $inum) | if . == null then "" else "I\(.)." end) + "P\($c.p)") end;
+  def project_sort:
+    project_tag as $t
+    | [ (if $t == "" then 1 else 0 end),
+        (if $t | test("^I[0-9]+\\.") then ($t | capture("^I(?<n>[0-9]+)\\.") | .n | tonumber) else 9999 end),
+        (if $t == "" then 0 else ($t | capture("P(?<n>[0-9]+)$") | .n | tonumber) end),
+        .name ];'
+
+# Pure: the id of the one entry in a [{id,name}] list whose name matches
+# (case-insensitive). Args: list JSON, kind (for the error), name. A miss lists
+# what the team has instead of guessing.
+pk_pick_by_name() {
+  local list="$1" kind="$2" want="$3" id
+  id=$(printf '%s' "$list" | jq -r --arg w "$want" '[ .[] | select((.name | ascii_downcase) == ($w | ascii_downcase)) ] | .[0].id // empty')
+  if [ -z "$id" ]; then
+    echo "ERROR: unknown $kind: $want (team has: $(printf '%s' "$list" | jq -r 'map(.name) | join(", ")'))" >&2
+    return 1
+  fi
+  printf '%s' "$id"
+}
+
+# Pure: the id of the one project matching <want> in pk_linear_team_projects_json
+# output — its full name (case-insensitive) or its I<N>.P<N> tag the way pk focus
+# matches (trailing dot tolerated; a bare P6 also matches I8.P6, so it can be
+# ambiguous across initiatives). Args: projects JSON, want.
+pk_project_pick() {
+  local json="$1" want="$2" hits n
+  hits=$(printf '%s' "$json" | jq -c --arg want "$want" "$PK_JQ_PROJECT_TAG"'
+    ($want | ascii_upcase | sub("\\.$"; "")) as $w
+    | [ .projects[] | project_tag as $t
+        | select((.name | ascii_downcase) == ($want | ascii_downcase)
+                 or ($t != "" and ($t == $w or ($t | endswith("." + $w))))) ]')
+  n=$(printf '%s' "$hits" | jq 'length')
+  case "$n" in
+    1) printf '%s' "$hits" | jq -r '.[0].id'; return 0 ;;
+    0) echo "ERROR: unknown project: $want (team has: $(printf '%s' "$json" | jq -r '[ .projects[] | select(.state != "completed" and .state != "canceled") | .name ] | join(", ")'))" >&2
+       return 1 ;;
+    *) echo "ERROR: ambiguous project: $want (matches: $(printf '%s' "$hits" | jq -r 'map(.name) | join(", ")'))" >&2
+       return 1 ;;
+  esac
+}
+
+# Pure renderer for pk project list (stdin: pk_linear_team_projects_json; $1 = "1"
+# to keep completed/canceled). Emits "name\tstate\tpriority\tpercent" in walk order.
+pk_project_list_rows() {
+  jq -r --arg all "${1:-}" "$PK_JQ_PROJECT_TAG"'
+    [ .projects[] | select($all == "1" or (.state != "completed" and .state != "canceled")) ]
+    | sort_by(project_sort)
+    | .[] | [ .name, (.state // "?"), ((.priority // 0) | tostring), (((.progress // 0) * 100 + 0.5 | floor) | tostring) ] | @tsv'
+}
+
 # Return the issue's tier (quick|standard|heavy) by scanning Linear labels for
 # the first `tier:*` match. Echoes empty — never a default — when no label is
 # set or the Linear lookup fails; the caller (skills/verify/SKILL.md Step 0)
@@ -1351,7 +1497,7 @@ pk_offformat_subjects() {
 # both consumers read as idle while carrying 290 open issues between them.
 pk_require_linear_key() {
   if [ -z "$(pk_linear_api_key)" ]; then
-    echo "ERROR: Linear API key not set — the board cannot be read. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..." >&2
+    echo "ERROR: Linear API key not set — the board cannot be read. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..., or run under \`op run --env-file=op-references.conf -- pk …\` (see .envrc)" >&2
     return 1
   fi
 }
@@ -4421,19 +4567,27 @@ cmd_issue() {
     set)     cmd_issue_set "$@";     return $? ;;
     relate)  cmd_issue_relate "$@";  return $? ;;
     comment) cmd_issue_comment "$@"; return $? ;;
+    search)  cmd_issue_search "$@";  return $? ;;
+    create)  cmd_issue_create "$@";  return $? ;;
+    update)  cmd_issue_update "$@";  return $? ;;
     ""|help|-h|--help)
       echo "Usage: pk issue show <ID> [--fields a,b,c] [--comments] [--json]"
       echo "  default fields: $PK_ISSUE_SHOW_DEFAULT_FIELDS"
-      echo "  known fields:   id title state labels priority assignee project url description comments"
-      echo "  comments are OFF by default (avoids the sticky full-thread payload)"
+      echo "  known fields:   id title state labels priority assignee project url relations description comments"
+      echo "  comments are OFF by default (avoids the sticky full-thread payload); --comments alone is the full read (description rides along)"
+      echo "  relations:      blocked by · blocks · duplicate of · duplicated by · related to, from both relation sides"
       echo "       pk issue set <ID> --priority N                        0 none · 1 urgent · 2 high · 3 medium · 4 low; no-op when unchanged"
       echo "       pk issue relate <ID> --blocked-by <ID2> [--why \"<text>\"]   ID2 blocks ID (skips if it already does); --why also comments on ID"
       echo "       pk issue comment <ID> \"<body>\" | --body-file <path> | -   post a comment"
+      echo "       pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]   title search in the team (default 20, max 50); one line per issue"
+      echo "       pk issue create --title \"<t>\" [--description-file <path> | -] [--state <name>] [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]"
+      echo "       pk issue update <ID> [--title \"<t>\"] [--state <name>] [--add-label <name>]… [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -] [--priority N] [--sort-order <float>] [--json]"
+      echo "  names resolve to ids with one read each; an unknown state/label/project is an error (never a guess)"
       return 0 ;;
-    *) echo "Unknown 'pk issue' subcommand: $subverb (show, set, relate, comment)" >&2; return 1 ;;
+    *) echo "Unknown 'pk issue' subcommand: $subverb (show, set, relate, comment, search, create, update)" >&2; return 1 ;;
   esac
 
-  local id="" fields="$PK_ISSUE_SHOW_DEFAULT_FIELDS" with_comments="" as_json=""
+  local id="" fields="" with_comments="" as_json=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --fields)   fields="${2:-}"; shift 2 ;;
@@ -4445,7 +4599,12 @@ cmd_issue() {
       *) if [ -z "$id" ]; then id="$1"; shift; else echo "Unexpected argument: $1" >&2; return 1; fi ;;
     esac
   done
-  [ -z "$fields" ] && fields="$PK_ISSUE_SHOW_DEFAULT_FIELDS"
+  if [ -z "$fields" ]; then
+    fields="$PK_ISSUE_SHOW_DEFAULT_FIELDS"
+    # --comments without --fields is the one full-content read: description rides
+    # along. An explicit --fields still says exactly what is fetched.
+    [ -n "$with_comments" ] && fields="$fields,description"
+  fi
   if [ -z "$id" ]; then
     echo "Usage: pk issue show <ID> [--fields a,b,c] [--comments] [--json]" >&2
     return 1
@@ -4462,7 +4621,9 @@ cmd_issue() {
     return 1
   fi
   if [ -n "$as_json" ]; then
-    printf '%s\n' "$json" | jq .
+    # relations: the two raw connections collapse into one flat array.
+    printf '%s\n' "$json" | jq "$PK_JQ_RELATIONS"'
+      if has("relations") or has("inverseRelations") then .relations = relations_list | del(.inverseRelations) else . end'
   else
     printf '%s\n' "$json" | pk_issue_show_render "$fields"
   fi
@@ -4583,6 +4744,457 @@ cmd_issue_comment() {
   pk_linear_comment "$id" "$body"
 }
 
+# Body text for --description-file <path> | - (stdin). Echoes the text; a
+# missing file is an error. Args: path ("-" = stdin), bare-dash flag.
+pk_read_body_arg() {
+  local file="$1" from_stdin="$2"
+  if [ -n "$file" ] && [ "$file" != "-" ]; then
+    [ -f "$file" ] || { echo "ERROR: --description-file $file not found" >&2; return 1; }
+    cat -- "$file"
+  elif [ "$file" = "-" ] || [ -n "$from_stdin" ]; then
+    cat
+  fi
+  return 0
+}
+
+# pk issue search <query> [--state <name>] [--label <name>] [--project <name>]
+# [--limit N] [--json] — title-only search in the team (containsIgnoreCase),
+# newest-updated first. Lean selection: no description, no relations. The limit
+# is capped at 50 to stay inside Linear's complexity quota.
+cmd_issue_search() {
+  local query="" state="" label="" project="" limit=20 as_json=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --state)     state="${2:-}"; shift 2 ;;
+      --state=*)   state="${1#--state=}"; shift ;;
+      --label)     label="${2:-}"; shift 2 ;;
+      --label=*)   label="${1#--label=}"; shift ;;
+      --project)   project="${2:-}"; shift 2 ;;
+      --project=*) project="${1#--project=}"; shift ;;
+      --limit)     limit="${2:-}"; shift 2 ;;
+      --limit=*)   limit="${1#--limit=}"; shift ;;
+      --json)      as_json=1; shift ;;
+      -*) echo "Unknown flag: $1" >&2; return 1 ;;
+      *) if [ -z "$query" ]; then query="$1"; shift; else echo "Unexpected argument: $1" >&2; return 1; fi ;;
+    esac
+  done
+  if [ -z "$query" ] && [ -z "$state$label$project" ]; then
+    echo "Usage: pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]" >&2
+    return 1
+  fi
+  case "$limit" in ''|*[!0-9]*|0) echo "ERROR: --limit must be 1–50 (got '$limit')" >&2; return 1 ;; esac
+  [ "$limit" -gt 50 ] && limit=50
+  local decl='$n: Int!' filt='team: {@TEAM_CMP@}' vars
+  vars=$(jq -n --argjson n "$limit" '{n: $n}')
+  if [ -n "$query" ]; then
+    decl="$decl, \$q: String!"; filt="$filt, title: {containsIgnoreCase: \$q}"
+    vars=$(printf '%s' "$vars" | jq -c --arg q "$query" '. + {q: $q}')
+  fi
+  if [ -n "$state" ]; then
+    decl="$decl, \$state: String!"; filt="$filt, state: {name: {eqIgnoreCase: \$state}}"
+    vars=$(printf '%s' "$vars" | jq -c --arg s "$state" '. + {state: $s}')
+  fi
+  if [ -n "$label" ]; then
+    decl="$decl, \$label: String!"; filt="$filt, labels: {name: {eqIgnoreCase: \$label}}"
+    vars=$(printf '%s' "$vars" | jq -c --arg l "$label" '. + {label: $l}')
+  fi
+  if [ -n "$project" ]; then
+    local pj pid
+    pj=$(pk_linear_team_projects_json) || return 1
+    pid=$(pk_project_pick "$pj" "$project") || return 1
+    decl="$decl, \$project: ID!"; filt="$filt, project: {id: {eq: \$project}}"
+    vars=$(printf '%s' "$vars" | jq -c --arg p "$pid" '. + {project: $p}')
+  fi
+  local q resp nodes
+  q="query(@TEAM_DECL@, $decl) { issues(filter: {$filt}, first: \$n, orderBy: updatedAt) { nodes { id identifier title priority state { name } project { id name } } } }"
+  resp=$(pk_linear_team_gql "$q" "$vars") || return 1
+  nodes=$(printf '%s' "$resp" | jq -c '.data.issues.nodes // []')
+  if [ "$(printf '%s' "$nodes" | jq 'length')" = "0" ]; then
+    echo "no issues match"
+    return 0
+  fi
+  if [ -n "$as_json" ]; then
+    printf '%s\n' "$nodes" | jq .
+  else
+    printf '%s' "$nodes" | jq -r '.[] | "\(.identifier)  \(.state.name // "?")  \(.project.name // "—")  \(.title // "")"'
+  fi
+}
+
+# pk issue create --title "<t>" [--description-file <path> | -] [--state <name>]
+# [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]
+# One issueCreate carrying only the fields given; every name resolves to an id
+# with one read per kind, and an unknown name is an error, never a guess.
+cmd_issue_create() {
+  local title="" desc_file="" from_stdin="" state="" labels="" project="" prio="" parent="" as_json=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -)                    from_stdin=1; shift ;;
+      --title)              title="${2:-}"; shift 2 ;;
+      --title=*)            title="${1#--title=}"; shift ;;
+      --description-file)   desc_file="${2:-}"; shift 2 ;;
+      --description-file=*) desc_file="${1#--description-file=}"; shift ;;
+      --state)              state="${2:-}"; shift 2 ;;
+      --state=*)            state="${1#--state=}"; shift ;;
+      --label)              labels="$labels${labels:+
+}${2:-}"; shift 2 ;;
+      --label=*)            labels="$labels${labels:+
+}${1#--label=}"; shift ;;
+      --project)            project="${2:-}"; shift 2 ;;
+      --project=*)          project="${1#--project=}"; shift ;;
+      --priority)           prio="${2:-}"; shift 2 ;;
+      --priority=*)         prio="${1#--priority=}"; shift ;;
+      --parent)             parent="${2:-}"; shift 2 ;;
+      --parent=*)           parent="${1#--parent=}"; shift ;;
+      --json)               as_json=1; shift ;;
+      -*) echo "Unknown flag: $1" >&2; return 1 ;;
+      *)  echo "Unexpected argument: $1" >&2; return 1 ;;
+    esac
+  done
+  if [ -z "$title" ]; then
+    echo 'Usage: pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]' >&2
+    return 1
+  fi
+  if [ -n "$prio" ]; then
+    case "$prio" in [0-4]) ;; *) echo "ERROR: --priority must be 0–4 (got '$prio')" >&2; return 1 ;; esac
+  fi
+  local desc=""
+  desc=$(pk_read_body_arg "$desc_file" "$from_stdin") || return 1
+
+  local team_uuid pj="" pid="" sid="" label_ids="[]" parent_uuid=""
+  team_uuid=$(pk_team_id)
+  if [ -z "$team_uuid" ] || { [ -n "$project" ] && [ "$project" != "none" ]; }; then
+    pj=$(pk_linear_team_projects_json) || return 1
+  fi
+  if [ -z "$team_uuid" ]; then
+    team_uuid=$(printf '%s' "$pj" | jq -r '.team // empty')
+    if [ -z "$team_uuid" ]; then
+      echo "ERROR: team '$(pk_team_name)' not found in Linear (check Team name / Team ID in method.config.md)" >&2
+      return 1
+    fi
+  fi
+  if [ -n "$project" ] && [ "$project" != "none" ]; then
+    pid=$(pk_project_pick "$pj" "$project") || return 1
+  fi
+  if [ -n "$state" ]; then
+    local states
+    states=$(pk_linear_states_json) || return 1
+    sid=$(pk_pick_by_name "$states" state "$state") || return 1
+  fi
+  if [ -n "$labels" ]; then
+    local all_labels name lid
+    all_labels=$(pk_linear_labels_json) || return 1
+    while IFS= read -r name; do
+      [ -z "$name" ] && continue
+      lid=$(pk_pick_by_name "$all_labels" label "$name") || return 1
+      label_ids=$(printf '%s' "$label_ids" | jq -c --arg id "$lid" '. + [$id] | unique')
+    done <<EOF
+$labels
+EOF
+  fi
+  if [ -n "$parent" ]; then
+    parent_uuid=$(pk_linear_issue "$parent" | jq -r '.id // empty')
+    if [ -z "$parent_uuid" ]; then
+      echo "ERROR: issue $parent not found" >&2
+      return 1
+    fi
+  fi
+
+  local input
+  input=$(jq -n --arg team "$team_uuid" --arg title "$title" '{teamId: $team, title: $title}')
+  [ -n "$desc" ]        && input=$(printf '%s' "$input" | jq -c --arg d "$desc" '. + {description: $d}')
+  [ -n "$sid" ]         && input=$(printf '%s' "$input" | jq -c --arg s "$sid" '. + {stateId: $s}')
+  [ "$label_ids" != "[]" ] && input=$(printf '%s' "$input" | jq -c --argjson l "$label_ids" '. + {labelIds: $l}')
+  [ -n "$pid" ]         && input=$(printf '%s' "$input" | jq -c --arg p "$pid" '. + {projectId: $p}')
+  [ -n "$prio" ]        && input=$(printf '%s' "$input" | jq -c --argjson p "$prio" '. + {priority: $p}')
+  [ -n "$parent_uuid" ] && input=$(printf '%s' "$input" | jq -c --arg p "$parent_uuid" '. + {parentId: $p}')
+
+  local mutation='mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }'
+  local resp
+  resp=$(pk_linear_gql "$mutation" "$(jq -n --argjson input "$input" '{input: $input}')") || return 1
+  pk_linear_mutation_ok "$resp" issueCreate || return 1
+  if [ -n "$as_json" ]; then
+    printf '%s' "$resp" | jq '.data.issueCreate.issue | {identifier, id, url}'
+  else
+    printf '%s' "$resp" | jq -r '.data.issueCreate.issue | "created \(.identifier)  \(.url)"'
+  fi
+}
+
+# pk issue update <ID> [--title "<t>"] [--state <name>] [--add-label <name>]…
+# [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -]
+# [--priority N] [--json] — one read of the issue, then ONE issueUpdate carrying
+# only the fields that differ (labels via IssueUpdateInput.addedLabelIds /
+# removedLabelIds, so a concurrent label edit elsewhere is never clobbered).
+# Change lines print only after Linear confirms the write.
+cmd_issue_update() {
+  local id="" title="" has_title="" state="" add_labels="" rm_labels="" project="" desc_file="" from_stdin="" prio="" sort_order="" as_json=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -)                    from_stdin=1; shift ;;
+      --title)              title="${2:-}"; has_title=1; shift 2 ;;
+      --title=*)            title="${1#--title=}"; has_title=1; shift ;;
+      --state)              state="${2:-}"; shift 2 ;;
+      --state=*)            state="${1#--state=}"; shift ;;
+      --sort-order)         sort_order="${2:-}"; shift 2 ;;
+      --sort-order=*)       sort_order="${1#--sort-order=}"; shift ;;
+      --add-label)          add_labels="$add_labels${add_labels:+
+}${2:-}"; shift 2 ;;
+      --add-label=*)        add_labels="$add_labels${add_labels:+
+}${1#--add-label=}"; shift ;;
+      --remove-label)       rm_labels="$rm_labels${rm_labels:+
+}${2:-}"; shift 2 ;;
+      --remove-label=*)     rm_labels="$rm_labels${rm_labels:+
+}${1#--remove-label=}"; shift ;;
+      --project)            project="${2:-}"; shift 2 ;;
+      --project=*)          project="${1#--project=}"; shift ;;
+      --description-file)   desc_file="${2:-}"; shift 2 ;;
+      --description-file=*) desc_file="${1#--description-file=}"; shift ;;
+      --priority)           prio="${2:-}"; shift 2 ;;
+      --priority=*)         prio="${1#--priority=}"; shift ;;
+      --json)               as_json=1; shift ;;
+      -*) echo "Unknown flag: $1" >&2; return 1 ;;
+      *) if [ -z "$id" ]; then id="$1"; shift; else echo "Unexpected argument: $1" >&2; return 1; fi ;;
+    esac
+  done
+  local want_desc=""
+  if [ -n "$desc_file" ] || [ -n "$from_stdin" ]; then want_desc=1; fi
+  if [ -z "$id" ] || { [ -z "$has_title$state$add_labels$rm_labels$project$prio$sort_order$want_desc" ]; }; then
+    echo 'Usage: pk issue update <ID> [--title "<t>"] [--state <name>] [--add-label <name>]… [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -] [--priority N] [--sort-order <float>] [--json]' >&2
+    return 1
+  fi
+  if [ -n "$prio" ]; then
+    case "$prio" in [0-4]) ;; *) echo "ERROR: --priority must be 0–4 (got '$prio')" >&2; return 1 ;; esac
+  fi
+  if [ -n "$sort_order" ] && ! printf '%s' "$sort_order" | grep -Eq '^-?[0-9]+(\.[0-9]+)?$'; then
+    echo "ERROR: --sort-order must be a number (got '$sort_order')" >&2
+    return 1
+  fi
+  if [ -n "$has_title" ] && [ -z "$title" ]; then
+    echo "ERROR: --title cannot be empty" >&2
+    return 1
+  fi
+  local desc=""
+  [ -n "$want_desc" ] && { desc=$(pk_read_body_arg "$desc_file" "$from_stdin") || return 1; }
+
+  # Description is the one fat field; it is read only when it is about to be compared.
+  local extra=""
+  [ -n "$want_desc" ] && extra=" description"
+  local q="query(\$id: String!) { issue(id: \$id) { id identifier title priority sortOrder state { id name } project { id name } labels { nodes { id name } }$extra } }"
+  local resp cur uuid ident
+  resp=$(pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')") || return 1
+  cur=$(printf '%s' "$resp" | jq -c '.data.issue // empty')
+  uuid=$(printf '%s' "$cur" | jq -r '.id // empty')
+  if [ -z "$uuid" ]; then
+    echo "ERROR: issue $id not found" >&2
+    return 1
+  fi
+  ident=$(printf '%s' "$cur" | jq -r '.identifier')
+
+  local input='{}' lines="" old new
+  if [ -n "$has_title" ]; then
+    old=$(printf '%s' "$cur" | jq -r '.title // ""')
+    if [ "$old" != "$title" ]; then
+      input=$(printf '%s' "$input" | jq -c --arg t "$title" '. + {title: $t}')
+      lines="$lines  Linear: $ident title $old → $title
+"
+    fi
+  fi
+  if [ -n "$state" ]; then
+    local states sid
+    states=$(pk_linear_states_json) || return 1
+    sid=$(pk_pick_by_name "$states" state "$state") || return 1
+    if [ "$(printf '%s' "$cur" | jq -r '.state.id // ""')" != "$sid" ]; then
+      input=$(printf '%s' "$input" | jq -c --arg s "$sid" '. + {stateId: $s}')
+      lines="$lines  Linear: $ident state $(printf '%s' "$cur" | jq -r '.state.name // "—"') → $(printf '%s' "$states" | jq -r --arg s "$sid" '.[] | select(.id == $s) | .name')
+"
+    fi
+  fi
+  if [ -n "$add_labels$rm_labels" ]; then
+    local all_labels name lid add_ids="[]" rm_ids="[]" cur_ids new_ids
+    all_labels=$(pk_linear_labels_json) || return 1
+    while IFS= read -r name; do
+      [ -z "$name" ] && continue
+      lid=$(pk_pick_by_name "$all_labels" label "$name") || return 1
+      add_ids=$(printf '%s' "$add_ids" | jq -c --arg id "$lid" '. + [$id] | unique')
+    done <<EOF
+$add_labels
+EOF
+    while IFS= read -r name; do
+      [ -z "$name" ] && continue
+      lid=$(pk_pick_by_name "$all_labels" label "$name") || return 1
+      rm_ids=$(printf '%s' "$rm_ids" | jq -c --arg id "$lid" '. + [$id] | unique')
+    done <<EOF
+$rm_labels
+EOF
+    cur_ids=$(printf '%s' "$cur" | jq -c '[ .labels.nodes[]?.id ]')
+    add_ids=$(jq -nc --argjson a "$add_ids" --argjson c "$cur_ids" '$a - $c')
+    rm_ids=$(jq -nc --argjson r "$rm_ids" --argjson c "$cur_ids" '$r - ($r - $c)')
+    if [ "$add_ids" != "[]" ] || [ "$rm_ids" != "[]" ]; then
+      [ "$add_ids" != "[]" ] && input=$(printf '%s' "$input" | jq -c --argjson a "$add_ids" '. + {addedLabelIds: $a}')
+      [ "$rm_ids" != "[]" ]  && input=$(printf '%s' "$input" | jq -c --argjson r "$rm_ids" '. + {removedLabelIds: $r}')
+      old=$(printf '%s' "$cur" | jq -r '[ .labels.nodes[]?.name ] | if length == 0 then "—" else join(", ") end')
+      new=$(printf '%s' "$cur" | jq -r --argjson all "$all_labels" --argjson a "$add_ids" --argjson r "$rm_ids" '
+        ([ .labels.nodes[]? | select(.id as $i | ($r | index($i)) == null) ]
+         + [ $all[] | select(.id as $i | ($a | index($i)) != null) ])
+        | map(.name) | if length == 0 then "—" else join(", ") end')
+      lines="$lines  Linear: $ident labels $old → $new
+"
+    fi
+  fi
+  if [ -n "$project" ]; then
+    local cur_pid
+    cur_pid=$(printf '%s' "$cur" | jq -r '.project.id // ""')
+    old=$(printf '%s' "$cur" | jq -r '.project.name // "—"')
+    if [ "$project" = "none" ]; then
+      if [ -n "$cur_pid" ]; then
+        input=$(printf '%s' "$input" | jq -c '. + {projectId: null}')
+        lines="$lines  Linear: $ident project $old → —
+"
+      fi
+    else
+      local pj pid
+      pj=$(pk_linear_team_projects_json) || return 1
+      pid=$(pk_project_pick "$pj" "$project") || return 1
+      if [ "$pid" != "$cur_pid" ]; then
+        input=$(printf '%s' "$input" | jq -c --arg p "$pid" '. + {projectId: $p}')
+        lines="$lines  Linear: $ident project $old → $(printf '%s' "$pj" | jq -r --arg p "$pid" '.projects[] | select(.id == $p) | .name')
+"
+      fi
+    fi
+  fi
+  if [ -n "$want_desc" ]; then
+    old=$(printf '%s' "$cur" | jq -r '.description // ""')
+    if [ "$old" != "$desc" ]; then
+      input=$(printf '%s' "$input" | jq -c --arg d "$desc" '. + {description: $d}')
+      lines="$lines  Linear: $ident description updated
+"
+    fi
+  fi
+  if [ -n "$prio" ]; then
+    old=$(printf '%s' "$cur" | jq -r '.priority // 0')
+    if [ "$old" != "$prio" ]; then
+      input=$(printf '%s' "$input" | jq -c --argjson p "$prio" '. + {priority: $p}')
+      lines="$lines  Linear: $ident priority $old → $prio
+"
+    fi
+  fi
+  # sortOrder rides the same write as projectId / stateId on purpose: Linear
+  # re-ranks sortOrder on a state or project move, so a second call would be undone.
+  if [ -n "$sort_order" ]; then
+    old=$(printf '%s' "$cur" | jq -r '.sortOrder // 0')
+    if [ "$(jq -n --argjson a "$old" --argjson b "$sort_order" '$a == $b')" != "true" ]; then
+      input=$(printf '%s' "$input" | jq -c --argjson s "$sort_order" '. + {sortOrder: $s}')
+      lines="$lines  Linear: $ident sortOrder $old → $sort_order
+"
+    fi
+  fi
+
+  if [ "$input" = "{}" ]; then
+    if [ -n "$as_json" ]; then
+      jq -n --arg ident "$ident" --arg id "$uuid" '{identifier: $ident, id: $id, input: {}}'
+    else
+      echo "  Linear: $ident no changes"
+    fi
+    return 0
+  fi
+  local mutation='mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }'
+  resp=$(pk_linear_gql "$mutation" "$(jq -n --arg id "$uuid" --argjson input "$input" '{id: $id, input: $input}')") || return 1
+  pk_linear_mutation_ok "$resp" issueUpdate || return 1
+  if [ -n "$as_json" ]; then
+    jq -n --arg ident "$ident" --arg id "$uuid" --argjson input "$input" '{identifier: $ident, id: $id, input: $input}'
+  else
+    printf '%s' "$lines"
+  fi
+}
+
+# pk project list [--all] [--json] — the team's projects in walk order.
+cmd_project() {
+  local subverb="${1:-}"
+  shift || true
+  case "$subverb" in
+    list) cmd_project_list "$@"; return $? ;;
+    ""|help|-h|--help)
+      echo "Usage: pk project list [--all] [--json]"
+      echo "  one line per project in I<N>.P<N>. order: name  state  tier A|B|C|—  progress%"
+      echo "  completed/canceled projects are hidden unless --all"
+      return 0 ;;
+    *) echo "Unknown 'pk project' subcommand: $subverb (list)" >&2; return 1 ;;
+  esac
+}
+
+cmd_project_list() {
+  local all="" as_json=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --all)  all=1; shift ;;
+      --json) as_json=1; shift ;;
+      -*) echo "Unknown flag: $1" >&2; return 1 ;;
+      *)  echo "Unexpected argument: $1" >&2; return 1 ;;
+    esac
+  done
+  local pj
+  pj=$(pk_linear_team_projects_json "$as_json") || return 1
+  if [ -n "$as_json" ]; then
+    printf '%s' "$pj" | jq --arg all "$all" "$PK_JQ_PROJECT_TAG"'
+      [ .projects[] | select($all == "1" or (.state != "completed" and .state != "canceled")) ]
+      | sort_by(project_sort) | map({id, name, state, priority, progress, description})'
+    return 0
+  fi
+  local rows name state prio pct tier
+  rows=$(printf '%s' "$pj" | pk_project_list_rows "$all")
+  if [ -z "$rows" ]; then
+    echo "no projects"
+    return 0
+  fi
+  while IFS=$'\t' read -r name state prio pct; do
+    tier=$(pk_focus_tier_letter "$prio")
+    [ "$tier" = "none" ] && tier="—"
+    printf '%s  %s  tier %s  %s%%\n' "$name" "$state" "$tier" "$pct"
+  done <<EOF
+$rows
+EOF
+}
+
+# pk gql '<query>' ['<variables-json>' | --vars '<json>'] — guarded passthrough
+# for the long tail (initiatives, project/label create, saved views, …). The
+# query may come from stdin with a bare `-`. A mutation still pays the workspace
+# guard, because the call is pk_linear_gql's. The response is printed as-is
+# (pretty); a GraphQL error envelope exits 1 with its messages on stderr.
+cmd_gql() {
+  local query="" vars="" from_stdin=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -)       from_stdin=1; shift ;;
+      --vars)   vars="${2:-}"; shift 2 ;;
+      --vars=*) vars="${1#--vars=}"; shift ;;
+      -*) echo "Unknown flag: $1" >&2; return 1 ;;
+      *) if [ -z "$query" ] && [ -z "$from_stdin" ]; then query="$1"
+         elif [ -z "$vars" ]; then vars="$1"
+         else echo "Unexpected argument: $1" >&2; return 1; fi
+         shift ;;
+    esac
+  done
+  [ -n "$from_stdin" ] && query=$(cat)
+  if [ -z "$(printf '%s' "$query" | tr -d '[:space:]')" ]; then
+    echo "Usage: pk gql '<query>' ['<variables-json>' | --vars '<json>']   (or - to read the query from stdin)" >&2
+    return 1
+  fi
+  [ -z "$vars" ] && vars='{}'
+  if ! printf '%s' "$vars" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    echo "ERROR: variables must be a JSON object (got: $vars)" >&2
+    return 1
+  fi
+  local resp
+  resp=$(pk_linear_gql "$query" "$vars") || return 1
+  if ! printf '%s\n' "$resp" | jq . 2>/dev/null; then
+    echo "ERROR: non-JSON response from Linear: $resp" >&2
+    return 1
+  fi
+  if printf '%s' "$resp" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+    printf '%s' "$resp" | jq -r '.errors[] | .extensions.userPresentableMessage // .message' >&2
+    return 1
+  fi
+}
+
 cmd_help() {
   cat <<EOF
 pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
@@ -4592,10 +5204,15 @@ Subcommands:
   pk status                       Quick triage of the Linear board + worktrees
   pk focus [<TAG> A|B|C|none] [--swap]   Read or set focus-lane tiers = Linear project priority 1/2/3 (what pk next reads). Tiers are exclusive: a held tier is refused unless --swap moves the holder to none first. Prints the strip from a re-read, never from the request.
   pk sessions [--minutes N] [--all] [--json]   Every live Claude Code session on this machine, read from its transcript tail: waiting / waiting? (unanswered tool call) / working, with what each is asking. Default window 60 min; --all widens to 7 days and marks the rest stale.
-  pk issue show <ID> [--fields a,b,c] [--comments] [--json]   Lean issue read via the GraphQL path — compact text (default: id,title,state,labels); comments OFF by default. The low-token alternative to MCP getIssueById, whose result drags the whole comment thread into the session as a sticky payload.
+  pk issue show <ID> [--fields a,b,c] [--comments] [--json]   Lean issue read via the GraphQL path — compact text (default: id,title,state,labels); comments OFF by default, and --comments alone is the full read (description rides along). --fields relations renders blocked by · blocks · duplicate of from both relation sides. The low-token alternative to MCP getIssueById, whose result drags the whole comment thread into the session as a sticky payload.
   pk issue set <ID> --priority N  Set issue priority (0 none · 1 urgent · 2 high · 3 medium · 4 low); prints old → new, no-op when unchanged.
   pk issue relate <ID> --blocked-by <ID2> [--why "<text>"]   Make ID2 block ID (skips if the relation exists); --why also posts "[tpm] blocked by ID2 — text" on ID.
   pk issue comment <ID> "<body>"  Post a comment on ID (body also from --body-file <path>, or - for stdin).
+  pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]   Title search in the team (default 20, max 50): one line per issue — identifier, state, project (— if none), title. Prints "no issues match" on an empty result.
+  pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]   Create an issue in the team; names resolve to ids (unknown → error, never a guess); prints "created <ID>  <url>".
+  pk issue update <ID> [--title "<t>"] [--state <name>] [--add-label <name>]… [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -] [--priority N] [--sort-order <float>] [--json]   Update only what differs, in ONE write (sortOrder with projectId/stateId, since a move re-ranks it); one "old → new" line per changed field, "no changes" when every value already holds.
+  pk project list [--all] [--json]   The team's projects in I<N>.P<N>. order: name · state · tier (priority 1/2/3 → A/B/C, else —) · progress %. completed/canceled hidden unless --all.
+  pk gql '<query>' ['<vars-json>' | --vars '<json>']   Guarded GraphQL passthrough for the long tail (initiatives, project/label create, …); '-' reads the query from stdin. Pretty-prints the response; exit 1 with the error messages on stderr when it carries errors. Mutations still pass the workspace guard.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
   pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
   pk ship [--env=<env>] [--review] [--ready] [--force] [--force-secgate]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/. --force waives the verify gate only; --force-secgate separately waives an armed /security-gate (both log a Linear audit comment).
@@ -4663,7 +5280,7 @@ cmd_doctor() {
   if [ -n "$key" ]; then
     echo "  ✓ Linear API key set (\$$key_var)"
   else
-    echo "  ✗ Linear API key not set — export $key_var=lin_api_…"
+    echo "  ✗ Linear API key not set — export $key_var=lin_api_…, or run under \`op run --env-file=op-references.conf -- pk …\` (see .envrc)"
     fail=$((fail+1))
   fi
   # Linear team
@@ -4842,6 +5459,7 @@ cmd_config() {
     "Default deep flag" \
     "Ship environments" \
     "Linear API key env var" \
+    "Linear transport|api" \
     "Migration dir" \
     "Spec ready state" \
     "Spec approved state" \
@@ -4894,6 +5512,8 @@ main() {
     status)   cmd_status "$@" ;;
     sessions) cmd_sessions "$@" ;;
     issue)    cmd_issue "$@" ;;
+    project)  cmd_project "$@" ;;
+    gql)      cmd_gql "$@" ;;
     portfolio) cmd_portfolio "$@" ;;
     branch)   cmd_branch "$@" ;;
     ship)     cmd_ship "$@" ;;
