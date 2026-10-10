@@ -68,9 +68,9 @@ The effective `--deep` is the CLI flag OR `Default deep flag: true`. Print one l
 
 ## Step 2 — Fetch the spec from Linear
 
-Call `mcp__linear-server__linear_getIssueById` once and capture `title`, `description`, `state.name`, and `labels`. Expected states: `In Progress`, `Building`, or `Approved` (Step 0's auto-branch transitions it). On `Backlog` / `Todo` without a just-completed auto-branch, refuse.
+Read the issue with its description and comment thread once via the project's Linear route — `pk issue show <ISSUE-ID> --comments` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there) — and capture `title`, `description`, `state`, and `labels`. Expected states: `In Progress`, `Building`, or `Approved` (Step 0's auto-branch transitions it). On `Backlog` / `Todo` without a just-completed auto-branch, refuse.
 
-**Read once.** This is the one full-content read `/work` needs. The payload carries the whole comment thread and is sticky (re-billed every turn, `pipekit-tooling.md` § MCP Result Payloads Are Sticky). For any later state check use `pk issue show <ID>`, `pk status`, `git`, or `gh`.
+**Read once.** This is the one full-content read `/work` needs. On the `mcp` route the payload carries the whole comment thread and is sticky (re-billed every turn, `pipekit-tooling.md` § MCP Result Payloads Are Sticky); on either route do it once — for any later state check use `pk issue show <ID>` (comments off by default), `pk status`, `git`, or `gh`.
 
 The description must contain `## Light Spec` or `## Acceptance Criteria`. If neither: without `--deep`, warn, print the first 30 lines, ask `Continue planning with this vague spec? (y/N)`, default N. With `--deep`, refuse: `Spec missing required sections. Run /light-spec <ID> first, OR pk delegate <ID> "draft a Light Spec for this issue against {project} conventions".`
 
@@ -277,7 +277,7 @@ Substitute the IDs; read the source root from `method.config.md` if it is not `s
 
 ### Risk-fallback follow-up — required when a documented fallback was used
 
-If you shipped a spec's `R<N>: Mitigation` path instead of the primary implementation, file the deferred scope now with `mcp__linear-server__linear_createIssue`: title `<short noun phrase> — closes <ISSUE-ID> R<N> fallback`, state Approved, same project and milestone as the parent, description opening `Source: <ISSUE-ID> R<N>` and citing the clause, the AC numbers covered, and the deferred scope. **Everything else follows `sop/Linear_SOP.md § Filing a follow-up issue`** — the parent's `Area:` label, a Type label, priority from the floor table (this one `blocks` the parent's AC, so it inherits the parent's priority), and a `blocks` relation to the parent — all in the one create call. Approved and same-project are this filer's stated exception to that contract (the follow-up *is* the parent's remaining, already-approved scope), not a licence to skip the rest. Reference the new ID **and its placement** in the hand-off, and mark the AC partial in the parent spec if you can edit it. (WIT-451, 2026-05-13: a fallback shipped correctly, two follow-ups were filed by hand, and the third was found in triage a round later.)
+If you shipped a spec's `R<N>: Mitigation` path instead of the primary implementation, file the deferred scope now — `pk issue create --title "<short noun phrase> — closes <ISSUE-ID> R<N> fallback" --state Approved --project <parent's lane> --label "<parent's Area: label>" --label "<Type label>" --priority <parent's priority> --description-file <F>` — with the description opening `Source: <ISSUE-ID> R<N>` and citing the clause, the AC numbers covered, and the deferred scope; then `pk issue relate <ISSUE-ID> --blocked-by <NEW-ID>` (the new issue `blocks` the parent) and the parent's milestone via `pk gql 'mutation { issueUpdate(id:"<NEW-ID>", input:{ projectMilestoneId:"<MILESTONE-ID>" }) { success } }'`. **Everything else follows `sop/Linear_SOP.md § Filing a follow-up issue`** — the parent's `Area:` label, a Type label, priority from the floor table (this one `blocks` the parent's AC, so it inherits the parent's priority), and the `blocks` relation to the parent — the create carries every field it can in the one call; the relation and the milestone are the only follow-on writes. Approved and same-project are this filer's stated exception to that contract (the follow-up *is* the parent's remaining, already-approved scope), not a licence to skip the rest. Reference the new ID **and its placement** in the hand-off, and mark the AC partial in the parent spec if you can edit it. (WIT-451, 2026-05-13: a fallback shipped correctly, two follow-ups were filed by hand, and the third was found in triage a round later.)
 
 ### Flag marker for `/verify`
 
@@ -322,7 +322,7 @@ Resume:
 | Spec missing required sections, no `--deep` | Warn, ask y/N |
 | Spec missing required sections, with `--deep` | Refuse; recommend `/light-spec` or `pk delegate` |
 | Plan revised more than 3 times | Refuse; recommend `pk delegate` |
-| `pk` binary absent | Warn: `pk not found — run /pipekit-update to fix.` |
+| `pk` binary absent | Warn that `pk` is not on PATH and that `/pipekit-update` installs it. |
 | `pk-execute` workflow file absent, or `Workflow` tool unavailable | Sequential `Agent` fallback, announced |
 | Workflow returns `stopped` | Print the task's result verbatim; stop; no rollover |
 | Task agent returns `wrong-base` | Someone moved the branch mid-run; stop and show both shas |

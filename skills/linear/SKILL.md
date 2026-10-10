@@ -19,7 +19,7 @@ The argument is a Linear issue identifier (e.g., `PROJ-178`) or a full Linear UR
 
 ## Linear State IDs
 
-Read all state IDs from your project's `method.config.md` under "Workflow State IDs". The table maps state names (Building, UAT, In Dev, In Beta, Done, etc.) to Linear state UUIDs specific to your workspace.
+Read all state IDs from your project's `method.config.md` under "Workflow State IDs". The table maps state names (Building, UAT, In Dev, In Beta, Done, etc.) to Linear state UUIDs specific to your workspace. The transitions below pass the state **name** (`pk issue update <ID> --state Building`) and `pk` resolves the id; the table is the reference for which names exist.
 
 ## Workflow Phases
 
@@ -29,13 +29,13 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
 
 ### Phase 1: Understand
 
-1. **Fetch the issue** using `mcp__linear-server__linear_getIssueById` with the identifier.
+1. **Fetch the issue** with its description and comments via the project's Linear route — `pk issue show <ID> --comments` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there).
 2. **Present a summary** to the user:
    - Title, description, priority, labels, current state
    - Any existing comments
    - If the issue has a linked spec (`**Spec:**` or `**Linked spec:**` in description), read it
-3. **Move to Building** using `mcp__linear-server__linear_updateIssue` with `stateId: {Building state ID from method.config.md}`.
-4. **Post a comment**: "Started work on this issue."
+3. **Move to Building** — `pk issue update <ID> --state Building`.
+4. **Post a comment** — `pk issue comment <ID> "Started work on this issue."`
 5. **Ask the user** to confirm the scope and approach before proceeding.
 
 ---
@@ -68,7 +68,7 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
      - Short title (under 70 chars)
      - Body with Summary bullets + Test plan checklist
      - `Closes PROJ-XXX` in the body
-   - **Move to UAT** using `mcp__linear-server__linear_updateIssue` with `stateId: {UAT state ID from method.config.md}`.
+   - **Move to UAT** — `pk issue update <ID> --state UAT`.
    - **Post a comment** with the PR link.
 
 ---

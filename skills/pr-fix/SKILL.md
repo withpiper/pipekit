@@ -75,7 +75,7 @@ If the PR's Linear issue (or referenced sibling issues) contains phrases like *"
 
 For each cross-spec reference found in the issue:
 
-1. Fetch the predecessor's spec via Linear MCP
+1. Fetch the predecessor's spec via the project's Linear route — `pk issue show <PREDECESSOR-ID> --comments` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there)
 2. Extract any "this issue's successor will…" handoff promises
 3. **Verify each promise landed in the diff:**
    - "Wires X into Y" → grep the diff for `Y` references that introduce `X`
@@ -488,7 +488,7 @@ Identify the Linear issue from:
 - The PR body's `Closes <TEAM>-<N>` line, OR
 - The current branch name's `feature/<TEAM>-<N>-…` token.
 
-Post via `pk_linear_comment <ISSUE-ID> "<body>"` (the helper `pk done` uses), or via the Linear MCP `mcp__linear-server__linear_createComment` tool. Body format:
+Post via `pk issue comment <ISSUE-ID> --body-file <F>` (the same route `pk done` posts through; write the body below to a file first, or pipe it on stdin with `-`). Body format:
 
 ```markdown
 **`/pr-fix` triage complete** (PR #<N>)

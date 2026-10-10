@@ -18,7 +18,7 @@ You are a roadmap builder. Your job is to extract requirements from strategy doc
 - `project-definition.md` must exist (output of `/define`)
 - `Strategy/` docs should exist (output of `/strategy-create`)
 - `method.config.md` should exist with Linear configuration (and `§ Initiative Surface`)
-- Linear MCP server must be connected (`mcp__linear-server__*` tools available)
+- The project's Linear route must be reachable — Phase 3's preflight checks it (verb table: `sop/Linear_SOP.md § Linear transport`)
 
 > **No scaffold step.** The initiative surface is Linear itself — there is no phase file or ID map to
 > create. The Linear Initiative→Project→Issue hierarchy *is* the roadmap.
@@ -107,35 +107,55 @@ create them in Linear? (y/n/edit)"_
 
 ### Phase 3 — Author the hierarchy in Linear
 
-**Preflight: check the Linear MCP connection** (`mcp__linear-server__linear_getTeams` or `linear_getProjects`). If it fails, tell the user how to reconnect and stop — **do not fabricate IDs**.
+**Preflight: check the project's Linear route** — `pk project list --all` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there). If it fails, tell the user how to fix the route (on `api` a missing key — `pk` names the `op run` recipe; on `mcp` the registered server missing from the committed `.mcp.json`) and stop — **do not fabricate IDs**.
 
-On approval, create top-down. Apply the naming convention exactly.
+On approval, create top-down. Apply the naming convention exactly. Everything above the issue level is a `pk gql` mutation (guarded like every other `pk` write); issues and relations have verbs. Team id comes from `pk config "Team ID"`.
 
 1. **Initiatives** — one per stage, named `i{N}. label`:
-   - If your MCP exposes an initiative-create tool (e.g. `mcp__linear-server__linear_createInitiative`),
-     use it. Otherwise create them in the Linear UI (Settings → Initiatives) with the `i{N}.` prefix and
-     tell the user exactly which to make. Set initiative status: current stage → `Active`, later stages →
-     `Planned`.
-   - **Verify the tool name against your installed MCP** — initiative create/update support varies by
-     server. Naming carries the order regardless, so manual UI creation is always a valid fallback.
+   ```bash
+   pk gql 'mutation($in: InitiativeCreateInput!) { initiativeCreate(input:$in) { success initiative { id name } } }' \
+          '{"in":{"name":"i1. Foundation","status":"Active","description":"<one line>"}}'
+   ```
+   Set initiative status: current stage → `Active`, later stages → `Planned` (`status` on the create
+   input; `initiativeUpdate(id:, input:{status:})` to change it later). Keep the returned `id`s — the
+   project creates below need them.
+   - If the workspace refuses the mutation, create them in the Linear UI (Settings → Initiatives) with the
+     `i{N}.` prefix and tell the user exactly which to make. Naming carries the order regardless, so manual
+     UI creation is always a valid fallback.
 2. **Projects** (lanes) — within each initiative, named `I{N}.P{N}. label` (the initiative number then
-   the project number, e.g. `I1.P2. Search`), via `linear_createProject` (set its `initiativeId`/parent
-   initiative, and `state`: current → `started`, else `planned`/`backlog`).
+   the project number, e.g. `I1.P2. Search`):
+   ```bash
+   pk gql 'mutation($in: ProjectCreateInput!) { projectCreate(input:$in) { success project { id name } } }' \
+          '{"in":{"teamIds":["<TEAM>"],"name":"I1.P2. Search","description":"<one line>","content":"<serialization notes>"}}'
+   # ProjectCreateInput has no initiativeId and no state — link the project to its initiative,
+   # then set its status, both with the project.id the create just returned
+   pk gql 'mutation($in: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input:$in) { success } }' \
+          '{"in":{"initiativeId":"<INIT>","projectId":"<PROJ>"}}'
+   pk gql 'mutation($id: String!, $in: ProjectUpdateInput!) { projectUpdate(id:$id, input:$in) { success } }' \
+          '{"id":"<PROJ>","in":{"statusId":"<STATUS>"}}'   # ids: pk gql '{ organization { projectStatuses { id name type } } }'
+   ```
+   (`<INIT>` = the parent initiative's id from step 1, `<PROJ>` = the id the create returned; `state`: current → `started`, else `planned`/`backlog`; `initiativeToProjectDelete(id:)` unlinks).
    - **~3–8 issues each.** If a cluster is bigger, cut it into two lanes rather than one large project.
    - Serialization / parallel-safety notes go in the project's **`content`** body — `description` hard-caps
      at 255 chars and silently truncates. Keep `description` a one-line summary.
    - Every downstream initiative gets its placeholder lane here (see above).
-3. **Issues** — for each requirement, via `mcp__linear-server__linear_createIssue`:
-   - `team`: from `method.config.md`
-   - `project`: the `I{N}.P{N}.` lane it belongs to — **or none**, if the requirement isn't part of a
-     coherent, completable lane yet. Project-less is a valid, intended resting state.
-   - `title`, `description` (+ strategy doc reference)
-   - `state`: Stage 1 → `On Deck` | later stages → `Future Phases`
-   - `priority`: 0 (None) — triage sets real priority
-4. **Dependency relations** — `linear_createIssueRelation` for each `blocked_by`. These carry all intra-lane
+3. **Issues** — for each requirement, one `pk issue create` call carrying every field:
+   `pk issue create --title "…" --description-file <req.md> --state "On Deck" --label Feature --label "Area: <area>" --project I1.P2 --priority 0`
+   - team: `pk` reads it from `method.config.md`
+   - `--project`: the `I{N}.P{N}.` lane it belongs to — **or omit the flag**, if the requirement isn't part
+     of a coherent, completable lane yet. Project-less is a valid, intended resting state.
+   - `--title`, `--description-file` (+ strategy doc reference; write the body to a file or pipe it with `-`)
+   - `--state`: Stage 1 → `On Deck` | later stages → `Future Phases`
+   - `--priority 0` (None) — triage sets real priority
+   - `--label …`: the labels from step 5, on the same call
+4. **Dependency relations** — `pk issue relate <ID> --blocked-by <ID2> [--why "…"]` for each `blocked_by`. These carry all intra-lane
    ordering; never encode order as description prose.
 5. **Labels** — type label (Feature/Improvement/Research) + domain label per feature cluster, **plus an
-   `Area:` label on every issue** (create the `Area` label group per `method.config.md § Area Labels`).
+   `Area:` label on every issue**, passed as `--label` flags on the step-3 create (`pk issue update <ID> --add-label L`
+   for one added after the fact). Create the `Area` label group per `method.config.md § Area Labels` first,
+   via `pk gql` — the parent group, then each child with `parentId`:
+   `pk gql 'mutation($in: IssueLabelCreateInput!) { issueLabelCreate(input:$in) { success issueLabel { id name } } }' '{"in":{"teamId":"<TEAM>","name":"Area","color":"#<hex>"}}'`
+   then `'{"in":{"teamId":"<TEAM>","name":"Area: <area>","parentId":"<GROUP-ID>","color":"#<hex>"}}'` per area.
    Area is what keeps project-less backlog work navigable, and it persists when an issue is later cut into
    a lane — so apply it to lane members too, not only to the backlog.
 6. **Milestones (optional)** — only for a project with >6 issues that benefits from intra-project gating.
@@ -148,17 +168,17 @@ On approval, create top-down. Apply the naming convention exactly.
 
 When opted in, offer to scaffold (all read the label/view convention from config — hardcode nothing):
 
-1. **Labels** — one team label per sequenced phase + the Continuous pool (e.g. `Roadmap: Phase A/B/C`, `Roadmap: Continuous`, drawn from this roadmap's own phase names) via `linear_createTeamLabel`, plus the `Order: Any` label.
-2. **Membership** — apply the phase label to each issue by the phase it sits under in the tree you just authored. **Continuous is named-items-only** — label just the issues you explicitly place there, never a whole project.
-3. **`sortOrder`** — set each issue's `sortOrder` to mirror the tree's top-to-bottom order within its phase, stepped (e.g. 1,000 apart) to leave insert slack. `linear_updateIssue`.
-4. **Saved views** — one ungrouped view per label via `linear_createSavedView` (**read an existing view's `filterData` first** — the DSL is undocumented). Tell the human to toggle the view to **Manual sort** in the Linear UI — that toggle is **not** settable over MCP, so the `sortOrder` you set only renders once they flip it.
+1. **Labels** — one team label per sequenced phase + the Continuous pool (e.g. `Roadmap: Phase A/B/C`, `Roadmap: Continuous`, drawn from this roadmap's own phase names) via `pk gql` → `issueLabelCreate` (the Phase 3 step 5 shape), plus the `Order: Any` label.
+2. **Membership** — apply the phase label to each issue by the phase it sits under in the tree you just authored (`pk issue update <ID> --add-label "Roadmap: Phase A"`). **Continuous is named-items-only** — label just the issues you explicitly place there, never a whole project.
+3. **`sortOrder`** — set each issue's `sortOrder` to mirror the tree's top-to-bottom order within its phase, stepped (e.g. 1,000 apart) to leave insert slack: `pk issue update <ID> --sort-order 1000`, one issue at a time (when a label or project write is due on the same issue, put `--sort-order` on that `pk issue update` so order and placement land in one write).
+4. **Saved views** — one ungrouped view per label via `pk gql` → `customViewCreate` (**read an existing view's `filterData` first** — `pk gql '{ customViews(first:50) { nodes { id name filterData } } }'`; the DSL is undocumented). Tell the human to toggle the view to **Manual sort** in the Linear UI — the view-create call does **not** set that toggle, so the `sortOrder` you set only renders once they flip it.
 5. **Order** = real `blockedBy` relations for intra-phase dependencies (Phase 3 step 4 already creates these); `Order: Any` marks the rest. Never encode order as description prose.
 
 This is a scaffold, not an ongoing sync — once created, `/roadmap-review` Phase 3.5 drift-checks the layer against `ROADMAP.md`. If you skip it here (or you're adopting the layer on an already-built board), it's fully retrofittable later: `/roadmap-review` Phase 3.5 detects an un-scaffolded board and offers the same **bootstrap** (create labels + views, seed `sortOrder`, apply membership + relations) before it drift-checks.
 
 ### Phase 4 — Verify the surface
 
-Confirm the native initiative surface is well-formed (this is what `pk next` will read):
+Confirm the native initiative surface is well-formed (this is what `pk next` will read). Read it back live — `pk gql '{ initiatives(first:50) { nodes { id name status projects(first:50) { nodes { id name state description } } } } }'` for the initiative → project tree, `pk project list --all --json` for the lanes with state, and `pk issue search "" --project <I{N}.P{N}> --json` per lane for its members (≤50 a page; one subagent, serially):
 
 1. Every delivery initiative is named `i{N}.` with a unique, ordered `{N}`.
 2. Every project is named `I{N}.P{N}.` — its initiative number, then a unique `P{N}` within that initiative (e.g. `I1.P1.`, `I1.P2.`).

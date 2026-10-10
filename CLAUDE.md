@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v4.38.0** — Last updated: 2026-09-27  *(**v4.38.0 — focus lanes: `pk next` and `pk status` lead with what you are driving.** A lane's tier is its Linear **project priority** (Urgent/High/Medium → A/B/C), set from the lane-map page; `pk next` prints the focus lanes, then the blockers that support them, then the rest of the board, and `--lane` pins one for a run. `pk sessions` lists every live Claude session across front ends, waiting first. A blocker merged into an `In <Env>` state no longer blocks. `/work` takes `>>` plan annotations; `/verify` records measurements. Carries v4.37.0 — follow-ups are placed at creation.)*
+**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — `/tpm` decides the week; Linear over the project's route (`Linear transport: api` by default — no MCP tool names in skills, `pk issue search/create/update`, `pk project list`, `pk gql`); `pk done` closes out a merged PR whose branch is gone; `/verify` gates a changed AI extraction call on a recorded real-API run.** A working session reconciles what is really in flight across the portfolio (Linear vs worktrees vs PRs vs sessions), runs `/linear-hygiene` when drift touches the candidates, drafts MUST / NEXT / WAIT with the capacity arithmetic, and argues from `sop/TPM_SOP.md` until agreed; then `pk focus` sets the tiers, Hard dependencies become `blocked by` relations, and the `Now` block of the one `engineering/RUNBOOK.md` is rewritten — `pk next` nudges when it goes stale. `/lane-map` retired. Carries v4.38.0 — focus lanes lead `pk next`.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -33,7 +33,7 @@ Stage 0 is a **contract** (a set of artifacts the dev pipeline requires), not a 
 
 ## How Consuming Projects Work
 
-Projects pull from this repo using `sync-method.sh`. The sync copies `skills/`, `sop/`, `templates/`, and `method.md` into the project. It never touches project-specific files (`method.config.md`, `.claude/rules/`, project-specific skills). Exception: the five `pipekit-*` canonical rule files in `.claude/rules/` are sync-owned; a `Skip rules` key in `method.config.md` opts a project out of canonical rules that don't apply to it (v4.21.0+).
+Projects pull from this repo using `sync-method.sh`. The sync copies `skills/`, `sop/`, `templates/`, and `method.md` into the project, and writes the `How we run` block of the project's one runbook (`engineering/RUNBOOK.md`, v5.0.0 — the former `pipekit/RUNBOOK.md`; the `Now` block belongs to `/tpm`, the rest to the project). It never touches project-specific files (`method.config.md`, `.claude/rules/`, project-specific skills). Exception: the five `pipekit-*` canonical rule files in `.claude/rules/` are sync-owned; a `Skip rules` key in `method.config.md` opts a project out of canonical rules that don't apply to it (v4.21.0+).
 
 **Sync-safe overrides:** projects can override synced skills/SOPs/method.md without forking by writing to `.claude/overrides/`. The sync script applies overrides after the upstream copy and surfaces drift warnings when upstream changes a file you override. See `method.md` § Sync-Safe Overrides.
 
@@ -74,6 +74,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 |---------|---------|
 | `pk next` | What's next, read live from Linear — derives the current initiative, groups issues by status with per-group hints. Focus lanes first (v4.38.0: Linear project priority 1/2/3 → tier A/B/C, then Supporting blockers, then the rest of the board); `--lane <TAG>` pins one lane as tier A for the run. |
 | `pk sessions` | Every live Claude Code session on this machine, read from transcript tails — `waiting` / `waiting?` / `working`, waiting first, with what each is asking. `pk next` and `pk status` lead with a one-line count when another session is waiting. |
+| `pk issue …` · `pk project list` · `pk gql` | The Linear verbs skills use on the `api` route (v5.0.0: `Linear transport`, default `api`): `issue show/search/create/update/set/relate/comment` with name-resolved state, label and project flags; `project list` = lanes with focus tier; `gql` = guarded passthrough for the long tail. Every mutation passes the workspace guard. Verb table in `sop/Linear_SOP.md § Linear transport`. |
 | `pk branch <ID>` | Worktree + branch + Linear → In Progress (idempotent). |
 | `/work <ID>` | The sole executor: plans inline, materializes a task DAG to `.pk-work/<ID>-PLAN.md`, hands it to the saved `pk-execute` workflow as data — one agent per task, verify before commit, expected-HEAD threading, optional disjoint-file parallel waves with an integration step — and writes the SUMMARY from the structured results. |
 | `/verify` | Pre-deploy gate. |
@@ -97,6 +98,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/pk-bug` | Bug pipeline: reproduce → regression-test-first → fix → ship → postmortem. |
 | `/pk-express` | Idea→Draft-PR autopilot for Quick/Standard-tier WITs; stops at attention gates. |
 | `/linear-hygiene` | Classifies unclassified/untriaged issues (placement, not disposition) and flags board-shape drift — pool smell, spent lanes, walk-skip hazards. Never creates a project. The backstop since v4.37.0: mid-flow filers place follow-ups at creation per `sop/Linear_SOP.md § Filing a follow-up issue`; `--session` checks this session's filings. |
+| `/tpm` | Technical program manager for the board (v5.0.0): a working session that reconciles what is really in flight across `§ Portfolio repos`, runs `/linear-hygiene` when drift touches the candidates, drafts MUST / NEXT / WAIT with the capacity arithmetic, and argues from `sop/TPM_SOP.md` until agreed. Writes tiers (`pk focus`), Hard-dependency relations and `[tpm]` comments to Linear, proves the order with `pk next`, and rewrites the `Now` block of the one runbook (`§ Runbook path`). User-typed only; `--quick`, `--check`. |
 | `/pipekit-help` | Recommends the next pipeline step from project state. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what shipped. |
 | `/release-changelog` | Draft CHANGELOG entry from commits between tags. |

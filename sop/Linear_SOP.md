@@ -2,37 +2,62 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — § Filing a follow-up issue: the intake contract every mid-flow filer writes to.** Parent's `Area:` inherited, Type label, the priority-floor table (canonical here; `/linear-hygiene` cites it), state by priority — never Triage — a `Source:` first line and a relation, in one create call. Carries v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.)*
+**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — § Linear transport: the route is a project decision (`Linear transport: api | mcp`, default `api`), skills name operations, and the verb table here maps each one to its `pk` form and its MCP tool.** `pk issue search/create/update`, `pk project list` and the guarded `pk gql` passthrough mean no skill needs raw `curl`. Carries v4.37.0 — § Filing a follow-up issue: the intake contract every mid-flow filer writes to. Parent's `Area:` inherited, Type label, the priority-floor table (canonical here; `/linear-hygiene` cites it), state by priority — never Triage — a `Source:` first line and a relation, in one create call. Carries v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
 ---
 
-## Linear MCP Server
+## Linear transport
 
-Pipekit's interactive Linear skills (`/linear`, `/sync-linear`, `/roadmap-create`, `/linear-hygiene`, `/light-spec`, `/brainstorm`, …) talk to Linear through an **MCP server registered as `linear-server`** in the project's version-controlled `.mcp.json`. The skills call tool names of the form `mcp__linear-server__<tool>`.
+**Every Pipekit skill that reads or writes Linear goes through the project's Linear route**, chosen once in `method.config.md` → `Linear transport` (read it with `pk config "Linear transport" api`):
 
-**The skills assume `@tacticlaunch/mcp-linear`** — the server both reference consuming projects (SiteLine, Piper) run. Its tools are **camelCase** with a `linear_` prefix:
+| `Linear transport` | What the skill calls | When to choose it |
+|---|---|---|
+| **`api`** (default, v5.0.0+) | `bin/pk` verbs — `pk issue …`, `pk project list`, `pk focus`, and `pk gql` for anything without a verb. Each is one GraphQL round-trip under `Linear API key env var`; **every mutation first passes `pk_linear_guard`**, which proves the token belongs to this project's pinned workspace and refuses otherwise. | The reference consumers (SiteLine ruled 2026-09-02: "all our Linear is via the API call"). Results are shaped text the session controls — nothing sticky, nothing echoing a description back. |
+| **`mcp`** | The Linear MCP server the project registers as `linear-server` in its committed `.mcp.json` (`mcp__linear-server__<tool>`). | A project that wants the MCP surface and accepts its costs (§ Rate limits; `.claude/rules/pipekit-tooling.md § MCP Result Payloads Are Sticky`). Writes bypass `pk`'s workspace guard. |
 
-| Purpose | Tool |
-|---|---|
-| List / filter issues | `linear_searchIssues` (filtered) · `linear_getIssues` (recent, connectivity test) |
-| Read one issue | `linear_getIssueById` |
-| Create / update issue | `linear_createIssue` · `linear_updateIssue` (one call carries `projectId` + `priority` + `stateId`) |
-| Comment | `linear_createComment` · `linear_getComments` |
-| Projects | `linear_getProjects` · `linear_getProjectById` · `linear_createProject` · `linear_updateProject` |
-| Initiatives | `linear_getInitiatives` · `linear_getInitiativeById` · `linear_createInitiative` · `linear_updateInitiative` |
-| Workflow states | `linear_getWorkflowStates` |
-| Labels | `linear_createTeamLabel` · `linear_addIssueLabel` · `linear_removeIssueLabel` |
-| Relations | `linear_createIssueRelation` |
+Skills are written against **operations**, not tool names — "read the issue and its comments", "create the issue with state, labels and project in one call". This table is the only place an operation maps to a concrete call; a skill cites it and never hardcodes either column. A raw `curl` mutation from a skill is never the answer on either route: it skips the guard that `pk gql` keeps.
 
-> **`getIssueById` is a full-content read — sticky and expensive.** It returns the description **and the entire comment thread**, which then rides every subsequent turn as input tokens (see `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky). For an issue's *state / merge / PR* status use `pk issue show <ID>` (a lean field-scoped read — `bin/pk`, v4.19.0+; comments off by default), `pk next` / `pk status`, filtered `linear_searchIssues`, or `git` / `gh` — reserve `getIssueById` for a genuine full-body read, and run batches of many reads/writes in a subagent so the payloads stay out of the main thread.
+### Verb table
 
-> **Not the official remote.** Linear's first-party `mcp.linear.app` server uses **snake_case** names (`list_issues`, `get_issue`, `update_issue`, `create_comment`) and a leaner ~21-tool surface that **lacks** the initiative-CRUD, label-create, and issue-relation tools these skills rely on. A project that points `linear-server` at the official remote (or any other Linear MCP) must remap the tool names in its synced skills — they are not drop-in compatible.
+| Operation | `api` — `pk` form | `mcp` — `@tacticlaunch/mcp-linear` tool |
+|---|---|---|
+| Find issues (title match, optional state / label / project filter; ≤50 a page) | `pk issue search "<text>" [--state S] [--label L] [--project P] [--limit N] [--json]` | `linear_searchIssues` (filtered) |
+| Read an issue's fields — state, labels, priority, project, PR | `pk issue show <ID> [--fields …] [--json]` | `linear_getIssueById` ⚠ full-content read — see note |
+| Read an issue with its description and comment thread | `pk issue show <ID> --comments` | `linear_getIssueById` · `linear_getComments` |
+| Create an issue — title, description, state, labels, project, priority, parent **in one call** (§ Filing a follow-up issue) | `pk issue create --title "…" [--description-file F \| -] [--state S] [--label L]… [--project P] [--priority N] [--parent ID] [--json]` | `linear_createIssue` |
+| Change state / title / description / project | `pk issue update <ID> [--state S] [--title "…"] [--description-file F \| -] [--project P \| none] [--priority N]` | `linear_updateIssue` |
+| Add / remove a label | `pk issue update <ID> --add-label L` · `--remove-label L` | `linear_addIssueLabel` · `linear_removeIssueLabel` |
+| Set importance only | `pk issue set <ID> --priority N` | `linear_updateIssue` (`priority`) |
+| Hard dependency — ID2 blocks ID | `pk issue relate <ID> --blocked-by <ID2> [--why "…"]` | `linear_createIssueRelation` (`type: blocks`) |
+| Comment | `pk issue comment <ID> "<body>" \| --body-file F \| -` | `linear_createComment` |
+| List the team's projects (lanes) with state and focus tier | `pk project list [--all] [--json]` | `linear_getProjects` |
+| Set a lane's focus tier (project priority) | `pk focus <LANE> A\|B\|C\|none [--swap]` | `linear_updateProject` (`priority`) |
+| What's next / board state / runway | `pk next` · `pk status` · `pk portfolio` | — (no MCP equivalent; always `pk`) |
+| Workflow states, labels, members, cycles, initiatives, projects — create or read anything above the issue level | `pk gql '<query>' ['<variables JSON>']` (stdin: `pk gql - '<vars>'`); mutations are guarded the same way | `linear_getWorkflowStates` · `linear_createTeamLabel` · `linear_getInitiatives` · `linear_createInitiative` · `linear_updateInitiative` · `linear_createProject` · `linear_updateProject` · `linear_getProjectById` |
 
-> Per `.claude/rules/pipekit-tooling.md`, this server **must** be declared in the committed `.mcp.json` (not the per-path block of `~/.claude.json`) so it's visible inside the `pk branch` worktrees where `/work` and the interactive skills run.
+`pk gql` recipes the skills lean on (team id from `pk config "Team ID"`):
 
-**Note on the daily loop:** `pk ship` / `pk done` / `pk promote` do **not** use MCP — they hit Linear's REST API directly via `LINEAR_API_KEY`. Only the interactive skills above use `mcp__linear-server__*`.
+```graphql
+# states of the team                 pk gql '{ team(id:"<TEAM>") { states { nodes { id name type } } } }'
+# labels of the team                 pk gql '{ team(id:"<TEAM>") { labels { nodes { id name parent { name } } } } }'
+# initiatives                        pk gql '{ initiatives(first:50) { nodes { id name status projects { nodes { id name state } } } } }'   # Initiative.status is an enum (Planned|Active|Completed); Project.state the string pk status reads
+# create a project, then link it to its initiative (ProjectCreateInput has no initiativeId)
+pk gql 'mutation($in: ProjectCreateInput!) { projectCreate(input:$in) { success project { id name } } }' \
+       '{"in":{"teamIds":["<TEAM>"],"name":"I5.P3. Lanes","description":"…"}}'
+pk gql 'mutation($in: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input:$in) { success } }' \
+       '{"in":{"initiativeId":"<INIT>","projectId":"<PROJ>"}}'
+# a label (groups: pass parentId)       pk gql 'mutation($in: IssueLabelCreateInput!) { issueLabelCreate(input:$in) { success issueLabel { id } } }' '{"in":{"teamId":"<TEAM>","name":"Area: Billing","parentId":"<GROUP>"}}'
+# a non-blocking relation                pk gql 'mutation($in: IssueRelationCreateInput!) { issueRelationCreate(input:$in) { success } }' '{"in":{"issueId":"<A>","relatedIssueId":"<B>","type":"duplicate"}}'
+```
+Names above are checked against Linear's published SDK schema (2026-10-10): `IssueRelationType` is `blocks | duplicate | related | similar`; `IssueUpdateInput` carries `addedLabelIds` / `removedLabelIds` / `projectMilestoneId`; `initiativeToProjectDelete(id:)` unlinks.
+
+> **`getIssueById` (mcp) is a full-content read — sticky and expensive.** It returns the description **and the entire comment thread**, which then rides every subsequent turn as input tokens. On the `api` route the problem does not arise: `pk issue show` is field-scoped with comments off by default. Either way, run a batch of many reads or writes in **one** subagent, serially, so the payloads stay out of the main thread.
+
+> **`mcp` route — not the official remote.** The skills' tool names assume `@tacticlaunch/mcp-linear` (camelCase, `linear_` prefix). Linear's first-party `mcp.linear.app` server uses **snake_case** names (`list_issues`, `get_issue`, `update_issue`, `create_comment`) and a leaner ~21-tool surface that **lacks** the initiative-CRUD, label-create and issue-relation tools; a project on it must remap the right-hand column. Per `.claude/rules/pipekit-tooling.md`, the server **must** be declared in the committed `.mcp.json` so it is visible inside `pk branch` worktrees.
+
+**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=op-references.conf -- pk …`); falling back to the MCP is not the fix.
 
 ### API gotchas (incident-anchored; read before any batch board mutation)
 
@@ -46,13 +71,13 @@ All verified live during the SiteLine board reorg, 2026-08-02.
 - **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** An issue "added to a project" while in Triage won't render, and the project reads short. Triage it out first. (Anchor: SiteLine PIPER-559.)
 - **View preferences accept unknown keys silently.** `viewPreferencesCreate(input: {type: organization, viewType: project|customView, projectId|customViewId, preferences: {"issueGrouping": "none", "viewOrdering": "manual"}})` does work — keys come from the typed `ViewPreferencesValues` type but values are free-form strings, so a wrong one stores fine and does nothing. Verify by reading back the resolved `CustomView.viewPreferencesValues` oracle; **project-scoped rows have no API read surface** — check one in the browser. Org-scoped rows act as the shared default and personal in-app tweaks overlay them.
 
-**MCP gaps — fall back to GraphQL:**
+**Long-tail operations — `pk gql` on the `api` route, and the gaps in the `mcp` route:**
 
-- **`archiveInitiative` returns "Entity not found"** for a valid initiative. GraphQL `initiativeArchive` succeeds.
-- **There is no MCP label-delete tool.** Deletion is GraphQL `issueLabelDelete(id:)` only.
+- **`archiveInitiative` (mcp) returns "Entity not found"** for a valid initiative. GraphQL `initiativeArchive` succeeds (`pk gql`).
+- **There is no MCP label-delete tool.** Deletion is GraphQL `issueLabelDelete(id:)` only (`pk gql`).
 - **`updateProject` to any paused/backlog-type status 500s** on plan-tier workspaces. `started` / `planned` / `completed` are safe.
-- Label **groups** create fine via MCP (a parent group plus children works).
-- `linear_createSavedView` uses the undocumented internal **`filterData` DSL** — read an existing view first and copy its shape.
+- Label **groups** create fine on either route (a parent group plus children works; `issueLabelCreate` with `parentId`).
+- Saved views (`linear_createSavedView` / `customViewCreate`) use the undocumented internal **`filterData` DSL** — read an existing view first and copy its shape.
 
 **Query complexity:** Linear rejects queries scoring over **10k**. A nested all-projects × all-issues read (~100 × 50) scores ~11k and fails outright. Filter server-side — e.g. the wrong-closure sweep is `projects(filter:{status:{type:{in:["completed","canceled"]}}})` each with `issues(filter:{state:{type:{nin:["completed","canceled"]}}})`, never the unfiltered cross-product.
 
@@ -64,16 +89,16 @@ All verified live during the SiteLine board reorg, 2026-08-02.
 
 Linear meters requests **per User**, not per key or per process: its docs state that requests by the same user share quota across different API keys. An API key gets **2,500 req/hr**, an OAuth app 5,000, refilled as a **leaky bucket** at `LIMIT/PERIOD` (~42 req/min on a key). Complexity is metered separately (object 1 pt, property 0.1, a connection multiplies its children by the pagination arg; the 10k single-query cap above), so one large page is one request but not a cheap one.
 
-Why this bites Pipekit specifically: **every Claude session spawns its own `mcp-linear` server, 1:1**, and every session is the same user. Worktree workers, the parent-repo session, and a board sweep all draw from one bucket. Anchor: SiteLine 2026-08-31 — three concurrent `/linear-hygiene` sweeps paging 250 exhausted the quota, blocked the board for ~1h, and starved four active worktree workers.
+Why this bites Pipekit specifically: **every Claude session is the same user** — `pk`, `pk gql`, a session's `mcp-linear` server if it runs one, and the claude.ai Linear connector all draw from one bucket. Worktree workers, the parent-repo session, and a board sweep all draw from one bucket. Anchor: SiteLine 2026-08-31 — three concurrent `/linear-hygiene` sweeps paging 250 exhausted the quota, blocked the board for ~1h, and starved four active worktree workers.
 
 Rules, for any skill or session that reads or writes the board:
 
-- **Never fan out parallel subagents at `linear-server`.** One subagent, serial calls. Batch writes go one at a time.
+- **Never fan out parallel subagents at Linear** — `pk`, `pk gql` or `linear-server`, same bucket. One subagent, serial calls. Batch writes go one at a time.
 - **Page in chunks of ~50**, not 250+.
-- **On rate-limit: wait once, retry once, then STOP and report partial.** Retry loops re-arm the MCP server's flat 60s backoff indefinitely — at ~42 req/min refill, 60s buys back ~42 requests, so a big burst resuming on that timer overdraws instantly and never drains.
+- **On rate-limit: wait once, retry once, then STOP and report partial.** On the `mcp` route retry loops re-arm the server's flat 60s backoff indefinitely — at ~42 req/min refill, 60s buys back ~42 requests, so a big burst resuming on that timer overdraws instantly and never drains.
 - **The error is HTTP 400 with a `RATELIMITED` code, not 429** — a 429 check misses it.
-- **`isBlocked: false` plus one successful small call is NOT proof the quota recovered.** `linear_getRateLimitStatus` reports only the local cooldown, never remaining quota (Linear's `X-RateLimit-Requests-Remaining` header is not surfaced). It proves "not blocked this instant" only.
-- **Run whole-board sweeps when no `/work` sessions are live.** Check with `pgrep -f 'bin/mcp-linear' | wc -l`.
+- **`isBlocked: false` plus one successful small call is NOT proof the quota recovered.** `linear_getRateLimitStatus` (mcp) reports only the local cooldown, never remaining quota (Linear's `X-RateLimit-Requests-Remaining` header is not surfaced). It proves "not blocked this instant" only.
+- **Run whole-board sweeps when no `/work` sessions are live.** Check with `pk sessions` (and `pgrep -f 'bin/mcp-linear' | wc -l` on the `mcp` route).
 
 ---
 
@@ -295,7 +320,7 @@ The issue prefix is defined in your project's `method.config.md`.
 
 **Why it lives here and nowhere else.** The priority-floor table below used to live only inside `/linear-hygiene` Phase 3, so no filer could cite it without a second copy, and every filer said "file a follow-up issue" with no contract at all. The result was structural: follow-ups landed with no project, no `Area:`, priority 0 and state Triage — every drift class the sweep exists to catch — then accumulated until the next sweep. (Anchor: SiteLine, 2026-09-20 — assessing a third-party planning tool for the intake problem and finding the inflow was our own filers.)
 
-Fill every field. Create the issue through the project's Linear route (`mcp__linear-server__linear_createIssue`, or the API where the project has ruled that) with everything set **in the one create call** — a second write to fix placement is what re-ranks `sortOrder` (§ API gotchas).
+Fill every field. Create the issue through the project's Linear route (§ Linear transport — `pk issue create` with every flag set, or `linear_createIssue` on the `mcp` route) with everything set **in the one create call** — a second write to fix placement is what re-ranks `sortOrder` (§ API gotchas).
 
 | Field | Rule |
 |---|---|

@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.34.0** — Last updated: 2026-09-02  *(**v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.** On current frontier models `low` / `medium` effort on the session model can cost less per completed task than a smaller model; measure before flipping — the silent-miss rubric still decides the tier. Carries v4.31.0 — five keys for `/repo-security-review`; v4.30.0 — the `Backend` key and its chain are gone.)*
+**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -157,7 +157,7 @@ map 1:1 to projects, you don't need this layer — the initiative surface alread
 | **Sequenced phase labels** | `Roadmap: Phase A`, `Roadmap: Phase B`, `Roadmap: Phase C` |
 | **Continuous pool label** | `Roadmap: Continuous` |
 | **Order label** | `Order: Any` |
-| **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over MCP) |
+| **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over the API) |
 | **`sortOrder` step** | `1000` (gap between adjacent issues; leaves slack to insert without a renumber) |
 
 - **Phase labels come from your own `ROADMAP.md` phase names** — the values above are SiteLine-shaped examples, not a contract.
@@ -330,6 +330,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
 | **Linear API key env var** | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
+| **Linear transport** | `api` \| `mcp` | `api` | Every skill that reads or writes Linear. `api` = `bin/pk` verbs (`pk issue search/show/create/update/set/relate/comment`, `pk project list`, `pk gql` for the long tail — every mutation passes `pk`'s workspace guard, and the key comes from `Linear API key env var`). `mcp` = the Linear MCP server the project registers in `.mcp.json`. Verb table in `sop/Linear_SOP.md § Linear transport`; skills read the value with `pk config "Linear transport" api`. |
 | **Method repo** | git URL | `https://github.com/withpiper/pipekit.git` | `pk doctor` (upstream-staleness check); also overridable via the `METHOD_REPO` env var. Only forks on a non-standard remote need to set this. |
 | **Migration dir** | e.g. `supabase/migrations/` | (none) | `/pr-security-review` (locate migrations to audit); `/spec-preflight` Probe 3.6d (migration data-shape); `scripts/check-migration-drift.sh` + `templates/ci/migration-drift.yml` (v4.18.0 drift detection — no value → clean skip) |
 | **Platform** | `managed-supabase` \| `self-hosted-postgres` \| `none` | `none` | `/spec-preflight` Probe 3.6b — refuses GUC-based prod-safety designs on managed-supabase (handoff #20, verified at WIT-450) |
@@ -349,7 +350,12 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Public security page** | path | (blank) | `/repo-security-review` — public-facing security page refreshed after the review (posture, doc version, any claim the audit couldn't evidence). **Blank → skipped**. |
 | **Security scan host** | hostname | (blank) | `/repo-security-review` — host for live external scans (header grading, Lighthouse). **Blank → live scans skipped and reported `n/a`**, never as a pass. Kept as its own key rather than read from § Environments so a project can scan a host it doesn't promote to. |
 | **Portfolio staleness days** | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
-| **Lane map URL** | artifact URL | (none) | `/lane-map` — published board-map artifact; blank until the project runs `/lane-map` once and publishes it (see `sop/Lane_Map_SOP.md`). One map can serve multiple repos sharing a Linear board — set the same URL in each. |
+| **Runbook path** | path | `engineering/RUNBOOK.md` | The one runbook: `/tpm` writes its `Now` block, `sync-method.sh` writes the `How we run` block, you own the rest (`sop/TPM_SOP.md § The runbook block`). `pk next` reads the block's `agreed` date for the staleness nudge. |
+| **Runbook primary** | relative repo path, or blank | (blank = this repo) | `/tpm` — in a multi-repo portfolio, the repo whose runbook holds the full `Now` block; every other repo's block holds a one-line pointer to it. Set it in the *non*-primary repos (e.g. `../SiteLine`). |
+| **Portfolio repos** | comma-separated relative paths | (blank) | `/tpm` — sibling repos read and written in the same session, each from inside its own directory with its own `method.config.md` and API key (e.g. `../piper`). |
+| **Weekly capacity days** | number | `6` | `/tpm` — the week the capacity arithmetic divides by (`sop/TPM_SOP.md § Capacity`). |
+| **Tier effort days** | `Quick: 0.5, Standard: 2, Heavy: 4` | that | `/tpm` — coarse effort per `tier:*` label; unsized issues are flagged, never guessed. |
+| **Runbook stale days** | integer | `7` | `pk next` — prints `runbook agreed Nd ago → /tpm` once the runbook's agreed date is older than this. |
 
 <!-- Optional (v4.21.0+) — uncomment the row below to stop syncing canonical
      .claude/rules/ files that don't apply to this project. Rules are
@@ -364,6 +370,16 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
      so indentation is what keeps a verbatim copy inert. To opt in, copy the
      row into the table above WITHOUT the leading spaces.
      | **Skip rules** | `pipekit-cmux, pipekit-migrations` | (none — all five rules sync) | `scripts/sync-method.sh` (v4.21.0+) — canonical-rule opt-out; see `.claude/rules/README.md` § Opting out |
+-->
+
+<!-- Optional — the real-API gate for AI extraction calls (`/verify` Step 3.6).
+     Same inert-while-indented convention as above: a verbatim copy must not
+     hand `/verify` a placeholder to execute. To opt in, copy the rows into the
+     table above WITHOUT the leading spaces and replace the example value, or set them in the `Key: value`
+     block form, which an `AI extraction paths` alternation (`a|b`) needs: the
+     table form splits on `|`. Projects with no extraction call skip both.
+     | **Real-API harness** | e.g. `npm run harness:quotes` | (blank → Flag check G, never an invented command) | `/verify` Step 3.6 — run against the real API when the diff changes an AI extraction call. Gets the changed files as `PK_AI_CHANGED`. Exit contract: `0` pass; `75` (`EX_TEMPFAIL`) could not run, infrastructure causes only, with a line `real-api-unrun: <cause>` naming one of `server-error`, `rate-limit`, `auth`, `credits`, `network`, `timeout` (the cause is committed in the evidence; nothing else the harness prints is) → Flag check G; any other non-zero, or 75 without a listed cause → ran and failed, NEEDS WORK. A harness that ignores the contract fails closed; it runs under `pipefail`. Written verbatim into the committed `evidence.txt`, so no inline secrets, and no backticks (`pk config` strips them). |
+     | **AI extraction paths** | ERE, e.g. `prompts/ai-quote-import\.md$` | (blank → schema-marker grep only) | `/verify` Step 3.6 — extraction inputs the marker grep cannot see: prompts, schema files kept apart from the call, calls that parse free-text JSON with no schema. |
 -->
 
 ### Example (rs-vault)

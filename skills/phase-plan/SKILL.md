@@ -60,10 +60,14 @@ surface. Order is the prefix number (numeric), never Linear `sortOrder`.
 
 #### Step 1 — Derive current state from Linear
 
-1. Fetch initiatives + their projects (with `status`/`state`). The current initiative/sub-phase fall out of
-   the rule above. Cross-check with `pk status` (its Roadmap section shows the same walk).
-2. Fetch the current project's issues from Linear, grouped by status (On Deck, Needs Spec, Specced,
-   Approved, Building, UAT, Done).
+1. Fetch initiatives + their projects (with `status`/`state`) via the project's Linear route —
+   `pk gql '{ initiatives(first:50) { nodes { id name status projects(first:50) { nodes { id name state } } } } }'`
+   (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there). The
+   current initiative/sub-phase fall out of the rule above. Cross-check with `pk status` (its Roadmap section
+   shows the same walk).
+2. Fetch the current project's issues from Linear — `pk issue search "" --project <I{N}.P{N}> --json` (≤50 a
+   page) — grouped by status (On Deck, Needs Spec, Specced, Approved, Building, UAT, Done). `pk next` prints
+   the same grouping for the current lane.
 3. Report the derived position:
 
 ```
@@ -82,9 +86,9 @@ If the current project's issues are **all Done**, this sub-phase is complete —
 The project membership *is* the batch (set at `/roadmap-create`). This skill moves that batch into the
 spec pipeline. On confirmation:
 
-1. Move the current project's `On Deck` issues → `Needs Spec` via `mcp__linear-server__linear_updateIssue`
-   (`stateId` from `method.config.md`). Skip issues blocked by an unfinished issue outside the project.
-2. Post a Linear comment on each: `"Promoted in {i{N}. initiative} / {P{N}. sub-phase}. Ready for /light-spec."`
+1. Move the current project's `On Deck` issues → `Needs Spec` via `pk issue update <ID> --state "Needs Spec"`
+   (state by name — `pk` resolves the id), one issue at a time. Skip issues blocked by an unfinished issue outside the project.
+2. Post a Linear comment on each: `pk issue comment <ID> "Promoted in {i{N}. initiative} / {P{N}. sub-phase}. Ready for /light-spec."`
 3. Do **not** write any file. The Linear state change *is* the record.
 
 #### Step 3 — Summary
@@ -108,13 +112,13 @@ Next steps:
 **This is the operation that keeps the board walkable.** Uncut work sits project-less with an `Area:` label; the `i{N}.`→`P{N}.` walk cannot see it. Cutting turns a slice of that backlog into a completable lane the walk *can* see. It is a deliberate planning act — always propose the full lane and get confirmation before writing.
 
 1. **Pick the target initiative** — normally the current one. Read `method.config.md § Initiative Surface → Area Labels` for the Area label set and `Lane size` (default `3-8`).
-2. **Survey the candidates.** Fetch open project-less issues, filtered to one `Area:` label, minimal fields only. Propose a slice that is **coherent** (one theme a human would call a batch) and **completable** (the lane can be called done when these are done). If a natural batch exceeds the `Lane size` upper bound, cut two lanes rather than one big one — an oversized lane is a pool with a lane's name.
+2. **Survey the candidates.** Fetch open project-less issues, filtered to one `Area:` label, minimal fields only — `pk gql '{ issues(first:50, filter:{ team:{ id:{ eq:"<TEAM>" } }, project:{ null:true }, labels:{ name:{ eq:"Area: <area>" } }, state:{ type:{ nin:["completed","canceled"] } } }) { nodes { id identifier title priority state { name } } pageInfo { hasNextPage endCursor } } }'`, paging with `after` (team id from `pk config "Team ID"`). Propose a slice that is **coherent** (one theme a human would call a batch) and **completable** (the lane can be called done when these are done). If a natural batch exceeds the `Lane size` upper bound, cut two lanes rather than one big one — an oversized lane is a pool with a lane's name.
 3. **Name it `I{N}.P{M}.`** where `{N}` is the initiative number and `{M}` is the next free project number in that initiative. Numbers are never reused within an initiative, and gaps are fine.
 4. **Write the serialization notes into `content`, not `description`.** Linear's project `description` **hard-caps at 255 characters**; long notes silently belong in the markdown `content` body. Keep `description` a trimmed one-line summary. Record which issues must run in sequence (and why — usually shared files or migration ordering) and which are parallel-safe. Real intra-lane ordering is `blockedBy` relations; the notes explain them, they don't replace them.
 5. **Stamp the run order** on each issue's `sortOrder`, ascending in intended execution order, stepped (`-2,000,000` upward in `1000` steps leaves room to insert). The project view under *Manual* ordering then reads top-to-bottom as the run sequence.
    - **Display settings are settable via the API** — `viewPreferencesCreate(input: {type: organization, viewType: project, projectId: …, preferences: {"issueGrouping": "none", "viewOrdering": "manual"}})`. A wrong key or value **stores fine and silently does nothing**, and project-scoped rows have no API read surface, so verify one in the browser after the first use. See `sop/Linear_SOP.md` § API gotchas.
    - **The stamp is authoritative for queued issues only.** A workflow-state change re-ranks `sortOrder`, so once an issue enters the pipeline its position is its state, not its stamp. Don't re-stamp in-flight work to "fix" the order.
-6. **Create and populate.** `linear_createProject` (with `initiativeId`, and `state`: `started` if this is the lane you're starting now, else `planned`), then one `linear_updateIssue` per member setting `projectId` **and** `sortOrder` together, and verify the echo.
+6. **Create and populate.** Create the lane — `pk gql 'mutation($in: ProjectCreateInput!) { projectCreate(input:$in) { success project { id name } } }' '{"in":{"teamIds":["<TEAM>"],"name":"I{N}.P{M}. <label>","description":"<one line>","content":"<serialization notes>"}}'` — then, with the `project.id` the create returned, link it to the initiative (`ProjectCreateInput` has no `initiativeId` and no `state`): `pk gql 'mutation($in: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input:$in) { success } }' '{"in":{"initiativeId":"<INIT>","projectId":"<PROJ>"}}'` and set its status: `pk gql 'mutation($id: String!, $in: ProjectUpdateInput!) { projectUpdate(id:$id, input:$in) { success } }' '{"id":"<PROJ>","in":{"statusId":"<STATUS>"}}'` (`started`-type status if this is the lane you're starting now, else `planned`; ids from `pk gql '{ organization { projectStatuses { id name type } } }'`) — then, **one member at a time, serially**: `pk issue update <ID> --project I{N}.P{M} --sort-order <stamp>` — project and run-order stamp in the **one** write (a separate state or project write would re-rank `sortOrder`; `sop/Linear_SOP.md § API gotchas`), and verify the echoed `sortOrder` line.
    - **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** Triage them out first, or the lane will render short and read as half-empty. (Anchor: SiteLine PIPER-559.)
    - **Leave `Area:` labels alone** — they persist through the cut. That's what keeps the backlog views honest.
 7. **Sanity-gate before the first write.** Count the candidate set, then re-survey it fresh and compare (tolerance ±5). A batch board mutation that starts from a stale survey is very hard to unwind.
@@ -137,11 +141,11 @@ Close the current sub-phase and open the next. Order is by `P{N}.`, then by `i{N
 
 1. **Confirm the current sub-phase is done** (all its issues Done/Canceled). If not, warn and require
    explicit confirmation to advance anyway.
-2. Set the current project's state → `completed` (`linear_updateProject`).
+2. Set the current project's state → `completed` — `pk gql 'mutation($id: String!, $in: ProjectUpdateInput!) { projectUpdate(id:$id, input:$in) { success project { name state } } }' '{"id":"<PROJECT-ID>","in":{"state":"completed"}}'`.
 3. **Find the next live sub-phase:**
-   - Next `P{N}.` project in the same initiative (by number) that isn't completed → set it `started`.
+   - Next `P{N}.` project in the same initiative (by number) that isn't completed → set it `started` (same `projectUpdate`).
    - If none remain, the **initiative** is done: set the current initiative `Completed`, set the next `i{N}.`
-     initiative `Active`, and `started` on its first `P{N}.` project.
+     initiative `Active` (`pk gql 'mutation($id: String!, $in: InitiativeUpdateInput!) { initiativeUpdate(id:$id, input:$in) { success initiative { name status } } }' '{"id":"<INIT-ID>","in":{"status":"Completed"}}'`), and `started` on its first `P{N}.` project.
 4. Run the default flow (Steps 1–3) on the newly-current sub-phase to promote its issues.
 5. Brief retrospective:
 
@@ -184,8 +188,8 @@ Alerts:
 Move issues between projects in Linear (the membership *is* the batch):
 
 1. Show the current project's issues + adjacent projects' On Deck issues.
-2. **Add:** reassign an issue's `projectId` to the current project (`linear_updateIssue`), then promote.
-3. **Remove:** reassign an issue out to a later `P{N}.` project (only if not yet started).
+2. **Add:** reassign the issue to the current project (`pk issue update <ID> --project <current I{N}.P{N}>`), then promote.
+3. **Remove:** reassign an issue out to a later `P{N}.` project (`pk issue update <ID> --project <later I{N}.P{N}>`; only if not yet started).
 4. Validate dependencies after the move (no issue left blocked by one outside its phase).
 
 ---

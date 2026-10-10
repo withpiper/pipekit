@@ -25,9 +25,13 @@ Issues created by `/brainstorm` land in Triage or Ideas with no disposition. The
 ### Phase 1 — Fetch Undisposed Issues
 
 1. Read `method.config.md` for team and state IDs
-2. Fetch issues needing disposition via `mcp__linear-server__linear_searchIssues`:
-   - State: Triage or Ideas
-   - Filter out issues that already have a `Parked` label (already dispositioned as "Later")
+2. Fetch issues needing disposition via the project's Linear route (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of each call is listed there). It is a state sweep, not a title search, so it is a `pk gql` page — and run the whole review's Linear traffic in one subagent, serially (`sop/Linear_SOP.md § Rate limits`):
+   ```bash
+   pk gql 'query($team: String!, $after: String) { issues(first:50, after:$after, filter:{ team:{ name:{ eq:$team } }, state:{ name:{ in:["Triage","Ideas"] } } }) { nodes { identifier title createdAt priority project { name } labels { nodes { name } } } pageInfo { hasNextPage endCursor } } }' '{"team":"{team from method.config.md}","after":null}'
+   ```
+   - State: Triage or Ideas (the `state.name in` filter above)
+   - Filter out issues that already have a `Parked` label (already dispositioned as "Later") — drop any node whose `labels` include `Parked`
+   - Follow `endCursor` while `hasNextPage` is true
 3. Sort by creation date (oldest first)
 
 ### Phase 2 — Present Dashboard
@@ -49,7 +53,7 @@ Review each? Or filter by project/age?
 
 For each issue, present the analysis and force a decision:
 
-1. **Read the issue** via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`
+1. **Read the issue** — `pk issue show <ID> --comments` for the description and thread, plus its relations (dependencies, duplicates — `pk issue show` carries none) via `pk gql '{ issue(id:"<ID>") { relations(first:50) { nodes { type relatedIssue { identifier state { name } } } } inverseRelations(first:50) { nodes { type issue { identifier state { name } } } } } }'`
 2. **Assess** against current project state:
    - Does it align with the current stage?
    - Are its dependencies met or close to met?
@@ -80,20 +84,20 @@ Disposition:
 **Now:**
 1. Ask which phase/stage
 2. If the brainstorm is broad, run REDUCE: _"What's the smallest useful version? What can wait?"_
-3. Update description with `## v1 Scope` if reduced
+3. Update description with `## v1 Scope` if reduced — `pk issue update <ID> --description-file <F>` (the write replaces the whole description, so send existing + new section)
 4. Route by complexity tier (matches `/brainstorm` tier mapping):
-   - **Low → Quick:** move to "Approved" — ready for `pk branch {issue}` + `/work {issue}` (no spec)
-   - **Medium → Standard:** move to "Needs Spec" — ready for `/light-spec {issue}`
-   - **High → Heavy:** move to "Needs Spec" — `/light-spec` mandatory; `/work` then plans inline with forced `--deep` grounding on the native backend (the default)
-5. Set priority (ask user)
-6. Assign to correct project/initiative
+   - **Low → Quick:** move to "Approved" (`pk issue update <ID> --state Approved`) — ready for `pk branch {issue}` + `/work {issue}` (no spec)
+   - **Medium → Standard:** move to "Needs Spec" (`pk issue update <ID> --state "Needs Spec"`) — ready for `/light-spec {issue}`
+   - **High → Heavy:** move to "Needs Spec" (same call) — `/light-spec` mandatory; `/work` then plans inline with forced `--deep` grounding on the native backend (the default)
+5. Set priority (ask user) — `pk issue set <ID> --priority N`
+6. Assign to correct project/initiative — `pk issue update <ID> --project <I{N}.P{N}>`
 
 **Later:**
 1. Ask for **trigger type** from the grammar (same table as `/brainstorm` Phase 2 HOLD — see that skill for the full list). In short: `{ISSUE-ID} ships` | `Stage {N} UAT passes` | `Initiative {N} ships` | `date: YYYY-MM-DD` | `manual`
 2. Ask for target initiative/stage
-3. Move to "Ideas" or "Future Phases"
-4. Add `Parked` label (create it if missing via `mcp__linear-server__linear_createTeamLabel`, color `#EAB308`)
-5. Post the Linear comment in the **exact parseable format** — `/roadmap-review` greps for this prefix:
+3. Move to "Ideas" or "Future Phases" — `pk issue update <ID> --state Ideas` / `--state "Future Phases"`
+4. Add `Parked` label — `pk issue update <ID> --add-label Parked` (same call as the state move). Create it if missing, color `#EAB308`: `pk gql 'mutation($in: IssueLabelCreateInput!) { issueLabelCreate(input:$in) { success issueLabel { id name } } }' '{"in":{"teamId":"<TEAM>","name":"Parked","color":"#EAB308"}}'` (team id from `pk config "Team ID"`)
+5. Post the Linear comment — `pk issue comment <ID> "<body>"` — in the **exact parseable format** — `/roadmap-review` greps for this prefix:
    ```
    **Parked:** Revisit when {trigger}. Target: {phase/stage}.
    ```
@@ -101,14 +105,14 @@ Disposition:
 
 **Kill:**
 1. Ask for rationale
-2. Move to "Canceled"
-3. Post Linear comment: `"Killed: {rationale}"`
+2. Move to "Canceled" — `pk issue update <ID> --state Canceled`
+3. Post Linear comment — `pk issue comment <ID> "Killed: {rationale}"`
 
 **Merge:**
 1. Ask which issue to merge into
-2. Post the brainstorm content as a comment on the target issue
-3. Move this issue to "Duplicate"
-4. Set `duplicate of` relation
+2. Post the brainstorm content as a comment on the target issue — `pk issue comment <TARGET-ID> --body-file <F>`
+3. Move this issue to "Duplicate" — `pk issue update <ID> --state Duplicate`
+4. Set `duplicate of` relation — `pk issue relate` writes only `blocks`, so: `pk gql 'mutation { issueRelationCreate(input:{ issueId:"<ID>", relatedIssueId:"<TARGET-ID>", type: duplicate }) { success } }'`
 
 ### Phase 5 — Summary
 

@@ -51,7 +51,7 @@ pk next → pk branch → /work → /verify ──(Flag check F)──► pk shi
 | **Integration branch** | The base the feature diffs against | `dev` |
 | **Project display name** | Report header + comment | (project name) |
 
-**Linear is best-effort and advisory.** Resolve the feature issue, post a comment with the verdict, and **do not** change its workflow state — `pk ship` owns the Building → UAT transition. Look up the issue via the project's Linear MCP; if Linear is unreachable, write the report anyway and tell the user to paste the verdict. Never hardcode Linear UUIDs.
+**Linear is best-effort and advisory.** Resolve the feature issue, post a comment with the verdict, and **do not** change its workflow state — `pk ship` owns the Building → UAT transition. Look up the issue via the project's Linear route — `pk issue show "$ISSUE" --fields id,title,state,description` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there); if Linear is unreachable, write the report anyway and tell the user to paste the verdict. Never hardcode Linear UUIDs.
 
 ## Step 0 — Load the category-definitions file (gate)
 
@@ -91,7 +91,7 @@ Gather, as the classification input:
 - the **diff hunks** for those files (so the classifier reads the actual code, not just paths),
 - if available, the Linear issue's **Scope / Dependencies** (supplementary — the diff is authoritative).
 
-If `ISSUE` is set and Linear is reachable, post a comment via the project's Linear MCP — `mcp__linear-server__linear_createComment` (the camelCase `@tacticlaunch/mcp-linear` surface): `"Starting security gate review — {YYYY-MM-DD}"`. **Do not** call any state-changing tool. If `ISSUE` can't be resolved, proceed anyway and skip the comment.
+If `ISSUE` is set and Linear is reachable, post a comment — `pk issue comment "$ISSUE" "Starting security gate review — {YYYY-MM-DD}"`. **Do not** change the issue's state. If `ISSUE` can't be resolved, proceed anyway and skip the comment.
 
 Print one line:
 
@@ -203,7 +203,7 @@ printf '# secgate-complete\n\nissue: %s\nstatus: PASS\nsha: %s\ncategories: %s\n
 
 ## Step 6 — Post the Linear comment + present to user
 
-- If `ISSUE` resolved and Linear reachable: post a comment — the **Summary** + **Classification** blocks + the report path. **Do not** change state.
+- If `ISSUE` resolved and Linear reachable: post a comment — the **Summary** + **Classification** blocks + the report path, piped into `pk issue comment "$ISSUE" -`. **Do not** change state.
 - Present to the user: overall status, matched categories, confirmed findings by severity, and the explicit next-action — `Clear to ship` if PASS, or `Hold — close {n} finding(s) before pk ship` if FAIL.
 
 ## Severity rubric

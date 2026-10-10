@@ -9,9 +9,10 @@
 #     by sync at all, declared by the project, not by pipekit)
 #
 # Add a name here only when the skill's value is project-specific curation
-# that a normal resync would destroy — see sop/Lane_Map_SOP.md for the
-# worked example and sop/Skills_SOP.md § Syncing Portable Skills for the
-# mechanism. Most skills should stay normally portable; this list should
-# stay short.
-
-lane-map
+# that a normal resync would destroy — see sop/Skills_SOP.md § Syncing
+# Portable Skills for the mechanism. Most skills should stay normally
+# portable; this list should stay short.
+#
+# Retiring an entry: remove it here AND add it to RETIRED_SKILLS in
+# scripts/sync-method.sh, so a consumer's scaffolded copy is never resynced
+# over or flagged as missing upstream. (lane-map retired this way in v5.0.0.)

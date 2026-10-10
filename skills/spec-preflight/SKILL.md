@@ -36,12 +36,12 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 
 | Source | Tool | Purpose |
 |--------|------|---------|
-| Linear issue body | `mcp__linear-server__linear_getIssueById` with `includeRelations: true` | Spec body + status + blocked_by |
+| Linear issue body | `pk issue show PROJ-XXX --fields id,title,state,description --comments`, plus the `pk gql` blocker read in Step 1 | Spec body + status + blocked_by |
 | File paths from spec | `Read` or `Glob` | Confirm cited files exist |
 | Line ranges from spec | `Read` with `offset`/`limit` | Confirm line citations resolve to real content |
 | Symbol/heading refs from spec | `Grep` | Confirm cited symbols/headings exist in the cited files |
-| Linear status (re-fetched) | `mcp__linear-server__linear_getIssueById` | Compare current status against spec body's claim |
-| Each `blocked_by` issue | `mcp__linear-server__linear_getIssueById` | Confirm dependency claims of "Done" |
+| Linear status (re-fetched) | `pk issue show PROJ-XXX --fields id,state` | Compare current status against spec body's claim |
+| Each `blocked_by` issue | `pk issue show <ID> --fields id,state` | Confirm dependency claims of "Done" |
 | `Strategy docs path` (from `method.config.md`) | `Glob` + `Read` | Probe 3.6a — canonical-doc cross-check (#21) |
 | `Platform` (from `method.config.md`) | none — heuristic match against spec body | Probe 3.6b — platform-capability check (#20) |
 | `package.json` + lockfile (root + workspace pkgs) | `Read` + `Grep` | Probe 3.6c — tooling availability (#22) |
@@ -51,12 +51,18 @@ For Quick-tier issues that skip agent review entirely, this skill is the only au
 
 ### Step 1 — Fetch the issue
 
-Call `mcp__linear-server__linear_getIssueById` with `id: PROJ-XXX` and `includeRelations: true`. Capture:
+Read the issue via the project's Linear route — `pk issue show PROJ-XXX --fields id,title,state,description --comments` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there) — then its blockers:
+
+```bash
+pk gql 'query($id: String!) { issue(id: $id) { inverseRelations(first: 50) { nodes { type issue { identifier state { name } } } } } }' '{"id":"PROJ-XXX"}'
+```
+
+Keep the `inverseRelations` nodes whose `type` is `blocks` — each one's `issue` blocks PROJ-XXX (the direction `bin/pk` itself reads for its blocked-by annotation). Capture:
 
 - `title`, `identifier`
 - Full `description` (the spec body)
 - Current `state.name` (e.g., `Approved`, `Specced`, `Building`)
-- `relations` filtered to `blocked_by` (each carries an issue identifier and its state)
+- The `blocked_by` list from the blocker read (each carries an issue identifier and its state)
 
 If the issue isn't found or has no description: stop and report `"PROJ-XXX has no spec body. Run /light-spec first."`. Do not proceed to checks.
 
@@ -67,7 +73,7 @@ Walk the spec body and bucket claims into four categories. Use these heuristics 
 1. **File paths.** Any backtick-quoted token containing `/` or a file extension (e.g., `` `supabase/config.toml` ``, `` `src/lib/auth.ts` ``). Treat absolute paths and project-relative paths the same way. Strip surrounding punctuation.
 2. **Code citations (line + symbol).** Line forms: `line N of <file>`, `lines N-M of <file>`, `<file>:N`, `<file>:N-M` — capture the file token and line range. Symbol forms (the preferred citation style, v4.23.0+ — `/light-spec` now emits path + symbol because line numbers rot fastest): `` `<file>` → `<symbol>` ``, `<symbol>() in <file>`, a backticked symbol and backticked file named in the same sentence, and `<file> § <heading>` for markdown targets — capture the file token and the symbol/heading text.
 3. **Linear status claim.** A line in the spec body of the form `Status: <name>` (typical Light Spec metadata). Capture the stated status.
-4. **Dependency claims.** Cross-references to other Linear issues (`PROJ-NN`) inside §Dependencies, §Blocked by, or in narrative prose like *"blocked by PROJ-42 (Done)"*. The blocker list also comes from `relations.blocked_by` in Step 1 — combine both sources, dedupe by identifier.
+4. **Dependency claims.** Cross-references to other Linear issues (`PROJ-NN`) inside §Dependencies, §Blocked by, or in narrative prose like *"blocked by PROJ-42 (Done)"*. The blocker list also comes from the Step 1 blocker read — combine both sources, dedupe by identifier.
 
 If a category yields zero claims, that's fine — record it as `n/a` in the verdict, not a failure.
 
@@ -113,13 +119,13 @@ A symbol found nowhere is a divergence (`✗`, REVISE). A moved symbol is `⚠` 
 
 #### 3c — Linear status
 
-Re-fetch the issue (or reuse Step 1's payload if still in scope). Compare `state.name` to the spec body's `Status:` line. Record `match` or `mismatch (spec says X, actual Y)`. The spec body claim is a documentation artifact, not the source of truth — Linear is. The point is to surface drift so the human knows the spec body is stale.
+Re-fetch the issue's state (`pk issue show PROJ-XXX --fields id,state`, or reuse Step 1's payload if still in scope). Compare `state.name` to the spec body's `Status:` line. Record `match` or `mismatch (spec says X, actual Y)`. The spec body claim is a documentation artifact, not the source of truth — Linear is. The point is to surface drift so the human knows the spec body is stale.
 
 #### 3d — Dependencies
 
-For each `blocked_by` identifier (from `relations` and from any narrative claims in Step 2.5), call `mcp__linear-server__linear_getIssueById` and read `state.name`. Record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `pk branch` / `/work` would also catch — surfacing it pre-flight saves a round trip.
+For each `blocked_by` identifier (from the Step 1 blocker read and from any narrative claims in Step 2.5), read its state — `pk issue show <ID> --fields id,state` — and record `Done` / `<other>`. The pass criterion is "every blocker is Done"; anything else is a real gate failure that `pk branch` / `/work` would also catch — surfacing it pre-flight saves a round trip.
 
-If the Linear MCP server times out or is unavailable on any individual fetch: record that specific dependency as `unverified — Linear API timeout` and continue. Do not fail the whole verdict on infrastructure flake. (See Graceful Degradation below.)
+If the Linear route times out or is unavailable on any individual fetch (`pk` surfaces the transport error rather than a not-found): record that specific dependency as `unverified — Linear API timeout` and continue. Do not fail the whole verdict on infrastructure flake. (See Graceful Degradation below.)
 
 ### Step 3.6 — Project signal probes
 
@@ -294,8 +300,8 @@ These rules are explicit so the skill stays useful when infrastructure is partia
 
 | Condition | Behavior |
 |-----------|----------|
-| Linear MCP timeout fetching the main issue | Stop. The skill needs the spec body to do anything else. Report `"Linear API unavailable — re-run later."`. |
-| Linear MCP timeout fetching a blocker | Record that dependency as `⚠ unverified`. Verdict is PASS-eligible if all other categories pass. |
+| Linear route timeout fetching the main issue | Stop. The skill needs the spec body to do anything else. Report `"Linear API unavailable — re-run later."`. |
+| Linear route timeout fetching a blocker | Record that dependency as `⚠ unverified`. Verdict is PASS-eligible if all other categories pass. |
 | File doesn't exist | Real divergence. Record `✗`. Triggers REVISE. Not graceful — file-presence is verifiable without infrastructure. |
 | Line range past EOF | Same as above — `✗`, REVISE. |
 | `Strategy docs path` unset / dir empty | Canonical-docs probe records `n/a`. Not a warning — projects without Strategy docs are valid. |

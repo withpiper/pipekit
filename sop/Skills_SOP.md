@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.** Carries v4.36.0 — the Model Policy roles have data. The PIPER-412 A/B evidence sits under § Pinning models; the reviewer tier decides what ships. Carries v4.34.0 — saved workflows are a synced artifact. `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
+**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — § Key Conventions 3: skills use the project's Linear route (`Linear transport`, `api` default) and never hardcode an MCP tool name; `/tpm` added (user-typed only; rubric in `sop/TPM_SOP.md`), `/lane-map` retired; the scaffold-once mechanism stays without a worked example.** Carries v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.)*
 
 ---
 
@@ -70,7 +70,7 @@ These skills work across any project that follows the method. They read `method.
 | `/repo-security-review` | Periodic **whole-repo** security audit (v4.31.0, renamed from `/security-review` — collided with Claude Code's built-in). Parallel area agents → adversarial verification → evidence-classified score report. Portable **framework**; project audit areas in `resources/repo-security-areas.md` (scaffolded from `templates/repo-security-areas.template.md`). No-op without an areas file. Distinct from `/pr-security-review` (PR-scoped) and `/security-gate` (feature-scoped). | Anytime |
 | `/financial-review` | Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable **framework**; concrete checks live in a per-project checks file (`resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`). No-op on projects without a checks file. | Anytime (domain: finance) |
 | `/skill-index` | Sync skill index after changes | Anytime |
-| `/lane-map` | Renders the current initiative's board as a private web artifact — frontier of run-order heads, one row per lane, optional collision register. **Scaffold-once**: seeded into `.claude/skills/lane-map/` on first sync if absent, never touched again — curation (groupings, collision notes, artifact URL) is project-owned from there. Conventions in `sop/Lane_Map_SOP.md`. | Anytime (board visualization) |
+| `/tpm` | Technical program manager for the board — a working session that agrees what must ship, what can wait and why, across every repo in `§ Portfolio repos`; writes the agreement to Linear (`pk focus`, relations, importance) and the `Now` block of the one runbook (`§ Runbook path`). Runs `/linear-hygiene` first when drift touches the candidates. `--quick` (≤3 questions), `--check` (read-only drift). Rubric in `sop/TPM_SOP.md`. User-typed only. | Anytime (weekly planning); when `pk next` says the runbook is stale |
 | `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
@@ -131,7 +131,7 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 
 1. **Read `method.config.md`** for project-specific values (Linear team, issue prefix, state IDs)
 2. **Read `CLAUDE.md`** for project coding conventions
-3. **Use Linear MCP tools** for issue management (`mcp__linear-server__*`)
+3. **Use the project's Linear route** for issue management — `Linear transport` in `method.config.md` (`api` by default: `pk issue …`, `pk project list`, `pk gql` for the long tail; `mcp`: the project's registered Linear MCP server). Write skill steps as operations ("read the issue and its comments", "create the issue with state, labels and project in one call") and point at the verb table in `sop/Linear_SOP.md § Linear transport`. Never hardcode an MCP tool name in a skill (v5.0.0 — 21 skills did, and a project on the API route needed a full-file override per skill to re-point two lines).
 4. **Dispatch heavy planning + execution through `/work`** (which plans inline and executes on the native-on-Workflow executor, the sole executor as of v4.0.0). Don't spawn ad-hoc execution agents directly from skills — that bypasses Pipekit's execution and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
 
 ### "What's next?" in v2 — `pk next` reads Linear
@@ -278,7 +278,7 @@ A few portable skills carry conventions that must propagate on every sync, paire
 
 The method repo declares which skills get this treatment in its own `.scaffold-once-skills` (one name per line, same format as `.local-skills`) — this is method-repo state, not project state; a consuming project has no manifest of its own to edit. On first scaffold, the sync auto-declares the skill in the project's own `pipekit/.local-skills`, so the "possibly upstream-removed" check above treats it as project-owned from that point on.
 
-**The pattern requires a split file**, so a fix still reaches every project even though the instance file doesn't resync: the portable half (conventions, patterns, gotchas) lives in a normally-synced SOP; the scaffolded skill cites that SOP instead of restating it. `/lane-map` is the worked example — conventions in `sop/Lane_Map_SOP.md`, curation in the scaffolded `.claude/skills/lane-map/SKILL.md`.
+**The pattern requires a split file**, so a fix still reaches every project even though the instance file doesn't resync: the portable half (conventions, patterns, gotchas) lives in a normally-synced SOP; the scaffolded skill cites that SOP instead of restating it. `/lane-map` was the worked example (v4.29.0–v4.38.0: conventions in `sop/Lane_Map_SOP.md`, curation in the scaffolded skill) until v5.0.0 retired it in favour of `/tpm`; the mechanism stays, and a project's existing scaffolded copy is never touched by sync.
 
 Use this sparingly. Most skills should stay normally portable — reach for scaffold-once only when a skill's value is genuinely per-project curation that a normal resync would destroy.
 

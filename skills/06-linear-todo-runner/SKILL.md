@@ -30,14 +30,14 @@ This skill is invoked when the user says:
 ## Prerequisites
 
 - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` should be set to `"1"` in `.claude/settings.json` under `env`
-- Linear MCP server should be connected (`mcp__linear-server__*` tools available)
-- Linear's quota is one shared, per-user bucket and **every worker session spawns its own `mcp-linear` server** — four workers plus the orchestrator all draw from it. Keep each worker's Linear traffic to the state transitions its prompt specifies, and never run a whole-board sweep (`/linear-hygiene`, `/sync-linear`) while workers are live. Rules and anchor in `sop/Linear_SOP.md` § Rate limits.
+- The project's Linear route must be reachable — `pk doctor` passes. Every Linear read and write in this skill goes through that route (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of each call is listed there). If `pk config "Linear transport" api` is `mcp`, the project's registered Linear MCP server must also be connected.
+- Linear's quota is one shared, per-user bucket and **every worker session draws from it** — its `pk` calls, plus its own Linear MCP server on the `mcp` route — so four workers plus the orchestrator all draw from one bucket. Keep each worker's Linear traffic to the state transitions its prompt specifies, and never run a whole-board sweep (`/linear-hygiene`, `/sync-linear`) while workers are live. Rules and anchor in `sop/Linear_SOP.md` § Rate limits.
 - Issues need `## Acceptance Criteria` in their description (issues without AC are skipped)
 - The orchestrator creates one real `git worktree add` per agent before spawning, and does not use the Agent tool's `isolation: "worktree"` for this. That parameter works on current harnesses (verified 2026-09-02 on Claude Code 2.1.258; it was a silent no-op until mid-2026, which is how four "parallel" agents once shared one checkout and discarded each other's work), but it places the worktree under `.claude/worktrees/` on a `worktree-<name>` branch based on `worktree.baseRef` — origin's default branch unless set to `head` — while the runner needs sibling paths, `pk`-convention branch names, and a base it chooses. The `cd` + `pwd` verification in the worker prompt stays the containment mechanism either way. If you cannot run `git worktree add` from the orchestrator, run the queue with `--max-agents 1` (sequential) instead.
 
 ## Linear State IDs
 
-Read all state IDs from your project's `method.config.md` under "Workflow State IDs". The table maps state names (Building, UAT, Done, etc.) to Linear state UUIDs specific to your workspace.
+Read all state IDs from your project's `method.config.md` under "Workflow State IDs". The table maps state names (Building, UAT, Done, etc.) to Linear state UUIDs specific to your workspace. The transitions below pass the state **name** (`pk issue update <ID> --state Building`) and `pk` resolves the id; the table is the reference for which names exist.
 
 ---
 
@@ -45,15 +45,18 @@ Read all state IDs from your project's `method.config.md` under "Workflow State 
 
 ### Phase 1 — Queue Assembly
 
-1. **Fetch candidate issues** from Linear using `mcp__linear-server__linear_searchIssues`:
-   - Primary: `team: "{team from method.config.md}"`, `state: "Approved"`
-   - Overflow: `team: "{team from method.config.md}"`, `state: "{Spec ready state from method.config.md — default Specced; never hardcode, two-state boards use Needs Spec}"`
-   - Apply `--project` or `--cycle` filters if provided
-   - **Paginate**: if `hasNextPage` is true, fetch subsequent pages using the `cursor` parameter until all issues are retrieved
+1. **Fetch candidate issues** from Linear — a state sweep of the team, not a title search, so it is a `pk gql` page:
+   ```bash
+   pk gql 'query($team: String!, $state: String!, $after: String) { issues(first:50, after:$after, filter:{ team:{ name:{ eq:$team } }, state:{ name:{ eq:$state } } }) { nodes { identifier title priority archivedAt project { name } cycle { name } labels { nodes { name } } } pageInfo { hasNextPage endCursor } } }' '{"team":"{team from method.config.md}","state":"Approved","after":null}'
+   ```
+   - Primary: `"state":"Approved"`
+   - Overflow: the same query with `"state":"{Spec ready state from method.config.md — default Specced; never hardcode, two-state boards use Needs Spec}"`
+   - Apply `--project` or `--cycle` filters if provided — add `project:{ name:{ eq:"…" } }` / `cycle:{ name:{ eq:"…" } }` to the filter
+   - **Paginate**: if `pageInfo.hasNextPage` is true, re-run with `after` set to `endCursor` until all issues are retrieved
    - **Filter out archived issues**: skip any issue where `archivedAt` is non-null
 2. **Sort** by priority (P1 Urgent first → P4 Low last), then by cycle assignment (current cycle first)
-3. **Build dependency graph** — for each issue, check `blocked_by` relations via `mcp__linear-server__linear_getIssueById`
-   - **Read the lane's serialization notes first.** On the lanes model, a project (`I{N}.P{N}.`) is a completable lane whose `content` body records which of its issues must run in sequence and why — usually shared files or migration ordering — and which are parallel-safe. `blocked_by` relations remain the machine-readable truth and the filter below still governs, but the notes catch function-level collisions that no relation encodes: two issues with no dependency between them that nonetheless edit the same file. Two workers on those will produce blended diffs even in separate worktrees. Fetch the lane's `content` (not `description` — it caps at 255 chars and won't hold the notes) before scheduling siblings from the same lane concurrently.
+3. **Build dependency graph** — for each issue, read its blockers (`pk issue show` carries no relations, so this is `pk gql`): `pk gql '{ issue(id:"<ID>") { inverseRelations(first:50) { nodes { type issue { identifier state { name type } } } } } }'` — the nodes with `type == "blocks"` are the issue's `blocked_by` set
+   - **Read the lane's serialization notes first.** On the lanes model, a project (`I{N}.P{N}.`) is a completable lane whose `content` body records which of its issues must run in sequence and why — usually shared files or migration ordering — and which are parallel-safe. `blocked_by` relations remain the machine-readable truth and the filter below still governs, but the notes catch function-level collisions that no relation encodes: two issues with no dependency between them that nonetheless edit the same file. Two workers on those will produce blended diffs even in separate worktrees. Fetch the lane's `content` — `pk gql '{ project(id:"<PROJECT-ID>") { content } }'`, project id from `pk project list --json` — (not `description` — it caps at 255 chars and won't hold the notes) before scheduling siblings from the same lane concurrently.
 4. **Filter to ready issues** — only issues whose blockers are ALL closed: Done, Canceled, or any post-merge `In <Env>` state (a merged blocker's code is already on the base branch the worker forks from; "In Progress" and UAT still block — same rule `pk next` applies)
 5. **Apply `--limit`** if provided
 6. **Output** the ordered queue:
@@ -81,7 +84,7 @@ When `--prep` is passed, the runner generates draft acceptance criteria for issu
 
 **For each issue in the queue that does NOT have a `## Acceptance Criteria` section:**
 
-1. Read the full description via `mcp__linear-server__linear_getIssueById`
+1. Read the full description — `pk issue show <ID> --comments`
 2. Analyze the description to extract verifiable criteria from:
    - `## Scope` or `**Scope:**` sections
    - `## What This Covers` sections
@@ -95,7 +98,7 @@ When `--prep` is passed, the runner generates draft acceptance criteria for issu
    - Include a UI/design criterion for any issue with a visual component: "UI uses project design system tokens and components (colors, typography, spacing)"
    - Reference specific POC functions to port if mentioned in the description
    - Keep to 5-10 criteria — enough to define "done", not a full test plan
-4. Post the draft AC as a **Linear comment** on the issue via `mcp__linear-server__linear_createComment`:
+4. Post the draft AC as a **Linear comment** on the issue — write the body to a file, then `pk issue comment <ID> --body-file <F>`:
 
 ```markdown
 ## Draft Acceptance Criteria (generated by runner)
@@ -107,7 +110,7 @@ When `--prep` is passed, the runner generates draft acceptance criteria for issu
 > Review and copy into the issue description under `## Acceptance Criteria` to enable processing.
 ```
 
-5. **Move issue to Approved** via `mcp__linear-server__linear_updateIssue` with `stateId: {Approved state ID from method.config.md}`
+5. **Move issue to Approved** — `pk issue update <ID> --state Approved`
 6. Log the issue: `"PROJ-XXX — draft AC posted, moved to Approved. Review in Linear."`
 
 **Issues that already have `## Acceptance Criteria` are moved to Approved (if not already) and skipped with:** `"PROJ-XXX — AC already present, moved to Approved, ready for queue."`
@@ -122,7 +125,7 @@ PROJ-XXX — {title}
   Approve and write to description? (y/n/edit)
 ```
 
-- **y** — Append the `## Acceptance Criteria` section to the issue description via `mcp__linear-server__linear_updateIssue` (append to existing description, do not overwrite)
+- **y** — Append the `## Acceptance Criteria` section to the issue description: take the current description (from the step-1 read), append the section, write the merged text to a file, then `pk issue update <ID> --description-file <F>` (the write replaces the whole description, so always send existing + appended — never the section alone)
 - **n** — Skip, leave as comment only for manual editing
 - **edit** — Show the draft AC inline, let the user modify, then write the edited version to the description
 
@@ -148,7 +151,7 @@ After prep, stop. Do not continue to Phase 2.
 
 For each issue at the front of the queue (up to max-agents):
 
-1. **Read full description** via `mcp__linear-server__linear_getIssueById`
+1. **Read full description** — `pk issue show <ID> --comments`
 2. **Extract acceptance criteria** — look for `## Acceptance Criteria` section
 3. **If no AC found:** skip the issue, log: `"PROJ-XXX skipped — no acceptance criteria. Add AC in Linear and re-run."`
 4. **Store AC** as the verification checklist for the worker agent
@@ -161,7 +164,7 @@ For each issue at the front of the queue (up to max-agents):
 
 For each issue that passes the AC gate (up to max-agents concurrently):
 
-1. **Move issue to Building** via `mcp__linear-server__linear_updateIssue` with `stateId: {Building state ID from method.config.md}`
+1. **Move issue to Building** — `pk issue update <ID> --state Building`
 2. **Compute identifiers:**
    - `BASE` = current checked-out branch in the orchestrator's repo (`git rev-parse --abbrev-ref HEAD`). All worker branches fork from this.
    - `BRANCH_NAME` = `feature/<issue-id-lowercase>-<slugified-title>` (e.g., `feature/proj-88-ag-grid-enterprise`). Use the project's existing branch-naming convention from `method.config.md` if specified.
@@ -174,7 +177,7 @@ For each issue that passes the AC gate (up to max-agents concurrently):
    ```
    If this fails (e.g., dirty index, lock contention), skip the issue, move it back to Approved, post the git error in a Linear comment, and continue with the next queue item. Do NOT spawn an agent without a worktree.
 5. **Verify the worktree:** run `git worktree list` and confirm `<WORKTREE_PATH>` appears with the expected branch. If not, treat as Step 4 failure.
-6. **Post a Linear comment**: `"Runner: spawning agent in worktree {WORKTREE_PATH} on branch {BRANCH_NAME}."`
+6. **Post a Linear comment** (`pk issue comment <ID> "…"`): `"Runner: spawning agent in worktree {WORKTREE_PATH} on branch {BRANCH_NAME}."`
 7. **Spawn a worker agent** using the `Agent` tool with `run_in_background: true`. The Agent tool has no `cwd` parameter, and passing `isolation: "worktree"` would create a second, harness-managed worktree instead of using the one prepared above — pass neither. Instead, the worker prompt's first instruction must be `cd <WORKTREE_PATH>` followed by `pwd` and `git rev-parse --show-toplevel` verification (see Worker Agent Prompt Template). Pass `<WORKTREE_PATH>` and `<BRANCH_NAME>` as concrete values inside the prompt — do not leave placeholders:
 
 ```
@@ -199,14 +202,14 @@ Agent(
 When any background agent completes:
 
 **On success (agent reports all AC met + pre-deploy gate passed):**
-1. Move issue to "UAT" via `mcp__linear-server__linear_updateIssue` with `stateId: {UAT state ID from method.config.md}`
+1. Move issue to "UAT" — `pk issue update <ID> --state UAT`
 2. Post a Linear comment with: branch name, worktree path, commit summary, pre-deploy gate results
 3. Log the branch for PR creation
 4. **Clean up the worktree:** run `git worktree remove <WORKTREE_PATH>` from the orchestrator's repo. The branch stays — it has the committed work and needs to remain for PR creation. If `git worktree remove` reports the worktree is dirty (the worker committed but left untracked files), use `git worktree remove --force <WORKTREE_PATH>` and note it in the dashboard. Do NOT delete the branch.
 5. **Write pipeline state file:** resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)` and write `$STATE_DIR/pipeline-state/<issue-id>.json` per `sop/Skills_SOP.md` § Pipeline state file with `stage: "linear-todo-runner"`, `verdict: "Pass"`, `cwd`, `timestamp`. Path is out-of-repo so no hook block; write should always succeed.
 
 **On failure (agent reports errors or AC not met):**
-1. Move issue back to "Approved" via `mcp__linear-server__linear_updateIssue` with `stateId: {Approved state ID from method.config.md}`
+1. Move issue back to "Approved" — `pk issue update <ID> --state Approved`
 2. Post a Linear comment with the failure reason, any partial progress, AND the preserved worktree path (so the user can `cd` into it for inspection)
 3. **Do NOT remove the worktree on failure.** It may contain uncommitted diagnostic state from the worker. Leave both the worktree and the branch in place — the user cleans up manually after triage (`git worktree remove <path>` and `git branch -D <branch>` once they're done).
 4. Log as failed
@@ -350,7 +353,7 @@ Set `blocked_by` relations in Linear to enforce the correct execution order.
 
 - **Agent timeout:** If an agent runs longer than 30 minutes without reporting, flag it in the dashboard as `Stalled`. Do not kill it automatically — notify the user.
 - **Pre-deploy gate failure:** Agent should attempt to fix. If it cannot fix after one retry, report as failed.
-- **Linear MCP unavailable:** Stop the runner with a clear error. Do not spawn agents without status tracking.
+- **Linear unreachable** (`pk doctor` fails, or a state write errors): Stop the runner with a clear error. Do not spawn agents without status tracking.
 - **No ready issues:** If all remaining issues are blocked, display the blocked list and exit cleanly.
 
 ## Relationship to Other Skills

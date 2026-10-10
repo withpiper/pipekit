@@ -27,18 +27,29 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 
 ## Tooling notes (read before building against this)
 
-- Targets **`@tacticlaunch/mcp-linear`** — the Linear MCP server both consuming projects register as `linear-server`. Tool names are camelCase: `mcp__linear-server__{linear_searchIssues, linear_getIssueById, linear_updateIssue, linear_getProjects}` — the same tools every other Linear-using skill calls. **One `linear_updateIssue` carries `projectId` + `priority` + `stateId` together** (verified live on SiteLine, 2026-06-19).
-- **Rate-limit discipline — Linear's quota is one shared, per-User bucket** (canonical, with the numbers and the anchor, in `sop/Linear_SOP.md` § Rate limits; this skill reads the *whole board*, so every rule there applies here): one subagent with serial calls, never a parallel fan-out at `linear-server`; page in chunks of ~50; on rate-limit wait once, retry once, then stop and report partial; the error is HTTP 400 `RATELIMITED`, not 429; `isBlocked: false` proves "not blocked this instant", never "quota recovered". Prefer running when no `/work` sessions are live (`pgrep -f 'bin/mcp-linear' | wc -l`). Anchor: SiteLine 2026-08-31 — three concurrent sweeps paging 250 blocked the board ~1h and starved four worktree workers.
-- **Not the official remote.** The first-party `mcp.linear.app` server uses snake_case (`list_issues`, `update_issue`) and lacks the initiative / label-create / issue-relation tools pipekit skills rely on. Pipekit's Linear skills assume the tacticlaunch surface; a project on a different Linear MCP server needs the tool names remapped.
+- **Reaches Linear through the project's route** — `Linear transport` in `method.config.md`, `api` by default (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of every operation below is listed there). The whole-board sweeps are `pk gql` queries with their filters server-side, paged `first: 50` with `after`; the placement writes are `pk issue update`. **One `pk issue update` carries `--project` + `--priority` + `--state` + `--add-label` together** — a single `issueUpdate` underneath, the shape verified live on SiteLine, 2026-06-19.
+- **Rate-limit discipline — Linear's quota is one shared, per-User bucket** (canonical, with the numbers and the anchor, in `sop/Linear_SOP.md` § Rate limits; this skill reads the *whole board*, so every rule there applies here): never fan out subagents at Linear — one subagent, serial calls, for the whole Phase 1–2 read and again for the Phase 5 writes; page in chunks of 50; on rate-limit wait once, retry once, then stop and report partial; the error is HTTP 400 `RATELIMITED`, not 429; one successful small call proves "not blocked this instant", never "quota recovered". Prefer running when no `/work` sessions are live (`pk sessions`). Anchor: SiteLine 2026-08-31 — three concurrent sweeps paging 250 blocked the board ~1h and starved four worktree workers.
+- If `pk config "Linear transport" api` is `mcp`: the verb table's `mcp` column names the server it assumes; the first-party `mcp.linear.app` remote uses snake_case names and lacks the label-create / issue-relation tools the deferred items below rely on — remap per `sop/Linear_SOP.md § Linear transport` before running.
 
 ## Execution Steps
 
 ### Phase 1 — Fetch (payload-safe)
 
+Run the whole fetch in **one subagent, serially** (the rate-limit rule above); it returns the digested issue list, never the raw pages, to the main thread.
+
 1. Read `method.config.md` → Team ID, Workflow State IDs, and the project's **open-state set** (everything except Done / Canceled / Duplicate — typically `Triage, Backlog, Needs Spec, Approved, In Progress, In Dev, UAT`). Also read **`§ Initiative Surface → Area Labels`** (the `Area` label group, its labels, and `Lane size`). If that section is blank, the board isn't on the lanes model — skip the Area routing in Phase 3 and the board-shape checks in Phase 2b, and behave exactly as before.
-2. `mcp__linear-server__linear_searchIssues` across those open states, requesting a **minimal field set** (`identifier, title, state, priority, project, labels, createdAt`). Do **not** pull descriptions board-wide. Under `--session`, add the `createdAt >= <cutoff>` filter **server-side** — it is the whole point of the mode that this read is small.
-   > **Payload watch-out (learned the hard way):** a board-wide `linear_searchIssues` with full descriptions can exceed a single context (~158K chars on a ~48-issue board). Page by state or have a subagent digest a saved tool-result if the board is large. Only fetch bodies for the drift subset (Phase 2).
-3. `mcp__linear-server__linear_getProjects` once → cache `{name, description, id, state}` for inference **and** for the board-shape checks. Derive each project's open-issue count from the Phase 1.2 result — do **not** issue a per-project issue query (see `sop/Linear_SOP.md` § API gotchas → Query complexity: an all-projects × all-issues nested read exceeds Linear's 10k cap and is rejected outright).
+2. Sweep those open states with a **minimal field set** (`identifier, title, state, priority, project, labels, createdAt`) — filters server-side, paged `first: 50`, `after: <endCursor>` until `hasNextPage` is false:
+   ```bash
+   pk gql 'query($team: ID!, $states: [String!]!, $after: String) {
+     issues(first: 50, after: $after,
+            filter: { team: { id: { eq: $team } }, state: { name: { in: $states } } }) {
+       pageInfo { hasNextPage endCursor }
+       nodes { identifier title priority createdAt state { name type } project { id name } labels { nodes { name } } } } }' \
+     '{"team":"<TEAM>","states":["Triage","Backlog","Needs Spec","Approved","In Progress","In Dev","UAT"]}'
+   ```
+   Do **not** pull descriptions board-wide. Under `--session`, add `createdAt: { gte: "<cutoff, ISO-8601>" }` to the filter **server-side** — it is the whole point of the mode that this read is small.
+   > **Payload watch-out (learned the hard way):** a board-wide read with full descriptions can exceed a single context (~158K chars on a ~48-issue board). Never add `description` to this field set; keep the pages at 50 and let the one subagent digest them. Only fetch bodies for the drift subset (Phase 2).
+3. Projects once — `pk gql '{ team(id:"<TEAM>") { projects(first: 50) { nodes { id name description state } } } }'` → cache `{name, description, id, state}` for inference **and** for the board-shape checks (`pk project list` is the human view of the same lanes; the placeholder exemption in Phase 2b needs `description`, so the sweep reads its own fields). For the walk-skip check, also `pk gql '{ initiatives(first: 50) { nodes { id name status projects(first: 50) { nodes { id name state } } } } }'` once. Derive each project's open-issue count from the Phase 1.2 result — do **not** issue a per-project issue query (see `sop/Linear_SOP.md` § API gotchas → Query complexity: an all-projects × all-issues nested read exceeds Linear's 10k cap and is rejected outright).
 4. **Exclude** any issue carrying the `Parked` *label* (already dispositioned "Later" by `/brainstorm-review`).
 
 ### Phase 2 — Classify (an issue can hit several)
@@ -49,7 +60,7 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 - ⚪ **Unprioritized** — `priority == 0`.
 - 🅿️ **Parked-as-state** — the issue sits in a Parked-*type* workflow state rather than carrying the `Parked` label. A Parked state hides work from every state-based query (including this skill's own Phase 1 fetch, if the state isn't in the open-state set). Fix: move to `Backlog` + apply the `Parked` label.
 
-Pull `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`) **only for the drift subset** — the issues that hit at least one class above — to read the body (for parent-project inference) and relations.
+**Only for the drift subset** — the issues that hit at least one class above — read the body (for parent-project inference) and the relations: `pk issue show <ID> --fields id,description`, and `pk gql 'query($id: String!) { issue(id: $id) { id relations(first: 20) { nodes { type relatedIssue { identifier project { name } } } } } }' '{"id":"<ID>"}'` (keep the `id` — Phase 5's `sortOrder` restore needs it).
 
 ### Phase 2b — Board-shape checks (lanes model only; report, never auto-fix)
 
@@ -60,7 +71,7 @@ Skip entirely when `§ Area Labels` is blank. These are **project-level** findin
   - **Exempt placeholders:** a project whose `description` contains the literal word `placeholder` is *correct* when empty — it exists so an initiative with no live work yet doesn't read as "all projects done" and get skipped by the walk. Never flag these, and never propose deleting them.
 - ⚠️ **Walk-skip hazard** — a non-`Completed` initiative whose projects are *all* `completed`/`canceled` **and** which has no placeholder project. The walk will step past this initiative as though it were finished. Recommend adding a placeholder lane.
 - 📛 **Status drift** — a lane holding shipped or in-flight issues while still marked `planned`/`backlog`, or an idle lane marked `started`. Project status is read by humans scanning the board; when it stops mirroring reality the board stops being the execution authority.
-  - Objective wrong-closure sweep: query projects filtered server-side to `status.type ∈ {completed, canceled}`, each with issues filtered to `state.type ∉ {completed, canceled}`. Any hit other than a `Duplicate`-state issue is rot. **Filter server-side** — see the 10k complexity note in Phase 1.
+  - Objective wrong-closure sweep: projects filtered server-side to `status.type ∈ {completed, canceled}`, each with issues filtered to `state.type ∉ {completed, canceled}` — `pk gql '{ projects(first: 50, filter: { status: { type: { in: ["completed","canceled"] } } }) { nodes { name issues(first: 50, filter: { state: { type: { nin: ["completed","canceled"] } } }) { nodes { identifier state { name } } } } } }'`. Any hit other than a `Duplicate`-state issue is rot. **Filter server-side** — see the 10k complexity note in Phase 1.
 
 **Optional cycle hygiene** (only if the team uses cycles): the active cycle should hold in-flight issues plus the head of each active lane, nothing else. Flag off-lane stragglers.
 
@@ -72,8 +83,15 @@ Unlike Phase 2b, this check is **not** lanes-gated — run it whether or not `§
 
 `/pk-bug` Phase 8 makes a postmortem mandatory for priority ≤ 3 (Urgent / High / Medium), and adds a reviewer sign-off for Urgent. Neither is enforceable by workflow state: `pk ship` puts the issue ID at the front of the PR title, so where Linear's GitHub integration transitions on merge, the issue reaches `Done` at Phase 6 — before the postmortem phase runs at all. **A closed bug with no postmortem is the default outcome, not an anomaly**, which is exactly why it needs a sweep rather than a gate.
 
-1. One additional `mcp__linear-server__linear_searchIssues`, filtered **server-side** and scoped hard: `label = Bug`, `state.type = completed`, `priority` in 1–3, `completedAt` within the last 30 days. On a normal board that is single digits. (If the configured Linear MCP surface won't filter on `completedAt`, filter it client-side but keep the label + state + priority filters server-side — see the 10k complexity note in Phase 1.)
-2. For **that set only**, read comments and look for a `# Postmortem` heading:
+1. One additional read, filtered **server-side** and scoped hard — `label = Bug`, `state.type = completed`, `priority` in 1–3, `completedAt` within the last 30 days:
+   ```bash
+   pk gql '{ issues(first: 50, filter: { team: { id: { eq: "<TEAM>" } }, labels: { name: { eq: "Bug" } },
+                                        state: { type: { eq: "completed" } }, priority: { gte: 1, lte: 3 },
+                                        completedAt: { gte: "<30 days ago, ISO-8601>" } }) {
+       nodes { identifier priority completedAt } } }'
+   ```
+   On a normal board that is single digits. (If `pk config "Linear transport" api` is `mcp` and the server won't filter on `completedAt`, filter that client-side but keep the label + state + priority filters server-side — see the 10k complexity note in Phase 1.)
+2. For **that set only**, read the comments — `pk issue show <ID> --comments` — and look for a `# Postmortem` heading:
    - 🧾 **Postmortem debt** — no `# Postmortem` comment. Report identifier, priority, and completion date. Recommend `/pk-bug <ID>`: its resume routing sends a `statusType=completed` issue with no postmortem straight into Phase 8.
    - ✍️ **Unsigned postmortem** *(Urgent only)* — a `# Postmortem` comment whose `Reviewer:` / `Approved:` lines are still blank. The postmortem exists; the human gate on it never closed.
 
@@ -83,7 +101,7 @@ Unlike Phase 2b, this check is **not** lanes-gated — run it whether or not `§
 
 - **Home (for orphans / unclassified).** On the lanes model the default home is **no project**, not a project. Work through this ladder in order and stop at the first hit:
 
-  1. **An existing lane — only if the issue is inside that lane's completable scope.** "It's the same domain" is not scope; the test is whether the lane could still be called *done* with this issue in it. If the body names a parent issue (`follow-up to/from <ID>`, `Source: <ID>`, `Related: <ID>`, `Split from <ID>`, where `<ID>` is any Linear identifier `[A-Z]+-N` — match every prefix, not just the workspace's current one: a prefix migration leaves older bodies citing the old prefix) → `get_issue(parent)` → the **parent's project** is the highest-confidence candidate, but still apply the scope test before proposing it.
+  1. **An existing lane — only if the issue is inside that lane's completable scope.** "It's the same domain" is not scope; the test is whether the lane could still be called *done* with this issue in it. If the body names a parent issue (`follow-up to/from <ID>`, `Source: <ID>`, `Related: <ID>`, `Split from <ID>`, where `<ID>` is any Linear identifier `[A-Z]+-N` — match every prefix, not just the workspace's current one: a prefix migration leaves older bodies citing the old prefix) → `pk issue show <parent> --fields id,project` → the **parent's project** is the highest-confidence candidate, but still apply the scope test before proposing it.
   2. **Otherwise: no project + the right `Area:` label.** Keyword-match title/body against the configured Area labels. This is the correct terminal state for uncut work — the issue is homed the moment it carries an Area label, and stays there until a human cuts it into a lane via `/phase-plan --cut`.
   3. If the Area is ambiguous → present the **top-2 candidates** for a human pick in the manifest.
 
@@ -143,11 +161,11 @@ Then, **only if Phase 2c found anything**, a third block — also advisory, also
 
 ### Phase 5 — Apply (on `go`, default mode only)
 
-- One `mcp__linear-server__linear_updateIssue` per issue combining `projectId` + `priority` + `stateId`; add the `Area:` label in the same call where one was inferred.
+- One `pk issue update <ID> --project <lane | none> --priority <N> --state <S>` per issue — project, priority and state in the one call; add the `Area:` label in that same call (`--add-label "Area: <X>"`) where one was inferred.
 - **Issue the updates serially, not in parallel.** These are writes against a rate-limited API (see `sop/Linear_SOP.md` § Rate limits); a fan-out here is the single easiest way to blow the quota mid-apply and leave the board half-updated.
 - Skip any line the user redirected to a manual pick that they didn't resolve.
 - **Apply nothing from the board-shape block** — it is advisory output only.
-- **Re-assert lane run order after any state change.** A workflow-state change re-ranks the issue's `sortOrder`, so a Triage→`Needs Spec` fix or a Parked-state fix silently moves that issue to the top of its lane's stamped order. If the issue belongs to a lane, restore its `sortOrder` in the same `linear_updateIssue` call and verify the echo. (`sop/Linear_SOP.md` § API gotchas — the silent-data-loss class.)
+- **Re-assert lane run order after any state change.** A workflow-state change re-ranks the issue's `sortOrder`, so a Triage→`Needs Spec` fix or a Parked-state fix silently moves that issue to the top of its lane's stamped order. If the issue belongs to a lane, carry its stamp in the **same** `pk issue update` call (`--sort-order <stamp from Phase 2>`) so the state change and the order land in one write, and verify the echoed `sortOrder` line. (`sop/Linear_SOP.md` § API gotchas — the silent-data-loss class.)
 
 ### Phase 6 — Summary
 
@@ -184,8 +202,8 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 
 ## Deferred to v2 (not in this version)
 
-- 🔗 **Isolated → relation linking** (body references a parent but no `blocked-by`/`relates` relation exists). Uses `mcp__linear-server__linear_createIssueRelation` — **confirmed present** on `@tacticlaunch/mcp-linear` (already called by `/roadmap-create`); deferred only to keep this pass scoped to tool-name correctness.
-- 🧹 **Strip stale labels.** Uses `mcp__linear-server__linear_removeIssueLabel` — **confirmed present**; deferred for the same reason.
+- 🔗 **Isolated → relation linking** (body references a parent but no `blocked-by`/`relates` relation exists). `pk issue relate <ID> --blocked-by <PARENT>` for a hard dependency; a `relates` link is the `pk gql` mutation `issueRelationCreate(input: { issueId, relatedIssueId, type: related })` — deferred only to keep this pass scoped to tool-name correctness.
+- 🧹 **Strip stale labels.** `pk issue update <ID> --remove-label <L>` — deferred for the same reason.
 - ~~**`--session` mode**~~ — shipped v4.37.0 (see Modes).
 
 ## Related
