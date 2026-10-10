@@ -560,7 +560,7 @@ esac
 # exit 0, and never touch gh.
 echo "== --help guard (regression: SiteLine 2026-06-04) =="
 
-for sub in ship done promote branch next ready status; do
+for sub in ship done promote branch next ready status focus; do
   : > "$GH_LOG"
   run_pk "$sub" --help
   if [ $RUN_CODE -ne 0 ]; then
@@ -2613,6 +2613,294 @@ sess_expect "pk sessions --json: subagent transcripts are not sessions" \
 RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" PK_CLAUDE_PROJECTS_DIR="$SESS_ROOT" "$PK" sessions --minutes nope 2>&1); RUN_CODE=$?
 if [ $RUN_CODE -ne 0 ]; then ok "pk sessions: a non-numeric --minutes is refused"; else fail "pk sessions: --minutes nope" "exit 0"; fi
 rm -rf "$FIXTURE" "$SESS_ROOT"; FIXTURE=""
+
+# ── Unit tests: pk focus / pk issue set|relate|comment (sourced, stubbed) ─────
+# Every Linear write goes through pk_linear_gql, so the stub below replaces it
+# after pk is sourced: it logs each (query, variables) pair, answers reads from
+# two fixture files, and APPLIES a projectUpdate to the initiatives fixture so
+# the re-read pk focus insists on sees what was written (STUB_FREEZE=1 drops the
+# write, for the unconfirmed-write case). Nothing here touches the network.
+
+echo "== pk focus (sourced, stubbed network) =="
+
+make_fixture
+write_config '```
+Team name: Eng
+```'
+GQL_LOG="$FIXTURE/gql.log"; STUB_STATE="$FIXTURE/initiatives.json"; STUB_ISSUES="$FIXTURE/issues.json"
+cat > "$FIXTURE/gql-stub.sh" <<'EOF'
+pk_linear_gql() {
+  printf '%s\t%s\n' "$1" "$(printf '%s' "${2:-null}" | jq -c .)" >> "$GQL_LOG"
+  case "$1" in
+    mutation*projectUpdate*)
+      if [ -z "${STUB_FREEZE:-}" ]; then
+        jq -c --arg id "$(printf '%s' "$2" | jq -r .id)" --argjson p "$(printf '%s' "$2" | jq -r .p)" \
+          '(.data.initiatives.nodes[].projects.nodes[] | select(.id == $id) | .priority) = $p' \
+          "$STUB_STATE" > "$STUB_STATE.n" && mv "$STUB_STATE.n" "$STUB_STATE"
+      fi
+      echo '{"data":{"projectUpdate":{"success":true}}}' ;;
+    mutation*issueUpdate*)         echo '{"data":{"issueUpdate":{"success":true}}}' ;;
+    mutation*issueRelationCreate*) echo '{"data":{"issueRelationCreate":{"success":true}}}' ;;
+    mutation*commentCreate*)       echo '{"data":{"commentCreate":{"success":true}}}' ;;
+    *initiatives*)  cat "$STUB_STATE" ;;
+    *"issue(id:"*)  jq -c --arg id "$(printf '%s' "$2" | jq -r .id)" '{data:{issue:(.[$id] // null)}}' "$STUB_ISSUES" ;;
+    *) echo '{}' ;;
+  esac
+}
+EOF
+unit_focus() { ( cd "$FIXTURE" && source "$PK" && source "$FIXTURE/gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_focus "$@" 2>&1 ); }
+unit_issue() { ( cd "$FIXTURE" && source "$PK" && source "$FIXTURE/gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_issue "$@" 2>&1 ); }
+# Logged mutations in order, as "name<TAB>variables" (compact JSON).
+gql_writes() { awk -F'\t' '/^mutation/ { match($1, /\{ *[A-Za-z]+/); n = substr($1, RSTART, RLENGTH); sub(/^\{ */, "", n); print n "\t" $2 }' "$GQL_LOG"; }
+write_names() { gql_writes | cut -f1 | paste -sd, -; }
+write_vars()  { gql_writes | sed -n "${1}p" | cut -f2; }
+
+FOCUS_STATE_FIX='{"data":{"initiatives":{"nodes":[
+  {"name":"i5. Build","status":"Active","projects":{"nodes":[
+    {"id":"c","name":"I5.P1. Medium lane","state":"started","priority":3},
+    {"id":"a","name":"P2. Urgent lane","state":"planned","priority":1},
+    {"id":"b","name":"I5.P3. High lane","state":"backlog","priority":2},
+    {"id":"z","name":"I5.P6. None","state":"planned","priority":0}]}}]}}}'
+reset_focus() { printf '%s' "$FOCUS_STATE_FIX" > "$STUB_STATE"; : > "$GQL_LOG"; }
+
+# Read mode: the strip plus one line per lane, nothing written.
+reset_focus
+out=$(unit_focus); code=$?
+exp='Focus  A I5.P2 · B I5.P3 · C I5.P1
+  A  P2. Urgent lane
+  B  I5.P3. High lane
+  C  I5.P1. Medium lane'
+[ $code -eq 0 ] && [ "$out" = "$exp" ] && [ -z "$(gql_writes)" ] \
+  && ok "focus: read mode prints strip + one line per lane, no write" \
+  || fail "focus: read mode" "exit $code, got:
+$out"
+
+# Exclusive tiers: a held tier is refused without --swap, and nothing is written.
+reset_focus
+out=$(unit_focus I5.P3 A); code=$?
+[ $code -ne 0 ] && [ "$out" = "A is held by I5.P2 — pass --swap to move it to none" ] && [ -z "$(gql_writes)" ] \
+  && ok "focus: held tier refused without --swap (exit 1, no write)" \
+  || fail "focus: held tier refused" "exit $code, out: $out, writes: $(gql_writes)"
+
+# --swap: clear the holder (a → 0) THEN set the lane (b → 1), both via projectUpdate
+# carrying input.priority; the strip afterwards is the re-read.
+reset_focus
+out=$(unit_focus I5.P3 A --swap); code=$?
+if [ $code -eq 0 ] && [ "$(write_names)" = "projectUpdate,projectUpdate" ] \
+   && [ "$(write_vars 1)" = '{"id":"a","p":0}' ] && [ "$(write_vars 2)" = '{"id":"b","p":1}' ]; then
+  ok "focus: --swap clears the holder (a→0) then sets the lane (b→1)"
+else
+  fail "focus: --swap order" "exit $code, writes: $(gql_writes), out: $out"
+fi
+grep -q 'projectUpdate(id: \$id, input: {priority: \$p})' "$GQL_LOG" \
+  && ok "focus: mutation is projectUpdate(id, input: {priority}) — ProjectUpdateInput.priority" \
+  || fail "focus: projectUpdate shape" "$(grep mutation "$GQL_LOG")"
+if printf '%s\n' "$out" | grep -q '^I5.P3 → A$' && printf '%s\n' "$out" | grep -q '^Focus  A I5.P3 · B — · C I5.P1$'; then
+  ok "focus: after --swap the strip is the re-read (A I5.P3, B freed)"
+else
+  fail "focus: post-swap strip" "got:
+$out"
+fi
+
+# Idempotent: already at that tier → say so, no write (args are case-insensitive).
+reset_focus
+out=$(unit_focus i5.p1 c); code=$?
+[ $code -eq 0 ] && [ "$out" = "I5.P1 already tier C (skip)" ] && [ -z "$(gql_writes)" ] \
+  && ok "focus: already at tier → skip, no write" \
+  || fail "focus: no-op" "exit $code, out: $out, writes: $(gql_writes)"
+
+# none → priority 0; then a free tier is set without --swap.
+reset_focus
+out=$(unit_focus I5.P3 none); code=$?
+[ $code -eq 0 ] && [ "$(write_vars 1)" = '{"id":"b","p":0}' ] && printf '%s\n' "$out" | grep -q '^I5.P3 → none$' \
+  && ok "focus: none → priority 0" \
+  || fail "focus: none" "exit $code, writes: $(gql_writes), out: $out"
+: > "$GQL_LOG"
+out=$(unit_focus I5.P6 B); code=$?
+[ $code -eq 0 ] && [ "$(write_vars 1)" = '{"id":"z","p":2}' ] && printf '%s\n' "$out" | grep -q '^Focus  A I5.P2 · B I5.P6 · C I5.P1$' \
+  && ok "focus: free tier set without --swap; strip from re-read" \
+  || fail "focus: free tier" "exit $code, writes: $(gql_writes), out: $out"
+
+# A write the re-read does not confirm is an error, and no tier is printed
+# (the mutation still answers success:true — only the re-read tells the truth).
+reset_focus
+out=$(STUB_FREEZE=1 unit_focus I5.P3 none); code=$?
+if [ $code -ne 0 ] && printf '%s\n' "$out" | grep -q 'write did not land' && ! printf '%s\n' "$out" | grep -q '→ none'; then
+  ok "focus: unconfirmed write → error, never prints the unconfirmed tier"
+else
+  fail "focus: unconfirmed write" "exit $code, out: $out"
+fi
+
+# Unknown tag, ambiguous bare tag, bad tier → exit 1, no write.
+reset_focus
+out=$(unit_focus I9.P9 A); code=$?
+[ $code -ne 0 ] && printf '%s\n' "$out" | grep -q 'matches no live' && [ -z "$(gql_writes)" ] \
+  && ok "focus: unknown tag → exit 1, lists live lanes" || fail "focus: unknown tag" "exit $code, out: $out"
+printf '%s' '{"data":{"initiatives":{"nodes":[
+  {"name":"i5. Build","status":"Active","projects":{"nodes":[{"id":"c","name":"I5.P1. One","state":"started","priority":0}]}},
+  {"name":"i6. Next","status":"Active","projects":{"nodes":[{"id":"d","name":"I6.P1. Two","state":"planned","priority":0}]}}]}}}' > "$STUB_STATE"
+: > "$GQL_LOG"
+out=$(unit_focus P1 A); code=$?
+[ $code -ne 0 ] && printf '%s\n' "$out" | grep -q 'ambiguous' && [ -z "$(gql_writes)" ] \
+  && ok "focus: bare P1 across two initiatives is ambiguous, no write" || fail "focus: ambiguous" "exit $code, out: $out"
+reset_focus
+out=$(unit_focus I5.P6 Z); code=$?
+[ $code -ne 0 ] && [ -z "$(gql_writes)" ] && ok "focus: tier must be A|B|C|none" || fail "focus: bad tier" "exit $code, out: $out"
+
+echo "== pk issue set / relate / comment (sourced, stubbed network) =="
+
+# RS-30 is already blocked by RS-28 and merely `related` to RS-29.
+cat > "$STUB_ISSUES" <<'EOF'
+{"RS-30":{"id":"u30","identifier":"RS-30","title":"Blocked one","priority":3,
+          "inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"RS-28"}},{"type":"related","issue":{"identifier":"RS-29"}}]}},
+ "RS-29":{"id":"u29","identifier":"RS-29","title":"Blocker","priority":0,"inverseRelations":{"nodes":[]}},
+ "RS-28":{"id":"u28","identifier":"RS-28","title":"Existing blocker","priority":2,"inverseRelations":{"nodes":[]}}}
+EOF
+
+: > "$GQL_LOG"
+out=$(unit_issue set RS-30 --priority 1); code=$?
+if [ $code -eq 0 ] && [ "$out" = "  Linear: RS-30 priority 3 → 1" ] && [ "$(write_names)" = "issueUpdate" ] \
+   && [ "$(write_vars 1)" = '{"id":"u30","p":1}' ] && grep -q 'issueUpdate(id: \$id, input: {priority: \$p})' "$GQL_LOG"; then
+  ok "issue set: issueUpdate input.priority on the resolved UUID, prints old → new"
+else
+  fail "issue set: mutation" "exit $code, out: $out, writes: $(gql_writes)"
+fi
+: > "$GQL_LOG"
+out=$(unit_issue set RS-30 --priority 3); code=$?
+[ $code -eq 0 ] && [ -z "$(gql_writes)" ] && printf '%s\n' "$out" | grep -q 'already 3 (skip)' \
+  && ok "issue set: unchanged priority → skip, no write" || fail "issue set: no-op" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue set RS-30 --priority 7); code=$?
+[ $code -ne 0 ] && [ -z "$(gql_writes)" ] && ok "issue set: priority outside 0–4 refused" || fail "issue set: range" "exit $code, out: $out"
+
+# Direction (the load-bearing assertion): the query binds issueId to $blocker and
+# relatedIssueId to $blocked, and the variables carry blocker=u29, blocked=u30 —
+# so with type blocks, RS-29 (issue) blocks RS-30 (relatedIssue). A `related`
+# relation from RS-29 does not count as existing.
+: > "$GQL_LOG"
+out=$(unit_issue relate RS-30 --blocked-by RS-29); code=$?
+if [ $code -eq 0 ] && [ "$(write_names)" = "issueRelationCreate" ] && [ "$(write_vars 1)" = '{"blocker":"u29","blocked":"u30"}' ] \
+   && grep -q 'issueRelationCreate(input: {issueId: \$blocker, relatedIssueId: \$blocked, type: blocks})' "$GQL_LOG"; then
+  ok "issue relate: issueId = blocker (RS-29), relatedIssueId = blocked (RS-30), type blocks"
+else
+  fail "issue relate: direction" "exit $code, out: $out, writes: $(gql_writes)"
+fi
+: > "$GQL_LOG"
+out=$(unit_issue relate RS-30 --blocked-by RS-28 --why "dup"); code=$?
+[ $code -eq 0 ] && [ -z "$(gql_writes)" ] && [ "$out" = "  Linear: RS-30 already blocked by RS-28 (skip)" ] \
+  && ok "issue relate: existing blocks relation → skip (no relation, no --why comment)" \
+  || fail "issue relate: idempotent" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(unit_issue relate RS-30 --blocked-by RS-29 --why "needs the schema first"); code=$?
+[ $code -eq 0 ] && [ "$(write_names)" = "issueRelationCreate,commentCreate" ] \
+  && printf '%s' "$(write_vars 2)" | grep -qE '^\{"issue":"u30","body":"\[tpm [0-9]{4}-[0-9]{2}-[0-9]{2}\] blocked by RS-29 — needs the schema first"\}$' \
+  && ok "issue relate: --why posts the [tpm] comment on the blocked issue after the relation" \
+  || fail "issue relate: --why" "exit $code, out: $out, writes: $(gql_writes)"
+out=$(unit_issue relate RS-30 --blocked-by RS-30); code=$?
+[ $code -ne 0 ] && ok "issue relate: an issue cannot block itself" || fail "issue relate: self" "exit $code, out: $out"
+
+: > "$GQL_LOG"
+out=$(unit_issue comment RS-30 "hello there"); code=$?
+[ $code -eq 0 ] && [ "$(write_names)" = "commentCreate" ] && [ "$(write_vars 1)" = '{"issue":"u30","body":"hello there"}' ] \
+  && ok "issue comment: commentCreate on the resolved UUID" || fail "issue comment: body arg" "exit $code, out: $out, writes: $(gql_writes)"
+printf 'from a file\nline two\n' > "$FIXTURE/body.md"
+: > "$GQL_LOG"
+out=$(unit_issue comment RS-30 --body-file "$FIXTURE/body.md"); code=$?
+[ $code -eq 0 ] && [ "$(write_vars 1 | jq -r .body)" = "$(printf 'from a file\nline two')" ] \
+  && ok "issue comment: --body-file" || fail "issue comment: --body-file" "exit $code, out: $out, writes: $(gql_writes)"
+: > "$GQL_LOG"
+out=$(printf 'from stdin' | unit_issue comment RS-30 -); code=$?
+[ $code -eq 0 ] && [ "$(write_vars 1 | jq -r .body)" = "from stdin" ] \
+  && ok "issue comment: - reads stdin" || fail "issue comment: stdin" "exit $code, out: $out, writes: $(gql_writes)"
+out=$(unit_issue comment RS-30); code=$?
+[ $code -ne 0 ] && ok "issue comment: empty body refused" || fail "issue comment: empty" "exit $code, out: $out"
+out=$(unit_issue bogus RS-30); code=$?
+[ $code -ne 0 ] && printf '%s\n' "$out" | grep -q 'show, set, relate, comment' \
+  && ok "issue: unknown subverb lists the verbs" || fail "issue: unknown subverb" "exit $code, out: $out"
+run_pk issue
+[ $RUN_CODE -eq 0 ] && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue relate' && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue show' \
+  && ok "issue: usage lists show and the new verbs" || fail "issue: usage" "exit $RUN_CODE: $RUN_OUT"
+cleanup
+
+# ── Unit tests: runbook nudge (sourced) ──────────────────────────────────────
+# pk_runbook_nudge prints exactly one line when the `<!-- tpm:begin · agreed
+# YYYY-MM-DD` marker is older than `Runbook stale days` (default 7 → 8+ days
+# prints), and nothing on a fresh marker, missing file, missing marker or bad
+# date. It never fails the caller. Dates are pinned relative to today (UTC).
+
+echo "== runbook nudge (sourced) =="
+
+unit_nudge()    { ( cd "$FIXTURE" && source "$PK" && pk_runbook_nudge ); }
+# BSD first here (test side only): GNU rejects -v with nothing on stdout.
+days_ago()      { date -u -v-"$1"d +%F 2>/dev/null || date -u -d "$1 days ago" +%F; }
+write_runbook() { mkdir -p "$(dirname "$1")"; printf '# Runbook\n\n<!-- tpm:begin · agreed %s · cadence weekly -->\nbody\n<!-- tpm:end -->\n' "$2" > "$1"; }
+
+make_fixture
+write_config '```
+Team name: Eng
+```'
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 8)"
+v=$(unit_nudge); code=$?
+[ $code -eq 0 ] && [ "$v" = "runbook agreed 8d ago → /tpm" ] && ok "nudge: 8-day-old agreement → one line" || fail "nudge: stale" "exit $code, got '$v'"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 7)"
+v=$(unit_nudge); [ -z "$v" ] && ok "nudge: exactly 7 days is not older than 7 → nothing" || fail "nudge: boundary" "got '$v'"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 0)"
+v=$(unit_nudge); [ -z "$v" ] && ok "nudge: fresh agreement → nothing" || fail "nudge: fresh" "got '$v'"
+printf '# Runbook\n\nno marker here\n' > "$FIXTURE/engineering/RUNBOOK.md"
+v=$(unit_nudge); [ -z "$v" ] && ok "nudge: missing marker → nothing" || fail "nudge: no marker" "got '$v'"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "2026-13-45"
+v=$(unit_nudge); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "nudge: unparsable date → nothing, exit 0" || fail "nudge: bad date" "exit $code, got '$v'"
+rm -f "$FIXTURE/engineering/RUNBOOK.md"
+v=$(unit_nudge); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "nudge: missing file → nothing, exit 0 (never fails the caller)" || fail "nudge: missing file" "exit $code, got '$v'"
+
+# Custom path and threshold.
+write_config '```
+Runbook path: docs/RB.md
+Runbook stale days: 3
+```'
+write_runbook "$FIXTURE/docs/RB.md" "$(days_ago 5)"
+v=$(unit_nudge); [ "$v" = "runbook agreed 5d ago → /tpm" ] && ok "nudge: Runbook path + Runbook stale days honoured" || fail "nudge: custom config" "got '$v'"
+
+# pk next leads with the nudge (after the sessions line) even before the board read.
+RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" PK_CLAUDE_PROJECTS_DIR="$FIXTURE/no-sessions" "$PK" next 2>&1)
+[ "$(printf '%s\n' "$RUN_OUT" | sed -n 1p)" = "runbook agreed 5d ago → /tpm" ] \
+  && ok "pk next: nudge is the first line" || fail "pk next: nudge placement" "got: $(printf '%s\n' "$RUN_OUT" | head -3)"
+cleanup
+
+# Runbook primary: the marker is read from the sibling repo's runbook.
+NUDGE_PARENT=$(mktemp -d)
+mkdir -p "$NUDGE_PARENT/repo" "$NUDGE_PARENT/SiteLine"
+git -C "$NUDGE_PARENT/repo" init -q -b main
+printf '```\nRunbook primary: ../SiteLine\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
+write_runbook "$NUDGE_PARENT/SiteLine/engineering/RUNBOOK.md" "$(days_ago 10)"
+v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_runbook_nudge )
+[ "$v" = "runbook agreed 10d ago → /tpm" ] && ok "nudge: Runbook primary reads the sibling repo's runbook" || fail "nudge: primary" "got '$v'"
+rm -rf "$NUDGE_PARENT"
+
+# ── CLI tests: pk config dump carries the TPM keys with defaults ─────────────
+
+echo "== pk config dump: TPM keys =="
+
+make_fixture
+write_config '```
+Integration branch: main
+```'
+run_pk config
+cfg_has() { printf '%s\n' "$RUN_OUT" | grep -Eq "^$1: +$2\$"; }
+cfg_has "Runbook path" "engineering/RUNBOOK.md" && ok "config dump: Runbook path defaults to engineering/RUNBOOK.md" || fail "config dump: Runbook path" "$RUN_OUT"
+cfg_has "Weekly capacity days" "6" && ok "config dump: Weekly capacity days defaults to 6" || fail "config dump: Weekly capacity days" "$RUN_OUT"
+cfg_has "Runbook stale days" "7" && ok "config dump: Runbook stale days defaults to 7" || fail "config dump: Runbook stale days" "$RUN_OUT"
+printf '%s\n' "$RUN_OUT" | grep -q '^Runbook primary:' && printf '%s\n' "$RUN_OUT" | grep -q '^Portfolio repos:' \
+  && ok "config dump: Runbook primary + Portfolio repos listed (empty default)" || fail "config dump: empty-default keys" "$RUN_OUT"
+cfg_has "Integration branch" "main" && ok "config dump: existing keys unchanged" || fail "config dump: existing keys" "$RUN_OUT"
+write_config '```
+Runbook stale days: 14
+```'
+run_pk config
+cfg_has "Runbook stale days" "14" && ok "config dump: a set TPM key overrides its default" || fail "config dump: override" "$RUN_OUT"
+cleanup
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
