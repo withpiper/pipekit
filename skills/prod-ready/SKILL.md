@@ -49,7 +49,7 @@ It runs **once per feature**, not per task — that is the whole reason it is se
 | **Ship environments** | Comma-separated, ordered; the **last** entry is the production env this gate guards | `dev,main` |
 | **Project display name** | Report header + comment | (project name) |
 
-**Linear is best-effort and advisory.** Resolve the feature issue ID, post a comment with the verdict, and **do not** change its workflow state — promotion (and the human signoff before it) owns the transition. Look up the issue via the project's Linear MCP; if Linear is unreachable, write the report anyway and tell the user to paste the verdict manually. Never hardcode Linear UUIDs.
+**Linear is best-effort and advisory.** Resolve the feature issue ID, post a comment with the verdict, and **do not** change its workflow state — promotion (and the human signoff before it) owns the transition. Look up the issue via the project's Linear route — `pk issue show "$ISSUE" --fields id,title,state` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there); if Linear is unreachable, write the report anyway and tell the user to paste the verdict manually. Never hardcode Linear UUIDs.
 
 ## Step 0 — Load the checks file (gate)
 
@@ -81,7 +81,7 @@ PROD_ENV=$(echo "$SHIP_ENVS" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^
 
 `PROD_ENV` is resolved, not assumed — **always print it** in the summary line below so the user can correct a mis-resolution before acting. On a 1-tier project (`Ship environments: main`, `Promote to main: false`) there is no promote chain; `PROD_ENV` is the integration branch and the gate is advisory-before-merge (see § Where this sits).
 
-If `ISSUE` is set and Linear is reachable, post a comment on the issue via the project's Linear MCP — `mcp__linear-server__linear_createComment` (the camelCase `@tacticlaunch/mcp-linear` surface; use whatever comment tool the project exposes): `"Starting production-readiness review for the {PROD_ENV} boundary — {YYYY-MM-DD}"`. **Do not** call any state-changing tool.
+If `ISSUE` is set and Linear is reachable, post a comment on the issue — `pk issue comment "$ISSUE" "Starting production-readiness review for the {PROD_ENV} boundary — {YYYY-MM-DD}"`. **Do not** change the issue's state.
 
 If `ISSUE` can't be resolved (detached HEAD, no ID in branch), proceed anyway — the report still gets written; just skip the Linear comment.
 
@@ -189,7 +189,7 @@ printf '# prodready-complete\n\nstatus: PASS\nsha: %s\nenv: %s\n' \
 - The `sha:` pins the audited source-branch head — a feature merged into the source branch *after* this audit correctly invalidates the sentinel (the batch changed; re-run the gate).
 - Not issue-scoped: prod-ready audits the promote batch at the boundary, and a promote bundles WITs.
 
-- If `ISSUE` resolved and Linear reachable: post a comment — the **Summary** block + a link/path to the report. **Do not** change state.
+- If `ISSUE` resolved and Linear reachable: post a comment — the **Summary** block + a link/path to the report, piped into `pk issue comment "$ISSUE" -`. **Do not** change state.
 - Present to the user: overall status, finding counts, top findings by severity, and the explicit next-action — `Promote to {PROD_ENV}` if PASS, or `Hold — close {n} finding(s) first` if FAIL.
 
 ## Severity rubric

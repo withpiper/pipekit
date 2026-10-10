@@ -24,7 +24,7 @@ The session is a conversation that ends in an agreement, then a write. The judgm
 
 ## Tooling notes (read before building against this)
 
-- **All Linear reads and writes go through `bin/pk`'s GraphQL path**, never MCP: `pk status`, `pk portfolio`, `pk next`, `pk issue show`, `pk focus`, `pk issue set`, `pk issue relate`, `pk issue comment`. Each repo in the portfolio is read and written **from inside that repo** (`cd <repo> && pk …`) so its own `method.config.md` and `LINEAR_API_KEY` apply — the boards may live in different workspaces, and this is what makes that not matter.
+- **All Linear reads and writes go through `bin/pk`'s GraphQL path** — `pk status`, `pk portfolio`, `pk next`, `pk issue show`, `pk issue search`, `pk focus`, `pk issue set`, `pk issue relate`, `pk issue comment` — never an MCP server, whatever `Linear transport` says: the tiers, blockers and comments this skill writes must pass `pk`'s workspace guard. Each repo in the portfolio is read and written **from inside that repo** (`cd <repo> && pk …`) so its own `method.config.md` and `LINEAR_API_KEY` apply — the boards may live in different workspaces, and this is what makes that not matter.
 - **Rate limits** — Linear's quota is one shared per-user bucket (`sop/Linear_SOP.md § Rate limits`). Everything here runs serially; never fan out across repos or lanes. The hygiene subagent and your own reads do not overlap in time.
 - **Keep fat payloads out of the main thread.** `/linear-hygiene --check` runs in a subagent (Execution role per `method.config.md § Model Policy`, default `sonnet`) that returns its manifest, not its tool results. Fallback checks against code run on the Grounding role (default `haiku`). The conversation stays in the main thread, on whatever model the user is running — the judgment is not delegated.
 - **Issue bodies and comments only for the candidate set** (focus-lane heads, anything Urgent/High, anything in flight, anything the user names) via `pk issue show <ID> --comments`. Never board-wide.
@@ -53,7 +53,7 @@ The session is a conversation that ends in an agreement, then a write. The judgm
    | any issue in Triage (unplaced work cannot be sequenced) | — |
    | pool smell on a live lane | — |
 
-   A sequenced read of a dirty board is a confident wrong order, so the sweep (propose, user confirms, apply — hygiene's own flow, in the same subagent) comes before the briefing. Refuse to sweep while `/work` sessions are live (`pgrep -f 'bin/mcp-linear' | wc -l`, hygiene's own guard). `/linear-hygiene` is written against the Linear MCP surface; where a repo doesn't register it, print that the placement sweep was not available and carry on — never silently skip.
+   A sequenced read of a dirty board is a confident wrong order, so the sweep (propose, user confirms, apply — hygiene's own flow, in the same subagent) comes before the briefing. Refuse to sweep while `/work` sessions are live (`pk sessions`, hygiene's own guard). `/linear-hygiene` runs on the repo's Linear route like everything else here (`pk`; `sop/Linear_SOP.md § Linear transport`); if that repo's key is not loaded in this shell, print that the placement sweep was not available there and carry on — never silently skip.
 
 ### Phase 1 — Read the memory
 

@@ -20,7 +20,7 @@ Apply **only** the fixes the agent asked for, preserving everything else. Detect
 ## When to Use
 
 - The spec has already been published (via `/light-spec` Phase 5).
-- The Spec Review Agent has posted at least one review comment (via the MCP trigger from `/light-spec` Phase 6).
+- The Spec Review Agent has posted at least one review comment (via the `pk spec-cycle` trigger from `/light-spec` Phase 6).
 - You want to incorporate that feedback without rewriting the spec from scratch.
 
 ## When NOT to Use
@@ -39,8 +39,8 @@ Apply **only** the fixes the agent asked for, preserving everything else. Detect
 
 ### Phase 1 — Fetch issue and comments
 
-1. Fetch the issue via `mcp__linear-server__linear_getIssueById` (`id: "PROJ-123"`, `includeRelations: true`). Extract `description` and `title`.
-2. Fetch comments via `mcp__linear-server__linear_getComments` (`issueId: "PROJ-123"`). `linear_getIssueById` does **not** return comments — they must be fetched separately.
+1. Read the issue with its description and comment thread via the project's Linear route — `pk issue show PROJ-123 --comments` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there). Extract `description` and `title`.
+2. The comments come back with that same read (`--comments`); if `pk config "Linear transport" api` is `mcp`, the thread is a **separate** call on that route — the issue read does not return comments — and the verb table names it.
 
    The agent's review arrives as a **threaded child comment** — a reply inside the trigger comment's thread, not a new top-level comment. Fetch the full comment list (thread replies included) and filter per step 3. Never read "the newest comment" from a top-level-only view: a `comments(last: 1)`-style read returns the `pk spec-cycle` trigger itself, not the verdict.
 
@@ -199,13 +199,10 @@ Do not proceed to Phase 6/7 until the user chooses.
 
 ### Phase 6 — Act on stalemate / override / manual choices
 
-- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `mcp__linear-server__linear_createComment` — the body MUST start with the literal text `@linear`. Format:
+- **Post nudge (option 2)**: draft a short comment (under 50 words) pointing at the specific line in the description that addresses the stalemate blocker. Post it via `pk issue comment` — the body MUST start with the literal text `@linear`. Format:
 
   ```
-  mcp__linear-server__linear_createComment({
-    issueId: "PROJ-XXX",
-    body: "@linear this blocker has been addressed in the description — see the [section name] section where [specific line or text]. Please re-review."
-  })
+  pk issue comment PROJ-XXX "@linear this blocker has been addressed in the description — see the [section name] section where [specific line or text]. Please re-review."
   ```
 
   Note: this is a targeted nudge, not a full re-review. For a full re-review, exit this skill and run `pk spec-cycle PROJ-XXX` — that's the canonical re-trigger path.
@@ -214,7 +211,7 @@ Do not proceed to Phase 6/7 until the user chooses.
   - Date of the stale review being overridden.
   - Link back to the specific description content that addresses each flagged blocker.
   - Who overrode it (the user).
-  - Update the issue description via `mcp__linear-server__linear_updateIssue`.
+  - Update the issue description via `pk issue update PROJ-XXX --description-file <revised.md>`.
 
 - **Manual review (option 4)**: for each blocker, show the user the flagged description section alongside the agent's demand. Let the user tell the skill what (if anything) to change. Treat each user-directed change as a patch to apply in Phase 7.
 
@@ -248,7 +245,7 @@ Do **not** apply Non-Blocking Improvements silently or in bulk.
 
 ### Phase 9 — Publish
 
-1. Update the issue description via `mcp__linear-server__linear_updateIssue`.
+1. Update the issue description via `pk issue update PROJ-XXX --description-file <revised.md>` (write the in-memory description to a file, or pipe it with `-`).
 2. Append to the `## Agent Review` section of the description:
 
    ```markdown

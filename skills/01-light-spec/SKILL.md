@@ -37,7 +37,7 @@ A light spec is an **AI→AI contract**: Generator → Reviewer → Planner. You
 
 ### Phase 1 — Capture
 
-1. **If issue ID provided**: Fetch via `mcp__linear-server__linear_getIssueById` (with `includeRelations: true`) **once**. Extract title, description, existing labels, project, and any sub-issues, and carry those fields through the review cycle — don't re-fetch. `getIssueById` also drags the full comment thread, a sticky payload re-billed every turn (`.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky); the `linear_updateIssue`/`linear_createIssue` in Phase 5 likewise echo the whole spec body back, so keep the spec-time loop in the main thread lean.
+1. **If issue ID provided**: Read the issue with its description and thread via the project's Linear route — `pk issue show PROJ-123 --fields id,title,state,labels,priority,project --comments` — **once** (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there). Extract title, description, existing labels, project, and any sub-issues, and carry those fields through the review cycle — don't re-fetch. On the `mcp` route a full-content read drags the whole comment thread, a sticky payload re-billed every turn (`.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky), and that route's create/update calls in Phase 5 echo the whole spec body back; on either route, do the batch in one subagent, serially, and keep the spec-time loop in the main thread lean.
 2. **If raw idea**: Ask the user for a 1-2 sentence description of what they want and why.
 
 ### Phase 2 — Technical Context
@@ -67,7 +67,7 @@ Write the spec using the **Light Spec Template** below. Fill in every section.
 
 **Scope discipline:** Specs define WHAT, not HOW. Litmus test: if a statement can be rewritten as "change X line" or "use Y syntax," it is implementation detail — remove it. If a statement can be rewritten as "the system should [observable behavior]," it belongs in the spec. Do not include file paths to create, function signatures, or implementation patterns — `/work`'s planning step owns the HOW.
 
-**Code reference discipline (v4.23.0+):** Where the spec legitimately points at *existing* code (Technical Context, Decisions, AC anchors), **reference it — don't paste it**. Cite `path` + symbol or heading (e.g. `` `src/lib/format.ts` → `formatCurrency()` ``), preferring symbols over raw line numbers — line numbers rot fastest, a symbol survives edits above it, and `/spec-preflight` resolves symbols empirically. Use a line number only as a secondary qualifier when the symbol alone is ambiguous. Three reasons pastes lose: the paste asserts a stale reality the moment the file changes; Linear bills the body twice (`createIssue`/`updateIssue` echo it back — `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky) and every later `getIssueById` re-drags it; and preflight can *verify* a reference but can only *trust* a paste.
+**Code reference discipline (v4.23.0+):** Where the spec legitimately points at *existing* code (Technical Context, Decisions, AC anchors), **reference it — don't paste it**. Cite `path` + symbol or heading (e.g. `` `src/lib/format.ts` → `formatCurrency()` ``), preferring symbols over raw line numbers — line numbers rot fastest, a symbol survives edits above it, and `/spec-preflight` resolves symbols empirically. Use a line number only as a secondary qualifier when the symbol alone is ambiguous. Three reasons pastes lose: the paste asserts a stale reality the moment the file changes; on the `mcp` route Linear bills the body twice (the create/update calls echo it back — `.claude/rules/pipekit-tooling.md` § MCP Result Payloads Are Sticky) and every later full-content read re-drags it; and preflight can *verify* a reference but can only *trust* a paste.
 
 Pasting IS right when the pasted content is itself the contract, not a description of code: an exact expected diff, a small type signature the implementation must match, an error string to assert on, or content that doesn't exist yet (nothing to reference). Keep pastes contract-sized, not context-sized.
 
@@ -202,20 +202,20 @@ Draft the split as: issue A (migration + the client changes it forces) → block
 
 ### Phase 5 — Publish to Linear
 
-1. **Update or create** the Linear issue via `mcp__linear-server__linear_updateIssue` (existing) or `mcp__linear-server__linear_createIssue` (new):
-   - `team`: `{team from method.config.md}`
-   - `title`: concise spec title (prefix with domain if useful, e.g., "Budget: Multi-currency support")
-   - `description`: the full light spec (markdown)
-   - `state`: the configured **`Spec ready state`** — read it with `pk config "Spec ready state" "Specced"` (default `Specced`). This is the state `pk spec-cycle` requires on entry (Phase 6), so publishing to it keeps the interlock intact on **any** board. Projects whose Linear workflow has no `Specced` column set `Spec ready state` to a state they *do* have (e.g. `Needs Spec`); hardcoding `Specced` here would try to set a nonexistent state and break the cycle.
-   - `priority`: ask user (default 0/None if unsure)
-   - `project`: suggest based on Phase 2 findings, confirm with user
-   - `labels`: **merged list**: `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
-     - Pull `existing_labels` from Phase 1's `linear_getIssueById` payload (new issues → empty list).
-     - Strip any pre-existing `tier:quick | tier:standard | tier:heavy` label — the Phase 3.6 derivation replaces it. Other labels (`Feature`, `Finance`, domain tags, etc.) are preserved.
-     - The `labels` param on `linear_updateIssue` is a **wholesale set, not a delta** — it replaces the issue's whole label list — so pass the full merged set. (Dedicated delta tools, `linear_addIssueLabel` / `linear_removeIssueLabel`, do exist on `@tacticlaunch/mcp-linear`; a single wholesale `updateIssue` set is just cleaner here since Phase 5 reconciles the entire label list at once.)
+1. **Update or create** the Linear issue via the project's Linear route, in one call — existing: `pk issue update PROJ-123 --title "…" --description-file <spec.md> --state <Spec ready state> --project <lane> --priority N --add-label spec --add-label <tier-from-Phase-3.6> --remove-label <old tier>`; new: `pk issue create --title "…" --description-file <spec.md> --state <Spec ready state> --project <lane> --priority N --label spec --label <tier-from-Phase-3.6>`:
+   - team: `pk` reads it from `method.config.md`
+   - `--title`: concise spec title (prefix with domain if useful, e.g., "Budget: Multi-currency support")
+   - `--description-file`: the full light spec (markdown) — write it to a file, or pipe it with `-`
+   - `--state`: the configured **`Spec ready state`** — read it with `pk config "Spec ready state" "Specced"` (default `Specced`). This is the state `pk spec-cycle` requires on entry (Phase 6), so publishing to it keeps the interlock intact on **any** board. Projects whose Linear workflow has no `Specced` column set `Spec ready state` to a state they *do* have (e.g. `Needs Spec`); hardcoding `Specced` here would try to set a nonexistent state and break the cycle.
+   - `--priority`: ask user (default 0/None if unsure)
+   - `--project`: suggest based on Phase 2 findings, confirm with user
+   - labels: the **merged list** `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
+     - Pull `existing_labels` from Phase 1's `pk issue show` read (new issues → empty list).
+     - Strip any pre-existing `tier:quick | tier:standard | tier:heavy` label — the Phase 3.6 derivation replaces it (`--remove-label <old tier>` on the update). Other labels (`Feature`, `Finance`, domain tags, etc.) are preserved — `--add-label`/`--remove-label` are deltas, so labels you don't name are untouched.
+     - If `pk config "Linear transport" api` is `mcp`: that route's update call takes labels as a **wholesale set, not a delta** — it replaces the issue's whole label list — so pass the full merged set there (the verb table names that route's delta tools too; a single wholesale set is just cleaner since Phase 5 reconciles the entire label list at once).
 2. Store the issue ID for reference.
 
-**Why the merge:** the `labels` param on `linear_updateIssue` is a wholesale set — pass it the desired final list. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
+**Why the merge:** Phase 5 reconciles the issue's whole label list at once — the Phase 1 read says what is on the issue, Phase 3.6 says which tier belongs, and the publish applies exactly that difference. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
 
 ### Phase 6 — Spec Review Cycle (automated)
 
@@ -271,7 +271,7 @@ loop:
   pass += 1
 ```
 
-**Why `pk spec-cycle` and not an inline MCP comment:** centralizes the Linear-agent trigger format in one place (so a Linear product change is one fix, not many), keeps the polling out of Claude's context window, and matches the rest of the `pk` CLI surface.
+**Why `pk spec-cycle` and not an inline `pk issue comment`:** centralizes the Linear-agent trigger format in one place (so a Linear product change is one fix, not many), keeps the polling out of Claude's context window, and matches the rest of the `pk` CLI surface.
 
 **State preconditions:** `pk spec-cycle` refuses to run if the issue is not in the configured "Spec ready state" (default: `Specced`). Phase 5 of this skill sets that state, so the precondition holds on entry.
 

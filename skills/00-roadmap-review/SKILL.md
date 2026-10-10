@@ -5,7 +5,7 @@ description: Audit roadmap health — issues, dependency order, spec coverage, d
 
 # Roadmap Review Skill
 
-**v4.15.0** — Last updated: 2026-07-14 *(add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file. Carries v4.14.0: the optional, config-gated **Phase-Label Layer** check — new **Phase 3.5** — mirroring `ROADMAP.md`'s per-phase build order + parallelism onto the Linear board via labels + saved views + `sortOrder` + `blockedBy`, drift-checked against `ROADMAP.md`. No-op unless that section is *filled in* (the template ships it commented out — gate on active values, not the bare heading), so it's fully portable. Carries v4.1.0: validate the Linear-native initiative surface — order lives in `i{N}.`/`I{N}.P{N}.` names per `method.config.md` § Initiative Surface, not in a committed phase file)*
+**v4.39.0** — Last updated: 2026-10-10 *(**v4.39.0 — Linear via the project's route (`Linear transport`), no MCP tool names;** carries v4.15.0 — add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file)*
 
 You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context — including the **§ Initiative Surface** contract that defines the Linear-native initiative model this skill validates. Run this before speccing a new initiative to ensure the roadmap is coherent and complete.
 
@@ -68,13 +68,13 @@ If all Stage 0 checks pass, continue to the next check.
 Linear is the source of truth for the initiative surface. Read it live; there is no committed phase-file mirror to consult.
 
 1. (Optional) Read the `Roadmap source` file for the strategy-derived requirements list, if present. Strategy docs are the live requirement source.
-2. Fetch all initiatives via `mcp__linear-server__linear_getInitiatives`. Partition them:
+2. Fetch all initiatives with their projects via the project's Linear route — `pk gql '{ initiatives(first:50) { nodes { id name status projects(first:50) { nodes { id name state description } } } } }'` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there). Partition them:
    - **Delivery initiatives** = names matching `^i(\d+)\.` — these are the ordered INITIATIVES.
    - **Strategic initiatives** = unprefixed names — themes, not initiatives; carried into Phase 2's strategic-initiative check.
 3. Determine the **current initiative** = the lowest `i{N}` delivery initiative whose status is not `Completed`.
-4. For each delivery initiative (current + next-up), fetch projects via `mcp__linear-server__linear_getProjects`. Projects named `^P(\d+)\.` are the ordered SUB-PHASES; `{N}` orders them within the initiative.
+4. For each delivery initiative (current + next-up), read its projects from the step-2 nodes (`pk project list --all --json` gives the same lanes as a flat team list, with state and focus tier). Projects named `^P(\d+)\.` are the ordered SUB-PHASES; `{N}` orders them within the initiative.
 5. Determine the **current sub-phase** = the lowest `P{N}` project (within the current initiative) whose state is not in {`completed`, `canceled`}.
-6. For each project, fetch issues via `mcp__linear-server__linear_searchIssues`.
+6. For each project, fetch issues — `pk gql '{ issues(first:50, filter:{ project:{ id:{ eq:"<PROJECT-ID>" } } }) { nodes { identifier title state { name } labels { nodes { name } } sortOrder } pageInfo { hasNextPage endCursor } } }'`, paging with `after` while `hasNextPage`. Run the whole sweep in one subagent, serially — never fan out subagents at Linear (`sop/Linear_SOP.md § Rate limits`).
 
 Throughout: order comes from the integer in the `i{N}.` / `P{N}.` name prefix (numeric), **never** from Linear's `sortOrder` field.
 
@@ -142,7 +142,7 @@ This is the core Linear-native validation. The initiative surface (per `method.c
 11. **Spent lanes.** A project with 0 open issues whose state isn't `completed`/`canceled` — it stays "current" forever. **Exempt** any project whose `description` contains the literal word `placeholder`.
 12. **Walk-skip hazard.** A non-`Completed` initiative whose projects are *all* completed/canceled and which has **no placeholder project**. The walk steps past it as though it were finished. This is the single highest-consequence lanes-model defect: an entire release phase silently disappears from `pk next`.
 13. **Status drift.** Lanes holding shipped or in-flight issues while still `planned`/`backlog`; idle lanes marked `started`. Initiatives: phases before the current one `Completed`, the current one `Active`, later ones `Planned` — with the honest exception of a genuinely in-flight parallel strand, which may be `Active` alongside the arc.
-    - Objective wrong-closure sweep: `projects(filter:{status:{type:{in:["completed","canceled"]}}})` each with `issues(filter:{state:{type:{nin:["completed","canceled"]}}})`. Any hit other than a `Duplicate`-state issue is rot. **Filter server-side** — an unfiltered all-projects × all-issues read exceeds Linear's 10k query-complexity cap and is rejected (`sop/Linear_SOP.md` § API gotchas → Query complexity).
+    - Objective wrong-closure sweep (`pk gql`): `projects(filter:{status:{type:{in:["completed","canceled"]}}})` each with `issues(filter:{state:{type:{nin:["completed","canceled"]}}})`. Any hit other than a `Duplicate`-state issue is rot. **Filter server-side** — an unfiltered all-projects × all-issues read exceeds Linear's 10k query-complexity cap and is rejected (`sop/Linear_SOP.md` § API gotchas → Query complexity).
 14. **Unclassified backlog.** Project-less issues carrying no `Area:` label — invisible to both the walk *and* the backlog views. Route to `/linear-hygiene`.
 15. **Lane serialization notes present.** Each active lane's `content` body should say what runs in sequence and what's parallel-safe. Absent notes aren't an error, but a lane with real `blockedBy` chains and no explanation is a lane only its author can run. (Notes belong in `content` — `description` caps at 255 chars.)
 
@@ -171,7 +171,7 @@ The label layer **owns no state `ROADMAP.md` doesn't already assert** — so thi
 - the **saved-view convention** — one ungrouped, Manual-sorted saved view per label. *(Views are **created** at scaffold time — by `/roadmap-create` at authoring, or by this phase's **bootstrap** on an existing board — but are **not drift-checked** once they exist: this phase verifies label membership, `sortOrder`, and relations against the roadmap, not the ongoing state of a view. A later deleted/renamed view won't flag.)*
 - the **`sortOrder` step** — the `sortOrder` step key (default 1,000): the numeric gap between adjacent issues, leaving slack to insert later without a full renumber.
 
-**Materialization check — is the layer scaffolded yet? (the retrofit path).** Before drift-checking, determine whether the layer's infrastructure exists on the board. List the team labels and the saved views (`linear_getSavedViews`) and compare against the configured label/view set:
+**Materialization check — is the layer scaffolded yet? (the retrofit path).** Before drift-checking, determine whether the layer's infrastructure exists on the board. List the team labels (`pk gql '{ team(id:"<TEAM>") { labels { nodes { id name parent { name } } } } }'`, team id from `pk config "Team ID"`) and the saved views (`pk gql '{ customViews(first:50) { nodes { id name filterData } } }'`) and compare against the configured label/view set:
 
 - **Scaffolded** — every configured phase/pool label exists as a team label and each has its saved view → skip to the drift checks (A–D).
 - **Un-scaffolded** — none of the configured labels exist and there are no matching views → this is a **first-time retrofit**: rolling the layer onto an *existing* board (the rs-vault / Piper case — a project that already has a roadmap but never had the layer). Offer to **bootstrap** it (below).
@@ -179,23 +179,23 @@ The label layer **owns no state `ROADMAP.md` doesn't already assert** — so thi
 
 **Bootstrap — one-time scaffold onto an existing board.** This is the same create path `/roadmap-create` Phase 3.5 runs at initial authoring, re-homed here so an *established* board can adopt the layer without hand-building it (the layer was originally hand-built on SiteLine; this closes that gap). It has its **own explicit confirm** — present a **scaffold plan**, apply on `go` — because it's a distinct one-time operation that includes writes (view creation, `sortOrder` seeding) the end-of-skill drift prompt doesn't cover. The full six-step create below runs on a fully **un-scaffolded** board (all-creates, one `go`); on a **partial** board bootstrap runs only steps 1 & 5 (missing labels + views) and the drift checks own the rest. On `go`:
 
-1. **Create missing labels** — `linear_createTeamLabel` for each sequenced phase label, the Continuous pool label, and `Order: Any` (only the ones that don't already exist).
+1. **Create missing labels** — `pk gql 'mutation($in: IssueLabelCreateInput!) { issueLabelCreate(input:$in) { success issueLabel { id name } } }' '{"in":{"teamId":"<TEAM>","name":"Roadmap: Phase A","color":"#<hex>"}}'` for each sequenced phase label, the Continuous pool label, and `Order: Any` (only the ones that don't already exist).
 2. **Apply membership** — label each issue by the phase the roadmap source places it under. Continuous is **named-items-only** (§A's rule applies — never bulk-label a whole project).
 3. **Seed `sortOrder`** — set each issue's `sortOrder` to the roadmap's top-to-bottom order within its phase, stepped by the `sortOrder` step key. **A seed of an unset value applies on the bootstrap confirm** — this is distinct from check B's flag-only *reorder*: seeding a blank order from the roadmap *is* the materialization; rewriting an already-curated order is the human-intent call B guards. Only seed issues whose `sortOrder` isn't already meaningfully set.
 4. **Create relations** — a `blockedBy` relation for each intra-phase dependency the roadmap names (§D).
-5. **Create views** — one ungrouped saved view per label (`linear_createSavedView`; read an existing view's `filterData` first — §Tooling).
-6. **Hand-off step (not optional to report):** tell the human to toggle each new view to **Manual sort** in the Linear UI — it's not settable over MCP, and until they do, the seeded `sortOrder` won't render. Report this as a *pending human step*, never as "views done."
+5. **Create views** — one ungrouped saved view per label (`pk gql` → `customViewCreate`; read an existing view's `filterData` first — §Tooling).
+6. **Hand-off step (not optional to report):** tell the human to toggle each new view to **Manual sort** in the Linear UI — the view-create call doesn't set it, and until they do, the seeded `sortOrder` won't render. Report this as a *pending human step*, never as "views done."
 
 After bootstrap the drift checks below are a no-op on a freshly-scaffolded board; on a partial one they reconcile whatever bootstrap didn't create. A project whose phases map 1:1 to projects shouldn't be here at all — it has no `### Phase Label Layer` config, so Phase 3.5 already no-opped.
 
 Run these checks (all report-only — fixes fold into the end-of-skill fix prompt):
 
-**A. Membership drift.** For each phase/pool `ROADMAP.md` names, diff the issue identifiers it lists against current Linear label membership (`linear_searchIssues` filtered by the label). Report:
+**A. Membership drift.** For each phase/pool `ROADMAP.md` names, diff the issue identifiers it lists against current Linear label membership (the label-membership read in §Tooling). Report:
 - **Missing label** — `ROADMAP.md` lists the issue under a phase but the issue lacks the label → propose add.
 - **Stray label** — the issue carries the label but `ROADMAP.md` doesn't list it under that phase → propose remove. *(This is the Bug-1 failure mode: a `Roadmap: Phase X` label picked up as a side effect of a re-parent, not asserted by the roadmap — see the `/linear-hygiene` guardrail. Project membership ≠ phase-label membership.)*
 - **Continuous is named-items-only.** Only issues `ROADMAP.md` names by identifier get the pool label. **Never** propose labeling every open issue in the pool's projects — a phase-arc project deliberately holds a mix of phase-labeled work and unitemized capacity-fill the roadmap leaves unordered. Labeling the whole project would invent priority the roadmap doesn't assert.
 
-**B. `sortOrder` monotonicity.** Within each label, verify `sortOrder` is monotonic in `ROADMAP.md`'s top-to-bottom listed order. **Flag out-of-order pairs — do NOT auto-fix.** Reordering is a human-intent call; surface it and let the user confirm before any `linear_updateIssue` rewrites `sortOrder`.
+**B. `sortOrder` monotonicity.** Within each label, verify `sortOrder` is monotonic in `ROADMAP.md`'s top-to-bottom listed order. **Flag out-of-order pairs — do NOT auto-fix.** Reordering is a human-intent call; surface it and let the user confirm before any `issueUpdate` (via `pk gql`, §Tooling) rewrites `sortOrder`.
 
 **C. Exclusivity + dependency consistency.**
 - No issue carries **two** `Roadmap: Phase *` labels — an issue lives in one sequenced phase (or the pool), not two. Flag conflicts.
@@ -205,23 +205,24 @@ Run these checks (all report-only — fixes fold into the end-of-skill fix promp
 
 **Propose-then-apply.** Two confirm surfaces, kept separate:
 - **Bootstrap** (materialization on an un-scaffolded / partial board) has its **own** scaffold-plan confirm inside this phase — it creates labels + views, seeds `sortOrder`, and applies membership + relations in one `go`.
-- **Drift** (A–D on an already-scaffolded board) folds into the skill's existing "Want me to fix any of these now?" prompt (`linear_addIssueLabel` / `linear_removeIssueLabel` / `linear_createIssueRelation`).
+- **Drift** (A–D on an already-scaffolded board) folds into the skill's existing "Want me to fix any of these now?" prompt (`pk issue update <ID> --add-label L` / `--remove-label L` / `pk issue relate <ID> --blocked-by <ID2>`).
 
 `sortOrder` handling differs by surface: **seeding** an unset order during bootstrap applies on the bootstrap confirm; **reordering** an already-set order (check B) stays **proposal-only** — never auto-applied.
 
-> **Tooling (verify against your installed MCP — a fast-moving, partly-undocumented surface, exactly what `pipekit-tooling.md`'s verify-installed-API rule is for):**
-> - Add/remove issue label: `mcp__linear-server__linear_addIssueLabel` / `linear_removeIssueLabel`. Create a missing phase label: `linear_createTeamLabel` (`teamId`, `name`, `color`).
-> - Saved views: `linear_createSavedView` uses an **undocumented internal `filterData` DSL** — **read an existing saved view first** (`linear_getSavedViews`) to confirm the current shape before authoring one. Example label filter: `{"and":[{"labels":{"and":[{"or":[{"name":{"eq":"Roadmap: Phase A"}}]}]}}]}`.
-> - `sortOrder` is a plain number on `linear_updateIssue` (lower sorts first) but **only renders in a view's Manual sort mode**, which a human must toggle in the Linear view UI — it is **not** settable over MCP. This skill sets labels + `sortOrder` *values*; the Manual-sort toggle is a one-time human step, so say so rather than reporting the view "done."
-> - Relations: `linear_createIssueRelation` (`blockedBy` / `blocks`).
-> - **Payload watch-out (same as `/linear-hygiene`):** a `linear_searchIssues` sweep across a project's several phase-arc projects can exceed one context. Dispatch a grounding-tier subagent (per `method.config.md § Model Policy`, default `haiku`, effort `low`) to digest and return a condensed `{identifier, phase-label, sortOrder}` table rather than pulling raw payloads into the skill context.
+> **Tooling (everything goes through the project's Linear route — verb table `sop/Linear_SOP.md § Linear transport`; verify the `pk gql` shapes against the live schema, a fast-moving, partly-undocumented surface, exactly what `pipekit-tooling.md`'s verify-installed-API rule is for):**
+> - Add/remove issue label: `pk issue update <ID> --add-label "<label>"` / `--remove-label "<label>"`. Create a missing phase label: `pk gql` → `issueLabelCreate` (`teamId`, `name`, `color`), the shape in bootstrap step 1.
+> - Label-membership read (check A): `pk gql '{ issues(first:50, filter:{ labels:{ name:{ eq:"Roadmap: Phase A" } } }) { nodes { identifier sortOrder labels { nodes { name } } inverseRelations { nodes { type issue { identifier } } } } pageInfo { hasNextPage endCursor } } }'`, paging with `after`.
+> - Saved views: `customViewCreate` uses an **undocumented internal `filterData` DSL** — **read an existing saved view first** (`pk gql '{ customViews(first:50) { nodes { id name filterData } } }'`) to confirm the current shape before authoring one. Example label filter: `{"and":[{"labels":{"and":[{"or":[{"name":{"eq":"Roadmap: Phase A"}}]}]}}]}`.
+> - `sortOrder` is a plain number on the issue (lower sorts first — `pk issue update <ID> --sort-order -2000000`, in the same call as any state or project change so the write cannot re-rank it) but **only renders in a view's Manual sort mode**, which a human must toggle in the Linear view UI — the view-create call does **not** set it. This skill sets labels + `sortOrder` *values*; the Manual-sort toggle is a one-time human step, so say so rather than reporting the view "done."
+> - Relations: `pk issue relate <ID> --blocked-by <ID2> [--why "…"]` (`blockedBy` / `blocks`).
+> - **Payload watch-out (same as `/linear-hygiene`):** a label-membership sweep across a project's several phase-arc projects can exceed one context. Dispatch a grounding-tier subagent (per `method.config.md § Model Policy`, default `haiku`, effort `low`) to digest and return a condensed `{identifier, phase-label, sortOrder}` table rather than pulling raw payloads into the skill context — one subagent, serial calls, never a fan-out at Linear (`sop/Linear_SOP.md § Rate limits`).
 
 ### Phase 4 — Dependency Validation
 
 1. Read light specs for issues that have them — extract dependency contracts (e.g., "PROJ-8 is a hard blocker for PROJ-7")
 2. Read the WP dependency graph from `pipekit/sop/Linear SOP.md` (Dependency Graph section)
 3. For each declared dependency:
-   - Fetch the issue via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`
+   - Read the issue's relations — `pk gql '{ issue(id:"<ID>") { identifier relations { nodes { type relatedIssue { identifier } } } inverseRelations { nodes { type issue { identifier } } } } }'`
    - Check that `blockedBy`/`blocks` relations exist in Linear
 4. Flag missing dependency links with the exact relation to add
 5. Flag circular dependencies
@@ -317,7 +318,7 @@ Bootstrap the phase-label layer onto this board? Will create:
   sortOrder:  seed 18 issues (step 1000)
   Relations:  3 blockedBy (intra-phase deps ROADMAP.md names)
   Views:      4 saved views (1 per label)
-  ⚠ After: toggle each view to Manual sort in Linear (not settable over MCP)
+  ⚠ After: toggle each view to Manual sort in Linear (the view-create call doesn't set it)
 Say "go" to scaffold, or redirect any line.
 ```
 
@@ -387,13 +388,13 @@ Report-only — the roadmap file is human-owned; resolve each by hand.
 Parked items are brainstorm dispositions marked "Later" with parseable triggers. Check if any triggers have fired.
 
 **Step 1 — Fetch parked items:**
-Use `mcp__linear-server__linear_searchIssues` filtered by the `Parked` label. For each, read the latest comment matching the parseable prefix `**Parked:** Revisit when ...`. If a parked issue has no such comment (older disposition, pre-grammar), flag it for manual review and continue.
+Use `pk issue search "" --label Parked --json` (≤50 a page). For each, read its thread (`pk issue show <ID> --comments`) and take the latest comment matching the parseable prefix `**Parked:** Revisit when ...`. If a parked issue has no such comment (older disposition, pre-grammar), flag it for manual review and continue.
 
 **Step 2 — Parse the trigger per the grammar** (authored by `/brainstorm` Phase 2):
 
 | Regex pattern | Evaluation |
 |---------------|------------|
-| `(\w+-\d+) ships` | Fetch that issue; trigger fires if state is `Done` |
+| `(\w+-\d+) ships` | Fetch that issue (`pk issue show <ID> --fields state`); trigger fires if state is `Done` |
 | `Stage (\d+) UAT passes` | Fetch all issues in Stage N; trigger fires if all are past UAT (state in {UAT, Done} for the entire set) |
 | `Phase (\d+) ships` | Fetch all issues in Phase N; trigger fires if all are `Done` |
 | `date: (\d{4}-\d{2}-\d{2})` | Trigger fires when today ≥ the date |

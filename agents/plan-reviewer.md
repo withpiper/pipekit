@@ -134,7 +134,7 @@ Run each check and record PASS | FAIL | N/A with evidence.
 | D2 | Auth/RLS: JWT vs service-role vs anon path distinctions; RLS-denied-UPDATE returning 200 traps |
 | D3 | Concurrency: race conditions, lock ordering, retry semantics |
 | D4 | Cross-env: preview URLs, env-var scope, secrets boundaries |
-| D5 | External deps (Supabase/Vercel/Linear MCP): failure modes and fallbacks |
+| D5 | External deps (Supabase/Vercel/Linear API): failure modes and fallbacks |
 
 Not every plan needs every D-check. Skip checks whose domain isn't touched.
 

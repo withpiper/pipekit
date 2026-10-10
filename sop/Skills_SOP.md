@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.39.0** — Last updated: 2026-10-10  *(**v4.39.0 — `/tpm` added (user-typed only; rubric in `sop/TPM_SOP.md`), `/lane-map` retired; the scaffold-once mechanism stays without a worked example.** Carries v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.)*
+**v4.39.0** — Last updated: 2026-10-10  *(**v4.39.0 — § Key Conventions 3: skills use the project's Linear route (`Linear transport`, `api` default) and never hardcode an MCP tool name; `/tpm` added (user-typed only; rubric in `sop/TPM_SOP.md`), `/lane-map` retired; the scaffold-once mechanism stays without a worked example.** Carries v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.)*
 
 ---
 
@@ -131,7 +131,7 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 
 1. **Read `method.config.md`** for project-specific values (Linear team, issue prefix, state IDs)
 2. **Read `CLAUDE.md`** for project coding conventions
-3. **Use Linear MCP tools** for issue management (`mcp__linear-server__*`)
+3. **Use the project's Linear route** for issue management — `Linear transport` in `method.config.md` (`api` by default: `pk issue …`, `pk project list`, `pk gql` for the long tail; `mcp`: the project's registered Linear MCP server). Write skill steps as operations ("read the issue and its comments", "create the issue with state, labels and project in one call") and point at the verb table in `sop/Linear_SOP.md § Linear transport`. Never hardcode an MCP tool name in a skill (v4.39.0 — 21 skills did, and a project on the API route needed a full-file override per skill to re-point two lines).
 4. **Dispatch heavy planning + execution through `/work`** (which plans inline and executes on the native-on-Workflow executor, the sole executor as of v4.0.0). Don't spawn ad-hoc execution agents directly from skills — that bypasses Pipekit's execution and visibility layer. Skills that genuinely need a planning subagent for narrow internal work (e.g., spec-review agents in `/light-spec`) may still spawn dedicated subagents; the rule is about replacing the daily-loop work pipeline, not all `Agent()` calls.
 
 ### "What's next?" in v2 — `pk next` reads Linear

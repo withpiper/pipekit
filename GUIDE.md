@@ -361,7 +361,7 @@ A narrative `ROADMAP.md` may still be written as an optional legacy/handoff arti
 
 **Feature clusters become `I{N}.P{N}.` Linear Projects.** A feature cluster is a logical grouping of related requirements — "Data Foundation", "Search & CRUD", "Auth & Permissions." Each becomes an `I{N}.P{N}.` Project (sub-phase) under its phase's `i{N}.` Initiative (e.g. `I1.P2. Auth & Permissions`).
 
-**Manual vs. automated:** The skill automates issue creation, relations, and labels via MCP. For things that require the Linear UI (initiatives, workflow states), it gives explicit step-by-step instructions.
+**Manual vs. automated:** The skill automates issue creation, relations, and labels over the project's Linear route (`pk` by default; `sop/Linear_SOP.md § Linear transport`). For things that require the Linear UI (initiatives, workflow states), it gives explicit step-by-step instructions.
 
 **The `--verify` flag:** After completing manual Linear setup, run `/roadmap-create --verify` to confirm everything is wired up correctly.
 

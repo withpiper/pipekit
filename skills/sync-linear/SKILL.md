@@ -5,7 +5,7 @@ description: Reconcile strategy-doc drift against the Linear i{N}./I{N}.P{N}. in
 
 # Sync Linear Skill
 
-**v4.1.0** — Last updated: 2026-06-21 *(Linear-native initiative surface — no PHASES.md/linear-map.json to sync. The initiative order and Initiative→Project→Issue hierarchy live entirely in Linear; this skill reconciles strategy-doc and requirement drift against that board, not against committed phase files.)*
+**v4.39.0** — Last updated: 2026-10-10 *(v4.39.0 — Linear via the project's route (`Linear transport`), no MCP tool names; carries v4.1.0 — Linear-native initiative surface — no PHASES.md/linear-map.json to sync.)*
 
 You are a Linear hierarchy reconciliation coordinator. Your job is to keep the Linear board's initiative hierarchy coherent with the project's strategy docs and requirements. Read `method.config.md` for project context — specifically `## Initiative Surface`, which defines the canonical model.
 
@@ -60,12 +60,18 @@ It does **not** reconcile a planning-file mirror — there is none. All reconcil
 
 To reconcile, build a live picture of the hierarchy from Linear (never from a map file):
 
-1. **List initiatives** via `mcp__linear-server__linear_getInitiatives` (or search) — these are the initiatives. Parse `i{N}.` from each name to get initiative order.
-2. **List projects** under each initiative via `mcp__linear-server__linear_getProjects` — these are the sub-phases. Parse `P{N}.` from each name to get sub-phase order.
-3. **List issues** in each project via `mcp__linear-server__linear_searchIssues` — these are the requirements/tasks.
+Every read and write in this skill goes through the project's Linear route (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of each call is listed there). Run the whole survey in **one** subagent, serially — never fan out subagents at Linear, it is one shared per-user quota (`sop/Linear_SOP.md § Rate limits`).
+
+1. **List initiatives** with their projects — `pk gql '{ initiatives(first:50) { nodes { id name status projects { nodes { id name } } } } }'` — these are the initiatives. Parse `i{N}.` from each name to get initiative order.
+2. **List projects** under each initiative — the `projects { nodes { id name } }` of each initiative from step 1; `pk project list --all --json` adds each project's state and focus tier. These are the sub-phases. Parse `P{N}.` from each name to get sub-phase order.
+3. **List issues** in each project — a project sweep, not a title search, so page it with `pk gql` (`first: 50`, follow `endCursor` while `hasNextPage` is true):
+   ```bash
+   pk gql 'query($p: ID!, $after: String) { issues(first:50, after:$after, filter:{ project:{ id:{ eq:$p } } }) { nodes { identifier title state { name } labels { nodes { name } } } pageInfo { hasNextPage endCursor } } }' '{"p":"<PROJECT-ID>","after":null}'
+   ```
+   These are the requirements/tasks.
 4. **Read the strategy docs** named in `method.config.md` — these define what *should* exist and where. This is the requirement side of the reconciliation.
 
-The Linear team ID and workflow state IDs come from `method.config.md` (or are resolved live via `mcp__linear-server__linear_getTeams` / `linear_getWorkflowStates`). **Never hardcode Linear IDs** and never read them from `linear-map.json` — that file is retired.
+The Linear team ID comes from `method.config.md` (`pk config "Team ID"`). The issue verbs take state, label and project **names** (`--state Approved`, `--project I5.P2`) and resolve ids themselves, so a workflow-state id is needed only inside a hand-written `pk gql` mutation — take it from `method.config.md` or resolve it live with `pk gql '{ team(id:"<TEAM>") { states { nodes { id name type } } } }'`. **Never hardcode Linear IDs** and never read them from `linear-map.json` — that file is retired.
 
 ## Execution Steps
 
@@ -90,10 +96,10 @@ The Linear team ID and workflow state IDs come from `method.config.md` (or are r
 1. Run **Check Mode** to produce the drift report.
 2. **Present each proposed change** as a table (rename / re-place / create), grouped by drift type.
 3. **Ask for confirmation.** Never auto-apply.
-4. On approval, apply only the approved changes:
-   - Rename initiatives via `mcp__linear-server__linear_updateInitiative`.
-   - Rename / re-parent projects via `mcp__linear-server__linear_updateProject`.
-   - Move issues into the correct project, or create missing issues, via `mcp__linear-server__linear_updateIssue` / `linear_createIssue`.
+4. On approval, apply only the approved changes — one call per approved row, serially, in the same single subagent (never fan out at Linear):
+   - Rename initiatives — `pk gql 'mutation($id: String!, $in: InitiativeUpdateInput!) { initiativeUpdate(id:$id, input:$in) { success } }' '{"id":"<INITIATIVE-ID>","in":{"name":"i1. Foundation"}}'`.
+   - Rename projects — `pk gql 'mutation($id: String!, $in: ProjectUpdateInput!) { projectUpdate(id:$id, input:$in) { success } }' '{"id":"<PROJECT-ID>","in":{"name":"I1.P2. Budget Editor"}}'`. Re-parent a project by moving its initiative link — `initiativeToProjectCreate(input:{ initiativeId:"<NEW-INITIATIVE-ID>", projectId:"<PROJECT-ID>" })`, then `initiativeToProjectDelete(id:"<OLD-LINK-ID>")` — both through `pk gql`.
+   - Move issues into the correct project — `pk issue update <ID> --project <I{N}.P{N}>`; create missing issues — `pk issue create --title "…" --project <I{N}.P{N}> --state <state> --label "Area: <area>" --description-file <F>`, one call each.
 5. **Re-run Check Mode** after applying to confirm the drift cleared. Report residual drift, if any.
 
 ### Promote Mode
@@ -106,14 +112,14 @@ Analyzes sub-phase completion status and recommends moving the next batch of iss
 Future Phases → On Deck → Needs Spec → Specced → Approved → In Progress → Building → UAT → [Released →] Done
 ```
 
-Workflow state IDs come from `method.config.md` or are resolved live via `mcp__linear-server__linear_getWorkflowStates`. Never hardcode them and never read them from `linear-map.json`.
+The promotions below pass the state **name** (`pk issue update <ID> --state "On Deck"`) and `pk` resolves the id. When a raw id is needed for a hand-written `pk gql` mutation, take it from `method.config.md` or resolve it live with `pk gql '{ team(id:"<TEAM>") { states { nodes { id name type } } } }'`. Never hardcode them and never read them from `linear-map.json`.
 
 #### Logic
 
 1. **Read** workflow state references from `method.config.md` (or resolve live).
 2. **List the `P{N}.` projects** in numeric-prefix order for the active phase initiative.
 3. **For each project, in order (P1 → Pn):**
-   - Fetch all issues via `mcp__linear-server__linear_searchIssues`.
+   - Fetch all issues — the per-project `pk gql` issues page from *Reading the Board* step 3 (`first: 50`, follow `endCursor`).
    - Classify by status bucket:
      - **Done bucket:** Done, Canceled, Duplicate
      - **Active bucket:** In Progress, Building, UAT, Approved, Specced, Needs Spec
@@ -128,7 +134,7 @@ Workflow state IDs come from `method.config.md` or are resolved live via `mcp__l
    - Issues in `Future Phases` → recommend `On Deck`.
    - Issues in `Triage` or `Ideas` → recommend `On Deck` (they're in a project, so they're real).
 6. **Present the recommendation** as a table showing issue ID, title, current status, and proposed status.
-7. **Ask for confirmation** before executing. On approval, batch-update via `mcp__linear-server__linear_updateIssue`.
+7. **Ask for confirmation** before executing. On approval, apply the batch as serial `pk issue update <ID> --state "On Deck"` calls — one per issue, in one subagent.
 
 #### Edge Cases
 
@@ -195,21 +201,23 @@ After a check or fix, display a drift summary:
 
 In **check** mode the Action column is advisory only. In **fix** mode each row is presented for approval before any write.
 
-## Linear MCP Tools Used
+## Linear Operations Used
 
-- `mcp__linear-server__linear_getInitiatives` / `linear_getInitiativeById` — list/read initiatives (phases)
-- `mcp__linear-server__linear_updateInitiative` — rename an initiative to the `i{N}.` convention
-- `mcp__linear-server__linear_getProjects` / `linear_getProjectById` — list/read projects (sub-phases)
-- `mcp__linear-server__linear_updateProject` — rename / re-parent a project to the `P{N}.` convention
-- `mcp__linear-server__linear_searchIssues` — list/filter issues in a project
-- `mcp__linear-server__linear_getIssueById` — read issue details
-- `mcp__linear-server__linear_createIssue` / `linear_updateIssue` — create or re-place an issue
-- `mcp__linear-server__linear_getWorkflowStates` — resolve workflow state IDs (when not in `method.config.md`)
+All through the project's Linear route — `api` forms shown; the `mcp` column of the verb table in `sop/Linear_SOP.md § Linear transport` carries each equivalent.
+
+- List / read initiatives (phases) — `pk gql '{ initiatives(first:50) { nodes { id name status projects { nodes { id name } } } } }'`
+- Rename an initiative to the `i{N}.` convention — `pk gql` `initiativeUpdate` mutation (shape in *Fix Mode*)
+- List / read projects (sub-phases) — `pk project list --all --json`, plus the initiative query above for parentage
+- Rename / re-parent a project to the `P{N}.` convention — `pk gql` `projectUpdate` / `initiativeToProject*` mutations (shape in *Fix Mode*)
+- List / filter issues in a project — the `pk gql` issues page filtered by `project.id` (shape in *Reading the Board*); a title lookup is `pk issue search "<text>" [--project P] [--state S] --json`
+- Read issue details — `pk issue show <ID>` (add `--comments` only when the description or thread is needed)
+- Create or re-place an issue — `pk issue create …` / `pk issue update <ID> --project <I{N}.P{N}>`
+- Resolve workflow state IDs when not in `method.config.md` — `pk gql '{ team(id:"<TEAM>") { states { nodes { id name type } } } }'`
 
 ## Important Notes
 
 - **Linear is the initiative surface.** Parse initiative/sub-phase order from the `i{N}.` / `P{N}.` name prefix — never from `sortOrder`, never from a planning file.
-- **`linear-map.json` and `PHASES.md` are retired** — this skill never reads or writes them. Resolve Linear IDs from `method.config.md` or live MCP queries.
+- **`linear-map.json` and `PHASES.md` are retired** — this skill never reads or writes them. Resolve Linear IDs from `method.config.md` or live reads over the project's Linear route (`pk gql`).
 - **`ROADMAP.md`, if present, is optional legacy narrative** — read it for human context only; it is not a reconciliation source or target.
 - **Initiative/project descriptions** use Markdown (`## Phase`, `### Scope`, `### Success Criteria`); normalize formatting when reading edits made in Linear's rich-text editor.
 - Include `PROJ-{number}` in commit messages when completing tasks linked to Linear issues.

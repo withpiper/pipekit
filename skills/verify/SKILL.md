@@ -263,7 +263,7 @@ Continue to step 4 only if QA is enabled.
 
 ### Step 4a — Fetch the spec for AC reference
 
-Use Linear MCP `mcp__linear-server__linear_getIssueById` with `<ISSUE-ID>`. Capture the full description.
+Read the spec via the project's Linear route — `pk issue show "$ISSUE" --fields id,title,description` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there). Capture the full description.
 
 ### Step 4b — Compute the diff
 

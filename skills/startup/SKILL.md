@@ -289,7 +289,7 @@ Walk through setup checklist from `STARTUP.md` Step 3, in order. Skip steps alre
 3. **Database** — create project(s), initial schema, auth setup
 4. **Deployment** — link to Vercel/equivalent, env vars, custom domains, preview deploys. Update the Environments table in `method.config.md` with URLs once deployed.
 5. **Tooling** — ESLint, Vitest, Playwright, pre-deploy gate. Update the `## Pre-Deploy Gate` section of `method.config.md` with the actual commands for this project's stack.
-6. **MCP Servers** — configure `.mcp.json` (Linear, GitHub, DB, browser, etc.)
+6. **MCP Servers** — configure `.mcp.json` (GitHub, DB, browser, etc.; a Linear MCP server only if the project sets `Linear transport: mcp` — the default route is `pk`'s API path, verified in 4a)
 
 **Tool and integration wiring:**
 
@@ -332,14 +332,19 @@ Record everything in the startup tracker under Step Notes — which CLIs were in
 
 This is the most important infrastructure step — every downstream skill depends on Linear being correctly configured. Walk through it carefully.
 
-**4a. Verify MCP connection**
+**4a. Verify the Linear route**
 
-Test that the Linear MCP server is connected by calling `mcp__linear-server__linear_getIssues` (or any list tool). If it fails:
-- _"Linear MCP isn't connected. Run this in your terminal and restart Claude Code:"_
+Every Pipekit skill reaches Linear through the route `method.config.md` names — `Linear transport`, `api` by default (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of each operation is listed there). Verify it before anything else in this step.
+
+On `api` (the default): run `pk doctor` — it must show `Linear API key set` and `Linear API reachable (viewer: …)` — then one real read, `pk issue search "<any word>" --limit 1` (or `pk project list`). If `pk doctor` reports the key missing, follow the recipe `pk` prints: on a 1Password-backed project `op run --env-file=op-references.conf -- pk …` (or `direnv allow` so the shell loads it), otherwise `export <Linear API key env var>=lin_api_…`. Falling back to an MCP is not the fix.
+
+If `pk config "Linear transport" api` is `mcp`: the project registers its Linear MCP server as `linear-server` in the committed `.mcp.json` (so it is visible inside `pk branch` worktrees — `pipekit-tooling.md § MCP Server Configuration`); verify by calling any list tool on it. If it fails:
+- _"Linear MCP isn't connected. Register it and restart Claude Code:"_
   ```
-  claude mcp add --transport http --scope user linear-server https://mcp.linear.app/mcp
+  claude mcp add --transport {type} --scope project linear-server {url-or-command}
   ```
-- Then run `/mcp` in Claude Code to complete OAuth authorization.
+  (`--scope project` writes the committed `.mcp.json`; the server is the one the verb table's `mcp` column names — not the first-party `mcp.linear.app` remote, whose snake_case, leaner surface needs remapping per `sop/Linear_SOP.md § Linear transport`.)
+- Then run `/mcp` in Claude Code to complete authorization.
 
 **4b. Workspace and Team**
 
@@ -350,12 +355,14 @@ Ask: _"Do you already have a Linear workspace, or should we start fresh?"_
   - Ask them to create a team (e.g., the project name). Linear creates one by default during onboarding.
   - Record the workspace slug, team name, and team ID.
 
-Fetch team details and populate `method.config.md`:
+Fetch team details (`pk gql '{ teams { nodes { id name key } } }'` — `key` is the issue prefix) and populate `method.config.md`:
 ```
 | **Workspace slug** | `{slug}` |
 | **Team name** | `{team}` |
 | **Team ID** | `{uuid}` |
 | **Issue prefix** | `{PREFIX}` |
+| **Linear API key env var** | `LINEAR_API_KEY` (or the project's name for it) |
+| **Linear transport** | `api` (default) — `mcp` only if the project runs a Linear MCP server (4a) |
 ```
 
 **4c. Workflow States**
@@ -399,7 +406,14 @@ Pipekit requires Triage enabled + these 12 workflow states:
     • Duplicate                 (type: canceled)
 ```
 
-**Attempt to configure via MCP first.** Try creating workflow states programmatically. If the MCP tools support state creation/management, automate the full setup. If not, give the user step-by-step manual instructions:
+**Attempt to configure via the Linear route first.** Try creating the states programmatically — one guarded `pk gql` mutation per state (`color` is required by the schema; any value works):
+
+```bash
+pk gql 'mutation($in: WorkflowStateCreateInput!) { workflowStateCreate(input: $in) { success workflowState { id name type } } }' \
+       '{"in":{"teamId":"<TEAM>","name":"Needs Spec","type":"backlog","color":"#95a2b3"}}'
+```
+
+If the API accepts them, automate the full setup (Triage is a team setting, not a state — it stays manual). If it refuses — permissions, plan tier, or a default state that can't be removed while it holds issues — give the user step-by-step manual instructions:
 
 _"Linear's workflow states need to be configured in the UI. Here's exactly what to do:"_
 
@@ -450,7 +464,7 @@ Ask the user to confirm when done: _"Let me know when the workflow states are co
 
 **4d. Fetch State IDs**
 
-After states are configured, fetch all workflow state IDs. Use the Linear MCP tools to list workflow states for the team, or guide the user to get them from Settings → Workflow (each state has a UUID visible in the URL when clicked).
+After states are configured, fetch all workflow state IDs — `pk gql '{ team(id:"<TEAM>") { states { nodes { id name type } } } }'` (team id from `pk config "Team ID"`) — or guide the user to get them from Settings → Workflow (each state has a UUID visible in the URL when clicked).
 
 Populate the Workflow State IDs table in `method.config.md`:
 
@@ -478,7 +492,14 @@ Populate the Workflow State IDs table in `method.config.md`:
 
 **4e. Standard Labels**
 
-Create the standard label taxonomy via `mcp__linear-server__linear_createTeamLabel`. If MCP doesn't support label creation, instruct manually:
+Create the standard label taxonomy — one guarded `pk gql` mutation per label (`parentId` only when the label sits in a group: create the group first with the same mutation and reuse its `id`):
+
+```bash
+pk gql 'mutation($in: IssueLabelCreateInput!) { issueLabelCreate(input: $in) { success issueLabel { id name } } }' \
+       '{"in":{"teamId":"<TEAM>","name":"Feature","parentId":"<GROUP-ID>","color":"#4ea7fc"}}'
+```
+
+If the API refuses label creation, instruct manually:
 
 ```
 Create these labels in Linear (Settings → Labels):
@@ -498,12 +519,12 @@ Domain and Tier labels are project-specific — these get created during `/roadm
 **4f. Verify Linear Setup**
 
 Run a quick verification:
-1. Fetch issues for the team — confirms MCP connection and team ID
-2. Count workflow states — should be exactly 13
-3. List labels — should include all Type and Flag labels
+1. Fetch issues for the team (`pk issue search "<any word>" --limit 1`, or `pk project list`) — confirms the Linear route and team ID
+2. Count workflow states (the 4d `pk gql` states query) — should be exactly 13
+3. List labels (`pk gql '{ team(id:"<TEAM>") { labels { nodes { id name parent { name } } } } }'`) — should include all Type and Flag labels
 4. Confirm `method.config.md` has no empty state IDs
 
-If anything is missing, loop back to the specific sub-step that produces it: missing state IDs → 4d, missing labels → 4e, MCP disconnected → 4a, missing team info → 4b, incorrect workflow states → 4c.
+If anything is missing, loop back to the specific sub-step that produces it: missing state IDs → 4d, missing labels → 4e, Linear route failing (`pk doctor` red) → 4a, missing team info → 4b, incorrect workflow states → 4c.
 
 **Output:** Working infrastructure — repo builds, deploys, pre-deploy gate passes, Linear workspace fully configured
 
@@ -657,7 +678,7 @@ Run `/roadmap-review` to validate:
 - Linear board seeded (initiatives, projects, milestones, issues)
 - Dependencies correctly set
 - All method.config.md fields populated (no TBDs)
-- Linear MCP connected and workflow states configured
+- Linear route verified (`pk doctor`) and workflow states configured
 
 If any check fails, diagnose and fix before proceeding to Step 11. Do not move issues into "Needs Spec" (Step 11's job) until validation passes.
 

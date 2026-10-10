@@ -157,7 +157,7 @@ map 1:1 to projects, you don't need this layer — the initiative surface alread
 | **Sequenced phase labels** | `Roadmap: Phase A`, `Roadmap: Phase B`, `Roadmap: Phase C` |
 | **Continuous pool label** | `Roadmap: Continuous` |
 | **Order label** | `Order: Any` |
-| **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over MCP) |
+| **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over the API) |
 | **`sortOrder` step** | `1000` (gap between adjacent issues; leaves slack to insert without a renumber) |
 
 - **Phase labels come from your own `ROADMAP.md` phase names** — the values above are SiteLine-shaped examples, not a contract.
@@ -330,6 +330,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Default deep flag** | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
 | **Linear API key env var** | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
+| **Linear transport** | `api` \| `mcp` | `api` | Every skill that reads or writes Linear. `api` = `bin/pk` verbs (`pk issue search/show/create/update/set/relate/comment`, `pk project list`, `pk gql` for the long tail — every mutation passes `pk`'s workspace guard, and the key comes from `Linear API key env var`). `mcp` = the Linear MCP server the project registers in `.mcp.json`. Verb table in `sop/Linear_SOP.md § Linear transport`; skills read the value with `pk config "Linear transport" api`. |
 | **Method repo** | git URL | `https://github.com/withpiper/pipekit.git` | `pk doctor` (upstream-staleness check); also overridable via the `METHOD_REPO` env var. Only forks on a non-standard remote need to set this. |
 | **Migration dir** | e.g. `supabase/migrations/` | (none) | `/pr-security-review` (locate migrations to audit); `/spec-preflight` Probe 3.6d (migration data-shape); `scripts/check-migration-drift.sh` + `templates/ci/migration-drift.yml` (v4.18.0 drift detection — no value → clean skip) |
 | **Platform** | `managed-supabase` \| `self-hosted-postgres` \| `none` | `none` | `/spec-preflight` Probe 3.6b — refuses GUC-based prod-safety designs on managed-supabase (handoff #20, verified at WIT-450) |

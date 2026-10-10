@@ -56,7 +56,7 @@ ls .pk-work/<ISSUE-ID>-PLAN.md
 
 The plan-reviewer agent compares the plan against the approved spec. Find the spec via this priority:
 
-1. **Linear issue tied to current branch** — extract `PROJ-XXX` from `git branch --show-current` (matches `feature/proj-xxx-*`, `fix/proj-xxx-*`, `hotfix/proj-xxx-*`); fetch via `mcp__linear-server__linear_getIssueById` with `includeRelations: true`; extract the `## Light Spec` and `## Acceptance Criteria` (or equivalent) sections from the description
+1. **Linear issue tied to current branch** — extract `PROJ-XXX` from `git branch --show-current` (matches `feature/proj-xxx-*`, `fix/proj-xxx-*`, `hotfix/proj-xxx-*`); read it via the project's Linear route — `pk issue show PROJ-XXX --fields title,state,description` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there); extract the `## Light Spec` and `## Acceptance Criteria` (or equivalent) sections from the description
 2. **User provides issue ID** — same fetch path with the explicit ID
 3. **No Linear context** — ask the user to paste the approved spec, or provide a path to a local spec file
 

@@ -246,7 +246,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │                                                          │
   │      • Reads PR review comments + diff                   │
   │      • Cross-spec handoff scan (v2.0.1 skill prose):     │
-  │        fetches predecessor specs via Linear MCP, checks  │
+  │        fetches predecessor specs from Linear, checks     │
   │        every "X will…" promise landed in this PR;        │
   │        unfulfilled handoff = Critical regardless of own  │
   │        AC list                                           │
@@ -420,7 +420,7 @@ If `method.config.md § Phase Label Layer` is configured, the board mirrors `ROA
 
 - **First run on an existing board** → it detects the un-scaffolded layer and offers a one-time **bootstrap**: create the labels + views, seed `sortOrder` from the roadmap order, apply membership + `blockedBy` relations.
 - **Ongoing** → it drift-checks membership / `sortOrder` / relations against `ROADMAP.md` and proposes fixes; the checkbox ↔ `Done` reconciliation (Phase 2.5) rides along.
-- **The one manual step** → toggle each saved view to **Manual sort** in the Linear UI (not settable over MCP); until you do, the seeded `sortOrder` won't render.
+- **The one manual step** → toggle each saved view to **Manual sort** in the Linear UI (not settable over the API); until you do, the seeded `sortOrder` won't render.
 
 ---
 

@@ -29,13 +29,12 @@ Take a rough idea from the user, explore the codebase to understand feasibility,
 2. **Explore** the codebase to assess feasibility
 3. **Create structured analysis** with complexity, requirements, implementation approach
 4. **Present** to user for approval
-5. **Create Linear issue** via `mcp__linear-server__linear_createIssue`:
-   - `team`: `{team from method.config.md}`
-   - `title`: concise feature title
-   - `description`: full brainstorm analysis (feasibility, complexity, approach, requirements)
-   - `priority`: 0 (None) — triage sets real priority later
-   - **`project`: none** — a newly filed idea is uncut work, and no project is its correct home. Apply an `Area:` label instead (per `method.config.md § Initiative Surface → Area Labels`); `/linear-hygiene` fills it in later if you can't infer one. File into a lane **only** when the idea is explicitly part of that lane's completable scope — filing for the sake of filing is what grows pools. On a board with no `§ Area Labels` config, keep the old behavior: ask which project to assign, or leave unassigned.
-   - `state`: Triage — but note a Triage-state issue is **invisible in project views and excluded from project scope counts**, so if you do file it into a lane it won't render there until it's triaged out.
+5. **Create the Linear issue** via the project's Linear route, with title, description, state, priority and label in **one** call — `pk issue create --title "…" --description-file <F> --state Triage --priority 0 --label "Area: <area>"` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there; the team comes from `method.config.md` and `pk` reads it itself):
+   - `--title`: concise feature title
+   - `--description-file`: the full brainstorm analysis (feasibility, complexity, approach, requirements), written to a file first (or `-` to pipe it on stdin)
+   - `--priority 0` (None) — triage sets real priority later
+   - **no `--project`** — a newly filed idea is uncut work, and no project is its correct home. Apply an `Area:` label instead (`--label "Area: <area>"`, per `method.config.md § Initiative Surface → Area Labels`); `/linear-hygiene` fills it in later if you can't infer one. File into a lane (`--project <I{N}.P{N}>`) **only** when the idea is explicitly part of that lane's completable scope — filing for the sake of filing is what grows pools. On a board with no `§ Area Labels` config, keep the old behavior: ask which project to assign, or leave unassigned.
+   - `--state Triage` — but note a Triage-state issue is **invisible in project views and excluded from project scope counts**, so if you do file it into a lane it won't render there until it's triaged out.
 6. **Output**: issue identifier and Linear URL
 
 ### Phase 2 — HOLD (Disposition)
@@ -51,16 +50,16 @@ Immediately after creating the issue, force a disposition decision:
 **If Now:**
 - Ask which stage/phase this belongs to
 - Route by complexity tier (see Complexity Guidelines for tier mapping):
-  - **Quick (Low)** → move to "Approved". Inform: _"Ready for `pk branch {issue}` then `/work {issue}` — no spec needed."_
-  - **Standard (Medium)** → move to "Needs Spec". Inform: _"Ready for `/light-spec {issue}`, then `pk branch {issue}` + `/work {issue}`."_
-  - **Heavy (High)** → move to "Needs Spec". Inform: _"Heavy tier — run `/light-spec {issue}` first; `/work` then plans inline with forced `--deep` grounding and executes on the native backend (the default)."_
+  - **Quick (Low)** → move to "Approved" (`pk issue update {issue} --state Approved`). Inform: _"Ready for `pk branch {issue}` then `/work {issue}` — no spec needed."_
+  - **Standard (Medium)** → move to "Needs Spec" (`pk issue update {issue} --state "Needs Spec"`). Inform: _"Ready for `/light-spec {issue}`, then `pk branch {issue}` + `/work {issue}`."_
+  - **Heavy (High)** → move to "Needs Spec" (same call). Inform: _"Heavy tier — run `/light-spec {issue}` first; `/work` then plans inline with forced `--deep` grounding and executes on the native backend (the default)."_
 
 **If Later:**
 - Ask for a **trigger type** from the grammar below (parsable triggers are what let `/roadmap-review` auto-surface this later — prose triggers get flagged as manual-review)
 - Ask for a **target initiative/stage**
-- Move issue to "Ideas" or "Future Phases" based on target
-- Add the `Parked` label. If the label doesn't exist in the Linear workspace, create it first via `mcp__linear-server__linear_createTeamLabel` with name `Parked`, color `#EAB308` (amber).
-- Post a Linear comment using the **exact parseable format** below (do not paraphrase — `/roadmap-review` greps for it):
+- Move issue to "Ideas" or "Future Phases" based on target — `pk issue update {issue} --state Ideas` / `--state "Future Phases"`
+- Add the `Parked` label — `pk issue update {issue} --add-label Parked` (one `pk issue update` can carry both the `--state` and the `--add-label`). If the label doesn't exist in the Linear workspace, create it first with name `Parked`, color `#EAB308` (amber): `pk gql 'mutation($in: IssueLabelCreateInput!) { issueLabelCreate(input:$in) { success issueLabel { id name } } }' '{"in":{"teamId":"<TEAM>","name":"Parked","color":"#EAB308"}}'` (team id from `pk config "Team ID"`).
+- Post a Linear comment — `pk issue comment {issue} "<body>"` — using the **exact parseable format** below (do not paraphrase — `/roadmap-review` greps for it):
   ```
   **Parked:** Revisit when {trigger}. Target: {phase/stage}.
   ```
@@ -79,8 +78,8 @@ If the user describes a trigger that doesn't match the grammar, coach them towar
 
 **If Kill:**
 - Ask for rationale (one sentence)
-- Move issue to "Canceled"
-- Post a Linear comment: `"Killed: {rationale}"`
+- Move issue to "Canceled" — `pk issue update {issue} --state Canceled`
+- Post a Linear comment — `pk issue comment {issue} "Killed: {rationale}"`
 
 ### Phase 3 — REDUCE (for "Now" items only)
 
@@ -88,7 +87,7 @@ If the disposition is **Now** and the brainstorm is broad, cut to v1 scope:
 
 1. Review the brainstorm analysis
 2. Ask: _"What's the smallest useful version of this? What can wait for v2?"_
-3. Update the issue description with a `## v1 Scope` section that trims to essentials
+3. Update the issue description with a `## v1 Scope` section that trims to essentials — append it to the description you filed and `pk issue update {issue} --description-file <F>` (the write replaces the whole description, so send existing + new section)
 4. This reduced scope is what `/light-spec` will work from
 
 ## Complexity Guidelines

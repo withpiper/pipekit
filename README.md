@@ -2,7 +2,7 @@
 
 **A structured way to ship software with AI — from idea to production, with a quality gate at every stage.**
 
-**v4.11.0** — Last updated: 2026-06-26. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
+**v4.39.0** — Last updated: 2026-10-10. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -174,15 +174,17 @@ No local clone needed; the script pulls directly from GitHub. It creates a `meth
 
 Linear is the only external dependency. The executor is built into Claude Code, the roadmap is authored straight into Linear, and the commit-format hook is installed by the sync script.
 
-To connect Linear's first-party OAuth server, close Claude Code and run:
+Pipekit talks to Linear over its GraphQL API through `bin/pk` — no MCP server required. Create a personal API key in Linear (Settings → Security & access → Personal API keys), export it under the name `method.config.md` → `Linear API key env var` gives (default `LINEAR_API_KEY`), and confirm the route:
 
 ```bash
-claude mcp add --transport http --scope user linear-server https://mcp.linear.app/mcp
+export LINEAR_API_KEY=lin_api_…        # or let your secrets manager inject it:
+op run --env-file=op-references.conf -- pk doctor
+pk doctor
 ```
 
-Reopen Claude Code and run `/mcp` to finish authorization. No workspace yet? Create a free one at [linear.app](https://linear.app/) first.
+No workspace yet? Create a free one at [linear.app](https://linear.app/) first.
 
-> **A note on which Linear server to use.** Pipekit's interactive skills target [`@tacticlaunch/mcp-linear`](https://www.npmjs.com/package/@tacticlaunch/mcp-linear) (registered as `linear-server`). It exposes the initiative and relation tools the initiative surface relies on, which the first-party remote lacks. The OAuth remote above is quickest for basic issue work, but if `pk status` shows no Roadmap section on a project that *has* `i{N}.` initiatives, switch `linear-server` to the tacticlaunch server. Register your choice in the project's committed `.mcp.json` so it is visible inside worktrees. Details in [`sop/Linear_SOP.md`](sop/Linear_SOP.md#linear-mcp-server).
+> **Prefer an MCP server?** Set `Linear transport: mcp` in `method.config.md` and register [`@tacticlaunch/mcp-linear`](https://www.npmjs.com/package/@tacticlaunch/mcp-linear) as `linear-server` in the project's committed `.mcp.json` so it is visible inside worktrees (the first-party `mcp.linear.app` remote lacks the initiative and relation tools the initiative surface relies on). Every skill names the operation, not the tool; the verb table in [`sop/Linear_SOP.md § Linear transport`](sop/Linear_SOP.md#linear-transport) maps each one to its `pk` form and its MCP tool. The daily loop (`pk next` … `pk done`) is API on both routes.
 
 ### 5. Run the startup orchestrator
 

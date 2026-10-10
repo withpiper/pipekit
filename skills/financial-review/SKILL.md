@@ -26,7 +26,7 @@ Different from `/repo-security-review` (repo-wide security audit) and `/pr-secur
 | **Reports path** | Where to write the review report | `Reports/` |
 | **Spec ready state** / state names | Linear state names for transitions (see below) | per board |
 
-**Linear transitions are by state NAME, never hardcoded UUIDs.** Use the project's Linear MCP: look up the workflow-state id by name (the team's workflow states), then update the issue's state. Exact tool names vary per project's Linear integration (e.g. a `getWorkflowStates`/`save_issue` pair, or `update-issue`) — use whatever the project exposes; do not assume a specific tool name. The three states this skill moves through are **In Progress**, **In Review**, **Done** — they must exist in the team's workflow.
+**Linear transitions are by state NAME, never hardcoded UUIDs.** Use the project's Linear route — `pk issue update <ID> --state "In Progress"` takes the name and resolves the workflow-state id itself (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent — a state lookup by name, then an issue update — is listed there). The three states this skill moves through are **In Progress**, **In Review**, **Done** — they must exist in the team's workflow.
 
 ## Step 0 — Load the checks file (gate)
 
@@ -44,8 +44,8 @@ The checks file defines, for this project: the **test command**, the **calculati
 ## Step 1 — Open the review (Linear lifecycle)
 
 If `Financial review WIT` is set:
-- Move it to **In Progress** via the Linear MCP (state lookup by name → update issue; see Config above).
-- Post a comment: `"Starting financial accuracy review — {YYYY-MM-DD}"`
+- Move it to **In Progress** — `pk issue update <WIT> --state "In Progress"` (state by name; see Config above).
+- Post a comment: `pk issue comment <WIT> "Starting financial accuracy review — {YYYY-MM-DD}"`
 
 If blank, skip — proceed straight to the audit and just produce the report.
 
@@ -79,7 +79,7 @@ Flag any change touching financial logic for manual review.
 ## Step 5 — Update Linear by findings
 
 If `Financial review WIT` is set:
-- **Critical or High findings:** move to **In Review**, post a comment summarizing findings + proposed fixes. Work each fix, posting a comment per fix with evidence. After all fixes verified, move to **Done**.
+- **Critical or High findings:** move to **In Review** (`pk issue update <WIT> --state "In Review"`), post a comment summarizing findings + proposed fixes (`pk issue comment <WIT> …`). Work each fix, posting a comment per fix with evidence. After all fixes verified, move to **Done** (`pk issue update <WIT> --state Done`).
 - **Only Medium/Low, or clean:** proceed to the report; move to **Done** after it's written.
 
 If blank, skip transitions.
@@ -134,7 +134,7 @@ Write `<Reports path>/Financial_Review_{YYYY-MM-DD}.md`:
 
 ## Step 7 — Close + summarize
 
-- If `Financial review WIT` set: move to **Done**, post `"Review complete — {STATUS}. Report: <path>"`.
+- If `Financial review WIT` set: move to **Done** (`pk issue update <WIT> --state Done`), post `pk issue comment <WIT> "Review complete — {STATUS}. Report: <path>"`.
 - Present the user: overall status, discrepancy count, top findings by severity, comparison to the previous review, recommended actions.
 
 ## Severity rubric

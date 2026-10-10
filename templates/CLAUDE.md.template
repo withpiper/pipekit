@@ -76,7 +76,7 @@ Interactive skills live in `.claude/skills/`. `pk *` commands live in `bin/pk`.
 
 Before writing or modifying any code, gather full context first:
 
-1. **Read the Linear issue and its comments.** Acceptance criteria, design decisions, and discussion history live there. Use `mcp__linear-server__linear_getIssueById` with `includeRelations: true`.
+1. **Read the Linear issue and its comments.** Acceptance criteria, design decisions, and discussion history live there. Use `pk issue show <ID> --comments` (the project's Linear route per `sop/Linear_SOP.md § Linear transport`); `pk issue show <ID>` alone when you only need state, labels or the PR.
 2. **Read the existing codebase.** The file you'll modify and its neighbors. Look for existing patterns before creating new ones.
 3. **{Project-specific reference reading}** — e.g., "Read the POC reference in `src_poc/` before porting a feature."
 
