@@ -2843,7 +2843,7 @@ pk_linear_gql() {
     mutation*issueCreate*)         echo '{"data":{"issueCreate":{"success":true,"issue":{"id":"u31","identifier":"RS-31","url":"https://linear.app/t/issue/RS-31"}}}}' ;;
     mutation*issueRelationCreate*) echo '{"data":{"issueRelationCreate":{"success":true}}}' ;;
     mutation*commentCreate*)       echo '{"data":{"commentCreate":{"success":true}}}' ;;
-    # Reads behind the v4.39.0 verbs. `teams(filter` precedes `*initiatives*`
+    # Reads behind the v5.0.0 verbs. `teams(filter` precedes `*initiatives*`
     # because the projects selection nests an initiatives sub-field.
     *"teams(filter"*)   cat "$STUB_TEAM" ;;
     *workflowStates*)   echo '{"data":{"workflowStates":{"nodes":[{"id":"s-ns","name":"Needs Spec"},{"id":"s-appr","name":"Approved"},{"id":"s-ip","name":"In Progress"}]}}}' ;;
@@ -3040,7 +3040,7 @@ run_pk issue
 [ $RUN_CODE -eq 0 ] && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue relate' && printf '%s\n' "$RUN_OUT" | grep -q 'pk issue show' \
   && ok "issue: usage lists show and the new verbs" || fail "issue: usage" "exit $RUN_CODE: $RUN_OUT"
 
-# ── Unit tests: pk issue search / create / update (v4.39.0, same stub) ────────
+# ── Unit tests: pk issue search / create / update (v5.0.0, same stub) ────────
 # The team fixture is what `teams(filter: …) { projects }` answers: the team UUID
 # plus five projects (one completed, one unprefixed, one bare P2. that borrows i5).
 
@@ -3282,7 +3282,7 @@ out=$(unit_issue show RS-30); code=$?
 [ $code -eq 0 ] && ! printf '%s' "$(read_query 1)" | grep -q ' description' && ! printf '%s' "$(read_query 1)" | grep -q 'comments(' \
   && ok "issue show: the default read still fetches neither description nor comments" || fail "issue show: default lean" "exit $code, reads: $(gql_reads)"
 
-# ── Unit tests: pk project list (v4.39.0, same stub) ─────────────────────────
+# ── Unit tests: pk project list (v5.0.0, same stub) ─────────────────────────
 
 echo "== pk project list (sourced, stubbed network) =="
 
@@ -3321,7 +3321,7 @@ out=$(unit_project); code=$?
 out=$(unit_project bogus); code=$?
 [ $code -ne 0 ] && printf '%s' "$out" | grep -q '(list)' && ok "project: unknown subverb lists the verbs" || fail "project: unknown subverb" "exit $code, out: $out"
 
-# ── Unit tests: pk gql (v4.39.0, same stub) ──────────────────────────────────
+# ── Unit tests: pk gql (v5.0.0, same stub) ──────────────────────────────────
 
 echo "== pk gql (sourced, stubbed network) =="
 
@@ -3363,7 +3363,7 @@ printf '%s\n' "$RUN_OUT" | grep -q '^  pk project list \[--all\] \[--json\]' && 
   && printf '%s\n' "$RUN_OUT" | grep -q '^  pk issue search <query>' && printf '%s\n' "$RUN_OUT" | grep -q '^  pk issue create --title' && printf '%s\n' "$RUN_OUT" | grep -q '^  pk issue update <ID>' \
   && ok "help: lists issue search/create/update, project list, gql" || fail "help: v4.39 verbs" "$RUN_OUT"
 
-# ── CLI tests: the missing-key error names the op run route (v4.39.0) ─────────
+# ── CLI tests: the missing-key error names the op run route (v5.0.0) ─────────
 # A direnv-less shell should self-serve from the message instead of falling
 # back to an MCP: every "Linear API key not set" site carries the op run hint.
 
@@ -3461,7 +3461,7 @@ run_pk config
 cfg_has "Runbook stale days" "14" && ok "config dump: a set TPM key overrides its default" || fail "config dump: override" "$RUN_OUT"
 cleanup
 
-# ── Skills cite only pk verbs that exist (v4.39.0) ──
+# ── Skills cite only pk verbs that exist (v5.0.0) ──
 # Every backticked `pk <verb> [<sub>]` in skills/*/SKILL.md must be a case label
 # in bin/pk's top-level dispatcher — and, for `pk issue …` / `pk project …`, in
 # that sub-dispatcher — so a skill never names a verb pk does not have. The

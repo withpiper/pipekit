@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v4.34.0** — Last updated: 2026-09-02  *(**v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.** On current frontier models `low` / `medium` effort on the session model can cost less per completed task than a smaller model; measure before flipping — the silent-miss rubric still decides the tier. Carries v4.31.0 — five keys for `/repo-security-review`; v4.30.0 — the `Backend` key and its chain are gone.)*
+**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -350,7 +350,12 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Public security page** | path | (blank) | `/repo-security-review` — public-facing security page refreshed after the review (posture, doc version, any claim the audit couldn't evidence). **Blank → skipped**. |
 | **Security scan host** | hostname | (blank) | `/repo-security-review` — host for live external scans (header grading, Lighthouse). **Blank → live scans skipped and reported `n/a`**, never as a pass. Kept as its own key rather than read from § Environments so a project can scan a host it doesn't promote to. |
 | **Portfolio staleness days** | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
-| **Lane map URL** | artifact URL | (none) | `/lane-map` — published board-map artifact; blank until the project runs `/lane-map` once and publishes it (see `sop/Lane_Map_SOP.md`). One map can serve multiple repos sharing a Linear board — set the same URL in each. |
+| **Runbook path** | path | `engineering/RUNBOOK.md` | The one runbook: `/tpm` writes its `Now` block, `sync-method.sh` writes the `How we run` block, you own the rest (`sop/TPM_SOP.md § The runbook block`). `pk next` reads the block's `agreed` date for the staleness nudge. |
+| **Runbook primary** | relative repo path, or blank | (blank = this repo) | `/tpm` — in a multi-repo portfolio, the repo whose runbook holds the full `Now` block; every other repo's block holds a one-line pointer to it. Set it in the *non*-primary repos (e.g. `../SiteLine`). |
+| **Portfolio repos** | comma-separated relative paths | (blank) | `/tpm` — sibling repos read and written in the same session, each from inside its own directory with its own `method.config.md` and API key (e.g. `../piper`). |
+| **Weekly capacity days** | number | `6` | `/tpm` — the week the capacity arithmetic divides by (`sop/TPM_SOP.md § Capacity`). |
+| **Tier effort days** | `Quick: 0.5, Standard: 2, Heavy: 4` | that | `/tpm` — coarse effort per `tier:*` label; unsized issues are flagged, never guessed. |
+| **Runbook stale days** | integer | `7` | `pk next` — prints `runbook agreed Nd ago → /tpm` once the runbook's agreed date is older than this. |
 
 <!-- Optional (v4.21.0+) — uncomment the row below to stop syncing canonical
      .claude/rules/ files that don't apply to this project. Rules are

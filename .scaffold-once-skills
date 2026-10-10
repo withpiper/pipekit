@@ -15,4 +15,4 @@
 #
 # Retiring an entry: remove it here AND add it to RETIRED_SKILLS in
 # scripts/sync-method.sh, so a consumer's scaffolded copy is never resynced
-# over or flagged as missing upstream. (lane-map retired this way in v4.39.0.)
+# over or flagged as missing upstream. (lane-map retired this way in v5.0.0.)

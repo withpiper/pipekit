@@ -5,7 +5,7 @@ description: Audit roadmap health — issues, dependency order, spec coverage, d
 
 # Roadmap Review Skill
 
-**v4.39.0** — Last updated: 2026-10-10 *(**v4.39.0 — Linear via the project's route (`Linear transport`), no MCP tool names;** carries v4.15.0 — add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file)*
+**v5.0.0** — Last updated: 2026-10-10 *(**v5.0.0 — Linear via the project's route (`Linear transport`), no MCP tool names;** carries v4.15.0 — add **Phase 2.5 — Roadmap Progress Reconciliation**: report-only checkbox ↔ Linear `Done` check, gated on the roadmap source using `- [ ]`/`- [x]` checkboxes (independent of the phase-label layer); flags both drift directions, never writes the human-owned roadmap file)*
 
 You are a roadmap health auditor. Your job is to run a comprehensive health check of the overall plan. Read `method.config.md` for project context — including the **§ Initiative Surface** contract that defines the Linear-native initiative model this skill validates. Run this before speccing a new initiative to ensure the roadmap is coherent and complete.
 

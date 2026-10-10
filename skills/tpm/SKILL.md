@@ -120,7 +120,7 @@ Then `pk next` in each repo and compare with the agreement. A mismatch is report
 
 Write the TPM block of the **primary** repo's runbook (`§ Runbook path`, default `engineering/RUNBOOK.md`) between `<!-- tpm:begin … -->` and `<!-- tpm:end -->`, canonical shape in `sop/TPM_SOP.md § The runbook block`. The begin line carries `agreed YYYY-MM-DD` — that date is what `pk next` reads for its staleness nudge. Every other repo in the portfolio gets a one-line pointer in its own TPM block: `Portfolio runbook → ../SiteLine/engineering/RUNBOOK.md · agreed 2026-10-10`.
 
-**Fail closed:** if a file is missing its marker pair, or the pair is malformed, stop and say so. Never guess where to write, never touch the Notes section or the sync-owned block. The file is created by `sync-method.sh`; a missing file means the project hasn't synced v4.39.0+ — say that, don't create it here.
+**Fail closed:** if a file is missing its marker pair, or the pair is malformed, stop and say so. Never guess where to write, never touch the Notes section or the sync-owned block. The file is created by `sync-method.sh`; a missing file means the project hasn't synced v5.0.0+ — say that, don't create it here.
 
 In `--check`, rewrite only the *Drift since agreement* sub-section and leave the agreed date alone.
 

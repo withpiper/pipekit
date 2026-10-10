@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="4.38.0"
+PK_VERSION="5.0.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1020,7 +1020,7 @@ pk_linear_relate_blocks() {
   pk_linear_mutation_ok "$resp" issueRelationCreate
 }
 
-# ── Linear verbs for skills (v4.39.0) ────────────────────────────────────────
+# ── Linear verbs for skills (v5.0.0) ────────────────────────────────────────
 # Helpers behind pk issue search|create|update, pk project list and pk gql, so a
 # skill never needs raw curl or an MCP server. Everything rides pk_linear_gql
 # (a mutation therefore inherits pk_linear_guard); reads are serial, and no list

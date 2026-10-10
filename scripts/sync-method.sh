@@ -14,14 +14,14 @@
 #   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills)
 #   pipekit/templates/  <- Spec and review templates
 #   pipekit/method.md   <- The deeper methodology overview
-#   <Runbook path>      <- The project runbook (v4.39.0+; `Runbook path` in
+#   <Runbook path>      <- The project runbook (v5.0.0+; `Runbook path` in
 #                         method.config.md, default engineering/RUNBOOK.md).
 #                         Created from templates/RUNBOOK.skeleton.md when
 #                         absent; afterwards ONLY its "How we run" block
 #                         (<!-- pipekit:begin … pipekit:end -->) is rewritten
 #                         with the method repo's RUNBOOK.md. The "Now" block
 #                         (/tpm) and everything else are the project's. The
-#                         pre-v4.39.0 copy at pipekit/RUNBOOK.md is removed
+#                         pre-v5.0.0 copy at pipekit/RUNBOOK.md is removed
 #                         once the new file is in place.
 #   pipekit/GUIDE.md    <- The full instruction manual
 #   pipekit/STARTUP.md  <- The bootstrap reference
@@ -525,7 +525,7 @@ is_scaffold_once() {
   [ -f "$SCAFFOLD_ONCE_MANIFEST" ] && grep -qx "$1" "$SCAFFOLD_ONCE_MANIFEST" 2>/dev/null
 }
 
-# Retired skills (v4.39.0): a scaffold-once skill that has left the method
+# Retired skills (v5.0.0): a scaffold-once skill that has left the method
 # repo. The consumer's copy is theirs — curation and all — and they remove it
 # when they choose. The loop below never visits a name absent upstream and
 # never prunes, so plain upstream removal is already safe; this list closes
@@ -795,7 +795,7 @@ if [ -d "$OVERRIDES_DIR" ]; then
   fi
 fi
 
-# --- Project runbook (v4.39.0) ---
+# --- Project runbook (v5.0.0) ---
 # One runbook per consumer at `Runbook path` (method.config.md; default
 # engineering/RUNBOOK.md), three regions, three owners:
 #   ## Now         <!-- tpm:begin … tpm:end -->          written by /tpm
@@ -959,7 +959,7 @@ else
     cp "$TEMP/RUNBOOK.md" "$OVERRIDE_SNAPSHOT/RUNBOOK.md"
   fi
 
-  # Migration: the pre-v4.39.0 copy goes once the new file is in place.
+  # Migration: the pre-v5.0.0 copy goes once the new file is in place.
   if [ "$rb_status" != error ] && [ -f "$LEGACY_RUNBOOK" ] && [ "$LEGACY_RUNBOOK" != "$RUNBOOK_PATH" ]; then
     if $DRY_RUN; then
       echo "  WOULD MIGRATE pipekit/RUNBOOK.md → $RUNBOOK_REL (How we run block)"

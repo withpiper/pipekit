@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-sync-runbook.sh — fixture-based tests for sync-method.sh's project
-# runbook step (v4.39.0): one runbook per consumer, three regions, three
+# runbook step (v5.0.0): one runbook per consumer, three regions, three
 # owners (/tpm, the project, sync).
 #
 # Covers:
@@ -63,7 +63,7 @@ NO_RUNBOOK=0      # 1 → upstream has no RUNBOOK.md (the smoke-suite fixture sh
 # A minimal method tree. skills/demo is load-bearing: the portable-skills step
 # pipes `ls -d "$TEMP/skills/"*/` through xargs under pipefail, and an empty
 # skills/ aborts the sync. Its SKILL.md deliberately has no `description:`
-# line — until v4.39.0 that made the changelog's "### New" grep fail the
+# line — until v5.0.0 that made the changelog's "### New" grep fail the
 # assignment under pipefail and set -e killed the sync, so a first sync here
 # also guards that fix. method.config.template.md is load-bearing too: a
 # consumer without method.config.md gets it cp'd, and set -e dies if absent.

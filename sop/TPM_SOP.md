@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md). This SOP is the rubric `/tpm` argues from; the session mechanics live in the skill.
 
-**v4.39.0** — Last updated: 2026-10-10  *(New. The judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger, and the runbook block `pk next` reads for staleness. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
+**v5.0.0** — Last updated: 2026-10-10  *(New. The judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger, and the runbook block `pk next` reads for staleness. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
 
 ---
 
@@ -166,7 +166,7 @@ One line, the bracketed date first, so `pk issue show --comments` can be grepped
 
 ## Why not a plan file, and why the lane map retired
 
-A tracker-external plan (`deps.json`, a `PLAN.md`, a kanban app) is a second source of truth that drifts the moment an issue ships; that is why Lane (2026-06) was declined. The lane-map artifact (v4.29.0–v4.38.0) was a picture plus a click-picker for tiers; once tiers are set by agreement with a reason attached, a picker without reasons is a step backwards and a second surface to regenerate after every write. Retired in v4.39.0; the runbook's top screen and `pk status` carry the picture.
+A tracker-external plan (`deps.json`, a `PLAN.md`, a kanban app) is a second source of truth that drifts the moment an issue ships; that is why Lane (2026-06) was declined. The lane-map artifact (v4.29.0–v4.38.0) was a picture plus a click-picker for tiers; once tiers are set by agreement with a reason attached, a picker without reasons is a step backwards and a second surface to regenerate after every write. Retired in v5.0.0; the runbook's top screen and `pk status` carry the picture.
 
 ## Borrowed from
 

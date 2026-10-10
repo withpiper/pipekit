@@ -5,7 +5,7 @@ description: Reconcile strategy-doc drift against the Linear i{N}./I{N}.P{N}. in
 
 # Sync Linear Skill
 
-**v4.39.0** — Last updated: 2026-10-10 *(v4.39.0 — Linear via the project's route (`Linear transport`), no MCP tool names; carries v4.1.0 — Linear-native initiative surface — no PHASES.md/linear-map.json to sync.)*
+**v5.0.0** — Last updated: 2026-10-10 *(v5.0.0 — Linear via the project's route (`Linear transport`), no MCP tool names; carries v4.1.0 — Linear-native initiative surface — no PHASES.md/linear-map.json to sync.)*
 
 You are a Linear hierarchy reconciliation coordinator. Your job is to keep the Linear board's initiative hierarchy coherent with the project's strategy docs and requirements. Read `method.config.md` for project context — specifically `## Initiative Surface`, which defines the canonical model.
 
