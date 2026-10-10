@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.37.0** — Last updated: 2026-09-20  *(**v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.** Carries v4.36.0 — the Model Policy roles have data. The PIPER-412 A/B evidence sits under § Pinning models; the reviewer tier decides what ships. Carries v4.34.0 — saved workflows are a synced artifact. `workflows/*.js` ships per-file to `.claude/workflows/`; a skill that needs deterministic control flow over many subagents keeps the loop there and invokes it by name — `/work`'s `pk-execute` is the worked example. Carries v4.31.0 — `/security-review` → `/repo-security-review`.)*
+**v4.39.0** — Last updated: 2026-10-10  *(**v4.39.0 — `/tpm` added (user-typed only; rubric in `sop/TPM_SOP.md`), `/lane-map` retired; the scaffold-once mechanism stays without a worked example.** Carries v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.)*
 
 ---
 
@@ -70,7 +70,7 @@ These skills work across any project that follows the method. They read `method.
 | `/repo-security-review` | Periodic **whole-repo** security audit (v4.31.0, renamed from `/security-review` — collided with Claude Code's built-in). Parallel area agents → adversarial verification → evidence-classified score report. Portable **framework**; project audit areas in `resources/repo-security-areas.md` (scaffolded from `templates/repo-security-areas.template.md`). No-op without an areas file. Distinct from `/pr-security-review` (PR-scoped) and `/security-gate` (feature-scoped). | Anytime |
 | `/financial-review` | Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable **framework**; concrete checks live in a per-project checks file (`resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`). No-op on projects without a checks file. | Anytime (domain: finance) |
 | `/skill-index` | Sync skill index after changes | Anytime |
-| `/lane-map` | Renders the current initiative's board as a private web artifact — frontier of run-order heads, one row per lane, optional collision register. **Scaffold-once**: seeded into `.claude/skills/lane-map/` on first sync if absent, never touched again — curation (groupings, collision notes, artifact URL) is project-owned from there. Conventions in `sop/Lane_Map_SOP.md`. | Anytime (board visualization) |
+| `/tpm` | Technical program manager for the board — a working session that agrees what must ship, what can wait and why, across every repo in `§ Portfolio repos`; writes the agreement to Linear (`pk focus`, relations, importance) and the `Now` block of the one runbook (`§ Runbook path`). Runs `/linear-hygiene` first when drift touches the candidates. `--quick` (≤3 questions), `--check` (read-only drift). Rubric in `sop/TPM_SOP.md`. User-typed only. | Anytime (weekly planning); when `pk next` says the runbook is stale |
 | `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
@@ -278,7 +278,7 @@ A few portable skills carry conventions that must propagate on every sync, paire
 
 The method repo declares which skills get this treatment in its own `.scaffold-once-skills` (one name per line, same format as `.local-skills`) — this is method-repo state, not project state; a consuming project has no manifest of its own to edit. On first scaffold, the sync auto-declares the skill in the project's own `pipekit/.local-skills`, so the "possibly upstream-removed" check above treats it as project-owned from that point on.
 
-**The pattern requires a split file**, so a fix still reaches every project even though the instance file doesn't resync: the portable half (conventions, patterns, gotchas) lives in a normally-synced SOP; the scaffolded skill cites that SOP instead of restating it. `/lane-map` is the worked example — conventions in `sop/Lane_Map_SOP.md`, curation in the scaffolded `.claude/skills/lane-map/SKILL.md`.
+**The pattern requires a split file**, so a fix still reaches every project even though the instance file doesn't resync: the portable half (conventions, patterns, gotchas) lives in a normally-synced SOP; the scaffolded skill cites that SOP instead of restating it. `/lane-map` was the worked example (v4.29.0–v4.38.0: conventions in `sop/Lane_Map_SOP.md`, curation in the scaffolded skill) until v4.39.0 retired it in favour of `/tpm`; the mechanism stays, and a project's existing scaffolded copy is never touched by sync.
 
 Use this sparingly. Most skills should stay normally portable — reach for scaffold-once only when a skill's value is genuinely per-project curation that a normal resync would destroy.
 
