@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md). This SOP is the rubric `/tpm` argues from; the session mechanics live in the skill.
 
-**v5.0.0** — Last updated: 2026-10-10  *(New. The judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger, and the runbook block `pk next` reads for staleness. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
+**v5.0.1** — Last updated: 2026-10-10  *(New. The judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger, and the runbook block `pk next` reads for staleness. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
 
 ---
 
@@ -149,7 +149,7 @@ POC-455 — needs a spec before it can be head · POC-377 — … (six words eac
 <!-- tpm:end -->
 ```
 
-The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `runbook agreed Nd ago → /tpm` past `§ Runbook stale days` (default 7). Portfolio repos other than the primary hold a one-line pointer in their block instead of a copy — one document, reachable from either repo, never two versions.
+The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `runbook agreed Nd ago → /tpm` past `§ Runbook stale days` (default 7). Portfolio repos other than the primary hold a one-line pointer in their block instead of a copy — one document, reachable from either repo, never two versions. Two repos on **one** Linear board (same `Team ID`) are the common solo shape — one board, two codebases: the board is read and written once, from the primary, and the sibling's worktrees, PRs and sessions are the only thing the session reads from it.
 
 ## Comments
 

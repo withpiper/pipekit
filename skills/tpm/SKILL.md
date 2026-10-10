@@ -24,7 +24,7 @@ The session is a conversation that ends in an agreement, then a write. The judgm
 
 ## Tooling notes (read before building against this)
 
-- **All Linear reads and writes go through `bin/pk`'s GraphQL path** — `pk status`, `pk portfolio`, `pk next`, `pk issue show`, `pk issue search`, `pk focus`, `pk issue set`, `pk issue relate`, `pk issue comment` — never an MCP server, whatever `Linear transport` says: the tiers, blockers and comments this skill writes must pass `pk`'s workspace guard. Each repo in the portfolio is read and written **from inside that repo** (`cd <repo> && pk …`) so its own `method.config.md` and `LINEAR_API_KEY` apply — the boards may live in different workspaces, and this is what makes that not matter.
+- **All Linear reads and writes go through `bin/pk`'s GraphQL path** — `pk status`, `pk portfolio`, `pk next`, `pk issue show`, `pk issue search`, `pk focus`, `pk issue set`, `pk issue relate`, `pk issue comment` — never an MCP server, whatever `Linear transport` says: the tiers, blockers and comments this skill writes must pass `pk`'s workspace guard. A sibling repo that has **its own board** (a different `Team ID`) is read and written **from inside that repo** (`cd <repo> && pk …`) under that repo's own key recipe — `pk` prints it when the key is missing (`op run --env-file=op-references.conf -- pk …`); a shell's direnv env does not follow a `cd` inside a session. A sibling that **shares the primary's board** (same `Team ID` — SiteLine and Piper are one `PIPER` board, two codebases) is never read or written through `pk` at all: the board is read once from the primary, and the sibling contributes only its in-flight evidence — worktrees, PRs, sessions.
 - **Rate limits** — Linear's quota is one shared per-user bucket (`sop/Linear_SOP.md § Rate limits`). Everything here runs serially; never fan out across repos or lanes. The hygiene subagent and your own reads do not overlap in time.
 - **Keep fat payloads out of the main thread.** `/linear-hygiene --check` runs in a subagent (Execution role per `method.config.md § Model Policy`, default `sonnet`) that returns its manifest, not its tool results. Fallback checks against code run on the Grounding role (default `haiku`). The conversation stays in the main thread, on whatever model the user is running — the judgment is not delegated.
 - **Issue bodies and comments only for the candidate set** (focus-lane heads, anything Urgent/High, anything in flight, anything the user names) via `pk issue show <ID> --comments`. Never board-wide.
@@ -33,8 +33,8 @@ The session is a conversation that ends in an agreement, then a write. The judgm
 
 ### Phase 0 — Preflight: the board as it actually is
 
-1. Resolve the portfolio: this repo plus `method.config.md § Portfolio repos` (relative paths). Print the set.
-2. Per repo, serially: `pk status` (board + worktrees), `pk portfolio` (runway, idle warnings), `gh pr list --state open --json number,headRefName,isDraft,reviewDecision`, `git worktree list --porcelain`. Once, machine-wide: `pk sessions --all`.
+1. Resolve the portfolio: this repo plus `method.config.md § Portfolio repos` (relative paths). For each sibling, compare `(cd <repo> && pk config "Team ID")` with this repo's: **same team = shared board** (one board, several codebases), different team = its own board. Print the set with that verdict per repo.
+2. Board reads, serially: `pk status` (board + worktrees) and `pk portfolio` (runway, idle warnings) **once per board** — from this repo for the shared board, from inside each own-board sibling under its key recipe. Per repo regardless of board: `gh pr list --state open --json number,headRefName,isDraft,reviewDecision` and `git worktree list --porcelain` (a shared-board sibling's worktrees are not in the primary's `pk status`). Once, machine-wide: `pk sessions --all`.
 3. **In-flight reconciliation.** Linear state is the claim; the worktree, the PR and the live session are the evidence. One table across repos:
 
    ```
@@ -107,14 +107,14 @@ One block: MUST / NEXT / WAIT with reasons and triggers, the Commitments registe
 
 ### Phase 5 — Write to Linear (on "go"; never in `--check`)
 
-Per repo, from inside it, serially:
+Once per **board**, serially — from this repo for the shared board, from inside an own-board sibling for its board (a sibling that shares the primary's board gets no writes of its own; the primary's cover it):
 
 - `pk focus <LANE> A|B|C [--swap]` for tier changes. Tiers are exclusive; the swap was shown in the read-back.
 - `pk issue relate <ID> --blocked-by <ID2> --why "<reason>"` for every **Hard** dependency agreed that Linear didn't already hold. Hard only — a Value or Soft ordering goes in the runbook, not into a relation (`sop/TPM_SOP.md § What Linear carries`).
 - `pk issue set <ID> --priority N` **only where importance changed.** Never to encode sequence, and never below the issue's floor (`sop/Linear_SOP.md § Filing a follow-up issue → Priority floors`): a WAIT item keeps its floor; being out of focus is what makes it wait.
 - `pk issue comment <ID> "[tpm 2026-10-10] …"` on every item whose place or reason changed, every WAIT item (fallback + trigger), and every commitment-bearing item (`[tpm 2026-10-10] commitment: Game7 · due 10-17`). Format in `sop/TPM_SOP.md § Comments`.
 
-Then `pk next` in each repo and compare with the agreement. A mismatch is reported as a mismatch, with the line that differs — never smoothed over.
+Then `pk next` once per board and compare with the agreement. A mismatch is reported as a mismatch, with the line that differs — never smoothed over.
 
 ### Phase 6 — Runbook
 
