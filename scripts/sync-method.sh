@@ -14,7 +14,15 @@
 #   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills)
 #   pipekit/templates/  <- Spec and review templates
 #   pipekit/method.md   <- The deeper methodology overview
-#   pipekit/RUNBOOK.md  <- The one-page operational doc (v2.3.1+)
+#   <Runbook path>      <- The project runbook (v4.39.0+; `Runbook path` in
+#                         method.config.md, default engineering/RUNBOOK.md).
+#                         Created from templates/RUNBOOK.skeleton.md when
+#                         absent; afterwards ONLY its "How we run" block
+#                         (<!-- pipekit:begin … pipekit:end -->) is rewritten
+#                         with the method repo's RUNBOOK.md. The "Now" block
+#                         (/tpm) and everything else are the project's. The
+#                         pre-v4.39.0 copy at pipekit/RUNBOOK.md is removed
+#                         once the new file is in place.
 #   pipekit/GUIDE.md    <- The full instruction manual
 #   pipekit/STARTUP.md  <- The bootstrap reference
 #   .claude/workflows/ <- Saved Workflow scripts that skills invoke by name
@@ -29,8 +37,10 @@
 # What it does NOT touch:
 #   pipekit/decisions/       <- Project-specific ADRs
 #   .claude/rules/          <- Project coding conventions
-#   .claude/skills/{local}  <- Project-specific skills
+#   .claude/skills/{local}  <- Project-specific skills (incl. retired
+#                              scaffold-once skills such as lane-map)
 #   method.config.md        <- Project configuration
+#   <Runbook path> outside the pipekit:begin/end block
 #
 # Overrides (sync-safe customization):
 #   .claude/overrides/skills/<name>/<file>        <- full-file replacement (any
@@ -38,6 +48,7 @@
 #                                                   SKILL.md or skill.json)
 #   .claude/overrides/sop/<file>.md               <- full-file replacement
 #   .claude/overrides/method.md.patch             <- unified diff applied to method.md
+#   .claude/overrides/RUNBOOK.md                  <- replaces the "How we run" block body
 #   .claude/overrides/.upstream-snapshot/         <- managed by sync; do not edit
 #   .claude/overrides/MANIFEST.md                 <- human-curated list (what + why)
 #
@@ -164,6 +175,9 @@ snapshot_dir "$PROJECT_ROOT/pipekit" "method"
 
 # Track changes
 CHANGES=0
+# Fail-closed conditions (a damaged runbook, below). The sync keeps going so
+# the rest of the tree still lands, but the final exit status is non-zero.
+SYNC_ERRORS=0
 
 # Changelog arrays
 NEW_SKILLS=""
@@ -280,7 +294,8 @@ mkdir -p "$PROJECT_ROOT/pipekit"
 sync_dir "$TEMP/sop" "$PROJECT_ROOT/pipekit/sop" "sop/"
 sync_dir "$TEMP/templates" "$PROJECT_ROOT/pipekit/templates" "templates/"
 sync_file "$TEMP/method.md" "$PROJECT_ROOT/pipekit/method.md" "method.md"
-sync_file "$TEMP/RUNBOOK.md" "$PROJECT_ROOT/pipekit/RUNBOOK.md" "RUNBOOK.md"
+# RUNBOOK.md is no longer copied to pipekit/ — it is composed into the project
+# runbook after overrides are known (see "Project runbook" below).
 sync_file "$TEMP/GUIDE.md" "$PROJECT_ROOT/pipekit/GUIDE.md" "GUIDE.md"
 sync_file "$TEMP/STARTUP.md" "$PROJECT_ROOT/pipekit/STARTUP.md" "STARTUP.md"
 
@@ -504,10 +519,24 @@ PORTABLE_SKILLS=$(ls -d "$TEMP/skills/"*/ 2>/dev/null | xargs -I{} basename {})
 # project — contrast with $LOCAL_MANIFEST below), in the freshly-cloned
 # $TEMP, one name per line. Seeded into the project once, if absent; never
 # touched again once present. See sop/Skills_SOP.md § Syncing Portable
-# Skills and sop/Lane_Map_SOP.md for the worked example (/lane-map).
+# Skills.
 SCAFFOLD_ONCE_MANIFEST="$TEMP/.scaffold-once-skills"
 is_scaffold_once() {
   [ -f "$SCAFFOLD_ONCE_MANIFEST" ] && grep -qx "$1" "$SCAFFOLD_ONCE_MANIFEST" 2>/dev/null
+}
+
+# Retired skills (v4.39.0): a scaffold-once skill that has left the method
+# repo. The consumer's copy is theirs — curation and all — and they remove it
+# when they choose. The loop below never visits a name absent upstream and
+# never prunes, so plain upstream removal is already safe; this list closes
+# the window where upstream still ships the directory but no longer declares
+# it scaffold-once (which would resync over the curated copy), and keeps the
+# changelog from flagging the skill as "not in upstream".
+RETIRED_SKILLS="lane-map"
+is_retired() {
+  local s
+  for s in $RETIRED_SKILLS; do [ "$s" = "$1" ] && return 0; done
+  return 1
 }
 
 for skill in $PORTABLE_SKILLS; do
@@ -515,6 +544,11 @@ for skill in $PORTABLE_SKILLS; do
   dst="$PROJECT_ROOT/.claude/skills/$skill"
 
   if [ ! -d "$src" ]; then
+    continue
+  fi
+
+  if is_retired "$skill"; then
+    echo "  SKIP skill: $skill (retired upstream; the local copy is project-owned)"
     continue
   fi
 
@@ -603,7 +637,7 @@ if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
   for existing_skill_dir in "$PROJECT_ROOT/.claude/skills"/*/; do
     existing_skill=$(basename "$existing_skill_dir")
     if [ ! -d "$TEMP/skills/$existing_skill" ] && { [ -f "$existing_skill_dir/SKILL.md" ] || [ -f "$existing_skill_dir/skill.md" ]; }; then
-      if [ -f "$LOCAL_MANIFEST" ] && grep -qx "$existing_skill" "$LOCAL_MANIFEST" 2>/dev/null; then
+      if is_retired "$existing_skill" || { [ -f "$LOCAL_MANIFEST" ] && grep -qx "$existing_skill" "$LOCAL_MANIFEST" 2>/dev/null; }; then
         LOCAL_SKILLS="$LOCAL_SKILLS $existing_skill"
       else
         REMOVED_SKILLS="$REMOVED_SKILLS $existing_skill"
@@ -761,6 +795,182 @@ if [ -d "$OVERRIDES_DIR" ]; then
   fi
 fi
 
+# --- Project runbook (v4.39.0) ---
+# One runbook per consumer at `Runbook path` (method.config.md; default
+# engineering/RUNBOOK.md), three regions, three owners:
+#   ## Now         <!-- tpm:begin … tpm:end -->          written by /tpm
+#   ## Notes       free text                              the project's
+#   ## How we run  <!-- pipekit:begin … pipekit:end -->  this script
+# Absent, the file is created from templates/RUNBOOK.skeleton.md. Present,
+# ONLY the pipekit block is rewritten — begin line inclusive, so the version
+# stamp moves. Anything else in the file (the tpm block, Notes, extra
+# sections) is never read, let alone written. Damaged markers fail closed:
+# the file is left alone, the error goes to stderr, and the script exits
+# non-zero at the end. .claude/overrides/RUNBOOK.md replaces the block body,
+# drift-checked against the upstream snapshot exactly like apply_override.
+# Runs after the overrides step so the body source is settled, and before the
+# method.config.md template copy so a fresh consumer's heading is its repo
+# name rather than the template's placeholder.
+RUNBOOK_REL=$(config_value "Runbook path")
+[ -n "$RUNBOOK_REL" ] || RUNBOOK_REL="engineering/RUNBOOK.md"
+case "$RUNBOOK_REL" in
+  /*) RUNBOOK_PATH="$RUNBOOK_REL" ;;
+  *)  RUNBOOK_PATH="$PROJECT_ROOT/$RUNBOOK_REL" ;;
+esac
+RUNBOOK_SKELETON="$TEMP/templates/RUNBOOK.skeleton.md"
+LEGACY_RUNBOOK="$PROJECT_ROOT/pipekit/RUNBOOK.md"
+RB_BEGIN_RE='^<!-- pipekit:begin'
+RB_END_RE='^<!-- pipekit:end'
+
+# Replace every occurrence of placeholder $2 in $1 with $3, literally. Not
+# ${s//p/r}: bash 5.2's patsub_replacement expands an unquoted `&` in the
+# replacement, and the quoted form is rejected by bash 3.2.
+rb_subst() {
+  local s="$1" p="$2" r="$3" out=""
+  while case "$s" in *"$p"*) true ;; *) false ;; esac; do
+    out="$out${s%%"$p"*}$r"
+    s="${s#*"$p"}"
+  done
+  printf '%s' "$out$s"
+}
+
+# cat $1 with a guaranteed trailing newline, so the end marker is on its own line.
+rb_cat_nl() {
+  cat "$1"
+  if [ -n "$(tail -c1 "$1")" ]; then echo; fi
+}
+
+echo ""
+echo "Project runbook ($RUNBOOK_REL):"
+if [ ! -f "$TEMP/RUNBOOK.md" ] || [ ! -f "$RUNBOOK_SKELETON" ]; then
+  echo "  SKIP runbook (source not found)"
+else
+  # Version stamp: bin/pk is the release's source of truth; the RUNBOOK.md
+  # header stamp covers a tree without bin/.
+  RB_VERSION=$(grep -m1 '^PK_VERSION=' "$TEMP/bin/pk" 2>/dev/null | sed 's/^PK_VERSION="*\([^"]*\)"*$/\1/' || true)
+  [ -n "$RB_VERSION" ] || RB_VERSION=$(grep -o -m1 '^\*\*v[0-9][^*]*\*\*' "$TEMP/RUNBOOK.md" 2>/dev/null | sed 's/^\*\*v//; s/\*\*$//' || true)
+  [ -n "$RB_VERSION" ] || RB_VERSION="unknown"
+
+  # Heading: the display name reads best; fall back to the slug, then the dir.
+  RB_NAME=$(config_value "Project display name")
+  [ -n "$RB_NAME" ] || RB_NAME=$(config_value "Project name")
+  [ -n "$RB_NAME" ] || RB_NAME=$(basename "$PROJECT_ROOT")
+
+  # Block body: the override wins, with apply_override's drift semantics —
+  # the snapshot is the upstream the override last stood in for.
+  RB_BODY="$TEMP/RUNBOOK.md"
+  RB_OVERRIDE="$OVERRIDES_DIR/RUNBOOK.md"
+  if [ -f "$RB_OVERRIDE" ]; then
+    if [ -f "$OVERRIDE_SNAPSHOT/RUNBOOK.md" ] && ! cmp -s "$OVERRIDE_SNAPSHOT/RUNBOOK.md" "$TEMP/RUNBOOK.md"; then
+      OVERRIDE_DRIFT="$OVERRIDE_DRIFT RUNBOOK.md"
+      echo "  ⚠ DRIFT RUNBOOK.md — upstream changed; review override against new upstream"
+    fi
+    if $DRY_RUN; then
+      echo "  WOULD OVERRIDE RUNBOOK.md (How we run block body)"
+    else
+      echo "  OVERRIDE RUNBOOK.md (How we run block body)"
+    fi
+    OVERRIDES_APPLIED="$OVERRIDES_APPLIED RUNBOOK.md"
+    RB_BODY="$RB_OVERRIDE"
+  fi
+
+  # The begin line lives in the skeleton only, so the stamp format has one home.
+  rb_begin_line=$(grep -m1 "$RB_BEGIN_RE" "$RUNBOOK_SKELETON" || true)
+  rb_begin_line=$(rb_subst "$rb_begin_line" '{{PK_VERSION}}' "$RB_VERSION")
+  rb_end_line=$(grep -m1 "$RB_END_RE" "$RUNBOOK_SKELETON" || true)
+
+  rb_render_block() {
+    printf '%s\n' "$rb_begin_line"
+    rb_cat_nl "$RB_BODY"
+    printf '%s\n' "$rb_end_line"
+  }
+  rb_render_new() {
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        '<!-- pipekit:begin'*|'<!-- pipekit:end'*) ;;   # emitted with the body
+        '{{PIPEKIT_BODY}}') rb_render_block ;;
+        *)
+          line=$(rb_subst "$line" '{{PROJECT_NAME}}' "$RB_NAME")
+          line=$(rb_subst "$line" '{{PK_VERSION}}' "$RB_VERSION")
+          printf '%s\n' "$line" ;;
+      esac
+    done < "$RUNBOOK_SKELETON"
+  }
+  rb_render_update() {   # $1 = existing file, $2/$3 = begin/end line numbers
+    if [ "$2" -gt 1 ]; then sed -n "1,$(($2 - 1))p" "$1"; fi
+    rb_render_block
+    tail -n +"$(($3 + 1))" "$1"
+  }
+
+  # Pre-write hash so the changelog's doc loop can see the runbook change
+  # (the pipekit/ snapshot above doesn't cover this path).
+  if [ -f "$RUNBOOK_PATH" ]; then
+    md5sum "$RUNBOOK_PATH" 2>/dev/null >> "$SNAP/method.md5" || true
+  fi
+
+  rb_new=$(mktemp)
+  rb_status=""
+  if [ ! -f "$RUNBOOK_PATH" ]; then
+    rb_render_new > "$rb_new"
+    rb_status=create
+  else
+    nb=$(grep -c "$RB_BEGIN_RE" "$RUNBOOK_PATH" || true)
+    ne=$(grep -c "$RB_END_RE" "$RUNBOOK_PATH" || true)
+    lb=$(grep -n -m1 "$RB_BEGIN_RE" "$RUNBOOK_PATH" | cut -d: -f1 || true)
+    le=$(grep -n -m1 "$RB_END_RE" "$RUNBOOK_PATH" | cut -d: -f1 || true)
+    if [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] && [ "$lb" -lt "$le" ]; then
+      rb_render_update "$RUNBOOK_PATH" "$lb" "$le" > "$rb_new"
+      if cmp -s "$rb_new" "$RUNBOOK_PATH"; then rb_status=ok; else rb_status=update; fi
+    else
+      rb_status=error
+    fi
+  fi
+
+  case "$rb_status" in
+    error)
+      echo "ERROR: runbook markers damaged in $RUNBOOK_REL — not written; restore the markers or delete the file to re-create it" >&2
+      SYNC_ERRORS=$((SYNC_ERRORS + 1)) ;;
+    ok)
+      echo "  OK $RUNBOOK_REL (How we run block unchanged)" ;;
+    create)
+      if $DRY_RUN; then
+        echo "  WOULD CREATE $RUNBOOK_REL"
+      else
+        mkdir -p "$(dirname "$RUNBOOK_PATH")"
+        cp "$rb_new" "$RUNBOOK_PATH"
+        echo "  CREATED $RUNBOOK_REL"
+      fi
+      CHANGES=$((CHANGES + 1)) ;;
+    update)
+      if $DRY_RUN; then
+        echo "  WOULD UPDATE block in $RUNBOOK_REL (How we run)"
+      else
+        cp "$rb_new" "$RUNBOOK_PATH"
+        echo "  UPDATED $RUNBOOK_REL (How we run block)"
+      fi
+      CHANGES=$((CHANGES + 1)) ;;
+  esac
+  rm -f "$rb_new"
+
+  # Snapshot the upstream the override stood in for — only once it actually did.
+  if ! $DRY_RUN && [ "$rb_status" != error ] && [ -f "$RB_OVERRIDE" ]; then
+    mkdir -p "$OVERRIDE_SNAPSHOT"
+    cp "$TEMP/RUNBOOK.md" "$OVERRIDE_SNAPSHOT/RUNBOOK.md"
+  fi
+
+  # Migration: the pre-v4.39.0 copy goes once the new file is in place.
+  if [ "$rb_status" != error ] && [ -f "$LEGACY_RUNBOOK" ] && [ "$LEGACY_RUNBOOK" != "$RUNBOOK_PATH" ]; then
+    if $DRY_RUN; then
+      echo "  WOULD MIGRATE pipekit/RUNBOOK.md → $RUNBOOK_REL (How we run block)"
+    else
+      rm "$LEGACY_RUNBOOK"
+      echo "  MIGRATED pipekit/RUNBOOK.md → $RUNBOOK_REL (How we run block)"
+    fi
+    CHANGES=$((CHANGES + 1))
+  fi
+fi
+
 # --- Check for method.config.md ---
 echo ""
 if [ ! -f "$PROJECT_ROOT/method.config.md" ]; then
@@ -774,9 +984,14 @@ fi
 
 # --- Post-sync: generate changelog ---
 if ! $DRY_RUN; then
-  # Compare method files
-  for f in method.md RUNBOOK.md GUIDE.md STARTUP.md; do
-    dst="$PROJECT_ROOT/pipekit/$f"
+  # Compare method files. The runbook lives at its own path, hashed into the
+  # same snapshot just before it was written.
+  for f in method.md GUIDE.md STARTUP.md "$RUNBOOK_REL"; do
+    if [ "$f" = "$RUNBOOK_REL" ]; then
+      dst="$RUNBOOK_PATH"
+    else
+      dst="$PROJECT_ROOT/pipekit/$f"
+    fi
     if [ -f "$dst" ]; then
       old_hash=$(grep "$dst" "$SNAP/method.md5" 2>/dev/null | awk '{print $1}' || true)
       new_hash=$(md5sum "$dst" 2>/dev/null | awk '{print $1}')
@@ -805,7 +1020,9 @@ CHLOG
       sf="$PROJECT_ROOT/.claude/skills/$s/SKILL.md"
       [ -f "$sf" ] || sf="$PROJECT_ROOT/.claude/skills/$s/skill.md"
       if [ -f "$sf" ]; then
-        desc=$(grep '^description:' "$sf" 2>/dev/null | head -1 | sed 's/^description: *//')
+        # `|| true`: under pipefail a SKILL.md with no description: line made
+        # this assignment fail and set -e killed the sync mid-changelog.
+        desc=$(grep '^description:' "$sf" 2>/dev/null | head -1 | sed 's/^description: *//' || true)
       fi
       echo "- \`/$s\` — $desc" >> "$CHANGELOG"
     done
@@ -977,4 +1194,10 @@ else
   echo "  1. Review pipekit/.sync-changelog.md for what changed"
   echo "  2. Run /pipekit-update reconciliation (restart Claude Code first)"
   echo "  3. Commit the synced files"
+fi
+
+if [ "$SYNC_ERRORS" -gt 0 ]; then
+  echo "" >&2
+  echo "✗ $SYNC_ERRORS error(s) — see the ERROR line(s) above; the affected file was not written." >&2
+  exit 1
 fi
