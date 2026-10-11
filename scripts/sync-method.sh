@@ -23,6 +23,14 @@
 #                         (/tpm) and everything else are the project's. The
 #                         pre-v5.0.0 copy at pipekit/RUNBOOK.md is removed
 #                         once the new file is in place.
+#   <Plan path>         <- The weekly plan (v5.1.0+; `Plan path` in
+#                         method.config.md, default engineering/WEEKLY_PLAN.md).
+#                         /tpm's weekly agreement lives here; the runbook's
+#                         "Now" block only points at it. Scaffolded ONCE from
+#                         templates/WEEKLY_PLAN.skeleton.md when absent, then
+#                         never touched — the whole file is /tpm's. Skipped
+#                         when `Plan primary` / `Runbook primary` names a
+#                         sibling repo that owns the plan.
 #   pipekit/GUIDE.md    <- The full instruction manual
 #   pipekit/STARTUP.md  <- The bootstrap reference
 #   .claude/workflows/ <- Saved Workflow scripts that skills invoke by name
@@ -41,6 +49,7 @@
 #                              scaffold-once skills such as lane-map)
 #   method.config.md        <- Project configuration
 #   <Runbook path> outside the pipekit:begin/end block
+#   <Plan path> once it exists (/tpm regenerates it; sync only scaffolds)
 #
 # Overrides (sync-safe customization):
 #   .claude/overrides/skills/<name>/<file>        <- full-file replacement (any
@@ -795,22 +804,27 @@ if [ -d "$OVERRIDES_DIR" ]; then
   fi
 fi
 
-# --- Project runbook (v5.0.0) ---
+# --- Project runbook (v5.0.0) + weekly plan (v5.1.0) ---
 # One runbook per consumer at `Runbook path` (method.config.md; default
 # engineering/RUNBOOK.md), three regions, three owners:
 #   ## Now         <!-- tpm:begin … tpm:end -->          written by /tpm
 #   ## Notes       free text                              the project's
 #   ## How we run  <!-- pipekit:begin … pipekit:end -->  this script
-# Absent, the file is created from templates/RUNBOOK.skeleton.md. Present,
-# ONLY the pipekit block is rewritten — begin line inclusive, so the version
-# stamp moves. Anything else in the file (the tpm block, Notes, extra
-# sections) is never read, let alone written. Damaged markers fail closed:
-# the file is left alone, the error goes to stderr, and the script exits
-# non-zero at the end. .claude/overrides/RUNBOOK.md replaces the block body,
-# drift-checked against the upstream snapshot exactly like apply_override.
-# Runs after the overrides step so the body source is settled, and before the
-# method.config.md template copy so a fresh consumer's heading is its repo
-# name rather than the template's placeholder.
+# Since v5.1.0 the Now block is a one-line pointer: the week's agreement
+# itself lives in the weekly plan at `Plan path` (default
+# engineering/WEEKLY_PLAN.md), a file /tpm owns outright. This step
+# scaffolds that file once (below, after the runbook) and never touches it
+# again.
+# Absent, the runbook is created from templates/RUNBOOK.skeleton.md (its Now
+# body names the plan path). Present, ONLY the pipekit block is rewritten —
+# begin line inclusive, so the version stamp moves. Anything else in the file
+# (the tpm block, Notes, extra sections) is never read, let alone written.
+# Damaged markers fail closed: the file is left alone, the error goes to
+# stderr, and the script exits non-zero at the end. .claude/overrides/RUNBOOK.md
+# replaces the block body, drift-checked against the upstream snapshot exactly
+# like apply_override. Runs after the overrides step so the body source is
+# settled, and before the method.config.md template copy so a fresh consumer's
+# heading is its repo name rather than the template's placeholder.
 RUNBOOK_REL=$(config_value "Runbook path")
 [ -n "$RUNBOOK_REL" ] || RUNBOOK_REL="engineering/RUNBOOK.md"
 case "$RUNBOOK_REL" in
@@ -818,6 +832,13 @@ case "$RUNBOOK_REL" in
   *)  RUNBOOK_PATH="$PROJECT_ROOT/$RUNBOOK_REL" ;;
 esac
 RUNBOOK_SKELETON="$TEMP/templates/RUNBOOK.skeleton.md"
+PLAN_REL=$(config_value "Plan path")
+[ -n "$PLAN_REL" ] || PLAN_REL="engineering/WEEKLY_PLAN.md"
+case "$PLAN_REL" in
+  /*) PLAN_PATH="$PLAN_REL" ;;
+  *)  PLAN_PATH="$PROJECT_ROOT/$PLAN_REL" ;;
+esac
+PLAN_SKELETON="$TEMP/templates/WEEKLY_PLAN.skeleton.md"
 LEGACY_RUNBOOK="$PROJECT_ROOT/pipekit/RUNBOOK.md"
 RB_BEGIN_RE='^<!-- pipekit:begin'
 RB_END_RE='^<!-- pipekit:end'
@@ -893,9 +914,17 @@ else
         *)
           line=$(rb_subst "$line" '{{PROJECT_NAME}}' "$RB_NAME")
           line=$(rb_subst "$line" '{{PK_VERSION}}' "$RB_VERSION")
+          line=$(rb_subst "$line" '{{PLAN_PATH}}' "$PLAN_REL")
           printf '%s\n' "$line" ;;
       esac
     done < "$RUNBOOK_SKELETON"
+  }
+  plan_render_new() {
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+      line=$(rb_subst "$line" '{{PROJECT_NAME}}' "$RB_NAME")
+      printf '%s\n' "$line"
+    done < "$PLAN_SKELETON"
   }
   rb_render_update() {   # $1 = existing file, $2/$3 = begin/end line numbers
     if [ "$2" -gt 1 ]; then sed -n "1,$(($2 - 1))p" "$1"; fi
@@ -969,6 +998,34 @@ else
     fi
     CHANGES=$((CHANGES + 1))
   fi
+
+  # --- Weekly plan (v5.1.0) ---
+  # Scaffolded once from templates/WEEKLY_PLAN.skeleton.md; an existing plan is
+  # never read or written — the whole file is /tpm's. A sibling repo that names
+  # a `Plan primary` (or, pre-5.1.0, a `Runbook primary`) reads that repo's
+  # plan and gets none of its own.
+  if [ -f "$PLAN_PATH" ]; then
+    md5sum "$PLAN_PATH" 2>/dev/null >> "$SNAP/method.md5" || true
+  fi
+  echo ""
+  echo "Weekly plan ($PLAN_REL):"
+  PLAN_PRIMARY=$(config_value "Plan primary")
+  [ -n "$PLAN_PRIMARY" ] || PLAN_PRIMARY=$(config_value "Runbook primary")
+  if [ -n "$PLAN_PRIMARY" ]; then
+    echo "  SKIP $PLAN_REL (plan lives in $PLAN_PRIMARY)"
+  elif [ ! -f "$PLAN_SKELETON" ]; then
+    echo "  SKIP $PLAN_REL (source not found)"
+  elif [ -f "$PLAN_PATH" ]; then
+    echo "  OK $PLAN_REL (owned by /tpm, not touched)"
+  elif $DRY_RUN; then
+    echo "  WOULD CREATE $PLAN_REL"
+    CHANGES=$((CHANGES + 1))
+  else
+    mkdir -p "$(dirname "$PLAN_PATH")"
+    plan_render_new > "$PLAN_PATH"
+    echo "  CREATED $PLAN_REL"
+    CHANGES=$((CHANGES + 1))
+  fi
 fi
 
 # --- Check for method.config.md ---
@@ -984,14 +1041,14 @@ fi
 
 # --- Post-sync: generate changelog ---
 if ! $DRY_RUN; then
-  # Compare method files. The runbook lives at its own path, hashed into the
-  # same snapshot just before it was written.
-  for f in method.md GUIDE.md STARTUP.md "$RUNBOOK_REL"; do
-    if [ "$f" = "$RUNBOOK_REL" ]; then
-      dst="$RUNBOOK_PATH"
-    else
-      dst="$PROJECT_ROOT/pipekit/$f"
-    fi
+  # Compare method files. The runbook and the weekly plan live at their own
+  # paths, hashed into the same snapshot just before they were written.
+  for f in method.md GUIDE.md STARTUP.md "$RUNBOOK_REL" "$PLAN_REL"; do
+    case "$f" in
+      "$RUNBOOK_REL") dst="$RUNBOOK_PATH" ;;
+      "$PLAN_REL")    dst="$PLAN_PATH" ;;
+      *)              dst="$PROJECT_ROOT/pipekit/$f" ;;
+    esac
     if [ -f "$dst" ]; then
       old_hash=$(grep "$dst" "$SNAP/method.md5" 2>/dev/null | awk '{print $1}' || true)
       new_hash=$(md5sum "$dst" 2>/dev/null | awk '{print $1}')

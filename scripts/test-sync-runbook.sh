@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # test-sync-runbook.sh — fixture-based tests for sync-method.sh's project
 # runbook step (v5.0.0): one runbook per consumer, three regions, three
-# owners (/tpm, the project, sync).
+# owners (/tpm, the project, sync) — and the weekly plan it scaffolds once
+# beside the runbook (v5.1.0).
 #
 # Covers:
-#   fresh consumer          → created from the skeleton with all three blocks
+#   fresh consumer          → created from the skeleton with all three blocks;
+#                             the Now body points at the plan path; the plan
+#                             is created from its skeleton with a dateless marker
 #   existing file           → only the pipekit block changes; Notes, the tpm
-#                             sentinel and trailing sections stay byte-identical
+#                             sentinel and trailing sections stay byte-identical;
+#                             an existing plan is byte-identical and reported OK
 #   damaged markers         → ERROR on stderr, file untouched, non-zero exit
 #   legacy pipekit/RUNBOOK.md → removed and reported as MIGRATED
 #   --dry-run               → WOULD CREATE / WOULD UPDATE block / WOULD MIGRATE,
-#                             nothing written
+#                             nothing written (plan included)
 #   Runbook path key        → honored (code-block and table forms)
+#   Plan path key           → honored; Plan primary / Runbook primary → SKIP
 #   .claude/overrides/RUNBOOK.md → becomes the block body; drift warning when
 #                             upstream moves underneath it
 #   retired lane-map        → a consumer's local copy survives untouched
@@ -72,6 +77,7 @@ make_method() {
   mkdir -p "$m/skills/demo" "$m/templates" "$m/bin"
   echo 'upstream demo body' > "$m/skills/demo/SKILL.md"
   cp "$repo_root/templates/RUNBOOK.skeleton.md" "$m/templates/RUNBOOK.skeleton.md"
+  cp "$repo_root/templates/WEEKLY_PLAN.skeleton.md" "$m/templates/WEEKLY_PLAN.skeleton.md"
   printf '#!/bin/bash\nPK_VERSION="9.9.9"\n' > "$m/bin/pk"
   printf '# Method Configuration\n\n| **Project name** | `your-project` |\n' > "$m/method.config.template.md"
   if [ "$NO_RUNBOOK" -eq 0 ]; then
@@ -142,7 +148,7 @@ content=$(cat "$RB" 2>/dev/null)
 assert_contains "fresh: heading is the repo dir name"   "# RUNBOOK — fresh" "$content"
 assert_contains "fresh: ## Now"                         "## Now" "$content"
 assert_contains "fresh: tpm:begin"                      "<!-- tpm:begin · agreed YYYY-MM-DD" "$content"
-assert_contains "fresh: tpm placeholder"                "_(no agreement yet — run /tpm)_" "$content"
+assert_contains "fresh: Now body points at the plan"    "_(this week → engineering/WEEKLY_PLAN.md — run /tpm to agree it)_" "$content"
 assert_contains "fresh: tpm:end"                        "<!-- tpm:end -->" "$content"
 assert_contains "fresh: ## Notes"                       "## Notes" "$content"
 assert_contains "fresh: ## How we run"                  "## How we run" "$content"
@@ -157,13 +163,31 @@ assert_eq       "fresh: end marker on its own line after the body" \
 assert_no_file  "fresh: no pipekit/RUNBOOK.md copy" "$P/pipekit/RUNBOOK.md"
 assert_contains "fresh: changelog lists the runbook" '`engineering/RUNBOOK.md` — updated' \
   "$(cat "$P/pipekit/.sync-changelog.md" 2>/dev/null)"
+PLAN="$P/engineering/WEEKLY_PLAN.md"
+assert_file     "fresh/plan: engineering/WEEKLY_PLAN.md created" "$PLAN"
+assert_contains "fresh/plan: CREATED reported" "CREATED engineering/WEEKLY_PLAN.md" "$SYNC_OUT"
+plan=$(cat "$PLAN" 2>/dev/null)
+assert_contains "fresh/plan: heading carries the project name" "# fresh — Weekly Plan" "$plan"
+assert_contains "fresh/plan: dateless tpm:begin marker" "<!-- tpm:begin · agreed YYYY-MM-DD · derived from Linear · written by /tpm, regenerate don't edit -->" "$plan"
+assert_contains "fresh/plan: placeholder body" "_(no agreement yet — run /tpm)_" "$plan"
+assert_contains "fresh/plan: tpm:end" "<!-- tpm:end -->" "$plan"
+assert_not_contains "fresh/plan: no unfilled placeholders" "{{" "$plan"
+assert_eq       "fresh/plan: byte-identical to the rendered skeleton" \
+  "$(sed 's/{{PROJECT_NAME}}/fresh/' "$repo_root/templates/WEEKLY_PLAN.skeleton.md")" "$plan"
+assert_contains "fresh/plan: changelog lists the plan" '`engineering/WEEKLY_PLAN.md` — updated' \
+  "$(cat "$P/pipekit/.sync-changelog.md" 2>/dev/null)"
 
 echo "1b. second sync, same upstream → no-op"
 cp "$RB" "$TMP/fresh.before"
+cp "$PLAN" "$TMP/fresh.plan.before"
 run_sync "$P"
 assert_eq       "no-op: exit 0" 0 "$SYNC_CODE"
 assert_contains "no-op: reported OK" "OK engineering/RUNBOOK.md" "$SYNC_OUT"
 assert_same     "no-op: file byte-identical" "$TMP/fresh.before" "$RB"
+assert_contains "no-op/plan: reported OK, owned by /tpm" "OK engineering/WEEKLY_PLAN.md (owned by /tpm, not touched)" "$SYNC_OUT"
+assert_same     "no-op/plan: byte-identical" "$TMP/fresh.plan.before" "$PLAN"
+assert_not_contains "no-op/plan: changelog does not list the plan" '`engineering/WEEKLY_PLAN.md` — updated' \
+  "$(cat "$P/pipekit/.sync-changelog.md" 2>/dev/null)"
 
 # ─── 2. Existing file: only the pipekit block moves ─────────────────────────
 echo "2. existing file → only the pipekit block changes"
@@ -172,10 +196,16 @@ mkdir -p "$P/engineering"
 write_existing "$P/engineering/RUNBOOK.md"
 RB="$P/engineering/RUNBOOK.md"
 cp "$RB" "$TMP/existing.before"
+# A plan /tpm already wrote — an agreed week, nothing like the skeleton.
+printf '# Existing — Weekly Plan\n<!-- tpm:begin · agreed 2026-10-06 · derived from Linear · written by /tpm, regenerate don'"'"'t edit -->\nPLAN-SENTINEL-9c1d: MUST lane A · NEXT lane B  \n<!-- tpm:end -->\nafter the block, also /tpm'"'"'s' > "$P/engineering/WEEKLY_PLAN.md"
+cp "$P/engineering/WEEKLY_PLAN.md" "$TMP/existing.plan.before"
 BODY='upstream how-we-run body v2'
 run_sync "$P"
 assert_eq       "existing: exit 0" 0 "$SYNC_CODE"
 assert_contains "existing: UPDATED reported" "UPDATED engineering/RUNBOOK.md" "$SYNC_OUT"
+assert_same     "existing/plan: byte-identical after sync" "$TMP/existing.plan.before" "$P/engineering/WEEKLY_PLAN.md"
+assert_contains "existing/plan: reported OK, owned by /tpm" "OK engineering/WEEKLY_PLAN.md (owned by /tpm, not touched)" "$SYNC_OUT"
+assert_not_contains "existing/plan: never CREATED over an existing plan" "CREATED engineering/WEEKLY_PLAN.md" "$SYNC_OUT"
 content=$(cat "$RB")
 assert_contains     "existing: new body present"         "$BODY" "$content"
 assert_not_contains "existing: stale body gone"          "stale body" "$content"
@@ -246,6 +276,8 @@ run_sync "$P" --dry-run
 assert_eq       "dry/fresh: exit 0" 0 "$SYNC_CODE"
 assert_contains "dry/fresh: WOULD CREATE" "WOULD CREATE engineering/RUNBOOK.md" "$SYNC_OUT"
 assert_no_file  "dry/fresh: nothing written" "$P/engineering/RUNBOOK.md"
+assert_contains "dry/fresh/plan: WOULD CREATE" "WOULD CREATE engineering/WEEKLY_PLAN.md" "$SYNC_OUT"
+assert_no_file  "dry/fresh/plan: nothing written" "$P/engineering/WEEKLY_PLAN.md"
 
 P=$(new_proj dry-existing)
 mkdir -p "$P/engineering" "$P/pipekit"
@@ -279,6 +311,26 @@ assert_no_file  "custom: nothing at the default path" "$P/engineering/RUNBOOK.md
 assert_contains "custom: heading is the display name" "# RUNBOOK — Widget Co" "$(cat "$P/docs/ops/RUNBOOK.md" 2>/dev/null)"
 assert_contains "custom: changelog uses the custom path" '`docs/ops/RUNBOOK.md` — updated' \
   "$(cat "$P/pipekit/.sync-changelog.md")"
+# No Plan path set → the plan still lands at its default, and the custom
+# runbook's Now body names that default.
+assert_file     "custom/plan: default plan path beside a custom runbook path" "$P/engineering/WEEKLY_PLAN.md"
+assert_contains "custom/plan: Now body names the default plan path" "_(this week → engineering/WEEKLY_PLAN.md — run /tpm to agree it)_" "$(cat "$P/docs/ops/RUNBOOK.md" 2>/dev/null)"
+
+P=$(new_proj custom-plan)
+cat > "$P/method.config.md" <<'EOF'
+```
+Project display name: Widget Co
+Plan path: docs/WEEK.md
+```
+EOF
+run_sync "$P"
+assert_eq       "custom-plan: exit 0" 0 "$SYNC_CODE"
+assert_file     "custom-plan: created at docs/WEEK.md" "$P/docs/WEEK.md"
+assert_no_file  "custom-plan: nothing at the default plan path" "$P/engineering/WEEKLY_PLAN.md"
+assert_contains "custom-plan: CREATED reported with the custom path" "CREATED docs/WEEK.md" "$SYNC_OUT"
+assert_contains "custom-plan: heading is the display name" "# Widget Co — Weekly Plan" "$(cat "$P/docs/WEEK.md" 2>/dev/null)"
+assert_contains "custom-plan: runbook Now body names the custom plan path" "_(this week → docs/WEEK.md — run /tpm to agree it)_" "$(cat "$P/engineering/RUNBOOK.md" 2>/dev/null)"
+assert_contains "custom-plan: changelog uses the custom path" '`docs/WEEK.md` — updated' "$(cat "$P/pipekit/.sync-changelog.md")"
 
 P=$(new_proj custom-table)
 cat > "$P/method.config.md" <<'EOF'
@@ -345,6 +397,35 @@ NO_RUNBOOK=0
 assert_eq       "no-runbook: exit 0" 0 "$SYNC_CODE"
 assert_contains "no-runbook: SKIP reported" "SKIP runbook (source not found)" "$SYNC_OUT"
 assert_no_file  "no-runbook: nothing created" "$P/engineering/RUNBOOK.md"
+assert_no_file  "no-runbook: no plan either (same SKIP)" "$P/engineering/WEEKLY_PLAN.md"
+
+# ─── 10. Sibling repo: the plan lives in the primary → SKIP ─────────────────
+echo "10. Plan primary / Runbook primary → plan SKIPped, not created"
+P=$(new_proj sibling-rb)
+cat > "$P/method.config.md" <<'EOF'
+```
+Runbook primary: ../x
+```
+EOF
+run_sync "$P"
+assert_eq       "sibling/runbook-primary: exit 0" 0 "$SYNC_CODE"
+assert_contains "sibling/runbook-primary: SKIP names the primary" "SKIP engineering/WEEKLY_PLAN.md (plan lives in ../x)" "$SYNC_OUT"
+assert_no_file  "sibling/runbook-primary: plan not created" "$P/engineering/WEEKLY_PLAN.md"
+assert_no_file  "sibling/runbook-primary: nothing at ../x either" "$TMP/x/engineering/WEEKLY_PLAN.md"
+assert_file     "sibling/runbook-primary: the runbook itself is still created" "$P/engineering/RUNBOOK.md"
+
+P=$(new_proj sibling-plan)
+cat > "$P/method.config.md" <<'EOF'
+```
+Plan primary: ../SiteLine
+Plan path: docs/WEEK.md
+```
+EOF
+run_sync "$P" --dry-run
+assert_eq       "sibling/plan-primary: exit 0" 0 "$SYNC_CODE"
+assert_contains "sibling/plan-primary: SKIP names the primary and the custom path" "SKIP docs/WEEK.md (plan lives in ../SiteLine)" "$SYNC_OUT"
+assert_not_contains "sibling/plan-primary: no WOULD CREATE for the plan" "WOULD CREATE docs/WEEK.md" "$SYNC_OUT"
+assert_no_file  "sibling/plan-primary: plan not created" "$P/docs/WEEK.md"
 
 echo ""
 if [ "$fail" -eq 0 ]; then
