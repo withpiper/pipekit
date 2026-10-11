@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.0.1"
+PK_VERSION="5.1.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -2187,17 +2187,27 @@ pk_sessions_crosslink() {
   echo ""
 }
 
-# ── Runbook nudge ─────────────────────────────────────────────────────────────
-# The TPM runbook (method.config.md → `Runbook path`, default
-# engineering/RUNBOOK.md, relative to the repo root — or to `Runbook primary`,
-# the sibling repo that owns it, e.g. ../SiteLine) carries a marker line
-# `<!-- tpm:begin · agreed YYYY-MM-DD` written by /tpm. pk next prints one line
-# when that agreement is older than `Runbook stale days` (default 7). A missing
-# file, missing marker or unparsable date prints nothing: the nudge never fails
-# or clutters the caller.
+# ── Plan nudge ────────────────────────────────────────────────────────────────
+# /tpm writes the week's agreement to the weekly plan (method.config.md →
+# `Plan path`, default engineering/WEEKLY_PLAN.md, relative to the repo root —
+# or to `Plan primary`, the sibling repo that owns it, e.g. ../SiteLine; v5.1.0).
+# The file carries a marker line `<!-- tpm:begin · agreed YYYY-MM-DD`. pk next
+# prints one line when that agreement is older than `Plan stale days` (default
+# 7), or when the marker has no date (the synced skeleton: a plan file exists
+# but no week was ever agreed).
+#
+# Before v5.1.0 the agreement lived in the runbook's `## Now` block. When no
+# plan file exists the nudge falls back to that file (`Runbook path`,
+# `Runbook primary`, `Runbook stale days`) with the pre-5.1.0 wording, so a
+# consumer that has not synced the plan yet keeps its nudge. `Plan primary`
+# and `Plan stale days` default to their Runbook counterparts for the same
+# reason. A missing file, missing marker or unparsable date prints nothing:
+# the nudge never fails or clutters the caller.
 
 PK_RUNBOOK_PATH_DEFAULT="engineering/RUNBOOK.md"
 PK_RUNBOOK_STALE_DAYS_DEFAULT=7
+PK_PLAN_PATH_DEFAULT="engineering/WEEKLY_PLAN.md"
+PK_PLAN_STALE_DAYS_DEFAULT=7
 
 # A calendar date (YYYY-MM-DD) as epoch seconds at UTC midnight. GNU first, as
 # pk_file_mtime: BSD date rejects -d outright with nothing on stdout, and GNU
@@ -2208,32 +2218,52 @@ pk_date_to_epoch() {
     || true
 }
 
-pk_runbook_nudge() {
-  local root rel primary file line agreed stale epoch days
-  root=$(pk_repo_root) || return 0
-  rel=$(pk_config "Runbook path" "$PK_RUNBOOK_PATH_DEFAULT")
-  primary=$(pk_config "Runbook primary" "")
-  case "$primary" in
-    "")  file="$root/$rel" ;;
-    /*)  file="$primary/$rel" ;;
-    *)   file="$root/$primary/$rel" ;;
+# A /tpm-owned file's absolute path: $1 = repo root, $2 = relative path,
+# $3 = primary (empty: this repo; absolute; or relative to the repo root).
+pk_tpm_file() {
+  case "$3" in
+    "")  echo "$1/$2" ;;
+    /*)  echo "$3/$2" ;;
+    *)   echo "$1/$3/$2" ;;
   esac
+}
+
+# One nudge line for the tpm:begin marker in $1, labelled $2 ("plan" or
+# "runbook"), stale after $3 days (falls back to $4 when unset or not a number).
+pk_tpm_marker_nudge() {
+  local file="$1" label="$2" stale="$3" stale_default="$4" line agreed epoch days
   [ -f "$file" ] || return 0
   line=$(grep -m1 'tpm:begin' "$file" 2>/dev/null) || return 0
   # `|| true`: under pipefail a marker with no date makes grep exit 1, which
   # would abort the function here and hide exactly the case handled below.
   agreed=$(printf '%s' "$line" | grep -oE 'agreed [0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | cut -d' ' -f2) || true
-  # A marker with no date is the synced skeleton: the runbook exists but no
-  # week was ever agreed — the one case where silence would hide the gap.
-  if [ -z "$agreed" ]; then echo "runbook: no agreement yet → /tpm"; return 0; fi
+  # A marker with no date is the synced skeleton: the file exists but no week
+  # was ever agreed — the one case where silence would hide the gap.
+  if [ -z "$agreed" ]; then echo "$label: no agreement yet → /tpm"; return 0; fi
   epoch=$(pk_date_to_epoch "$agreed")
   [ -n "$epoch" ] || return 0
-  stale=$(pk_config "Runbook stale days" "$PK_RUNBOOK_STALE_DAYS_DEFAULT")
-  case "$stale" in ''|*[!0-9]*) stale=$PK_RUNBOOK_STALE_DAYS_DEFAULT ;; esac
+  case "$stale" in ''|*[!0-9]*) stale=$stale_default ;; esac
   days=$(( ($(date +%s) - epoch) / 86400 ))
   [ "$days" -gt "$stale" ] || return 0
-  echo "runbook agreed ${days}d ago → /tpm"
+  echo "$label agreed ${days}d ago → /tpm"
 }
+
+pk_plan_nudge() {
+  local root rb_primary rb_stale plan_file rb_file
+  root=$(pk_repo_root) || return 0
+  rb_primary=$(pk_config "Runbook primary" "")
+  rb_stale=$(pk_config "Runbook stale days" "$PK_RUNBOOK_STALE_DAYS_DEFAULT")
+  plan_file=$(pk_tpm_file "$root" "$(pk_config "Plan path" "$PK_PLAN_PATH_DEFAULT")" "$(pk_config "Plan primary" "$rb_primary")")
+  if [ -f "$plan_file" ]; then
+    pk_tpm_marker_nudge "$plan_file" "plan" "$(pk_config "Plan stale days" "$rb_stale")" "$PK_PLAN_STALE_DAYS_DEFAULT"
+    return 0
+  fi
+  rb_file=$(pk_tpm_file "$root" "$(pk_config "Runbook path" "$PK_RUNBOOK_PATH_DEFAULT")" "$rb_primary")
+  pk_tpm_marker_nudge "$rb_file" "runbook" "$rb_stale" "$PK_RUNBOOK_STALE_DAYS_DEFAULT"
+}
+
+# Pre-v5.1.0 name, kept for callers that source bin/pk (tests/pk-smoke.sh).
+pk_runbook_nudge() { pk_plan_nudge; }
 
 cmd_sessions() {
   local minutes=60 all="" json=0
@@ -2354,9 +2384,9 @@ cmd_focus() {
 
 cmd_next() {
   pk_sessions_crosslink || true
-  # One line when the /tpm runbook agreement has gone stale; silent otherwise.
+  # One line when the /tpm weekly agreement has gone stale; silent otherwise.
   local nudge
-  nudge=$(pk_runbook_nudge 2>/dev/null || true)
+  nudge=$(pk_plan_nudge 2>/dev/null || true)
   [ -n "$nudge" ] && { echo "$nudge"; echo ""; }
   local current
   current=$(pk_current_branch)
@@ -3599,6 +3629,10 @@ $commits"
     fi
   fi
 
+  # TPM follow-through (v5.1.0): any `[tpm DATE] on-merge: …` note /tpm left on
+  # the issue is offered now that the merge is real. Never fails pk done.
+  pk_done_tpm_follow_through "$issue" || true
+
   echo "Removing worktree..."
   if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
     git worktree remove "$wt_path" --force 2>/dev/null || rm -rf "$wt_path"
@@ -4406,6 +4440,83 @@ pk_linear_comments() {
   local q='query($id: String!) { issue(id: $id) { comments(orderBy: createdAt) { nodes { id body createdAt user { displayName } } } } }'
   pk_linear_gql "$q" "$(jq -n --arg id "$id" '{id:$id}')" \
     | jq -r '.data.issue.comments.nodes // []'
+}
+
+# ── TPM on-merge follow-through (v5.1.0) ─────────────────────────────────────
+# /tpm may leave a comment on an issue for a board move that only makes sense
+# once that issue's PR has merged (a focus swap, a relation):
+#   [tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to …
+# pk done reads these back after the merge and offers to run the command.
+#
+# Pure parser, unit-tested: comment text on stdin → one command per line. Only
+# a line that STARTS with `[tpm YYYY-MM-DD] on-merge: ` counts (a plain `[tpm
+# DATE] MUST — …` note or an `on-merge:` mid-line is not an instruction); the
+# command runs to the first ` · ` (the note's rationale) or end of line,
+# trimmed; empties are dropped. Bash expansions, not awk: the separator is a
+# multibyte middle dot and byte-wise prefix/suffix stripping is locale-proof.
+pk_tpm_on_merge_from_text() {
+  local line cmd
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "[tpm "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"] on-merge: "*) ;;
+      *) continue ;;
+    esac
+    cmd="${line#*"] on-merge: "}"
+    cmd="${cmd%% · *}"
+    cmd="${cmd#"${cmd%%[![:space:]]*}"}"
+    cmd="${cmd%"${cmd##*[![:space:]]}"}"
+    [ -n "$cmd" ] && printf '%s\n' "$cmd"
+  done
+  return 0
+}
+
+# The on-merge commands on issue $1, oldest comment first. Fails closed to
+# empty output and exit 0 — no API key, an unreachable Linear or a malformed
+# thread all mean "nothing to offer", never a failed pk done.
+pk_tpm_on_merge_commands() {
+  local id="$1" comments
+  comments=$(pk_linear_comments "$id" 2>/dev/null) || return 0
+  case "$comments" in \[*) ;; *) return 0 ;; esac
+  { printf '%s' "$comments" | jq -r '.[]? | .body // empty' 2>/dev/null || true; } \
+    | pk_tpm_on_merge_from_text
+  return 0
+}
+
+# cmd_done's follow-through step. Prints the notes, then — only at an
+# interactive terminal, with PK_ON_MERGE unset or `ask` — offers to run them.
+# `PK_ON_MERGE=print` (or no TTY) lists them and leaves them to the human. A
+# `pk …` command re-invokes this script with the remaining words (split on
+# whitespace, never eval'd); anything else is printed for the human. The merge
+# already happened, so nothing in here may change pk done's exit path.
+pk_done_tpm_follow_through() {
+  local id="$1" cmds="" cmd="" answer="" rc=0
+  local -a words=()
+  cmds=$(pk_tpm_on_merge_commands "$id" 2>/dev/null) || cmds=""
+  [ -n "$cmds" ] || return 0
+  echo ""
+  echo "TPM follow-through — [tpm] on-merge notes on $id:"
+  while IFS= read -r cmd; do echo "  $cmd"; done <<< "$cmds"
+  if [ "${PK_ON_MERGE:-ask}" = "ask" ] && [ -t 0 ] && [ -t 1 ]; then
+    printf 'Run now? [y/N] '
+    read -r answer || answer=""
+  fi
+  case "$answer" in
+    y|Y|yes|Yes|YES)
+      while IFS= read -r cmd; do
+        case "$cmd" in
+          "pk "*)
+            read -r -a words <<< "${cmd#pk }"
+            echo "  → $cmd"
+            rc=0; "$0" "${words[@]}" || rc=$?
+            echo "  exit $rc"
+            ;;
+          *) echo "  $cmd (not a pk command — run it by hand)" ;;
+        esac
+      done <<< "$cmds"
+      ;;
+    *) echo "  not run — run each by hand" ;;
+  esac
+  return 0
 }
 
 # True when the issue already carries a pk-authored Shipped record. Used by
@@ -5569,9 +5680,12 @@ cmd_config() {
     "Worktree prefix" \
     "Runbook path|$PK_RUNBOOK_PATH_DEFAULT" \
     "Runbook primary" \
+    "Runbook stale days|$PK_RUNBOOK_STALE_DAYS_DEFAULT" \
+    "Plan path|$PK_PLAN_PATH_DEFAULT" \
+    "Plan primary" \
+    "Plan stale days|$PK_PLAN_STALE_DAYS_DEFAULT" \
     "Portfolio repos" \
-    "Weekly capacity days|6" \
-    "Runbook stale days|$PK_RUNBOOK_STALE_DAYS_DEFAULT"; do
+    "Weekly capacity days|6"; do
     key=${entry%%|*}
     default=${entry#*|}
     [ "$default" = "$entry" ] && default=""

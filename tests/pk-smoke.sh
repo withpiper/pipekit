@@ -1742,7 +1742,7 @@ EOF
 gd_done() { # $@ = pk done args → GD_OUT (combined output), GD_RC
   : > "$GD_GQL_LOG"; : > "$GH_LOG"
   GD_OUT=$( cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" && source "$PK" \
-    && source "$FIXTURE/gd-gql-stub.sh" && LINEAR_API_KEY=lin_test cmd_done "$@" 2>&1 ); GD_RC=$?
+    && source "${GD_STUB:-$FIXTURE/gd-gql-stub.sh}" && LINEAR_API_KEY=lin_test cmd_done "$@" 2>&1 ); GD_RC=$?
 }
 # Logged mutations in order, as "name<TAB>variables" (compact JSON).
 gd_writes() { awk -F'\t' '/^mutation/ { match($1, /\{ *[A-Za-z]+/); n = substr($1, RSTART, RLENGTH); sub(/^\{ */, "", n); print n "\t" $2 }' "$GD_GQL_LOG"; }
@@ -1849,6 +1849,49 @@ else
     *) fail "done: ordinary path unchanged for an existing branch" "out=$GD_OUT" ;;
   esac
 fi
+
+# (g) TPM follow-through (v5.1.0): an `[tpm DATE] on-merge:` note on the issue
+#     is listed after the Shipped comment + transition and before the worktree
+#     goes; PK_ON_MERGE=print never runs it and the only Linear writes are
+#     still the ship record and the state change. Same stub, with a thread.
+cat > "$FIXTURE/gd-gql-stub-tpm.sh" <<'EOF'
+pk_linear_gql() {
+  printf '%s\t%s\n' "$1" "$(printf '%s' "${2:-null}" | jq -c .)" >> "$GD_GQL_LOG"
+  case "$1" in
+    mutation*issueUpdate*)   echo '{"data":{"issueUpdate":{"success":true}}}' ;;
+    mutation*commentCreate*) echo '{"data":{"commentCreate":{"success":true}}}' ;;
+    *workflowStates*)        echo '{"data":{"workflowStates":{"nodes":[{"id":"st-in-dev","name":"In Dev"}]}}}' ;;
+    *"issue(id:"*)           echo '{"data":{"issue":{"id":"uuid-gd","state":{"name":"UAT"},"comments":{"nodes":[{"body":"UAT round 1: fine"},{"body":"[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to Finance settings once this merges"}]}}}}' ;;
+    *) echo '{}' ;;
+  esac
+}
+EOF
+GD_STUB="$FIXTURE/gd-gql-stub-tpm.sh" PK_ON_MERGE=print gd_done GD-1
+case "$GD_OUT" in
+  *"TPM follow-through — [tpm] on-merge notes on GD-1:"*"  pk focus I7.P10 C --swap"*"  not run — run each by hand"*"Removing worktree..."*)
+    if [ $GD_RC -eq 0 ] && [ "$(gd_writes | cut -f1 | paste -sd, -)" = "commentCreate,issueUpdate" ]; then
+      ok "done: [tpm] on-merge note listed after the transition; PK_ON_MERGE=print leaves it to the human"
+    else
+      fail "done: tpm follow-through with PK_ON_MERGE=print" "rc=$GD_RC writes=$(gd_writes | cut -f1 | paste -sd, -)"
+    fi ;;
+  *"Run now?"*) fail "done: tpm follow-through with PK_ON_MERGE=print" "prompted despite print mode: $GD_OUT" ;;
+  *) fail "done: tpm follow-through header" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+# (h) Default mode off a TTY (CI, a pipe): same listing, no prompt, nothing run.
+GD_STUB="$FIXTURE/gd-gql-stub-tpm.sh" gd_done GD-1
+case "$GD_OUT" in
+  *"Run now?"*) fail "done: tpm follow-through off a TTY" "prompted with no terminal: $GD_OUT" ;;
+  *"TPM follow-through — [tpm] on-merge notes on GD-1:"*"  not run — run each by hand"*)
+    [ $GD_RC -eq 0 ] && ok "done: tpm follow-through off a TTY lists the notes and does not prompt" \
+      || fail "done: tpm follow-through off a TTY" "rc=$GD_RC" ;;
+  *) fail "done: tpm follow-through off a TTY" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+# (i) No note on the thread → not a word about follow-through.
+gd_done GD-1
+case "$GD_OUT" in
+  *"TPM follow-through"*) fail "done: no on-merge note → no follow-through section" "out=$GD_OUT" ;;
+  *) [ $GD_RC -eq 0 ] && ok "done: no on-merge note → no follow-through section" || fail "done: no on-merge note" "rc=$GD_RC" ;;
+esac
 
 cleanup
 FIXTURE=""
@@ -2646,6 +2689,49 @@ else
   ok "shipped-detect: the --force audit comment is not a ship record"
 fi
 
+# ── TPM on-merge notes (v5.1.0, sourced) ─────────────────────────────────────
+# /tpm leaves `[tpm DATE] on-merge: <cmd> · <why>` comments on an issue; pk done
+# parses them back after the merge. The parser is pure (comment text on stdin →
+# one command per line); the fetch fails closed to nothing, exit 0.
+
+echo "== tpm on-merge notes (sourced) =="
+
+unit_on_merge()      { ( cd "$REPO_ROOT" && source "$PK" && pk_tpm_on_merge_from_text ); }
+unit_on_merge_cmds() { # $1 = stubbed pk_linear_comments payload
+  ( cd "$REPO_ROOT" && source "$PK" \
+    && eval "pk_linear_comments() { printf '%s' '$1'; }" \
+    && pk_tpm_on_merge_commands PK-1 )
+}
+
+v=$(printf '[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to Finance settings once this merges\n' | unit_on_merge)
+[ "$v" = "pk focus I7.P10 C --swap" ] && ok "on-merge: one note → one command, the rationale after · dropped" || fail "on-merge: one note" "got '$v'"
+v=$(printf 'Review round 1\n[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · first\n**Shipped — PK-1**\nPR: http://x/1\n[tpm 2026-10-12] on-merge: pk issue relate PK-9 --blocked-by PK-1 · second\n' | unit_on_merge | paste -sd '|' -)
+[ "$v" = "pk focus I7.P10 C --swap|pk issue relate PK-9 --blocked-by PK-1" ] && ok "on-merge: two notes across a thread → two commands, in order" || fail "on-merge: two notes" "got '$v'"
+v=$(printf '[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap\n' | unit_on_merge)
+[ "$v" = "pk focus I7.P10 C --swap" ] && ok "on-merge: no · → the whole remainder is the command" || fail "on-merge: no separator" "got '$v'"
+v=$(printf 'as agreed, on-merge: pk focus I7.P10 C\nsee [tpm 2026-10-11] on-merge: pk focus X\n[tpm 2026-10-11]on-merge: pk focus Y\n' | unit_on_merge)
+[ -z "$v" ] && ok "on-merge: on-merge: anywhere but the start of a [tpm DATE] line → ignored" || fail "on-merge: mid-line" "got '$v'"
+v=$(printf '[tpm 2026-10-11] MUST — ship PK-1 by Thursday\n[tpm 2026-10-11] WAIT — PK-7 blocked by vendor\n' | unit_on_merge)
+[ -z "$v" ] && ok "on-merge: [tpm DATE] MUST / WAIT notes → nothing" || fail "on-merge: MUST note" "got '$v'"
+v=$(printf '[tpm 2026-10-11] on-merge:    pk focus I7.P10 C    · padded\n[tpm 2026-10-11] on-merge: pk focus I7.P11 B   \n' | unit_on_merge | sed -n l | paste -sd '|' -)
+[ "$v" = 'pk focus I7.P10 C$|pk focus I7.P11 B$' ] && ok "on-merge: surrounding and trailing spaces trimmed" || fail "on-merge: trim" "got '$v'"
+v=$(printf '[tpm 2026-10-11] on-merge:  · nothing before the dot\n' | unit_on_merge)
+[ -z "$v" ] && ok "on-merge: an empty command is dropped" || fail "on-merge: empty" "got '$v'"
+
+# Fetch: one command per note across two comments, oldest first.
+v=$(unit_on_merge_cmds '[{"body":"[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · first"},{"body":"**Shipped — PK-1**"},{"body":"[tpm 2026-10-12] on-merge: pk issue relate PK-9 --blocked-by PK-1 · second"}]' | paste -sd '|' -)
+[ "$v" = "pk focus I7.P10 C --swap|pk issue relate PK-9 --blocked-by PK-1" ] && ok "on-merge fetch: two comments → two commands in thread order" || fail "on-merge fetch: two comments" "got '$v'"
+v=$(unit_on_merge_cmds '{"errors":[{"message":"nope"}]}'); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "on-merge fetch: non-array response → nothing, exit 0" || fail "on-merge fetch: non-array" "exit $code, got '$v'"
+# No API key: pk_linear_gql refuses, the fetch stays silent and exit 0.
+make_fixture
+write_config '```
+Team name: Eng
+```'
+v=$( cd "$FIXTURE" && unset LINEAR_API_KEY && source "$PK" && pk_tpm_on_merge_commands PK-1 2>&1 ); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "on-merge fetch: no API key → nothing, exit 0 (never fails pk done)" || fail "on-merge fetch: no key" "exit $code, got '$v'"
+cleanup
+
 # ── Unit tests: pk sessions (sourced) ────────────────────────────────────────
 # pk sessions reads Claude Code transcript tails. The fixtures live under a temp
 # projects root (PK_CLAUDE_PROJECTS_DIR), never the real ~/.claude/projects.
@@ -3440,6 +3526,92 @@ v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_runbook_nudge )
 [ "$v" = "runbook agreed 10d ago → /tpm" ] && ok "nudge: Runbook primary reads the sibling repo's runbook" || fail "nudge: primary" "got '$v'"
 rm -rf "$NUDGE_PARENT"
 
+# ── Unit tests: plan nudge (v5.1.0, sourced) ─────────────────────────────────
+# The weekly plan (`Plan path`, default engineering/WEEKLY_PLAN.md) carries the
+# tpm:begin marker since v5.1.0 and wins whenever the file exists; the runbook
+# tests above (no plan in the fixture) exercise the fallback. `Plan primary`
+# and `Plan stale days` default to their Runbook counterparts.
+
+echo "== plan nudge (v5.1.0, sourced) =="
+
+unit_plan_nudge() { ( cd "$FIXTURE" && source "$PK" && pk_plan_nudge ); }
+write_plan()      { mkdir -p "$(dirname "$1")"; printf '# X — Weekly Plan\n<!-- tpm:begin · agreed %s · derived from Linear · written by /tpm, regenerate don\x27t edit -->\nbody\n<!-- tpm:end -->\n' "$2" > "$1"; }
+
+make_fixture
+write_config '```
+Team name: Eng
+```'
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "$(days_ago 8)"
+v=$(unit_plan_nudge); code=$?
+[ $code -eq 0 ] && [ "$v" = "plan agreed 8d ago → /tpm" ] && ok "plan nudge: 8-day-old agreement → one line" || fail "plan nudge: stale" "exit $code, got '$v'"
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "$(days_ago 7)"
+v=$(unit_plan_nudge); [ -z "$v" ] && ok "plan nudge: exactly 7 days → nothing" || fail "plan nudge: boundary" "got '$v'"
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "YYYY-MM-DD"
+v=$(unit_plan_nudge); code=$?
+[ $code -eq 0 ] && [ "$v" = "plan: no agreement yet → /tpm" ] && ok "plan nudge: synced skeleton (marker, no date) → no-agreement line" || fail "plan nudge: skeleton" "exit $code, got '$v'"
+# The plan wins: a fresh plan beside a stale runbook is silence, and a stale
+# plan beside a fresh runbook is the plan line — the runbook is not consulted.
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "$(days_ago 0)"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 30)"
+v=$(unit_plan_nudge); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "plan nudge: fresh plan + stale runbook → nothing (plan wins)" || fail "plan nudge: plan wins" "exit $code, got '$v'"
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "$(days_ago 9)"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 0)"
+v=$(unit_plan_nudge)
+[ "$v" = "plan agreed 9d ago → /tpm" ] && ok "plan nudge: stale plan + fresh runbook → the plan line" || fail "plan nudge: stale plan" "got '$v'"
+v=$(unit_nudge)
+[ "$v" = "plan agreed 9d ago → /tpm" ] && ok "plan nudge: pk_runbook_nudge (pre-5.1.0 name) reads the plan too" || fail "plan nudge: old name" "got '$v'"
+rm -f "$FIXTURE/engineering/WEEKLY_PLAN.md"
+v=$(unit_plan_nudge)
+[ -z "$v" ] && ok "plan nudge: plan removed → back to the runbook (fresh → nothing)" || fail "plan nudge: fallback after removal" "got '$v'"
+rm -f "$FIXTURE/engineering/RUNBOOK.md"
+v=$(unit_plan_nudge); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "plan nudge: neither file → nothing, exit 0" || fail "plan nudge: neither file" "exit $code, got '$v'"
+
+# Custom path and threshold, and the threshold's fallback to the Runbook key.
+write_config '```
+Plan path: docs/WEEK.md
+Plan stale days: 3
+```'
+write_plan "$FIXTURE/docs/WEEK.md" "$(days_ago 5)"
+v=$(unit_plan_nudge); [ "$v" = "plan agreed 5d ago → /tpm" ] && ok "plan nudge: Plan path + Plan stale days honoured" || fail "plan nudge: custom config" "got '$v'"
+write_config '```
+Plan path: docs/WEEK.md
+Runbook stale days: 3
+```'
+v=$(unit_plan_nudge); [ "$v" = "plan agreed 5d ago → /tpm" ] && ok "plan nudge: Plan stale days unset → Runbook stale days" || fail "plan nudge: stale-days fallback" "got '$v'"
+write_config '```
+Plan path: docs/WEEK.md
+Plan stale days: 10
+Runbook stale days: 3
+```'
+v=$(unit_plan_nudge); [ -z "$v" ] && ok "plan nudge: a set Plan stale days beats Runbook stale days" || fail "plan nudge: plan key precedence" "got '$v'"
+
+# pk next leads with the plan nudge.
+write_config '```
+Plan path: docs/WEEK.md
+Plan stale days: 3
+```'
+RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" PK_CLAUDE_PROJECTS_DIR="$FIXTURE/no-sessions" "$PK" next 2>&1)
+[ "$(printf '%s\n' "$RUN_OUT" | sed -n 1p)" = "plan agreed 5d ago → /tpm" ] \
+  && ok "pk next: plan nudge is the first line" || fail "pk next: plan nudge placement" "got: $(printf '%s\n' "$RUN_OUT" | head -3)"
+cleanup
+
+# Plan primary, and Runbook primary alone (a consumer synced before v5.1.0):
+# both read the sibling repo's plan.
+NUDGE_PARENT=$(mktemp -d)
+mkdir -p "$NUDGE_PARENT/repo" "$NUDGE_PARENT/SiteLine"
+git -C "$NUDGE_PARENT/repo" init -q -b main
+write_plan "$NUDGE_PARENT/SiteLine/engineering/WEEKLY_PLAN.md" "$(days_ago 10)"
+write_runbook "$NUDGE_PARENT/SiteLine/engineering/RUNBOOK.md" "$(days_ago 0)"
+printf '```\nPlan primary: ../SiteLine\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
+v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_plan_nudge )
+[ "$v" = "plan agreed 10d ago → /tpm" ] && ok "plan nudge: Plan primary reads the sibling repo's plan" || fail "plan nudge: Plan primary" "got '$v'"
+printf '```\nRunbook primary: ../SiteLine\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
+v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_plan_nudge )
+[ "$v" = "plan agreed 10d ago → /tpm" ] && ok "plan nudge: Runbook primary alone still finds the sibling's plan" || fail "plan nudge: Runbook primary fallback" "got '$v'"
+rm -rf "$NUDGE_PARENT"
+
 # ── CLI tests: pk config dump carries the TPM keys with defaults ─────────────
 
 echo "== pk config dump: TPM keys =="
@@ -3455,6 +3627,9 @@ cfg_has "Weekly capacity days" "6" && ok "config dump: Weekly capacity days defa
 cfg_has "Runbook stale days" "7" && ok "config dump: Runbook stale days defaults to 7" || fail "config dump: Runbook stale days" "$RUN_OUT"
 printf '%s\n' "$RUN_OUT" | grep -q '^Runbook primary:' && printf '%s\n' "$RUN_OUT" | grep -q '^Portfolio repos:' \
   && ok "config dump: Runbook primary + Portfolio repos listed (empty default)" || fail "config dump: empty-default keys" "$RUN_OUT"
+cfg_has "Plan path" "engineering/WEEKLY_PLAN.md" && ok "config dump: Plan path defaults to engineering/WEEKLY_PLAN.md (v5.1.0)" || fail "config dump: Plan path" "$RUN_OUT"
+cfg_has "Plan stale days" "7" && ok "config dump: Plan stale days defaults to 7 (v5.1.0)" || fail "config dump: Plan stale days" "$RUN_OUT"
+printf '%s\n' "$RUN_OUT" | grep -q '^Plan primary:' && ok "config dump: Plan primary listed (empty default)" || fail "config dump: Plan primary" "$RUN_OUT"
 cfg_has "Integration branch" "main" && ok "config dump: existing keys unchanged" || fail "config dump: existing keys" "$RUN_OUT"
 cfg_has "Linear transport" "api" && ok "config dump: Linear transport defaults to api" || fail "config dump: Linear transport" "$RUN_OUT"
 write_config '```

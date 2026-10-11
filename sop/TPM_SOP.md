@@ -2,13 +2,13 @@
 
 > For the full development pipeline, see [method.md](../method.md). This SOP is the rubric `/tpm` argues from; the session mechanics live in the skill.
 
-**v5.0.1** — Last updated: 2026-10-10  *(New. The judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger, and the runbook block `pk next` reads for staleness. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
+**v5.1.0** — Last updated: 2026-10-11  *(**v5.1.0 — the agreement is written to a weekly plan (`engineering/WEEKLY_PLAN.md`), a dev-facing task list by session, not to the runbook; capacity is counted in session-days; `on-merge` notes defer a write to the merge that triggers it; titles beside IDs, one question per turn, the scout contract. Lessons of the first real run, 2026-10-11.** Carries v5.0.1 — the judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
 
 ---
 
 ## What a TPM session is for
 
-A solo engineer's scarce resource is the attention to step back and decide. The session spends that attention once, on purpose: what must ship, what can wait and why, what stacks and what runs side by side. The output is an **agreement**, written to Linear (so `pk next` and `pk portfolio` print it) and to the one runbook (so the reasons survive). It is not a plan file: everything decision-bearing is in Linear, and the runbook is regenerated from the next agreement.
+A solo engineer's scarce resource is the attention to step back and decide. The session spends that attention once, on purpose: what must ship, what can wait and why, what stacks and what runs side by side. The output is an **agreement**, written to Linear (so `pk next` and `pk portfolio` print it) and to the weekly plan (so the order, the reasons and the commands survive in a form the engineer reads every morning). The plan is derived: everything decision-bearing is in Linear, and the plan is regenerated from the next agreement. The runbook is how the project runs; the plan is what the engineer does this week. Different readers, different cadence, two files.
 
 ## Diagnose before ranking
 
@@ -28,23 +28,27 @@ Five questions, each with a source. Draft every answer first; ask only where the
 
 | Question | Source |
 |---|---|
-| Who is waiting, and was it promised? | Commitments register (runbook); `[tpm] commitment:` comment; the user |
+| Who is waiting, and was it promised? | Commitments register (plan); `[tpm] commitment:` comment; the user |
 | What happens if it waits two weeks? | issue body; the user |
-| Is there an acceptable fallback today? | **the code**, via a Grounding-role scout — never the issue body's word |
+| Is there an acceptable fallback today? | **the code**, via a Grounding-role scout under the scout contract below — never the issue body's word, never the scout's summary |
 | What does it unblock? | Linear blocking relations (`pk next` Supporting group) |
 | What would make it urgent later? | the user — becomes the WAIT trigger |
 
 Separate the literal ask from the job to be done, and must-haves from success criteria — the distinction that most often blurs when a client is waiting.
+
+**The scout contract.** A fallback claim is accepted only when the scout returns three things: the sink or guard with `file:line`; the fallback (constraint, check, filter, policy) with its `file:line` or migration id; and whether the path is **outward-facing** — reachable by a client or an unauthenticated user — or internal. A verdict without those three is re-run, not summarised. Anchor: first real run, 2026-10-11 — the scout called two internal `menu.js` sinks unmitigated and the outward client-portal cell mitigated; the code said the reverse, and the inverted reason reached the read-back.
 
 ## Dependencies: Hard, Value, Soft
 
 | Kind | Meaning | Where it lives |
 |---|---|---|
 | **Hard** | B cannot start, or cannot be correct, until A lands (schema, migration, foundation, auth model) | a Linear `blocked by` relation — the only kind `pk next` sees |
-| **Value** | B is worth less until A ships (A proves the approach, A is the demo) | the runbook's order and reason; no relation |
-| **Soft** | B is easier after A | a risk note in the runbook; never a relation |
+| **Value** | B is worth less until A ships (A proves the approach, A is the demo) | the plan's order and reason; no relation |
+| **Soft** | B is easier after A | a risk note in the plan; never a relation |
 
 A Hard dependency goes first regardless of any score. Schema and foundation tasks are almost always Hard for what sits on them. Writing a Value or Soft ordering as a `blocked by` relation pollutes the dependency truth every other tool reads; don't.
+
+**A draft pulls its blocker in.** When a worktree already holds a draft of B, A (its Hard blocker) is a candidate for the week whether or not anything else lifts it — the draft is sunk work that A unlocks. Anchor: 2026-10-11, 1167's three-commit draft was flagged as a leak while 1154, its blocker, was absent from the briefing.
 
 ## Ranking
 
@@ -60,11 +64,16 @@ Never invent durations or a computed critical path. The data supports a longest 
 
 ## Capacity
 
-- **Week** = `method.config.md § Weekly capacity days` (default 6).
-- **Effort** from the issue's tier label via `§ Tier effort days` (default `Quick: 0.5, Standard: 2, Heavy: 4`). Unsized items are **flagged**, not guessed.
-- **MUST ≤ 60% of the week.** Over it, you have a scope problem, not a capacity problem — see Diagnose.
+Capacity is counted in **session-days**: one Claude Code session working for one day. An engineer who runs three sessions side by side has three session-days per working day.
+
+- **Week** = `method.config.md § Weekly capacity days`, in session-days: working days × the sessions the user actually runs on an average day. One session, six days → `6` (the default). Three sessions, five days → `15`. Peak concurrency is not the number; the average is.
+- **Effort** per item from its tier label via `§ Tier effort days`, in the same unit. The default `Quick: 0.5, Standard: 2, Heavy: 4` describes one session doing everything by hand; a user who runs several sessions and lets `/work` execute has measured closer to `Quick: 0.1, Standard: 0.5, Heavy: 1`. Unsized items are **flagged**, not guessed.
+- **Ask before you trust the numbers.** When either key is unset, the briefing says so, uses the default, and asks for the real figures as the first question. Both keys are proposed as rows for the key table (`§ V2`); `pk config` reads them from anywhere in the file, but the next reader looks in the key table.
+- **MUST ≤ 60% of the week.** Over it, you have a scope problem, not a capacity problem — see Diagnose. Under it, the headroom is slack, not a target: nothing is pulled in to fill it unless the user asks.
 - In-flight leaks count as zero capacity used once cleared, and as a tax until then.
-- Show the arithmetic in the briefing (`MUST ≈ 3.3 of 6 days (55%)`) so it can be disputed in one line.
+- Show the arithmetic in the briefing (`MUST ≈ 3.9 of 15 session-days (26%)`) so it can be disputed in one line.
+
+Anchor: first real run, 2026-10-11 — the calendar-day defaults were four to five times too large for the user; a week that was 41% full read as "your five don't fit".
 
 ## Parallel work: the independence bar
 
@@ -75,81 +84,112 @@ Two items may run side by side only when **all four** hold; otherwise they are s
 3. No shared unmerged foundation (a migration or shared module one of them is waiting on).
 4. Provably disjoint file scope — read the specs; "probably" fails.
 
-Fail closed. Two or more focus-lane heads that pass the bar and are Approved are the signal for `/06-linear-todo-runner --dry-run`.
+Fail closed. A pair that fails only criterion 4 on mechanical overlap (both add a trigger to the same table, both regenerate the schema dump) is **built in parallel and merged in sequence** — the plan says which merges first and on which day. Two or more focus-lane heads that pass the bar and are Approved are the signal for `/06-linear-todo-runner --dry-run`.
 
 ## WAIT discipline
 
 An item may be allowed to sit only with all three:
 
-- a **fallback** that was read in code this session or a previous one (date it);
+- a **fallback** that was read in code this session or a previous one (date it), under the scout contract;
 - a **re-entry trigger** — the condition that moves it back in ("a second tenant hits it", "before the beta promote", "when 441 ships");
-- its **floor priority intact** — WAIT is expressed by being out of focus and by the runbook, never by lowering importance, which `/pk-bug` and `/linear-hygiene` read for other purposes.
+- its **floor priority intact** — WAIT is expressed by being out of focus and by the plan, never by lowering importance, which `/pk-bug` and `/linear-hygiene` read for other purposes.
 
-A WAIT with no trigger is neglect with a label.
+A WAIT with no trigger is neglect with a label. A WAIT row reaches the read-back with its fallback filled, or marked `unverified — scout running` in the row; a blank cell is not a row.
+
+## Themes
+
+The user groups work by meaning — "the eval loop", "the Game7 board" — and the grouping crosses lanes. The lane read cannot see it. So the briefing asks for themes and promises the board cannot show, and each theme the user names is checked: which issues it really covers, which of the named issues are something else (a bug in a neighbouring lane that merely sounds related), and whether it has three buildable issues. Three or more → a lane, cut with `/phase-plan --cut`. Fewer → a `Themes` line in the plan, carried forward so the next session sees it without being told again. Anchor: 2026-10-11, the user's "Eval Loop" was one real Langfuse theme across two initiatives plus three Smart Start / Drop Zone bugs that were not eval work.
 
 ## How to ask
 
 - The briefing comes first and is a complete draft; questions are corrections to it.
-- Ask only the questions that most change the output; in `--quick`, at most three.
+- **One question per turn.** The one that most changes the output, with its options and your pick; then wait for the answer. Bundled questions get the first one answered and the rest lost — on the first real run the user missed the third of three. In `--quick`, at most three questions, still one per turn.
 - Every question offers two or three real options with what each costs, which one you would take and why, and **what would make your pick wrong**. A question handed up without options moves the work back to the user unchanged.
-- "Just do it" → proceed, and list the assumptions at the top of the read-back and the runbook block.
+- **Titles beside IDs.** Every identifier in a briefing, question, read-back, comment or plan line carries its title. The user does not know the board by number, and an ID they cannot place is a question they cannot answer.
+- **Gloss the words.** The first time a term of this SOP appears in front of the user — leak, floor, criterion 4, "not changing" — say in a clause what it means. Citing the rule is not the same as being understood.
+- "Just do it" → proceed, and list the assumptions at the top of the read-back and the plan.
 - Judgment calls that are the user's alone are recorded with their reason, not argued.
 
-## What Linear carries, what the runbook carries
+## What Linear carries, what the plan carries
 
 `pk next` orders by lane tier → issue priority → blocked-sinks, and nothing else. Four priority levels cannot encode a sequence, and priority already means importance elsewhere. So:
 
-| Linear carries (coarse, tool-readable) | The runbook carries (exact, human-readable) |
+| Linear carries (coarse, tool-readable) | The weekly plan carries (exact, human-readable) |
 |---|---|
 | lane tiers A/B/C (project priority) | the order within and across lanes, with reasons |
 | Hard dependencies (`blocked by`) | Value and Soft orderings, risk notes |
 | importance (issue priority), changed only when importance changed | WAIT fallbacks and triggers |
-| `[tpm]` comments — the per-item reason | the Commitments register, the capacity arithmetic, parallel-safe pairs, "not these, and why" |
+| `[tpm]` comments — the per-item reason | the Commitments register, the capacity arithmetic, parallel-safe pairs and merge order, "not these, and why" |
+| `[tpm] on-merge:` notes — a write deferred to a merge, read back by `pk done` | which session builds what, the command to run, the merge day |
 
-`pk next` therefore prints the agreed *lanes and blockers*; the runbook prints the agreed *order*. Promise no more than that.
+`pk next` therefore prints the agreed *lanes and blockers*; the plan prints the agreed *order and the day's commands*. Promise no more than that.
 
-## The runbook block
+## The weekly plan
 
-One file per consumer (`§ Runbook path`, default `engineering/RUNBOOK.md`), three regions, three owners: the TPM block (`/tpm`), the Notes section (the human), the How-we-run block (`sync-method.sh`). Each writer touches only its own marker pair and fails closed if the pair is missing or malformed.
+One file per portfolio, in the primary repo (`§ Plan path`, default `engineering/WEEKLY_PLAN.md`), written only by `/tpm` between `<!-- tpm:begin · agreed YYYY-MM-DD … -->` and `<!-- tpm:end -->`, regenerated from each agreement. It is a **task list for the engineer**, not a digest of Linear: it opens with what to type, grouped by the concurrent sessions the user runs, and only then shows the picture. Rules that hold on every line: the issue's title beside its ID, a Linear link on the first mention, the repo to `pk branch` from when the portfolio has more than one, the effort, and the merge day when it is constrained. Sections, in this order:
 
 ```
-## Now
-<!-- tpm:begin · agreed 2026-10-10 · derived from Linear · written by /tpm, regenerate don't edit -->
-Focus  A I8.P6 Game7 ledger reconcile · B I7.P2 export fixes · C —
-Assumptions: (only when the user said "just do it")
+# <Project> — Week of Mon 2026-10-12
+<!-- tpm:begin · agreed 2026-10-11 · derived from Linear · written by /tpm, regenerate don't edit -->
+**Agreed Sun 2026-10-11.** One commitment: Game7 gets the reconciliation ledger, live on app.withpiper.ai, by Fri 2026-10-16.
+Capacity 15 session-days. Planned: MUST 3.9 + NEXT 2.2 = 6.1.   (Assumptions: … — only after "just do it")
 
-### Commitments
+## Start now
+| Session | Run | What | Merge |
+| 1 | `pk branch PIPER-1132` | Ledger versions: never-publish guard + reconcile_note column | Mon 10-12 — first migration of the week |
+| 2 | `pk branch PIPER-986`  | Store each budget version's key metrics once in the DB      | Tue 10-13 — after 1132 |
+| 3 | `pk branch PIPER-546`  | Three remaining stored-XSS sinks                             | when green — no migration |
+
+## Session 1 — Game7 ledger  (lane A · I5.P4 Vendor Invoices vs Quotes)
+- [ ] **[PIPER-1132](…) Ledger versions: never-publish guard …** · siteline · Standard 0.5 · migration
+      Before merging: … Then merge **Mon 10-12**.
+- [ ] **[PIPER-1130](…) Reconcile view on Compare …** · siteline · Heavy 1.0 · after 1132 · merge by **Wed 10-14**
+- [ ] **Ship it.** `/sync-legacy` → `pk promote beta` → `pk promote main` (Thu). Friday is slack.
+
+## Session 2 — …            ## Session 3 — …            ## Free slot — …
+
+## If the week runs long
+Drop in this order: 1071 … → spec 1134 …. Sequence spills: 1167 if 1154 is late · …
+
+## Lanes — the picture
+| Tier | Lane | Flow | Repo |
+| A | I5.P4 Vendor Invoices vs Quotes | 1132 Ledger guard ▸ 1130 Reconcile view ▸ sync-legacy ▸ promote → Game7 Fri | siteline → piper |
+| B | I8.P6 Dashboard Redesign        | 986 Store metrics ⇢ spec 997 Read-only surfaces                            | siteline |
+| C | I3.P1 XSS output-encoding       | 546 Three sinks → swap C to I7.P10                                        | siteline |
+▸ hard dependency (in Linear as blocked by) · ⇢ soft order · → then
+
+## Don't merge together
+- 1132 ∥ 986 — both add triggers on budget_snapshots and regenerate the schema dump. Build side by side, merge Mon then Tue.
+
+## Merge calendar
+| Day | Migration merge (one per day) | Also merge when green |
+
+## Commitments
 | Who | What | Due | Issues | Since |
-| Game7 | ledger reconcile | 2026-10-17 | POC-441, POC-442 | 10-03 |
 
-### MUST — this week  (≈3.3 of 6 days, 55%)
-| Item | Why | Unblocks | Effort | Status |
-| POC-441 ledger reconcile | Game7, due Fri | 442 | 2d | Approved, head |
-| POC-377 (Low) | inversion: blocks 398 (High) | 398 | 0.5d | Approved |
+## Waiting on you  (hand work, not Linear writes)
+- [ ] 1168 … → Needs Spec · remove 3 orphan worktrees (paths) · commit this file …
 
-### NEXT
-| Item | Why | After |
-| POC-398 export fix | promised to … | 377 |
+## Parked (WAIT) — each has a fallback read in code and a trigger to come back
+| Issue | Why it can wait | Comes back when |
 
-### WAIT — fallback and re-entry trigger
-| Item | Fallback (verified) | Trigger |
-| POC-412 input hardening | boundary validation rejects (10-03) | 2nd tenant hits it, or before beta promote |
+## Not this week, and why
+PIPER-1155 … — lane out of focus · … (six words each)
 
-### Parallel-safe now
-441 ∥ 377 — no edge, no shared foundation, disjoint files.
+## Themes  (carried until they are lanes)
+Eval loop: 1115 + 963 + 1114 — under the three-issue floor until 1115's spec yields build issues.
 
-### Waiting on you
-POC-440 review (2d) · PIPER-698 — abandoned or not?
+## Notes from the session
+- Grounding finding (10-11): …
 
-### Not these, and why
-POC-455 — needs a spec before it can be head · POC-377 — … (six words each)
-
-### Drift since agreement   (rewritten by --check)
+### Drift since agreement  (rewritten by /tpm --check)
 —
 <!-- tpm:end -->
 ```
 
-The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `runbook agreed Nd ago → /tpm` past `§ Runbook stale days` (default 7). Portfolio repos other than the primary hold a one-line pointer in their block instead of a copy — one document, reachable from either repo, never two versions. Two repos on **one** Linear board (same `Team ID`) are the common solo shape — one board, two codebases: the board is read and written once, from the primary, and the sibling's worktrees, PRs and sessions are the only thing the session reads from it.
+The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `plan agreed Nd ago → /tpm` past `§ Plan stale days` (default 7), and `plan: no agreement yet → /tpm` while the synced skeleton's marker carries no date. The runbook's `## Now` block holds one pointer line to the plan — `This week → engineering/WEEKLY_PLAN.md · agreed 2026-10-11` — and in the other repos of the portfolio `Portfolio weekly plan → ../SiteLine/engineering/WEEKLY_PLAN.md · agreed 2026-10-11`: one document, reachable from either repo, never two versions. Two repos on **one** Linear board (same `Team ID`) are the common solo shape — one board, two codebases: the board is read and written once, from the primary, and the sibling's worktrees, PRs and sessions are the only thing the session reads from it.
+
+Before v5.1.0 the agreement was the `## Now` block of the runbook itself. The runbook is how the project runs and is read when something is unfamiliar; the plan is read every morning. A consumer whose runbook still holds a full block gets it moved on the next `/tpm`.
 
 ## Comments
 
@@ -157,17 +197,18 @@ Every Linear write the session makes leaves its reason on the issue, so the next
 
 ```
 [tpm 2026-10-10] MUST — Game7 commitment, due 10-17; head of I8.P6
-[tpm 2026-10-10] WAIT — fallback: boundary validation rejects (verified in src/api/validate.ts); trigger: 2nd tenant hits it
+[tpm 2026-10-10] WAIT — fallback: boundary validation rejects (verified in src/api/validate.ts:88); trigger: 2nd tenant hits it
 [tpm 2026-10-10] blocked by POC-377 — Hard: 398 reads the column 377 adds
 [tpm 2026-10-10] commitment: Game7 · due 2026-10-17
+[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to Finance settings once this merges
 ```
 
-One line, the bracketed date first, so `pk issue show --comments` can be grepped for the latest.
+One line, the bracketed date first, so `pk issue show --comments` can be grepped for the latest. The `on-merge:` form is machine-read: `pk done` collects every `[tpm DATE] on-merge: <command> · <why>` on the issue it just closed out, prints the commands and asks before running the ones that start with `pk`. It is how a decision that depends on a merge ("the day 546 merges, C swaps") survives without anyone remembering it.
 
-## Why not a plan file, and why the lane map retired
+## Why not a hand-maintained plan, and why the lane map retired
 
-A tracker-external plan (`deps.json`, a `PLAN.md`, a kanban app) is a second source of truth that drifts the moment an issue ships; that is why Lane (2026-06) was declined. The lane-map artifact (v4.29.0–v4.38.0) was a picture plus a click-picker for tiers; once tiers are set by agreement with a reason attached, a picker without reasons is a step backwards and a second surface to regenerate after every write. Retired in v5.0.0; the runbook's top screen and `pk status` carry the picture.
+A plan kept by hand outside the tracker (`deps.json`, a `PLAN.md` someone edits, a kanban app) is a second source of truth that drifts the moment an issue ships; that is why Lane (2026-06) was declined. The weekly plan is not that: it is written only by `/tpm`, from Linear, regenerated at every agreement, and Linear wins on any disagreement (`--check` says so). The lane-map artifact (v4.29.0–v4.38.0) was a picture plus a click-picker for tiers; once tiers are set by agreement with a reason attached, a picker without reasons is a step backwards and a second surface to regenerate after every write. Retired in v5.0.0. What the lane map got right — a start-now row, lanes as flows with arrows, short titles on every chip, the repo to branch from, a collision list before you parallelize — is the shape of the plan's lower half.
 
 ## Borrowed from
 
-Surveyed 2026-10-10 across ~65 Claude Code skill files; nothing filled the role, these rules did: unblock-first ranking and the independence bar (khalilouardini/kstack), priority inversion (joa23/linear-cli), Hard/Value/Soft and the 60% bound (AI-Foundry-Core/ril-agents), scope/capacity/dependency diagnosis and slack-at-integration-points (cbrock84/headcount), options-and-a-pick-and-what-would-make-it-wrong (avelikiy/great_cto), ask-vs-job and must-haves-vs-success-criteria (deanpeters/Product-Manager-Skills), the question stop rule (borghei/Claude-Skills), re-entry triggers (rampstackco), the tie-break formula (Anthropic engineering plugin `tech-debt`).
+Surveyed 2026-10-10 across ~65 Claude Code skill files; nothing filled the role, these rules did: unblock-first ranking and the independence bar (khalilouardini/kstack), priority inversion (joa23/linear-cli), Hard/Value/Soft and the 60% bound (AI-Foundry-Core/ril-agents), scope/capacity/dependency diagnosis and slack-at-integration-points (cbrock84/headcount), options-and-a-pick-and-what-would-make-it-wrong (avelikiy/great_cto), ask-vs-job and must-haves-vs-success-criteria (deanpeters/Product-Manager-Skills), the question stop rule (borghei/Claude-Skills), re-entry triggers (rampstackco), the tie-break formula (Anthropic engineering plugin `tech-debt`). The plan's shape (2026-10-11) borrows from the retired lane map's frontier, flows and collision register.

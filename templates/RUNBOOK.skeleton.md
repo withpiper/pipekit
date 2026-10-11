@@ -2,7 +2,7 @@
 
 ## Now
 <!-- tpm:begin · agreed YYYY-MM-DD · derived from Linear · written by /tpm, regenerate don't edit -->
-_(no agreement yet — run /tpm)_
+_(this week → {{PLAN_PATH}} — run /tpm to agree it)_
 <!-- tpm:end -->
 
 ## Notes
