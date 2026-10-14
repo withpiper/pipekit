@@ -3451,19 +3451,37 @@ printf '%s\n' "$RUN_OUT" | grep -q '^  pk project list \[--all\] \[--json\]' && 
 
 # ── CLI tests: the missing-key error names the op run route (v5.0.0) ─────────
 # A direnv-less shell should self-serve from the message instead of falling
-# back to an MCP: every "Linear API key not set" site carries the op run hint.
+# back to an MCP: every "Linear API key not set" site carries the op run hint,
+# and the hint names the reference file this repo actually carries (v5.1.2 —
+# secrets.op in Piper, op-references.conf in SiteLine).
 
 echo "== missing key names the op run route =="
 
-RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" gql 'query { viewer { id } }' 2>&1); RUN_CODE=$?
-[ $RUN_CODE -ne 0 ] && printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=op-references.conf -- pk' \
-  && ok "no key: pk_linear_gql's error names op run --env-file=op-references.conf" || fail "no key: gql" "exit $RUN_CODE: $RUN_OUT"
-RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" next 2>&1); RUN_CODE=$?
-printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=op-references.conf -- pk' \
+no_key_pk() {
+  RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" "$@" 2>&1); RUN_CODE=$?
+}
+rm -f "$FIXTURE/secrets.op" "$FIXTURE/op-references.conf"
+no_key_pk gql 'query { viewer { id } }'
+[ $RUN_CODE -ne 0 ] && printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=<op:// reference file> -- pk' \
+  && ok "no key, no reference file: pk_linear_gql's error names the generic op run recipe" || fail "no key: gql generic" "exit $RUN_CODE: $RUN_OUT"
+: > "$FIXTURE/op-references.conf"
+no_key_pk gql 'query { viewer { id } }'
+[ $RUN_CODE -ne 0 ] && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=op-references.conf -- pk' \
+  && ok "no key: op-references.conf in the repo → the hint names it" || fail "no key: op-references.conf" "exit $RUN_CODE: $RUN_OUT"
+rm -f "$FIXTURE/op-references.conf"; : > "$FIXTURE/secrets.op"
+no_key_pk gql 'query { viewer { id } }'
+[ $RUN_CODE -ne 0 ] && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=secrets.op -- pk' \
+  && ok "no key: secrets.op in the repo → the hint names it" || fail "no key: secrets.op" "exit $RUN_CODE: $RUN_OUT"
+no_key_pk next
+printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=secrets.op -- pk' \
   && ok "no key: pk_require_linear_key's error names op run" || fail "no key: next" "exit $RUN_CODE: $RUN_OUT"
-grep -c 'Linear API key not set' "$PK" | grep -qx "$(grep -c 'Linear API key not set.*op run --env-file=op-references.conf' "$PK")" \
+no_key_pk doctor
+printf '%s' "$RUN_OUT" | grep -q '✗ Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=secrets.op -- pk' \
+  && ok "no key: pk doctor's line names op run" || fail "no key: doctor" "exit $RUN_CODE: $RUN_OUT"
+rm -f "$FIXTURE/secrets.op"
+grep -c 'Linear API key not set' "$PK" | grep -qx "$(grep -c 'Linear API key not set.*pk_op_run_hint' "$PK")" \
   && ok "no key: every 'Linear API key not set' site in bin/pk carries the op run hint" \
-  || fail "no key: sites" "$(grep -n 'Linear API key not set' "$PK" | grep -v 'op run')"
+  || fail "no key: sites" "$(grep -n 'Linear API key not set' "$PK" | grep -v 'pk_op_run_hint')"
 cleanup
 
 # ── Unit tests: runbook nudge (sourced) ──────────────────────────────────────

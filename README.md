@@ -178,7 +178,7 @@ Pipekit talks to Linear over its GraphQL API through `bin/pk` — no MCP server 
 
 ```bash
 export LINEAR_API_KEY=lin_api_…        # or let your secrets manager inject it:
-op run --env-file=op-references.conf -- pk doctor
+op run --env-file=secrets.op -- pk doctor   # your op:// reference file
 pk doctor
 ```
 

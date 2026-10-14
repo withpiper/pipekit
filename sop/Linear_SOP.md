@@ -57,7 +57,7 @@ Names above are checked against Linear's published SDK schema (2026-10-10): `Iss
 
 > **`mcp` route — not the official remote.** The skills' tool names assume `@tacticlaunch/mcp-linear` (camelCase, `linear_` prefix). Linear's first-party `mcp.linear.app` server uses **snake_case** names (`list_issues`, `get_issue`, `update_issue`, `create_comment`) and a leaner ~21-tool surface that **lacks** the initiative-CRUD, label-create and issue-relation tools; a project on it must remap the right-hand column. Per `.claude/rules/pipekit-tooling.md`, the server **must** be declared in the committed `.mcp.json` so it is visible inside `pk branch` worktrees.
 
-**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=op-references.conf -- pk …`); falling back to the MCP is not the fix.
+**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=<ref file> -- pk …`, naming the repo's own op:// reference file — `secrets.op` in Piper, `op-references.conf` in SiteLine); falling back to the MCP is not the fix.
 
 ### API gotchas (incident-anchored; read before any batch board mutation)
 
