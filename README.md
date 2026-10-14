@@ -2,7 +2,7 @@
 
 **A structured way to ship software with AI — from idea to production, with a quality gate at every stage.**
 
-**v5.0.0** — Last updated: 2026-10-10. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
+**v5.1.2** — Last updated: 2026-10-14. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -178,7 +178,7 @@ Pipekit talks to Linear over its GraphQL API through `bin/pk` — no MCP server 
 
 ```bash
 export LINEAR_API_KEY=lin_api_…        # or let your secrets manager inject it:
-op run --env-file=op-references.conf -- pk doctor
+op run --env-file=secrets.op -- pk doctor   # your op:// reference file
 pk doctor
 ```
 

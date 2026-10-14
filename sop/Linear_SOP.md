@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.0.0** — Last updated: 2026-10-10  *(**v5.0.0 — § Linear transport: the route is a project decision (`Linear transport: api | mcp`, default `api`), skills name operations, and the verb table here maps each one to its `pk` form and its MCP tool.** `pk issue search/create/update`, `pk project list` and the guarded `pk gql` passthrough mean no skill needs raw `curl`. Carries v4.37.0 — § Filing a follow-up issue: the intake contract every mid-flow filer writes to. Parent's `Area:` inherited, Type label, the priority-floor table (canonical here; `/linear-hygiene` cites it), state by priority — never Triage — a `Source:` first line and a relation, in one create call. Carries v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.)*
+**v5.1.2** — Last updated: 2026-10-14  *(**v5.1.2 — the missing-key recipe names the repo's own op:// reference file, not always `op-references.conf`.** Carries v5.0.0 — **§ Linear transport: the route is a project decision (`Linear transport: api | mcp`, default `api`), skills name operations, and the verb table here maps each one to its `pk` form and its MCP tool.** `pk issue search/create/update`, `pk project list` and the guarded `pk gql` passthrough mean no skill needs raw `curl`. Carries v4.37.0 — § Filing a follow-up issue: the intake contract every mid-flow filer writes to. Parent's `Area:` inherited, Type label, the priority-floor table (canonical here; `/linear-hygiene` cites it), state by priority — never Triage — a `Source:` first line and a relation, in one create call. Carries v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
@@ -57,7 +57,7 @@ Names above are checked against Linear's published SDK schema (2026-10-10): `Iss
 
 > **`mcp` route — not the official remote.** The skills' tool names assume `@tacticlaunch/mcp-linear` (camelCase, `linear_` prefix). Linear's first-party `mcp.linear.app` server uses **snake_case** names (`list_issues`, `get_issue`, `update_issue`, `create_comment`) and a leaner ~21-tool surface that **lacks** the initiative-CRUD, label-create and issue-relation tools; a project on it must remap the right-hand column. Per `.claude/rules/pipekit-tooling.md`, the server **must** be declared in the committed `.mcp.json` so it is visible inside `pk branch` worktrees.
 
-**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=op-references.conf -- pk …`); falling back to the MCP is not the fix.
+**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=<ref file> -- pk …`, naming the repo's own op:// reference file — `secrets.op` in Piper, `op-references.conf` in SiteLine); falling back to the MCP is not the fix.
 
 ### API gotchas (incident-anchored; read before any batch board mutation)
 

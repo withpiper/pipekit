@@ -36,10 +36,24 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.1.1"
+PK_VERSION="5.1.2"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
+}
+
+# The op:// reference file name is per-project (secrets.op in Piper,
+# op-references.conf in SiteLine), so name whichever one this repo carries.
+pk_op_run_hint() {
+  local root f
+  root=$(pk_repo_root) || root=""
+  for f in secrets.op op-references.conf; do
+    if [ -n "$root" ] && [ -f "$root/$f" ]; then
+      echo "op run --env-file=$f -- pk …"
+      return 0
+    fi
+  done
+  echo "op run --env-file=<op:// reference file> -- pk …"
 }
 
 pk_config_path() {
@@ -205,7 +219,7 @@ pk_linear_gql() {
   local key
   key=$(pk_linear_api_key)
   if [ -z "$key" ]; then
-    echo "ERROR: Linear API key not set. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..., or run under \`op run --env-file=op-references.conf -- pk …\` (see .envrc)" >&2
+    echo "ERROR: Linear API key not set. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..., or run under \`$(pk_op_run_hint)\` (see .envrc)" >&2
     return 1
   fi
   # Guarded writes: any mutation must first prove the resolved token belongs to
@@ -1497,7 +1511,7 @@ pk_offformat_subjects() {
 # both consumers read as idle while carrying 290 open issues between them.
 pk_require_linear_key() {
   if [ -z "$(pk_linear_api_key)" ]; then
-    echo "ERROR: Linear API key not set — the board cannot be read. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..., or run under \`op run --env-file=op-references.conf -- pk …\` (see .envrc)" >&2
+    echo "ERROR: Linear API key not set — the board cannot be read. Configure via method.config.md → 'Linear API key env var' or export LINEAR_API_KEY=..., or run under \`$(pk_op_run_hint)\` (see .envrc)" >&2
     return 1
   fi
 }
@@ -5492,7 +5506,7 @@ cmd_doctor() {
   if [ -n "$key" ]; then
     echo "  ✓ Linear API key set (\$$key_var)"
   else
-    echo "  ✗ Linear API key not set — export $key_var=lin_api_…, or run under \`op run --env-file=op-references.conf -- pk …\` (see .envrc)"
+    echo "  ✗ Linear API key not set — export $key_var=lin_api_…, or run under \`$(pk_op_run_hint)\` (see .envrc)"
     fail=$((fail+1))
   fi
   # Linear team
