@@ -1,72 +1,49 @@
 # Security Rules
 
-Non-negotiable security discipline. These apply regardless of stack.
+Non-negotiable security discipline, regardless of stack.
 
 ## Secrets
 
 <important>
-Never commit secrets to git. Ever. No exceptions for "just for testing" or "I'll remove it before merging."
+Never commit secrets to git. No exceptions for "just for testing" or "I'll remove it before merging."
 </important>
 
-- `.env` files are gitignored — verify before every commit
-- Never put credentials, tokens, API keys, service-role keys in source code
-- Never paste secrets into public issue trackers, pastebins, or PR descriptions
-- When you see a secret-looking string during review, treat it as a secret until proven otherwise
-
-If you accidentally commit a secret: rotate it immediately, then rewrite history. A committed secret is a leaked secret even if you delete the commit — assume it was scraped.
+- Verify `.env` files are gitignored before every commit.
+- No credentials, tokens, API keys or service-role keys in source, issue trackers, pastebins or PR descriptions.
+- Treat a secret-looking string as a secret until proven otherwise.
+- A committed secret is leaked even if the commit is deleted: rotate it immediately, then rewrite history.
 
 ## Secrets Managers and Worktrees
 
-When the project uses a secrets manager (reference pattern: 1Password for Developers, proven on SiteLine POC-85/86 and Piper WIT-559), the contract is:
+With a secrets manager (reference pattern: 1Password for Developers):
 
-- **Committed reference files carry pointers, never values.** `op://` reference files (`secrets.op`, `op-references.conf`, `*.tpl`) are tracked in git, so they reach every worktree via checkout — no copying or symlinking needed. Injection happens at the edge: `op run --env-file=<refs> -- <cmd>` locally, `op inject` on templates at deploy, `1password/load-secrets-action` in CI.
-- **A reference is not a credential.** `op://` lines are safe to commit; exempt them from secret scanners.
-- **An `.envrc` wrapping the secrets-manager recipe** (direnv + `op run`) is config, not a secret — `pk branch` symlinks it into worktrees and auto-allows direnv so worktree shells load the vault-backed env.
-- **Plaintext `.env*` symlinking into worktrees is the legacy fallback** for projects not yet migrated. `pk branch` announces what it links, and **never links `.env.prod`** — prod credentials have no business in a feature worktree. When a deploy needs prod values, render them from the vault at deploy time.
-- **Loaded ≠ valid.** When migrating a write-only secret (GitHub Actions secrets cannot be read back), exercise the real auth path once before declaring the cutover done — a token that resolves from the vault can still be expired.
+- **Committed reference files carry pointers, never values.** `op://` files (`secrets.op`, `op-references.conf`, `*.tpl`) are tracked, so they reach every worktree. Inject at the edge: `op run --env-file=<refs> -- <cmd>` locally, `op inject` at deploy, `1password/load-secrets-action` in CI. A reference is not a credential — exempt `op://` lines from secret scanners.
+- **An `.envrc` wrapping `op run`** is config, not a secret; `pk branch` symlinks it into worktrees and auto-allows direnv.
+- **Plaintext `.env*` symlinking is the legacy fallback**, and `pk branch` **never links `.env.prod`**. Render prod values from the vault at deploy time.
+- **Loaded ≠ valid.** When migrating a write-only secret (e.g. GitHub Actions secrets), exercise the real auth path once before declaring the cutover done.
 
 ## Input Validation at Boundaries Only
 
-- Validate user input at the entry point (API handlers, form submissions, CLI args)
-- Do NOT re-validate the same data as it flows through internal functions
-- Internal code trusts internal code — only the boundary is untrusted
-
-Overvalidation is a smell: it suggests the architecture doesn't know where its trust boundaries are.
-
-Security bugs live in the seams between layers — frontend↔backend, service↔service, app↔database, sync↔async. The boundary rule above says where to *validate*; this is where to *look* when auditing. When reviewing a change, name which seams it crosses and verify each crossing is intact.
+Validate at entry points (API handlers, form submissions, CLI args). Do not re-validate the same data as it flows through internal functions — internal code trusts internal code. Overvalidation means the architecture doesn't know its trust boundaries. Security bugs live in the seams (frontend↔backend, service↔service, app↔database, sync↔async): when reviewing a change, name the seams it crosses and verify each.
 
 ## Authorization Must Be Explicit
 
-Every data-access path must have authorization checked at the point of query, not in application code around the query. If the DB supports it (Row Level Security, policies, ACLs), use it there — auth-in-app-code is a layer that can be bypassed.
+Every data-access path must check authorization at the point of query, not in application code around it — use the DB's RLS / policies / ACLs where they exist.
 
-Specific rules:
-- Never use service-role or admin-scope clients in code that runs on user input paths
-- Never assume "the UI prevents this" means "it cannot happen" — the UI is a suggestion, the DB is the truth
-- Anonymous/public paths must be explicitly marked and reviewed; default is authenticated
+- Never use service-role or admin-scope clients on user-input paths.
+- "The UI prevents this" does not mean it cannot happen.
+- Anonymous/public paths must be explicitly marked and reviewed; the default is authenticated.
 
 ## SQL and Injection
 
-- Always use parameterized queries / the ORM's safe API
-- Never concatenate user input into SQL, shell commands, HTML, or file paths
-- `eval()` and equivalents (shell `source`, `exec`) on untrusted input is a guaranteed vulnerability
+Use parameterized queries or the ORM's safe API. Never concatenate user input into SQL, shell commands, HTML or file paths. `eval()` and equivalents (`source`, `exec`) on untrusted input is a guaranteed vulnerability.
 
 ## OWASP Top 10 Awareness
 
-When editing code that touches any of these, stop and think:
-
-1. **Broken Access Control** — auth enforced at every layer the data passes through
-2. **Cryptographic Failures** — never roll your own crypto; use the stdlib or a reviewed library
-3. **Injection** — covered above
-4. **Insecure Design** — if the feature requires a trust decision, it belongs in a spec with human review
-5. **Security Misconfiguration** — default-deny, not default-allow; explicit scopes on tokens, envs, buckets
-6. **Vulnerable Components** — `pnpm audit` / `npm audit` shouldn't be a surprise
-7. **Identification / Auth Failures** — session handling, password storage, MFA handoffs
-8. **Data Integrity Failures** — signed artifacts, verified webhooks, trusted supply chain
-9. **Logging / Monitoring Failures** — ensure the production failure path is observable
-10. **SSRF** — external URLs entered by users must be validated against an allowlist
+When a change touches access control (enforced at every layer the data passes through), crypto (never roll your own — use the stdlib or a reviewed library), injection, insecure design (trust decisions belong in a spec with human review), misconfiguration (default-deny, explicit scopes), vulnerable components (`pnpm audit` / `npm audit`), auth (sessions, password storage, MFA handoffs), data integrity (signed artifacts, verified webhooks), logging of the failure path, or SSRF (allowlist user-entered URLs) — stop and think.
 
 ## Feature Flags and Kill Switches
 
-If a feature could fail-unsafe (financial miscalculation, data leak, bulk destructive action), ship it behind a flag even when the product team didn't ask. Flag granularity should match blast radius — per-user for UI experiments, global for destructive ops.
+If a feature could fail unsafe (financial miscalculation, data leak, bulk destructive action), ship it behind a flag even unasked. Match flag granularity to blast radius — per-user for UI experiments, global for destructive ops.
 
-Project-specific RLS, secrets-management, and auth patterns live in the project's own rules and SOPs. This file is the always-on baseline.
+Project-specific RLS, secrets and auth patterns live in the project's own rules and SOPs.

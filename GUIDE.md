@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.1.2** — Last updated: 2026-10-14  *(**v5.1.2 — the missing-key hint names the repo's own op:// reference file (`secrets.op` in Piper, `op-references.conf` in SiteLine) instead of always SiteLine's. Carries v5.1.1 — the runbook gains a `## Weekly loop` section — the three `/tpm` commands and when each is for, what the session reads and writes, how to read `engineering/WEEKLY_PLAN.md`, and what `pk next` and `pk done` do with it during the week. Carries v5.1.0 — `/tpm` writes a weekly plan (`engineering/WEEKLY_PLAN.md`): a task list by session with the commands to run, not a Linear digest in the runbook; `[tpm] on-merge:` notes that `pk done` reads back and offers to run; capacity in session-days; titles beside IDs, one question per turn.** Carries v5.0.1 — `/tpm` reads a shared board once (SiteLine + Piper are one `PIPER` team, two codebases) and `pk next` nudges a runbook that was never agreed. Carries v5.0.0 — `/tpm` decides the week; Linear over the project's route (`Linear transport: api` by default — no MCP tool names in skills, `pk issue search/create/update`, `pk project list`, `pk gql`); `pk done` closes out a merged PR whose branch is gone; `/verify` gates a changed AI extraction call on a recorded real-API run.** A working session reconciles what is really in flight across the portfolio (Linear vs worktrees vs PRs vs sessions), runs `/linear-hygiene` when drift touches the candidates, drafts MUST / NEXT / WAIT with the capacity arithmetic, and argues from `sop/TPM_SOP.md` until agreed; then `pk focus` sets the tiers, Hard dependencies become `blocked by` relations, and the `Now` block of the one `engineering/RUNBOOK.md` is rewritten — `pk next` nudges when it goes stale. `/lane-map` retired. Carries v4.38.0 — focus lanes lead `pk next`.)*
+**v5.2.0** — Last updated: 2026-10-24 08:53  *(**v5.2.0 — the canonical rules are rightsized:** rules carry the rule only, the incidents behind them move to `sop/Rules_SOP.md` § Anchors, and `tests/pk-smoke.sh` holds `templates/rules/` to a word budget. 7,577 → 3,687 words, no behavioural loss on a 13-probe A/B.)*
 
 ---
 
@@ -1236,7 +1236,9 @@ Skills with Red Flags: `/concept`, `/define`, `/strategy-create`, `/roadmap-crea
 
 The method includes rule templates in `templates/rules/` that consuming projects sync into their `.claude/rules/` directory. These are auto-loaded every session by Claude Code under the **hub-and-spoke model** (CLAUDE.md hub → rules/ auto-loaded → pipekit/sop/ demand-loaded).
 
-Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames. Five canonical topic files ship from Pipekit. Rules that don't apply to a project (`pipekit-cmux.md` outside cmux, `pipekit-migrations.md` without a versioned migration system) can be skip-listed via a `Skip rules` key in `method.config.md` — the sync stops syncing them and removes previously-synced copies, since an auto-loaded rule the session was told to ignore still costs input tokens every turn (v4.21.0+; see `templates/rules/README.md` § Opting out).
+Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames. Five canonical topic files ship from Pipekit. Rules that don't apply to a project (`pipekit-cmux.md` outside cmux, `pipekit-migrations.md` without a versioned migration system) can be skip-listed via a `Skip rules` key in `method.config.md` — the sync stops syncing them and removes previously-synced copies, since an auto-loaded rule the session was told to ignore still costs input tokens every turn (v4.21.0+; see `sop/Rules_SOP.md` § Canonical rules).
+
+Rules carry the rule only (v5.2.0). The incident that earned each one lives in `sop/Rules_SOP.md` § Anchors, demand-loaded, and `tests/pk-smoke.sh` holds the canonical set to a word budget (`RULES_WORD_BUDGET`): a new rule displaces or tightens an old one. v5.2.0 cut the set from 7,577 to 3,687 words; an A/B of 13 rule probes against the old set (blind-graded, plus a no-rules control) showed no behavioural loss.
 
 ### `pipekit-discipline.md`
 
@@ -1288,7 +1290,7 @@ cmux pane/surface discipline (informational if not running in cmux):
 
 ### Adding project-specific rules
 
-Consumers add new files directly to their `.claude/rules/` — `sync-method.sh` won't touch them. See `templates/rules/README.md` for naming conventions (`patterns.md`, `file-structure.md`, `{library}-pitfalls.md`).
+Consumers add new files directly to their `.claude/rules/` — `sync-method.sh` won't touch them. See `sop/Rules_SOP.md` § Writing a rule for what belongs in one and the naming conventions (`patterns.md`, `file-structure.md`, `{library}-pitfalls.md`). A rule that only matters for some paths takes `paths:` frontmatter and loads only when matching files are touched.
 
 ---
 

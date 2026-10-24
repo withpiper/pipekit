@@ -349,7 +349,7 @@ fi
 # --- Sync canonical .claude/rules/ files ---
 # Contract: Pipekit owns five canonical rule files prefixed `pipekit-`
 # (pipekit-discipline, pipekit-tooling, pipekit-security, pipekit-migrations,
-# pipekit-cmux) plus the README that documents the hub-and-spoke model.
+# pipekit-cmux) plus the README that tells a session the canonical files are sync-owned.
 # These get overwritten on every sync — changes must round-trip through
 # pipekit.
 #

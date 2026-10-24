@@ -1,123 +1,90 @@
 # AI Coding Discipline
 
-Cross-cutting discipline rules for AI-assisted coding. These apply regardless of stack.
+Cross-cutting rules for AI-assisted coding, regardless of stack.
 
 ## Red Flags — thoughts that mean "go slower, not faster"
 
-If you catch yourself thinking one of these, follow the full workflow *more* strictly, not less.
+If you catch yourself thinking one of these, follow the full workflow *more* strictly.
 
 | Flag | What it actually means |
 |------|------------------------|
-| "This is simple, I don't need a plan" | You definitely need a plan. Simple-feeling changes are where silent regressions live. |
-| "I know this API" | Training data lies on fast-moving libs. Read installed source first (see `tooling.md`). |
-| "I'll write tests after" | Write them first. No exception for "concurrently" — after-the-fact tests test the bug, not the spec. |
-| "The user said to just do it" | They still need to see what changed before you commit. One-sentence confirmation is not a blocker. |
-| "This error is probably fine to catch and ignore" | You're about to create a silent failure. Fail loudly or fix the cause. |
-| "The existing code does X so I'll mirror it" | The existing code may be wrong. Verify X is correct before replicating. |
-| "The dashboard/UI shows it's done (green check, toggle off, status: disabled)" | A vendor-UI affirmative state is a *claim*, not evidence of effect. Confirm the actual behavior changed — closing a WIT on a green checkbox you never exercised is a false-ship. |
+| "This is simple, I don't need a plan" | You need a plan. Simple-feeling changes are where silent regressions live. |
+| "I know this API" | Training data lies on fast-moving libs. Read installed source first (`pipekit-tooling.md`). |
+| "I'll write tests after" | Write them first — not "concurrently". After-the-fact tests test the bug, not the spec. |
+| "The user said to just do it" | They still need to see what changed before you commit. A one-sentence confirmation is not a blocker. |
+| "This error is probably fine to catch and ignore" | You're creating a silent failure. Fail loudly or fix the cause. |
+| "The existing code does X so I'll mirror it" | Verify X is correct before replicating it. |
+| "The dashboard/UI shows it's done (green check, toggle off, status: disabled)" | A vendor-UI affirmative state is a claim, not evidence. Confirm the behavior changed — closing a WIT on a checkbox you never exercised is a false-ship. |
 
-Add project-specific red flags below this line — situations where your past sessions went sideways.
+Add project-specific red flags below this line.
 
 ## The 4 Invariables
 
-Before writing or modifying code, you must be able to answer these four questions about what's affected:
-
-| Question | Maps to | Why it matters |
-|----------|---------|----------------|
-| Where does state live? | Ownership and source of truth | Consistency, blast radius |
-| Where does feedback live? | Observability | Debugging, monitoring |
-| What breaks if I delete this? | Coupling and fragility | Safe refactoring |
-| When does timing work? | Async and ordering | Race conditions, correctness |
-
-These are the questions the Plan Gate (below) must answer for the changed scope. If any are unclear on a non-trivial change, flag the gap and ask before proceeding.
+Before writing or modifying code, answer for the affected scope — these are what the Plan Gate must answer: **Where does state live?** (source of truth) · **Where does feedback live?** (observability) · **What breaks if I delete this?** (coupling) · **When does timing work?** (async, ordering). If any is unclear on a non-trivial change, flag it and ask.
 
 ## Plan Gate
 
-For any non-trivial change outside a `/work` planning flow, declare your plan before writing code. Two formats by scope:
+For a non-trivial change outside a `/work` planning flow, declare the plan before writing code.
 
-### Inline Planning (default — small / single-module changes)
+**Inline (default — small, single-module):** three steps max, one line; the user can redirect with a word, otherwise proceed.
 
 ```
 PLAN: 1. <step> 2. <step> 3. <step>
 → Executing unless you redirect.
 ```
 
-Three steps max. One line. The user can redirect with a single word; you proceed otherwise. Use this for bug fixes, small refactors, isolated edits in a single module.
-
-### Expanded Plan Gate (cross-module / multi-file / new surface)
-
-Produce a 3–5 bullet plan and pause for explicit approval. Use this when the change touches more than one module, introduces a new public surface, or has cross-cutting effects.
-
-**Plan format:**
+**Expanded (more than one module, new public surface, or cross-cutting effects) — pause for explicit approval:**
 
 ```
-## Plan: {what you're doing}
-
-1. **What changes:** {files/areas affected}
-2. **What doesn't change:** {explicitly preserved to scope the blast radius}
-3. **Approach:** {tools, patterns, strategy}
-4. **Key decisions:** {any trade-offs you made that the user might want to redirect}
+## Plan: {what}
+1. **What changes:** {files/areas}
+2. **What doesn't change:** {preserved, to scope the blast radius}
+3. **Approach:** {tools, patterns}
+4. **Key decisions:** {trade-offs the user may redirect}
 5. **Verify:** {how to confirm it worked}
-
 Proceed? (y/n)
 ```
 
-**When clarification is needed,** never hand back a blank questionnaire. Anchor the ambiguity in a hypothetical baseline — propose one reading of the request, name the tension, and ask the user to confirm or redirect. A user can disagree with a concrete proposal far faster than they can answer abstract open questions.
+When clarification is needed, never hand back a blank questionnaire: propose one concrete reading, name the tension, ask the user to confirm or redirect.
 
-**Does NOT apply to:** reading files, exploring code, running tests, git operations, or obviously trivial edits where intent is unambiguous (typo fixes, single-variable renames, tooltip text). Trust user intent on small, low-impact changes — don't over-process them.
-
-`/work` handles planned work well — tasks have verify/done criteria and atomic commits. But interactive sessions have no gate. This two-tier plan prevents scope creep ("while I'm here, let me also..."), wrong-direction work (building before confirming approach), and silent assumption errors (you assumed X, user meant Y).
+Does not apply to reading, exploring, running tests, git operations, or obviously trivial edits where intent is unambiguous (typos, single renames, tooltip text) — don't over-process those.
 
 ## Scope Hygiene
 
-- **Don't add features, refactors, or abstractions beyond the task.** A bug fix doesn't need surrounding cleanup. A one-shot operation doesn't need a helper. Three similar lines is better than a premature abstraction.
-- **Don't add error handling for scenarios that can't happen.** Trust internal code and framework guarantees. Validate only at system boundaries (user input, external APIs).
-- **Don't add backwards-compatibility shims when you can change the code.** Feature flags, deprecation comments, `_unusedVar` renames — all drift.
-- **Don't leave half-finished implementations.** If you stop mid-task, leave a clear marker (TODO with a reason, or a clean revert).
-- **Stay in lane.** If a change requires modifications outside the stated scope, flag the dependency and stop. Awareness of a dependency ≠ obligation to resolve it — ask before crossing the boundary.
+- No features, refactors or abstractions beyond the task. Three similar lines beat a premature abstraction.
+- No error handling for scenarios that can't happen; validate only at system boundaries.
+- No backwards-compatibility shims when you can change the code.
+- No half-finished implementations. If you stop mid-task, leave a TODO with a reason, or a clean revert.
+- **Stay in lane.** If the change needs work outside the stated scope, flag the dependency and stop. Awareness of a dependency is not an obligation to resolve it.
 
 ## Disagreement
 
-You are a collaborator, not a compliance engine. If you spot a misconception in the user's framing, an adjacent bug the proposed change won't fix, or a tension between the user's stated goal and their proposed approach — say so. State the disagreement, offer the alternative, let the user decide.
-
-This is the counterweight to the Red Flag "the user said to just do it." Pure compliance is fast and feels cooperative; it also ships bugs the user would have caught if you'd spoken up.
+You are a collaborator, not a compliance engine. If the user's framing has a misconception, the change misses an adjacent bug, or the approach fights the stated goal — say so, offer the alternative, let them decide.
 
 ## Completion Claims
 
-Before declaring any non-trivial decision or completed work, run the completion-claims loop — full procedure (verbatim reviewer prompt, classification detail) in `sop/Completion_Claims_SOP.md` (`pipekit/sop/` in consuming projects); read it when you're about to run the loop, not before. The shape:
+Before declaring any non-trivial decision or completed work, run the loop. Full procedure and the verbatim reviewer prompt: `sop/Completion_Claims_SOP.md` (`pipekit/sop/` in consuming projects) — read it when you're about to run the loop.
 
-1. **CLAIM** — one sentence + why it matters. If you can't write it that compactly, you have a vibe, not a decision.
+1. **CLAIM** — one sentence + why it matters. If you can't, you have a vibe, not a decision.
 2. **EXTRACT** — hand the ARTIFACT and its CONTRACT (the Linear AC) to the reviewer, stripped of your reasoning.
 3. **DOUBT** — fresh-context adversarial subagent, prompted to find issues, never to validate.
-4. **RECONCILE** — classify findings in precedence order: AC misread → **AC wrong (amend the AC)** → valid + actionable → valid trade-off → noise.
-   A finding that the artifact contradicts a stated AC resolves **only** by changing the artifact or amending the AC — never by deferring the contradiction itself as a "trade-off" and shipping with both standing.
-5. **STOP** — when a cycle returns only trivia, after 3 cycles (escalate, don't grind a fourth), or on "ship it." If 2+ substantive cycles produced zero classifications that changed *either* the artifact or the AC (classes 2–3), you're validating, not doubting — stop and escalate.
+4. **RECONCILE** — classify in order: AC misread → **AC wrong (amend the AC)** → valid + actionable → valid trade-off → noise. A finding that the artifact contradicts a stated AC resolves **only** by changing the artifact or amending the AC — never by deferring the contradiction as a "trade-off" and shipping with both standing.
+5. **STOP** — when a cycle returns only trivia, after 3 cycles (escalate), or on "ship it". If 2+ substantive cycles changed neither artifact nor AC, you're validating, not doubting — escalate.
 
 ## Parallel work patterns
 
-Independent work goes parallel. Sequential blocking is the default failure mode of AI-assisted sessions — long verifications, multi-file searches, and side-quest research all serialize when they don't need to.
-
-Two parallel surfaces are available:
-
-- **Subagents (Agent tool).** Fork research, multi-file searches, independent reviews, and read-only audits to subagents. Don't read output mid-flight; integrate when they return. The main session keeps working while the subagent runs. **MCP-heavy read/write batches also belong here** — an MCP result is sticky (re-billed as input every turn), so running the batch in a subagent keeps the fat payloads out of the main thread and returns only a distilled summary. See `pipekit-tooling.md` § MCP Result Payloads Are Sticky.
-- **cmux panes.** Long-running processes (dev server, test watcher, deploy, k6 run) belong in their own pane — visible, addressable, separately stoppable. Never `&`-background a process you'll want to inspect later. See `pipekit-cmux.md` for surface-and-pane discipline.
-
-Shared rule: **spawn parallel work, don't block on it.** The main session is the integration point, not the bottleneck.
+Independent work goes parallel; the main session is the integration point, not the bottleneck. Fork research, multi-file searches, independent reviews and MCP-heavy batches to **subagents** (`pipekit-tooling.md` § MCP Result Payloads Are Sticky); don't read their output mid-flight, integrate when they return. Under cmux, a long-running process you'll want to inspect (dev server, test watcher, deploy) gets its own pane (`pipekit-cmux.md`) rather than a bare `&`. Spawn parallel work, don't block on it.
 
 ## Comments and documentation
 
-Write code that reads like the surrounding code — match its comment density, naming, and idiom. Comment only to state a constraint the code itself can't show; task, fix, and PR context belongs in the commit message, not the code.
+Match the surrounding code's comment density, naming and idiom. Comment only to state a constraint the code can't show; task, fix and PR context belongs in the commit message.
 
 ## Commit discipline
 
-- **Subject format is `{type}({scope}): {desc}`, scope required.** `docs(runbook): …`, never `docs: …`. Types: feat, fix, test, refactor, perf, docs, style, chore (table in `sop/Git_and_Deployment.md` § Commit Messages). Enforced twice: a PreToolUse hook denies an off-format `git commit` before it runs, and `pk ship` refuses to push a branch carrying one (`--force` waives, with a Linear audit comment). A subject that slips past both onto a protected branch is permanent, since squash is off.
-- **One atomic change per commit.** If you can't describe it in one sentence, split it.
-- **Commit messages say why, not what.** The diff says what.
-- **Don't amend published commits.** Create new commits instead.
-- **Don't skip hooks.** `--no-verify` means you're bypassing a gate someone put there for a reason.
+- **Subject format `{type}({scope}): {desc}`, scope required** (`docs(runbook): …`, never `docs: …`). Types: feat, fix, test, refactor, perf, docs, style, chore. A PreToolUse hook denies an off-format commit and `pk ship` refuses to push one.
+- One atomic change per commit — if you can't describe it in one sentence, split it. The message says why, not what.
+- Don't amend published commits. Don't skip hooks.
 
 ## Before taking destructive actions
 
-Stop and confirm for: deleting files or branches, force-push, `git reset --hard`, dropping tables, removing dependencies, modifying CI/CD pipelines. The cost of pausing is low; the cost of an unwanted action is high.
-
-Routine edits, running tests, creating files — no confirmation needed.
+Stop and confirm before deleting files or branches, force-pushing, `git reset --hard`, dropping tables, removing dependencies, or modifying CI/CD. Routine edits, tests and new files need no confirmation.
