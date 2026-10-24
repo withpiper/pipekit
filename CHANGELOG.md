@@ -42,6 +42,7 @@ Every doc below carries a `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(blurb)*` l
 | `sop/Skills_SOP.md` | SOP — skill anatomy, sync, overrides |
 | `sop/Completion_Claims_SOP.md` | SOP — the completion-claims loop (CLAIM → DOUBT → RECONCILE → STOP) |
 | `sop/Cmux_Orchestration_SOP.md` | SOP — orchestrating other Claude sessions in cmux worker panes |
+| `sop/Rules_SOP.md` | SOP — what belongs in a rule, the word budget, and the incident anchors behind the canonical rules |
 | `sop/TPM_SOP.md` | SOP — the `/tpm` rubric: diagnosis, stakes, Hard/Value/Soft, ranking, capacity (session-days), independence bar, the weekly plan |
 
 Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line release blurb)*`. The three constitutional docs additionally carry an `HH:MM` suffix on the date to disambiguate same-day patch releases (e.g., `2026-05-13 21:04`).
@@ -49,6 +50,10 @@ Format (copy verbatim): `**vX.Y.Z** — Last updated: YYYY-MM-DD  *(one-line rel
 Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` header stamps because release PRs edited prose at specific line numbers without touching the "Last updated" line. The header tells humans and AI sessions which version the doc describes — when it lies, every reader after that ships against the wrong contract.
 
 ---
+
+## v5.2.0 — 2026-10-24
+
+> **The canonical rules are rightsized.** Every file in `.claude/rules/` loads into every session, and by the time a SiteLine or Piper session started the always-loaded instructions came to about 17,600 words, 7,577 of them from Pipekit's canonical rules. Most of that was incident narrative sitting inline with the rule it earned. The rules now carry the rule only. The incidents move word for word to a new `sop/Rules_SOP.md` § Anchors (migration narratives were already in `sop/Database_SOP.md`), and every ID and date was checked across. `templates/rules/` drops from 7,577 to 3,687 words. All 18 anchor IDs and dates and every cited `§` heading survive. Project-specific examples in portable files are generalized: the Supabase `--agent` case becomes "pin the output format of any command a script parses", and the `claude-code-action` case becomes "assert on the artifact, not the check's colour". The specifics stay in the anchors. The rules `README.md` stays put but is cut to what a session needs: which six files Pipekit owns and overwrites, companion files for overrides, `Skip rules`, and `paths:` scoping (verified: a path-scoped rule loads only once a matching file is read). Its human-facing docs move to `sop/Rules_SOP.md`, which also says how to write a rule: earn it, one in one out, rule inline and incident in the SOP, generalize, keep headings stable. `tests/pk-smoke.sh` holds `templates/rules/` to `RULES_WORD_BUDGET=3750`. Evidence: a fresh reviewer audited the cut against the originals and found 27 dropped conditions, which were all restored (including two errors the cut had introduced: an unconditional "never `&`" that contradicted cmux's own recipe, and a README overclaim about sync ownership). A 13-probe A/B on headless sessions, blind-graded with a no-rules control, scored old 26/26, cut 25/26 and no rules 22/26. Only 3 probes moved with the rules at all (cmux RPC, destructive confirmation, MCP-applied migrations), so the probes can't tell yet which further rules are dead weight. A harder, long-session test should come before cutting toward 3,000. Consumers pick this up on their next sync.
 
 ## v5.1.2 — 2026-10-14
 
