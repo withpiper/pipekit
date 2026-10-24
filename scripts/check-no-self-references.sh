@@ -24,12 +24,11 @@
 
 set -euo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/lib/package-root.sh"
+
 # --- Locate repo + config --------------------------------------------------
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
-  echo "ERROR: not in a git repo" >&2
-  exit 2
-}
+REPO_ROOT="$PKG_ROOT"
 cd "$REPO_ROOT"
 
 CONFIG="$REPO_ROOT/method.config.md"
@@ -90,7 +89,9 @@ done
 
 EDITED_FILES=""
 if [ -n "$BASE" ]; then
-  EDITED_FILES=$(git diff --name-only "$BASE"...HEAD 2>/dev/null | sort -u)
+  # --relative: git grep paths below are cwd-relative, so this list must be too
+  # (nested under apps/legacy/ they would otherwise never match).
+  EDITED_FILES=$(git diff --relative --name-only "$BASE"...HEAD 2>/dev/null | sort -u)
 fi
 
 # --- Run the grep ----------------------------------------------------------

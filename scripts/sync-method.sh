@@ -320,6 +320,10 @@ sync_file "$TEMP/scripts/verify-next-md-defer.sh" "$PROJECT_ROOT/scripts/verify-
 [ -f "$PROJECT_ROOT/scripts/verify-next-md-defer.sh" ] && chmod +x "$PROJECT_ROOT/scripts/verify-next-md-defer.sh"
 sync_file "$TEMP/scripts/pipekit-configure-repo.sh" "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" "scripts/pipekit-configure-repo.sh"
 [ -f "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh" ] && chmod +x "$PROJECT_ROOT/scripts/pipekit-configure-repo.sh"
+# v5.2.2 — the two check scripts below source this to find their package root, so it
+# must land first; it is not executable, only sourced.
+$DRY_RUN || mkdir -p "$PROJECT_ROOT/scripts/lib"
+sync_file "$TEMP/scripts/lib/package-root.sh" "$PROJECT_ROOT/scripts/lib/package-root.sh" "scripts/lib/package-root.sh"
 # v4.18.0 — migration-drift detector (gap #1 Tier 2; templates/ci/migration-drift.yml runs it in CI).
 sync_file "$TEMP/scripts/check-migration-drift.sh" "$PROJECT_ROOT/scripts/check-migration-drift.sh" "scripts/check-migration-drift.sh"
 [ -f "$PROJECT_ROOT/scripts/check-migration-drift.sh" ] && chmod +x "$PROJECT_ROOT/scripts/check-migration-drift.sh"
