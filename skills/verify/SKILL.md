@@ -350,7 +350,7 @@ If the subagent fails to write the file (Write permission denied, disk full), su
 
 ## Step 5 — Antagonistic review (mandatory tier:heavy; auto for sensitive-path diffs on tier:standard; opt-in via --review on tier:standard; skipped tier:quick)
 
-Antagonistic review is a separate, adversarial subagent with the **same inputs** as QA (diff + AC list) but a different lens: find what is wrong, not whether it shipped. The prompt is the **verbatim DOUBT prompt** from `pipekit-discipline.md` § Completion Claims — never paraphrase it, the wording is load-bearing.
+Antagonistic review is a separate, adversarial subagent with the **same inputs** as QA (diff + AC list) but a different lens: find what is wrong, not whether it shipped. The prompt is the **verbatim DOUBT prompt** from `sop/Completion_Claims_SOP.md` § 3. DOUBT (`pipekit/sop/` in consuming projects) — never paraphrase it, the wording is load-bearing. `pipekit-discipline.md` § Completion Claims only summarizes the loop.
 
 Run conditions:
 
