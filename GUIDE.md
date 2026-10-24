@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.2.0** — Last updated: 2026-10-24 08:53  *(**v5.2.0 — the canonical rules are rightsized:** rules carry the rule only, the incidents behind them move to `sop/Rules_SOP.md` § Anchors, and `tests/pk-smoke.sh` holds `templates/rules/` to a word budget. 7,577 → 3,687 words, no behavioural loss on a 13-probe A/B.)*
+**v5.2.1** — Last updated: 2026-10-24 09:16  *(**v5.2.1 — `/linear-hygiene` classifies an issue by its own text, never the lane it came from;** fixes a rule citation that never resolved.)*
 
 ---
 

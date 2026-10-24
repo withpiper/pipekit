@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.2.0** — Last updated: 2026-10-24 08:53  *(**v5.2.0 — the canonical rules are rightsized:** rules carry the rule only, the incidents behind them move to `sop/Rules_SOP.md` § Anchors, and `tests/pk-smoke.sh` holds `templates/rules/` to a word budget. 7,577 → 3,687 words, no behavioural loss on a 13-probe A/B.)*
+**v5.2.1** — Last updated: 2026-10-24 09:16  *(**v5.2.1 — `/linear-hygiene` classifies an issue by its own text, never the lane it came from;** fixes a rule citation that never resolved.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
