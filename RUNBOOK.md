@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.2.1** — Last updated: 2026-10-24 09:16  *(**v5.2.1 — `/linear-hygiene` classifies an issue by its own text, never the lane it came from;** fixes a rule citation that never resolved.)*
+**v5.2.1** — Last updated: 2026-10-24 09:46  *(**v5.2.1 — an issue's `Area:` follows its own work, not where it came from:** `/linear-hygiene` stops classifying by source lane, and a follow-up's Area is chosen at filing instead of inherited from the parent.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
