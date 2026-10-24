@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.2.0** — Last updated: 2026-10-24 08:53  *(**v5.2.0 — the canonical rules are rightsized:** rules carry the rule only, the incidents behind them move to `sop/Rules_SOP.md` § Anchors, and `tests/pk-smoke.sh` holds `templates/rules/` to a word budget. 7,577 → 3,687 words, no behavioural loss on a 13-probe A/B.)*
+**v5.2.1** — Last updated: 2026-10-24 09:46  *(**v5.2.1 — an issue's `Area:` follows its own work, not where it came from:** `/linear-hygiene` stops classifying by source lane, and a follow-up's Area is chosen at filing instead of inherited from the parent.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.2.0                (or latest tag)
+1. ./scripts/sync-method.sh v5.2.1                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
