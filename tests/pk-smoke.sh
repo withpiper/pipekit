@@ -2316,6 +2316,21 @@ else
   fi
 fi
 
+# ── Canonical rules word budget (v5.2.0) ─────────────────────────────────────
+# templates/rules/*.md load into every session of every consumer, so their size
+# is paid on every turn. A new rule that breaches the budget displaces or
+# tightens an old one (sop/Rules_SOP.md § Writing a rule); raising the number
+# is a decision, not a side effect.
+
+RULES_WORD_BUDGET=3750
+echo "== canonical rules word budget =="
+rules_words=$(cat "$REPO_ROOT"/templates/rules/*.md | wc -w | tr -d ' ')
+if [ "$rules_words" -le "$RULES_WORD_BUDGET" ]; then
+  ok "rules budget: templates/rules/ is $rules_words words (budget $RULES_WORD_BUDGET)"
+else
+  fail "rules budget: templates/rules/ is $rules_words words, over the $RULES_WORD_BUDGET budget" "cut or move an anchor to sop/Rules_SOP.md before adding"
+fi
+
 # ── Dogfood mirror freshness (local only) ────────────────────────────────────
 # .claude/skills|rules|agents are generated mirrors of tracked sources, used by
 # Claude Code sessions in THIS repo. They are gitignored, so they do not exist
