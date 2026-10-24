@@ -95,14 +95,14 @@ Unlike Phase 2b, this check is **not** lanes-gated — run it whether or not `§
    - 🧾 **Postmortem debt** — no `# Postmortem` comment. Report identifier, priority, and completion date. Recommend `/pk-bug <ID>`: its resume routing sends a `statusType=completed` issue with no postmortem straight into Phase 8.
    - ✍️ **Unsigned postmortem** *(Urgent only)* — a `# Postmortem` comment whose `Reviewer:` / `Approved:` lines are still blank. The postmortem exists; the human gate on it never closed.
 
-**Cap the window, and say so in the output.** Thirty days is a deliberate bound, not full coverage — an older debt will not appear. Print the window alongside the findings so "no findings" cannot be misread as "nothing is owed" (`pipekit-tooling.md` § no silent caps).
+**Cap the window, and say so in the output.** Thirty days is a deliberate bound, not full coverage — an older debt will not appear. Print the window alongside the findings so "no findings" cannot be misread as "nothing is owed" (`pipekit-tooling.md` § The Verification Method Must Be Able to See the Failure).
 
 ### Phase 3 — Infer the fix per issue
 
 - **Home (for orphans / unclassified).** On the lanes model the default home is **no project**, not a project. Work through this ladder in order and stop at the first hit:
 
   1. **An existing lane — only if the issue is inside that lane's completable scope.** "It's the same domain" is not scope; the test is whether the lane could still be called *done* with this issue in it. If the body names a parent issue (`follow-up to/from <ID>`, `Source: <ID>`, `Related: <ID>`, `Split from <ID>`, where `<ID>` is any Linear identifier `[A-Z]+-N` — match every prefix, not just the workspace's current one: a prefix migration leaves older bodies citing the old prefix) → `pk issue show <parent> --fields id,project` → the **parent's project** is the highest-confidence candidate, but still apply the scope test before proposing it.
-  2. **Otherwise: no project + the right `Area:` label.** Keyword-match title/body against the configured Area labels. This is the correct terminal state for uncut work — the issue is homed the moment it carries an Area label, and stays there until a human cuts it into a lane via `/phase-plan --cut`.
+  2. **Otherwise: no project + the right `Area:` label.** Match title/body against the configured Area labels. Classify the issue's own text, never the lane it came from: in a 2026-09-27 SiteLine sample about a fifth of Area labels disagreed with their issue's text, many because the label had followed the source lane rather than the domain. This is the correct terminal state for uncut work — the issue is homed the moment it carries an Area label, and stays there until a human cuts it into a lane via `/phase-plan --cut`.
   3. If the Area is ambiguous → present the **top-2 candidates** for a human pick in the manifest.
 
   **Never file into a pool-shaped project, and never create a project.** Filing an issue into a project just to get it out of the orphan list is what grows a pool — the exact drift Phase 2b flags. A project is created only by a deliberate lane cut.
