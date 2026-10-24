@@ -498,7 +498,7 @@ Post via `pk issue comment <ISSUE-ID> --body-file <F>` (the same route `pk done`
 - **Rejected:** <count>
   - <each, with reason — e.g. "C1 — AG Grid var() support verified via MCP">
 - **Deferred:** <count>
-  - <each, with follow-up issue link if opened — filed to `sop/Linear_SOP.md § Filing a follow-up issue`: `Source: <ISSUE-ID> PR #<n> finding #<k>`, the parent's `Area:` label, a Type label, priority from the floor table, state by that priority, `relates` to the parent; name the placement here>
+  - <each, with follow-up issue link if opened — filed to `sop/Linear_SOP.md § Filing a follow-up issue`: `Source: <ISSUE-ID> PR #<n> finding #<k>`, an `Area:` label for the follow-up's own work, a Type label, priority from the floor table, state by that priority, `relates` to the parent; name the placement here>
 
 PR: <pr-url>
 ```
