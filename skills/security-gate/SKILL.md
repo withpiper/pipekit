@@ -139,7 +139,7 @@ Skip any category the definitions file lists under **Not applicable** (record it
 
 ## Step 4 — Adversarial verification, reconcile, rate
 
-Run an adversarial pass over the candidate findings (mirroring `/repo-security-review` and `pipekit-discipline.md` § DOUBT): for each finding, **try to refute it** — open the cited code and check it's actually reachable and exploitable given auth, RLS, and the real call sites. Mark each **confirmed / refuted / needs-info**. Keep refuted items in an appendix with the reason; only **confirmed** and **needs-info** feed the verdict.
+Run an adversarial pass over the candidate findings (mirroring `/repo-security-review` and `sop/Completion_Claims_SOP.md` § 3. DOUBT): for each finding, **try to refute it** — open the cited code and check it's actually reachable and exploitable given auth, RLS, and the real call sites. Mark each **confirmed / refuted / needs-info**. Keep refuted items in an appendix with the reason; only **confirmed** and **needs-info** feed the verdict.
 
 Headline status (a single read-only gate run can't iterate-to-fix, so the rubric is on confirmed severity, not an "addressed" loop):
 

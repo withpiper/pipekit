@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.2.1** — Last updated: 2026-10-24 09:46  *(**v5.2.1 — an issue's `Area:` follows its own work, not where it came from:** `/linear-hygiene` stops classifying by source lane, and a follow-up's Area is chosen at filing instead of inherited from the parent.)*
+**v5.2.2** — Last updated: 2026-10-24 10:06  *(**v5.2.2 — the migration-drift and self-reference checks find their package from their own location** (SiteLine's nested-package fixes, upstreamed with `scripts/lib/package-root.sh`), and the runbook's security-review trigger names the configured Migration dir.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.2.1                (or latest tag)
+1. ./scripts/sync-method.sh v5.2.2                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -267,7 +267,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │      /pr-security-review                                 │
   │                                                          │
   │      Run when the PR touches ANY of:                     │
-  │      • supabase/migrations/** or *.sql files             │
+  │      • method.config's Migration dir, or any *.sql file  │
   │      • SECURITY DEFINER function definitions             │
   │      • CREATE POLICY / ALTER POLICY (RLS)                │
   │      • GRANT / REVOKE statements                         │

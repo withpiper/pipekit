@@ -27,14 +27,13 @@
 #   Migration dir       — no value / missing dir → exit 0 skip (non-migration project)
 #   Integration branch  — default base for check A (default: dev, else origin/HEAD)
 #
-# Exit codes: 0 = clean or skipped; 1 = drift found; 2 = usage / not a git repo
+# Exit codes: 0 = clean or skipped; 1 = drift found; 2 = usage; 3 = not a git repo (scripts/lib/package-root.sh)
 
 set -euo pipefail
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
-  echo "ERROR: not in a git repo" >&2
-  exit 2
-}
+. "$(dirname "${BASH_SOURCE[0]}")/lib/package-root.sh"
+
+REPO_ROOT="$PKG_ROOT"
 cd "$REPO_ROOT"
 
 read_config() {
@@ -138,7 +137,7 @@ else
           echo "      (pipekit-migrations.md § Parallel Branch Coordination, anchor: WIT-550)."
           DRIFT=1
         fi
-      done < <(git diff --name-only --diff-filter=A "$MB..HEAD" -- "$DIR" 2>/dev/null)
+      done < <(git diff --name-only --relative --diff-filter=A "$MB..HEAD" -- "$DIR" 2>/dev/null)
     fi
   fi
 fi

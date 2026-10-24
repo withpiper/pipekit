@@ -2111,9 +2111,17 @@ esac
 
 echo "== check-migration-drift (v4.18.0) =="
 
-DRIFT_SH="$REPO_ROOT/scripts/check-migration-drift.sh"
+# The script resolves its package root from its own location
+# (scripts/lib/package-root.sh), not from cwd, so each fixture gets its own copy.
+install_drift_sh() {
+  mkdir -p "$1/scripts/lib"
+  cp "$REPO_ROOT/scripts/check-migration-drift.sh" "$1/scripts/"
+  cp "$REPO_ROOT/scripts/lib/package-root.sh" "$1/scripts/lib/"
+}
 
 make_fixture
+install_drift_sh "$FIXTURE"
+DRIFT_SH="$FIXTURE/scripts/check-migration-drift.sh"
 # (1) No Migration dir configured → clean skip, exit 0.
 write_config '```
 Integration branch: main
@@ -2161,6 +2169,25 @@ rm -f "$FIXTURE/db/migrations/20260103000000_dupe.sql"
 out=$(cd "$FIXTURE" && "$DRIFT_SH" --base origin/nope 2>&1); rc=$?
 [ $rc -eq 0 ] && case "$out" in *"not resolvable"*) ok "drift: unresolvable base warns, never false-blocks" ;; *) fail "drift: unresolvable base warns, never false-blocks" "out: $out" ;; esac \
   || fail "drift: unresolvable base warns, never false-blocks" "rc=$rc (want 0)"
+cleanup
+FIXTURE=""
+
+# (6) Nested package (SiteLine's apps/legacy/ layout): the package's own config
+# and migration dir are found, and a backdated migration there is still flagged.
+make_fixture
+PKG="$FIXTURE/apps/legacy"
+mkdir -p "$PKG/db/migrations"
+install_drift_sh "$PKG"
+printf '%s\n' '```' 'Integration branch: main' 'Migration dir: db/migrations' '```' > "$PKG/method.config.md"
+echo "select 1;" > "$PKG/db/migrations/20260101000000_init.sql"
+echo "select 3;" > "$PKG/db/migrations/20260103000000_third.sql"
+git -C "$FIXTURE" add -A && git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -qm "nested base"
+git -C "$FIXTURE" checkout -qb feat/nested-collide
+echo "select 2;" > "$PKG/db/migrations/20260102000000_backdated.sql"
+git -C "$FIXTURE" add -A && git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -qm "nested backdated"
+out=$(cd "$PKG" && "$PKG/scripts/check-migration-drift.sh" --base main 2>&1); rc=$?
+[ $rc -eq 1 ] && case "$out" in *"branch collision"*) ok "drift: nested package's backdated migration flagged" ;; *) fail "drift: nested package's backdated migration flagged" "out: $out" ;; esac \
+  || fail "drift: nested package's backdated migration flagged" "rc=$rc (want 1) out: $out"
 cleanup
 FIXTURE=""
 
