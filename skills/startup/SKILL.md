@@ -623,7 +623,7 @@ Create each skill with the user's input. Test after creation.
 - `pipekit-discipline.md` — Red Flags, Ad-hoc Plan Gate, scope hygiene (portable AI-coding discipline)
 - `pipekit-tooling.md` — Verify Library API, package manager pinning, pre-deploy gate (portable tooling discipline)
 - `pipekit-security.md` — secrets, boundary validation, OWASP Top 10 baseline (portable security discipline)
-- `README.md` — hub-and-spoke model explanation
+- `README.md` — what the session must know about the directory (canonical files are sync-owned; full guide in `pipekit/sop/Rules_SOP.md`)
 
 Verify these exist. If missing, re-run `bash scripts/sync-method.sh` or copy from `templates/rules/` manually.
 

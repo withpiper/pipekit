@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.1.2** — Last updated: 2026-10-14  *(**v5.1.2 — the missing-key hint names the repo's own op:// reference file (`secrets.op` in Piper, `op-references.conf` in SiteLine) instead of always SiteLine's. Carries v5.1.1 — the runbook gains a `## Weekly loop` section — the three `/tpm` commands and when each is for, what the session reads and writes, how to read `engineering/WEEKLY_PLAN.md`, and what `pk next` and `pk done` do with it during the week. Carries v5.1.0 — `/tpm` writes a weekly plan (`engineering/WEEKLY_PLAN.md`): a task list by session with the commands to run, not a Linear digest in the runbook; `[tpm] on-merge:` notes that `pk done` reads back and offers to run; capacity in session-days; titles beside IDs, one question per turn.** Carries v5.0.1 — `/tpm` reads a shared board once (SiteLine + Piper are one `PIPER` team, two codebases) and `pk next` nudges a runbook that was never agreed. Carries v5.0.0 — `/tpm` decides the week; Linear over the project's route (`Linear transport: api` by default — no MCP tool names in skills, `pk issue search/create/update`, `pk project list`, `pk gql`); `pk done` closes out a merged PR whose branch is gone; `/verify` gates a changed AI extraction call on a recorded real-API run.** A working session reconciles what is really in flight across the portfolio (Linear vs worktrees vs PRs vs sessions), runs `/linear-hygiene` when drift touches the candidates, drafts MUST / NEXT / WAIT with the capacity arithmetic, and argues from `sop/TPM_SOP.md` until agreed; then `pk focus` sets the tiers, Hard dependencies become `blocked by` relations, and the `Now` block of the one `engineering/RUNBOOK.md` is rewritten — `pk next` nudges when it goes stale. `/lane-map` retired. Carries v4.38.0 — focus lanes lead `pk next`.)*
+**v5.2.0** — Last updated: 2026-10-24 08:53  *(**v5.2.0 — the canonical rules are rightsized:** rules carry the rule only, the incidents behind them move to `sop/Rules_SOP.md` § Anchors, and `tests/pk-smoke.sh` holds `templates/rules/` to a word budget. 7,577 → 3,687 words, no behavioural loss on a 13-probe A/B.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.1.2                (or latest tag)
+1. ./scripts/sync-method.sh v5.2.0                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

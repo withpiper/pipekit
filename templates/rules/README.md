@@ -1,58 +1,7 @@
 # Claude Code Rules
 
-Files in this directory are **auto-loaded into every Claude Code session** via the `.claude/rules/` convention. Keep rules short and load-bearing — every line costs input tokens on every turn.
+Every file here auto-loads into every session. Rules carry the rule only; the incident behind a rule goes in an SOP. Full guide: `sop/Rules_SOP.md` (`pipekit/sop/` in consuming projects).
 
-## Hub-and-spoke model
-
-```
-CLAUDE.md            — project hub + routing pointers (~200 lines)
-  .claude/rules/*    — auto-loaded enforceable constraints (per-topic files)
-  pipekit/sop/*       — demand-loaded deep reference (SQL templates, walkthroughs)
-```
-
-CLAUDE.md points to rules for "how do I build correctly here?" Rules point to SOPs for "how do I do this specific complex thing?"
-
-## What goes in rules/
-
-- **Enforceable constraints** — "must / must not" guidance the AI should refuse to violate
-- **Invariants** — things true across every feature (e.g., "RLS enabled on every table")
-- **Cross-cutting patterns** — naming, file structure, package manager, auth flow
-- **Domain pitfalls** — counter-intuitive API behaviors that have caused regressions
-
-## What does NOT go in rules/
-
-- Feature-specific documentation — that's SOPs or inline docs
-- Historical context or decision logs — that's `pipekit/decisions/` ADRs
-- Tutorial-style guides — that's SOPs
-- Anything longer than ~100 lines — split by topic
-
-## Canonical rules shipped by Pipekit
-
-Canonical files use a `pipekit-` prefix so they never collide with project-specific rule filenames.
-
-| File | Topic | Portable |
-|------|-------|----------|
-| `pipekit-discipline.md` | AI coding discipline: Red Flags, Ad-hoc Plan Gate, scope hygiene, commit-subject format | ✅ |
-| `pipekit-tooling.md` | Verify installed library APIs, pin package manager, pre-deploy gate | ✅ |
-| `pipekit-security.md` | Secrets, boundary validation, OWASP, auth must be explicit | ✅ |
-| `pipekit-migrations.md` | Frozen-file invariant, hardening discipline, parallel-branch coordination, drift recovery | ✅ |
-| `pipekit-cmux.md` | cmux discipline: identify-before-split, send-not-rpc, read-screen verify, track by PID | ✅ |
-
-These are synced by `scripts/sync-method.sh` from Pipekit on every run. Changes must round-trip through pipekit — local edits to `pipekit-*.md` files will be overwritten on next sync. If you need to override a canonical rule, create a companion file (e.g., `security.md`) whose content takes precedence per your CLAUDE.md Routing Pointers ordering.
-
-### Opting out of inapplicable canonical rules (v4.21.0+)
-
-Two canonical rules open with "if the project doesn't use X, this rule is informational" (`pipekit-cmux.md` when not running in cmux, `pipekit-migrations.md` when there's no versioned migration system). A rule the session was told to ignore still costs input tokens on every turn. If a canonical rule doesn't apply to this project, stop syncing it: add a `Skip rules` key to `method.config.md`, e.g. `Skip rules: pipekit-cmux, pipekit-migrations`. The next sync removes the listed files and stops re-syncing them; clearing the key restores them. This is for rules that don't *apply* — a rule you want to *modify* still goes through the companion-file pattern above. `README.md` (this file) is not skippable.
-
-## Adding project-specific rules
-
-Create new files directly in this directory — `sync-method.sh` won't touch anything outside the six canonical names above. Common project-specific patterns:
-
-- `security.md` — project-specific auth, RLS, secrets; sits alongside `pipekit-security.md` baseline
-- `tooling.md` — project-specific commands, monorepo filters, pre-deploy gate; sits alongside `pipekit-tooling.md` baseline
-- `patterns.md` — data-layer patterns, component conventions, state management
-- `naming.md` — file and code naming conventions
-- `file-structure.md` — directory layout, import alias rules
-- `{library}-pitfalls.md` — counter-intuitive API behaviors (e.g., `ag-grid-pitfalls.md`, `react-query-pitfalls.md`)
-
-Reference CLAUDE.md's routing table so both canonical and project-specific rules are discoverable.
+- **Pipekit owns six files here:** `pipekit-discipline.md`, `pipekit-tooling.md`, `pipekit-security.md`, `pipekit-migrations.md`, `pipekit-cmux.md` and this README. `sync-method.sh` overwrites local edits to them on every run. To change a canonical rule for this project, write a companion file (e.g. `security.md` beside `pipekit-security.md`); it takes precedence per the Routing Pointers order in CLAUDE.md. To change it everywhere, change it in Pipekit.
+- **A canonical rule that doesn't apply** is dropped with `Skip rules: <name>, …` in `method.config.md`, not by deleting the file.
+- **Project-specific rules** are new files here with any other name (`patterns.md`, `naming.md`, `{library}-pitfalls.md`). Scope one to paths with `paths:` frontmatter when it only matters for some files.
