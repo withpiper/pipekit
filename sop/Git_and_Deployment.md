@@ -105,7 +105,7 @@ This sets repo-level merge flags AND creates/updates the ruleset. The script liv
 
 ## Release Flow
 
-**Core principle: every step forward is a PR. No direct merges between long-lived branches.** (Exception: hotfix cherry-picks back to dev — and beta in three-tier — are direct pushes.)
+**Core principle: every step forward is a PR. No direct merges between long-lived branches.** (Exception: a hotfix cherry-pick back to `dev` — and `beta` in three-tier — may be a direct push, because speed matters for backports, **unless the branch rejects direct pushes** (a PR-required ruleset or branch protection). Then the backport is a short-lived branch and a PR like any other change. Protect any branch whose push deploys against shared production data that way — typically `beta` once a push to it deploys: a direct push there is a prod deploy with no other gate.)
 
 **Two-tier flow:** `feature/*` → PR to `dev` → PR to `main`
 **Three-tier flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
@@ -118,7 +118,7 @@ Each project defines its own promotion skills. As of v2.6.0, state transitions f
 
 **v2.5.0+ UAT gate** (still applies): `pk promote <env>` (Phase 1) refuses with `exit 1` when any bundled issue is still in `UAT` (feature PR not yet merged). Pass `--confirmed` after env-UAT is signed off (Linear comment, PR comment, or session-log note recording the accept verdict) to bypass. `pk done` no longer refuses on UAT (it IS the transition out of UAT) — its safety check is the PR-merged verification. The discipline rule remains: "don't advance past UAT without sign-off"; code-level enforcement lives in `pk promote --confirmed`.
 
-**Hotfix flow:** `hotfix/*` → PR to `main` → cherry-pick back to `dev` and `beta`
+**Hotfix flow:** `hotfix/*` → PR to `main` → cherry-pick back to `dev` and `beta` (through a PR on any branch that rejects direct pushes)
 
 **Bug found in beta:** Fix on `fix/*` from `dev`, PR to `dev`, re-promote `dev` → `beta`. Do not fix directly on `beta`.
 
@@ -395,7 +395,7 @@ The gate at each boundary catches integration-level regressions that wouldn't sh
 If a promotion turns out to be wrong:
 
 - **Dev rollback** — revert the merge commit on dev. Cheap. Re-promote the working subset.
-- **Beta rollback** (three-tier) — revert beta's merge from dev, then cherry-pick the working issues forward. Document what was rolled back in the Linear issue's comments.
+- **Beta rollback** (three-tier) — revert beta's merge from dev (on a revert branch and a PR if `beta` rejects direct pushes), then cherry-pick the working issues forward. Document what was rolled back in the Linear issue's comments.
 - **Main rollback** — revert main's merge, run `supabase db push` if a migration was rolled back (sometimes requires manual `DROP` for additive-only migrations), notify any external users. Treat as an incident.
 
 Database migrations are typically forward-only — the rollback for a destructive migration is a forward migration that re-creates the dropped state. Plan migrations with rollback in mind (avoid `DROP COLUMN` until you're sure no readers depend on the column; prefer `ADD COLUMN` + transitional dual-read period).
@@ -425,7 +425,9 @@ git checkout dev && git pull && git cherry-pick <hash> && git push origin dev
 
 # Three-tier (see § When the explicit beta cherry-pick is needed below):
 git checkout dev && git pull && git cherry-pick <hash> && git push origin dev
-git checkout beta && git pull && git cherry-pick <hash> && git push origin beta
+# beta: a direct push only if it accepts one; where a ruleset requires a PR, backport through one
+git checkout -b <slug>-cherrypick-beta origin/beta && git cherry-pick <hash> && git push -u origin <slug>-cherrypick-beta
+gh pr create --base beta --title "hotfix(<scope>): <desc> — backport to beta" --body "Backport of #<main-PR>."
 
 # 4. Clean up
 cd ../<project>
