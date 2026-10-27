@@ -132,6 +132,19 @@ illustrative.
 > Rename your delivery initiatives with `i{N}.` prefixes to switch a project to the native surface,
 > then the files can be deleted. New projects are native from `/roadmap-create`.
 
+### Repo Labels (optional — one board, more than one codebase)
+
+When a single Linear team tracks deliverables that land in different repositories (a strangler-fig
+port, a monorepo split), a `Repo:` label says **which codebase** an issue's deliverable lands in —
+orthogonal to `Area:` (domain) and to project membership (batch). Filers add it at creation
+(`sop/Linear_SOP.md § Filing a follow-up issue`); `pk issue create` does not enforce it.
+
+| Key | Value |
+|-----|-------|
+| **Repo labels** | `Repo: app`, `Repo: legacy` _(illustrative; one per live codebase)_ |
+
+- Leave this section blank on a single-repo board; skills that read it skip the label.
+
 ### Phase Label Layer (optional — the phase-spans-projects shape only)
 
 An **opt-in visualization mirror** of `ROADMAP.md`'s build order onto the Linear board, for projects

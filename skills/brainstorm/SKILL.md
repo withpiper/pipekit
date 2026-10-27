@@ -29,12 +29,13 @@ Take a rough idea from the user, explore the codebase to understand feasibility,
 2. **Explore** the codebase to assess feasibility
 3. **Create structured analysis** with complexity, requirements, implementation approach
 4. **Present** to user for approval
-5. **Create the Linear issue** via the project's Linear route, with title, description, state, priority and label in **one** call — `pk issue create --title "…" --description-file <F> --state Triage --priority 0 --label "Area: <area>"` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there; the team comes from `method.config.md` and `pk` reads it itself):
+5. **Create the Linear issue** via the project's Linear route, with title, description, state, priority and label in **one** call — `pk issue create --title "…" --description-file <F> --state Triage --priority 0 --label "Area: <area>" --label "Repo: <repo>"` (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there; the team comes from `method.config.md` and `pk` reads it itself):
    - `--title`: concise feature title
    - `--description-file`: the full brainstorm analysis (feasibility, complexity, approach, requirements), written to a file first (or `-` to pipe it on stdin)
    - `--priority 0` (None) — triage sets real priority later
    - **no `--project`** — a newly filed idea is uncut work, and no project is its correct home. Apply an `Area:` label instead (`--label "Area: <area>"`, per `method.config.md § Initiative Surface → Area Labels`); `/linear-hygiene` fills it in later if you can't infer one. File into a lane (`--project <I{N}.P{N}>`) **only** when the idea is explicitly part of that lane's completable scope — filing for the sake of filing is what grows pools. On a board with no `§ Area Labels` config, keep the old behavior: ask which project to assign, or leave unassigned.
    - `--state Triage` — but note a Triage-state issue is **invisible in project views and excluded from project scope counts**, so if you do file it into a lane it won't render there until it's triaged out.
+   - `--label "Repo: <repo>"` where `method.config.md § Repo Labels` is populated (a board shared by more than one codebase): which repo the deliverable lands in, orthogonal to Area and to lane. Skip on a single-repo board.
 6. **Output**: issue identifier and Linear URL
 
 ### Phase 2 — HOLD (Disposition)

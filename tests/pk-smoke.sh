@@ -3755,6 +3755,49 @@ else
   fail "skills: cited pk verbs missing from bin/pk" "$CITE_MISSING"
 fi
 
+# ── CLI tests: pk issue create — Area-label intake guard ─────────────────────
+
+echo "== issue create: Area guard =="
+
+# Four filers once created issues with no Area: label on a board whose
+# method.config.md lists them (SiteLine, 2026-10-27). The guard fires before
+# any network call, so these run with no token and must fail on the guard
+# (or, past it, on anything but the guard).
+make_fixture
+write_config '```
+Team ID: 00000000-0000-0000-0000-000000000000
+Area labels: Area: Security, Area: Budget Editor, Area: Platform
+```'
+
+run_pk issue create --title "x" --label Bug
+case "$RUN_CODE:$RUN_OUT" in
+  0:*) fail "issue create: refuses without Area: label" "exit 0" ;;
+  *"no Area: label"*"Area: Security"*) ok "issue create: refuses without Area: label, names the configured set" ;;
+  *) fail "issue create: refuses without Area: label" "got: $RUN_OUT" ;;
+esac
+
+run_pk issue create --title "x" --label Bug --label "Area: Platform"
+case "$RUN_OUT" in
+  *"no Area: label"*) fail "issue create: Area: label passes the guard" "guard fired: $RUN_OUT" ;;
+  *) ok "issue create: Area: label passes the guard" ;;
+esac
+
+run_pk issue create --title "x" --no-area
+case "$RUN_OUT" in
+  *"no Area: label"*) fail "issue create: --no-area waives the guard" "guard fired: $RUN_OUT" ;;
+  *) ok "issue create: --no-area waives the guard" ;;
+esac
+
+# No Area labels configured (not the lanes model): the guard is off.
+write_config '```
+Team ID: 00000000-0000-0000-0000-000000000000
+```'
+run_pk issue create --title "x"
+case "$RUN_OUT" in
+  *"no Area: label"*) fail "issue create: guard off without Area labels config" "guard fired: $RUN_OUT" ;;
+  *) ok "issue create: guard off without Area labels config" ;;
+esac
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
