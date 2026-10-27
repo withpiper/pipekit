@@ -4806,7 +4806,7 @@ cmd_issue() {
       echo "       pk issue relate <ID> --blocked-by <ID2> [--why \"<text>\"]   ID2 blocks ID (skips if it already does); --why also comments on ID"
       echo "       pk issue comment <ID> \"<body>\" | --body-file <path> | -   post a comment"
       echo "       pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]   title search in the team (default 20, max 50); one line per issue"
-      echo "       pk issue create --title \"<t>\" [--description-file <path> | -] [--state <name>] [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]"
+      echo "       pk issue create --title \"<t>\" [--description-file <path> | -] [--state <name>] [--label <name>]… [--no-area] [--project <name>|none] [--priority N] [--parent <ID>] [--json]"
       echo "       pk issue update <ID> [--title \"<t>\"] [--state <name>] [--add-label <name>]… [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -] [--priority N] [--sort-order <float>] [--json]"
       echo "  names resolve to ids with one read each; an unknown state/label/project is an error (never a guess)"
       return 0 ;;
@@ -5047,11 +5047,14 @@ cmd_issue_search() {
 }
 
 # pk issue create --title "<t>" [--description-file <path> | -] [--state <name>]
-# [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]
+# [--label <name>]… [--no-area] [--project <name>|none] [--priority N] [--parent <ID>] [--json]
 # One issueCreate carrying only the fields given; every name resolves to an id
 # with one read per kind, and an unknown name is an error, never a guess.
+# On a board with `Area labels` configured the create refuses without an
+# `Area:` label (sop/Linear_SOP.md § Filing a follow-up issue); --no-area waives
+# it for a genuinely ambiguous item, which /linear-hygiene then homes.
 cmd_issue_create() {
-  local title="" desc_file="" from_stdin="" state="" labels="" project="" prio="" parent="" as_json=""
+  local title="" desc_file="" from_stdin="" state="" labels="" project="" prio="" parent="" as_json="" no_area=""
   while [ $# -gt 0 ]; do
     case "$1" in
       -)                    from_stdin=1; shift ;;
@@ -5071,17 +5074,27 @@ cmd_issue_create() {
       --priority=*)         prio="${1#--priority=}"; shift ;;
       --parent)             parent="${2:-}"; shift 2 ;;
       --parent=*)           parent="${1#--parent=}"; shift ;;
+      --no-area)            no_area=1; shift ;;
       --json)               as_json=1; shift ;;
       -*) echo "Unknown flag: $1" >&2; return 1 ;;
       *)  echo "Unexpected argument: $1" >&2; return 1 ;;
     esac
   done
   if [ -z "$title" ]; then
-    echo 'Usage: pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]' >&2
+    echo 'Usage: pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--no-area] [--project <name>|none] [--priority N] [--parent <ID>] [--json]' >&2
     return 1
   fi
   if [ -n "$prio" ]; then
     case "$prio" in [0-4]) ;; *) echo "ERROR: --priority must be 0–4 (got '$prio')" >&2; return 1 ;; esac
+  fi
+  # Intake contract: uncut work is classified by Area, so on a board that
+  # configures Area labels a create without one is a placement leak, not a choice.
+  local area_cfg
+  area_cfg=$(pk_config "Area labels" "")
+  if [ -n "$area_cfg" ] && [ -z "$no_area" ] && ! printf '%s\n' "$labels" | grep -q '^Area: '; then
+    echo "ERROR: no Area: label. This board classifies issues by Area (method.config.md § Area Labels): $area_cfg" >&2
+    echo "       add --label \"Area: <x>\" chosen for this issue's own work, or --no-area if the area is genuinely ambiguous (/linear-hygiene then offers the top two)" >&2
+    return 1
   fi
   local desc=""
   desc=$(pk_read_body_arg "$desc_file" "$from_stdin") || return 1
@@ -5435,7 +5448,7 @@ Subcommands:
   pk issue relate <ID> --blocked-by <ID2> [--why "<text>"]   Make ID2 block ID (skips if the relation exists); --why also posts "[tpm] blocked by ID2 — text" on ID.
   pk issue comment <ID> "<body>"  Post a comment on ID (body also from --body-file <path>, or - for stdin).
   pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]   Title search in the team (default 20, max 50): one line per issue — identifier, state, project (— if none), title. Prints "no issues match" on an empty result.
-  pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--project <name>|none] [--priority N] [--parent <ID>] [--json]   Create an issue in the team; names resolve to ids (unknown → error, never a guess); prints "created <ID>  <url>".
+  pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--no-area] [--project <name>|none] [--priority N] [--parent <ID>] [--json]   Create an issue in the team; names resolve to ids (unknown → error, never a guess); prints "created <ID>  <url>". With `Area labels` configured, refuses without an `Area:` label (--no-area waives).
   pk issue update <ID> [--title "<t>"] [--state <name>] [--add-label <name>]… [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -] [--priority N] [--sort-order <float>] [--json]   Update only what differs, in ONE write (sortOrder with projectId/stateId, since a move re-ranks it); one "old → new" line per changed field, "no changes" when every value already holds.
   pk project list [--all] [--json]   The team's projects in I<N>.P<N>. order: name · state · tier (priority 1/2/3 → A/B/C, else —) · progress %. completed/canceled hidden unless --all.
   pk gql '<query>' ['<vars-json>' | --vars '<json>']   Guarded GraphQL passthrough for the long tail (initiatives, project/label create, …); '-' reads the query from stdin. Pretty-prints the response; exit 1 with the error messages on stderr when it carries errors. Mutations still pass the workspace guard.

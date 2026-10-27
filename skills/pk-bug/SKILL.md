@@ -90,11 +90,11 @@ For resume into Phases 3–8, `cd` into the existing `<ISSUE-ID>` worktree first
    - `Medium` (3) — degraded UX, workaround exists
    - `Low` (4) — cosmetic / single-user / edge case
 3. **Urgent fast path:** if user picks `Urgent`, skip detailed intake — capture one-liner + priority, mark issue body with `**Fast-path: Urgent** — fill in details during postmortem`. Postmortem becomes mandatory + reviewer sign-off in Phase 8.
-4. Create Linear issue:
+4. Create Linear issue in **one** call — `pk issue create --title "…" --description-file <intake.md> --state Backlog --priority N --label Bug --label "Area: <area>" --label "Repo: <repo>"` (verb table: `sop/Linear_SOP.md § Linear transport`):
    - Team: from `method.config.md`
    - Status: backlog-type (e.g. `Backlog` or `Parked` — anything with `statusType=backlog`)
    - Priority: 1–4 per the heuristic above
-   - Labels: `Bug` (no severity labels — priority is the native field)
+   - Labels: `Bug` (no severity labels — priority is the native field) **plus** an `Area:` label chosen for this bug's own work from `method.config.md § Area Labels`, and a `Repo:` label from `§ Repo Labels` where that section is populated. `pk issue create` refuses a create with no `Area:` on a board that configures them; a bug filed as bare `Bug` is the drift `/linear-hygiene` exists to catch (SiteLine PIPER-1294, 2026-10-27). Full placement contract: `sop/Linear_SOP.md § Filing a follow-up issue`.
    - Body: filled `templates/intake.md`
 5. Echo `<ISSUE-ID>` to the user. Advance to Phase 2.
 

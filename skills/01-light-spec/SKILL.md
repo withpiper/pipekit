@@ -202,7 +202,7 @@ Draft the split as: issue A (migration + the client changes it forces) → block
 
 ### Phase 5 — Publish to Linear
 
-1. **Update or create** the Linear issue via the project's Linear route, in one call — existing: `pk issue update PROJ-123 --title "…" --description-file <spec.md> --state <Spec ready state> --project <lane> --priority N --add-label spec --add-label <tier-from-Phase-3.6> --remove-label <old tier>`; new: `pk issue create --title "…" --description-file <spec.md> --state <Spec ready state> --project <lane> --priority N --label spec --label <tier-from-Phase-3.6>`:
+1. **Update or create** the Linear issue via the project's Linear route, in one call — existing: `pk issue update PROJ-123 --title "…" --description-file <spec.md> --state <Spec ready state> --project <lane> --priority N --add-label spec --add-label <tier-from-Phase-3.6> --remove-label <old tier>`; new: `pk issue create --title "…" --description-file <spec.md> --state <Spec ready state> --project <lane> --priority N --label spec --label <tier-from-Phase-3.6> --label "Area: <area>" --label "Repo: <repo>"`:
    - team: `pk` reads it from `method.config.md`
    - `--title`: concise spec title (prefix with domain if useful, e.g., "Budget: Multi-currency support")
    - `--description-file`: the full light spec (markdown) — write it to a file, or pipe it with `-`
@@ -212,8 +212,10 @@ Draft the split as: issue A (migration + the client changes it forces) → block
    - labels: the **merged list** `[...existing_labels_minus_old_tier, 'spec', '<tier-from-Phase-3.6>']`
      - Pull `existing_labels` from Phase 1's `pk issue show` read (new issues → empty list).
      - Strip any pre-existing `tier:quick | tier:standard | tier:heavy` label — the Phase 3.6 derivation replaces it (`--remove-label <old tier>` on the update). Other labels (`Feature`, `Finance`, domain tags, etc.) are preserved — `--add-label`/`--remove-label` are deltas, so labels you don't name are untouched.
+     - **If `existing_labels` carries no `Area:` label, choose one now** from `method.config.md § Area Labels` (for the issue's own work) and `--add-label` it; likewise a `Repo:` label where `§ Repo Labels` is populated. A spec published without an Area is uncut work no `Area: * — backlog` view can show (SiteLine PIPER-1305, 2026-10-27). On a board with no `§ Area Labels` config, skip this.
      - If `pk config "Linear transport" api` is `mcp`: that route's update call takes labels as a **wholesale set, not a delta** — it replaces the issue's whole label list — so pass the full merged set there (the verb table names that route's delta tools too; a single wholesale set is just cleaner since Phase 5 reconciles the entire label list at once).
 2. Store the issue ID for reference.
+3. **Anything found while speccing that is not this spec's scope** (a bug in adjacent code, a gap in a neighbouring surface) is its own issue, filed to `sop/Linear_SOP.md § Filing a follow-up issue` in one `pk issue create` call: `Source: <this issue> (found while speccing)` as the body's first line, an `Area:` chosen for the finding's own work, a Type label, priority from the floor table, state by that priority (never Triage), and a `relates` relation. Never a bare `Bug` with no placement — that is the drift `/linear-hygiene` then has to home (SiteLine PIPER-1294, 2026-10-27).
 
 **Why the merge:** Phase 5 reconciles the issue's whole label list at once — the Phase 1 read says what is on the issue, Phase 3.6 says which tier belongs, and the publish applies exactly that difference. Pulling the existing label list in Phase 1 and merging here means custom human-applied labels (e.g., `Finance`, `Customer-impact`) survive the publish. Stale `tier:*` labels are explicitly stripped so the Phase 3.6 derivation is authoritative — if the user re-runs `/light-spec PROJ-XXX` after raising the Complexity, the tier label updates accordingly.
 
