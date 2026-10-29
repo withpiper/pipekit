@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.2.2** — Last updated: 2026-10-24 10:06  *(**v5.2.2 — the migration-drift and self-reference checks find their package from their own location** (SiteLine's nested-package fixes, upstreamed with `scripts/lib/package-root.sh`), and the runbook's security-review trigger names the configured Migration dir.)*
+**v5.2.3** — Last updated: 2026-10-29 15:20  *(**v5.2.3 — `pk done`'s migration check runs the Supabase CLI in the chain's own workdir**, derived from `Migration dir`, and skips with a pointer to CI when nothing is linked there instead of reporting every migration "not matched".)*
 
 ---
 
