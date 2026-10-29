@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.2.2"
+PK_VERSION="5.2.3"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -79,6 +79,24 @@ pk_config_path() {
 #
 # Code-block form is tried first since that is what consumers actually set.
 # Falls back to the table form, then to the supplied default.
+
+# pk_supabase_workdir <migration dir> — the directory holding the supabase/ folder that
+# owns the configured migration dir, for `supabase --workdir`. "supabase/migrations/" → ".",
+# "apps/legacy/supabase/migrations/" → "apps/legacy". A dir that is not
+# <x>/supabase/migrations falls back to "." (the CLI's own default).
+pk_supabase_workdir() {
+  local d="${1%/}"
+  case "$d" in
+    supabase/migrations) echo "." ;;
+    */supabase/migrations) echo "${d%/supabase/migrations}" ;;
+    *) echo "." ;;
+  esac
+}
+
+# pk_supabase_linked <workdir> — true when `supabase link` has recorded a project there.
+pk_supabase_linked() {
+  [ -s "${1:-.}/supabase/.temp/project-ref" ]
+}
 pk_config() {
   local label="$1"
   local default="${2:-}"
@@ -3574,9 +3592,21 @@ cmd_done() {
     if [ -n "$new_migrations" ]; then
       migration_count=$(echo "$new_migrations" | wc -l | tr -d ' ')
       echo "→ ${migration_count} migration(s) in this merge — checking remote..."
-      if command -v supabase &>/dev/null; then
+      local sb_workdir
+      sb_workdir=$(pk_supabase_workdir "$migration_dir")
+      if ! command -v supabase &>/dev/null; then
+        echo "  ⚠ supabase CLI not found — verify migrations manually: supabase --workdir $sb_workdir migration list"
+      elif ! pk_supabase_linked "$sb_workdir"; then
+        # No linked project under the workdir: `migration list` would fail and every
+        # migration would read as "not matched" — a false alarm on every merge.
+        echo "  ℹ skipped: $sb_workdir/supabase is not linked to a project, so there is nothing local to compare."
+        echo "    The CI apply workflow is the check; ground truth is the live DB's migration history."
+      else
         local remote_list
-        remote_list=$(supabase migration list 2>/dev/null || true)
+        # --workdir: never run the CLI from the repo root when the chain lives in a subdir
+        # (a bare call writes <root>/supabase/.temp and can act on a stale link there).
+        # --agent no: pin the human table format this greps, whoever runs pk.
+        remote_list=$(supabase --agent no --workdir "$sb_workdir" migration list 2>/dev/null || true)
         local all_applied=true
         while IFS= read -r mfile; do
           local mname
@@ -3595,10 +3625,8 @@ cmd_done() {
           echo "  ℹ Filename heuristic — advisory, not a failure. If you recently"
           echo "    renamed a migration (collision fix), the remote may hold the old"
           echo "    name and this is a false alarm. Ground truth: 'supabase migration"
-          echo "    list' or the live DB. If genuinely unapplied → run: supabase db push"
+          echo "    list' or the live DB. If genuinely unapplied → run: supabase --workdir $sb_workdir db push"
         fi
-      else
-        echo "  ⚠ supabase CLI not found — verify migrations manually: supabase migration list"
       fi
     fi
   fi

@@ -173,6 +173,31 @@ if   ! printf '%s\n' "$RM2" | grep -q 'i1. Build  \[Active\]  → I1.P2. Editor'
 elif ! printf '%s\n' "$RM2" | grep -q 'i2. Next  \[Planned\]  → P1. Vendor'; then fail "native: I-prefix roadmap" "P<N>.-only project not handled alongside I-prefix: $RM2"
 else ok "native: I<N>.P<N>. and bare P<N>. projects coexist (backward-compatible)"; fi
 
+# ── Unit tests: supabase workdir for pk done's migration check (sourced) ─────
+# pk done runs `supabase migration list`; with the chain in a subdir (Migration dir
+# "apps/legacy/supabase/migrations/") a bare call from the repo root wrote
+# <root>/supabase/.temp and, with no link there, reported every migration "not matched".
+
+echo "== supabase workdir (sourced) =="
+
+unit_sbwd()  { ( cd "$REPO_ROOT" && source "$PK" && pk_supabase_workdir "$1" ); }
+unit_sbln()  { ( cd "$REPO_ROOT" && source "$PK" && pk_supabase_linked "$1" ); }
+
+for case_ in "supabase/migrations/|." "supabase/migrations|." "apps/legacy/supabase/migrations/|apps/legacy" \
+             "a/b/c/supabase/migrations|a/b/c" "db/migrations/|." "prisma/migrations/|."; do
+  in="${case_%%|*}"; want="${case_##*|}"
+  v=$(unit_sbwd "$in")
+  [ "$v" = "$want" ] && ok "supabase workdir: '$in' → '$want'" || fail "supabase workdir: '$in'" "got '$v', want '$want'"
+done
+
+LINKD=$(mktemp -d)
+unit_sbln "$LINKD" && fail "supabase linked: no .temp → not linked" "reported linked" || ok "supabase linked: no .temp → not linked"
+mkdir -p "$LINKD/supabase/.temp" && : > "$LINKD/supabase/.temp/project-ref"
+unit_sbln "$LINKD" && fail "supabase linked: empty project-ref → not linked" "reported linked" || ok "supabase linked: empty project-ref → not linked"
+echo "abcdefghijklmnopqrst" > "$LINKD/supabase/.temp/project-ref"
+unit_sbln "$LINKD" && ok "supabase linked: project-ref present → linked" || fail "supabase linked: project-ref present" "reported not linked"
+rm -rf "$LINKD"
+
 # ── Unit tests: issue priority sort (sourced) ────────────────────────────────
 # pk_issues_priority_sort orders a JSON issue array most-important-first so
 # pk next/pk status surface the top item and .[0] (the suggested next action) is
