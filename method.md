@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.2.3** — Last updated: 2026-10-29 15:20  *(**v5.2.3 — `pk done`'s migration check runs the Supabase CLI in the chain's own workdir**, derived from `Migration dir`, and skips with a pointer to CI when nothing is linked there instead of reporting every migration "not matched".)*
+**v5.2.4** — Last updated: 2026-10-31 12:30  *(**v5.2.4 — `pk verify` and `pk promote` fail when any gate command fails**, not only the last: the gate runs under errexit, names the failing command, and reads stdin from /dev/null.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

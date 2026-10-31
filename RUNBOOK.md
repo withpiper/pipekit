@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.2.3** — Last updated: 2026-10-29 15:20  *(**v5.2.3 — `pk done`'s migration check runs the Supabase CLI in the chain's own workdir**, derived from `Migration dir`, and skips with a pointer to CI when nothing is linked there instead of reporting every migration "not matched".)*
+**v5.2.4** — Last updated: 2026-10-31 12:30  *(**v5.2.4 — `pk verify` and `pk promote` fail when any gate command fails**, not only the last: the gate runs under errexit, names the failing command, and reads stdin from /dev/null.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.2.3                (or latest tag)
+1. ./scripts/sync-method.sh v5.2.4                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

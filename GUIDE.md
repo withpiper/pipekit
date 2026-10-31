@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.2.3** — Last updated: 2026-10-29 15:20  *(**v5.2.3 — `pk done`'s migration check runs the Supabase CLI in the chain's own workdir**, derived from `Migration dir`, and skips with a pointer to CI when nothing is linked there instead of reporting every migration "not matched".)*
+**v5.2.4** — Last updated: 2026-10-31 12:30  *(**v5.2.4 — `pk verify` and `pk promote` fail when any gate command fails**, not only the last: the gate runs under errexit, names the failing command, and reads stdin from /dev/null.)*
 
 ---
 
