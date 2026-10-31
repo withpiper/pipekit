@@ -1021,11 +1021,16 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 
 | Source (method repo) | Destination (project) |
 |---------------------|----------------------|
-| `skills/*/` | `.claude/skills/*/` |
-| `sop/` | `pipekit/sop/` |
-| `templates/` | `pipekit/templates/` |
-| `method.md` | `pipekit/method.md` |
-| `STARTUP.md` | `pipekit/STARTUP.md` |
+| `skills/*/` | `.claude/skills/*/` (project-specific skills untouched; `.claude/overrides/` applied on top) |
+| `templates/rules/pipekit-*.md` | `.claude/rules/pipekit-*.md` (`Skip rules` in `method.config.md` opts out of any) |
+| `workflows/`, `agents/` | `.claude/workflows/`, `.claude/agents/` |
+| `sop/`, `templates/` | `pipekit/sop/`, `pipekit/templates/` |
+| `method.md`, `GUIDE.md`, `STARTUP.md` | `pipekit/` |
+| `bin/pk`, `bin/pk-init/` | `bin/` (then `pk install` puts it on PATH) |
+| `scripts/sync-method.sh` + helpers | `scripts/` (the sync updates itself) |
+| `RUNBOOK.md` | the *How we run* block of `engineering/RUNBOOK.md` (`Runbook path`); the file is created from a skeleton when absent |
+| `templates/WEEKLY_PLAN.skeleton.md` | `engineering/WEEKLY_PLAN.md` (`Plan path`), scaffolded once, then `/tpm`'s; `Plan path: none` skips it |
+| `method.config.template.md` | `method.config.md`, only when the project has none |
 
 ### What Never Gets Synced
 
@@ -1041,11 +1046,13 @@ The method repo is the source of truth. Projects pull from it using `scripts/syn
 ### Commands
 
 ```bash
-# First time — fetch sync script from GitHub
+# First time — the full path (prerequisites, pk install, Linear states) is
+# README.md § Install; this is the sync step of it
 mkdir -p scripts
 curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
 chmod +x scripts/sync-method.sh
 ./scripts/sync-method.sh
+./bin/pk install
 
 # Update to latest (from terminal)
 ./scripts/sync-method.sh
@@ -1053,8 +1060,11 @@ chmod +x scripts/sync-method.sh
 # Or update from inside Claude Code
 /pipekit-update
 
-# Pin to a version
-./scripts/sync-method.sh v1.0
+# Pin to a release (any tag in CHANGELOG.md)
+./scripts/sync-method.sh vX.Y.Z
+
+# Usage
+./scripts/sync-method.sh --help
 
 # Preview changes
 ./scripts/sync-method.sh --dry-run
