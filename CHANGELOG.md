@@ -51,6 +51,10 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v5.4.1 — 2026-10-31
+
+> **The v5.4.0 release commit tripped the guard it shipped.** The new smoke check fails on a former consumer's name or issue prefix anywhere in the synced surface — and the fifteen doc stamps written for v5.4.0 quoted the renamed config key and the retired word verbatim, so the release merged with the smoke red (the merge chain piped the test's exit status into `grep` and `tail`, which hid it). The stamps now describe the change without the literals; nothing else moved. The tag that should be synced is this one.
+
 ## v5.4.0 — 2026-10-31
 
 > **The repo is optimized for a single consumer and a stranger.** Its two founding consumers are gone, and an audit of the tree as a stranger would find it turned up four PRs' worth of fixes (#215–#218). The cold-start path now works, the public face is honest, the fossils are gone, and the two former consumers are no longer named anywhere a sync can carry them.

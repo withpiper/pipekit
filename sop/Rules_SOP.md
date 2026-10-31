@@ -1,6 +1,6 @@
 # Rules SOP
 
-**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue" — every entry in § Anchors kept)*
+**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone — every entry in § Anchors kept)*
 
 ## The model
 

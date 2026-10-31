@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; the PHP row names a generic auth-guard helper, not one project's)*
+**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone; the PHP row names a generic auth-guard helper, not one project's)*
 
 **Source of truth:** The concrete category signals for a project live in its definitions file (`resources/security-categories.md`, scaffolded from `templates/security-categories.template.md`) and `method.config.md`. This SOP provides the methodology that applies regardless of stack.
 
