@@ -5,14 +5,14 @@
 # constrains how a migration is born; this script catches the drift classes that
 # survive it — each anchored to a real incident:
 #
-#   A. Parallel-branch timestamp collision (Piper WIT-550, 2026-06-02): a long-lived
+#   A. Parallel-branch timestamp collision (a consumer project, 2026-06): a long-lived
 #      branch's new migration is not strictly later than the base branch's migration
 #      tail. Invisible in the worktree — passes local validation and /verify, because
 #      both only see your branch's tree — then collides on merge.
 #   B. Duplicate or malformed version prefixes on disk (two branches picked the same
 #      timestamp; a hand-named file the tool will mis-order).
 #   C. (--remote, best-effort) Disk vs remote history — the class behind the MCP
-#      wall-clock-stamp incident (Piper, 2026-05-27: ~5h deploy lockup from "Remote
+#      wall-clock-stamp incident (a consumer project, 2026-05: ~5h deploy lockup from "Remote
 #      migration versions not found in local migrations directory"). Delegates to
 #      `supabase db push --dry-run`, which refuses loudly on exactly this drift.
 #      Requires the supabase CLI + a linked project; skipped with a note otherwise.
@@ -105,7 +105,7 @@ if [ "${#DISK_VERSIONS[@]}" -gt 0 ]; then
   fi
 fi
 
-# --- Check A: new-on-this-branch vs base tail (the WIT-550 class) -----------
+# --- Check A: new-on-this-branch vs base tail (the collision class) ---------
 if [ -z "$BASE" ]; then
   ib=$(read_config "Integration branch" "dev")
   if git rev-parse --verify -q "origin/$ib" >/dev/null; then BASE="origin/$ib";
@@ -134,7 +134,7 @@ else
           echo "  ✗ branch collision: $(basename "$nf") (version $nv) is not strictly later than the $BASE migration tail ($base_tail)."
           echo "      A migration landed on the base branch after you picked your timestamp."
           echo "      Rename it NOW — pre-merge is still before the freeze on the base DB"
-          echo "      (pipekit-migrations.md § Parallel Branch Coordination, anchor: WIT-550)."
+          echo "      (pipekit-migrations.md § Parallel Branch Coordination)."
           DRIFT=1
         fi
       done < <(git diff --name-only --relative --diff-filter=A "$MB..HEAD" -- "$DIR" 2>/dev/null)

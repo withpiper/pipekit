@@ -14,7 +14,7 @@ Project-specific values (workspace, team ID, state IDs) live in your project's `
 
 | `Linear transport` | What the skill calls | When to choose it |
 |---|---|---|
-| **`api`** (default, v5.0.0+) | `bin/pk` verbs — `pk issue …`, `pk project list`, `pk focus`, and `pk gql` for anything without a verb. Each is one GraphQL round-trip under `Linear API key env var`; **every mutation first passes `pk_linear_guard`**, which proves the token belongs to this project's pinned workspace and refuses otherwise. | The reference consumers (SiteLine ruled 2026-09-02: "all our Linear is via the API call"). Results are shaped text the session controls — nothing sticky, nothing echoing a description back. |
+| **`api`** (default, v5.0.0+) | `bin/pk` verbs — `pk issue …`, `pk project list`, `pk focus`, and `pk gql` for anything without a verb. Each is one GraphQL round-trip under `Linear API key env var`; **every mutation first passes `pk_linear_guard`**, which proves the token belongs to this project's pinned workspace and refuses otherwise. | Every reference consumer (one ruled 2026-09: "all our Linear is via the API call"). Results are shaped text the session controls — nothing sticky, nothing echoing a description back. |
 | **`mcp`** | The Linear MCP server the project registers as `linear-server` in its committed `.mcp.json` (`mcp__linear-server__<tool>`). | A project that wants the MCP surface and accepts its costs (§ Rate limits; `.claude/rules/pipekit-tooling.md § MCP Result Payloads Are Sticky`). Writes bypass `pk`'s workspace guard. |
 
 Skills are written against **operations**, not tool names — "read the issue and its comments", "create the issue with state, labels and project in one call". This table is the only place an operation maps to a concrete call; a skill cites it and never hardcodes either column. A raw `curl` mutation from a skill is never the answer on either route: it skips the guard that `pk gql` keeps.
@@ -57,18 +57,18 @@ Names above are checked against Linear's published SDK schema (2026-10-10): `Iss
 
 > **`mcp` route — not the official remote.** The skills' tool names assume `@tacticlaunch/mcp-linear` (camelCase, `linear_` prefix). Linear's first-party `mcp.linear.app` server uses **snake_case** names (`list_issues`, `get_issue`, `update_issue`, `create_comment`) and a leaner ~21-tool surface that **lacks** the initiative-CRUD, label-create and issue-relation tools; a project on it must remap the right-hand column. Per `.claude/rules/pipekit-tooling.md`, the server **must** be declared in the committed `.mcp.json` so it is visible inside `pk branch` worktrees.
 
-**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=<ref file> -- pk …`, naming the repo's own op:// reference file — `secrets.op` in Piper, `op-references.conf` in SiteLine); falling back to the MCP is not the fix.
+**The daily loop never varies by transport:** `pk next` / `pk branch` / `pk ship` / `pk ready` / `pk done` / `pk promote` are `bin/pk` GraphQL on both routes. When the key is missing in a direnv-less shell, `pk` says so and names the recipe (`op run --env-file=<ref file> -- pk …`, naming the project's `op://` reference file — `Secrets reference file` in `method.config.md`; `pk` also probes `secrets.op` and `op-references.conf`); falling back to the MCP is not the fix.
 
 ### API gotchas (incident-anchored; read before any batch board mutation)
 
-All verified live during the SiteLine board reorg, 2026-08-02.
+All verified live during a consumer board reorg, 2026-08.
 
 **Silent-data-loss class — these accept your write and quietly do something else:**
 
 - **Project / initiative `description` hard-caps at 255 characters.** Longer text is not an error. Put long-form content (lane serialization notes, scope rationale) in the markdown **`content`** body and keep `description` a trimmed summary.
 - **A workflow-state change re-ranks the issue's `sortOrder`** — Linear moves it to the top of its new column. Any deliberate run-order stamp is destroyed by ordinary pipeline motion (`pk branch` → In Progress, `pk ship` → UAT are both state changes). Consequences: set `cycleId` **and** `sortOrder` in one `issueUpdate` and verify the echo; re-assert order after any state fix; and treat a stamp as authoritative for **queued issues only** — once an issue is in flight, its position is its state.
 - **Adding a Backlog issue to a cycle auto-moves it out of Backlog** (observed landing in `Needs Spec`), which then triggers the re-rank above.
-- **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** An issue "added to a project" while in Triage won't render, and the project reads short. Triage it out first. (Anchor: SiteLine PIPER-559.)
+- **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** An issue "added to a project" while in Triage won't render, and the project reads short. Triage it out first. (Anchor: a consumer project.)
 - **View preferences accept unknown keys silently.** `viewPreferencesCreate(input: {type: organization, viewType: project|customView, projectId|customViewId, preferences: {"issueGrouping": "none", "viewOrdering": "manual"}})` does work — keys come from the typed `ViewPreferencesValues` type but values are free-form strings, so a wrong one stores fine and does nothing. Verify by reading back the resolved `CustomView.viewPreferencesValues` oracle; **project-scoped rows have no API read surface** — check one in the browser. Org-scoped rows act as the shared default and personal in-app tweaks overlay them.
 
 **Long-tail operations — `pk gql` on the `api` route, and the gaps in the `mcp` route:**
@@ -89,7 +89,7 @@ All verified live during the SiteLine board reorg, 2026-08-02.
 
 Linear meters requests **per User**, not per key or per process: its docs state that requests by the same user share quota across different API keys. An API key gets **2,500 req/hr**, an OAuth app 5,000, refilled as a **leaky bucket** at `LIMIT/PERIOD` (~42 req/min on a key). Complexity is metered separately (object 1 pt, property 0.1, a connection multiplies its children by the pagination arg; the 10k single-query cap above), so one large page is one request but not a cheap one.
 
-Why this bites Pipekit specifically: **every Claude session is the same user** — `pk`, `pk gql`, a session's `mcp-linear` server if it runs one, and the claude.ai Linear connector all draw from one bucket. Worktree workers, the parent-repo session, and a board sweep all draw from one bucket. Anchor: SiteLine 2026-08-31 — three concurrent `/linear-hygiene` sweeps paging 250 exhausted the quota, blocked the board for ~1h, and starved four active worktree workers.
+Why this bites Pipekit specifically: **every Claude session is the same user** — `pk`, `pk gql`, a session's `mcp-linear` server if it runs one, and the claude.ai Linear connector all draw from one bucket. Worktree workers, the parent-repo session, and a board sweep all draw from one bucket. Anchor: a consumer project, 2026-08 — three concurrent `/linear-hygiene` sweeps paging 250 exhausted the quota, blocked the board for ~1h, and starved four active worktree workers.
 
 Rules, for any skill or session that reads or writes the board:
 
@@ -124,7 +124,7 @@ Labels = Cross-cutting metadata        <- Filterable on everything
   Audience: Client Request
 ```
 
-**Completability is the load-bearing property, and it lives at the project level.** A project holding 60 open issues is a *pool*, and the `i{N}.`→`P{N}.` walk structurally cannot see into a pool — so `pk status` points at some idle lane while the live work hides. Eternity belongs at the theme/label level: a long-running strand is an unprefixed initiative or an `Area:` label, never a standing project. A project is created only for work that has been **cut** into a lane. (Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues sat in three pool projects, `In Progress` read 0, and the real execution order had migrated into a gitignored notes file. Full reorg rationale in `method.config.md § Initiative Surface`.)
+**Completability is the load-bearing property, and it lives at the project level.** A project holding 60 open issues is a *pool*, and the `i{N}.`→`P{N}.` walk structurally cannot see into a pool — so `pk status` points at some idle lane while the live work hides. Eternity belongs at the theme/label level: a long-running strand is an unprefixed initiative or an `Area:` label, never a standing project. A project is created only for work that has been **cut** into a lane. (Anchor: a consumer project, 2026-08 — 98 of 162 open issues sat in three pool projects, `In Progress` read 0, and the real execution order had migrated into a gitignored notes file. Full reorg rationale in `method.config.md § Initiative Surface`.)
 
 ### Ordering is the numeric name prefix — never Linear `sortOrder`
 
@@ -318,7 +318,7 @@ The issue prefix is defined in your project's `method.config.md`.
 
 **v4.37.0.** Every skill that spins off an issue mid-flow — `/work`'s risk-fallback follow-up, `/verify`'s scope-cut, `/pk-bug`'s intake and recurrence prevention, `/light-spec`'s "found while speccing" finding, `/light-spec-revise`'s "defer to follow-up", `/pr-fix`'s deferred findings — files it to **this** contract. `pk issue create` enforces the Area row: on a board with `Area labels` configured it refuses a create carrying no `Area:` label (`--no-area` waives it for the genuinely ambiguous case, which `/linear-hygiene` then homes). It is the placement `/linear-hygiene` would otherwise apply a session later, done at creation by the one party that already has the context: the filer. The janitor is the backstop, not the routine.
 
-**Why it lives here and nowhere else.** The priority-floor table below used to live only inside `/linear-hygiene` Phase 3, so no filer could cite it without a second copy, and every filer said "file a follow-up issue" with no contract at all. The result was structural: follow-ups landed with no project, no `Area:`, priority 0 and state Triage — every drift class the sweep exists to catch — then accumulated until the next sweep. (Anchor: SiteLine, 2026-09-20 — assessing a third-party planning tool for the intake problem and finding the inflow was our own filers.)
+**Why it lives here and nowhere else.** The priority-floor table below used to live only inside `/linear-hygiene` Phase 3, so no filer could cite it without a second copy, and every filer said "file a follow-up issue" with no contract at all. The result was structural: follow-ups landed with no project, no `Area:`, priority 0 and state Triage — every drift class the sweep exists to catch — then accumulated until the next sweep. (Anchor: a consumer project, 2026-09 — assessing a third-party planning tool for the intake problem and finding the inflow was our own filers.)
 
 Fill every field. Create the issue through the project's Linear route (§ Linear transport — `pk issue create` with every flag set, or `linear_createIssue` on the `mcp` route) with everything set **in the one create call** — a second write to fix placement is what re-ranks `sortOrder` (§ API gotchas).
 
@@ -327,7 +327,7 @@ Fill every field. Create the issue through the project's Linear route (§ Linear
 | **`Source:` line** | The body's first line is `Source: <PARENT-ID>` (add `R<N>`, the finding number, or the AC it defers, after it). This is the literal `/linear-hygiene` Phase 3 greps for parent inference — omit it and the janitor has to guess. |
 | **Area label** | **Choose it for the follow-up's own work**, at filing, from `method.config.md § Area Labels`. Start from the parent's `Area:` as the likely answer, but don't keep it on the strength of being the parent's: a follow-up can be a different domain (a permissions gap found while building a Budget Editor feature is `Area: Security`). The exception is `/work`'s risk-fallback follow-up, which keeps the parent's Area because it *is* the parent's remaining scope. Still ambiguous → leave it off and say so in the hand-off; `/linear-hygiene` offers the top two. Boards with no `§ Area Labels` config skip this row. |
 | **Type label** | One of the Type labels below. The priority floor keys on it, so it is not optional. |
-| **Repo label** | Where `method.config.md § Repo Labels` is populated (one board, more than one codebase): the repo the deliverable lands in, e.g. `Repo: piper` / `Repo: siteline`. Orthogonal to Area (domain) and to project (batch). Boards with no `§ Repo Labels` config skip this row. |
+| **Repo label** | Where `method.config.md § Repo Labels` is populated (one board, more than one codebase): the repo the deliverable lands in, e.g. `Repo: <name>`. Orthogonal to Area (domain) and to project (batch). Boards with no `§ Repo Labels` config skip this row. |
 | **Priority** | The floor table below, from the labels you just set and the parent's own priority. **A follow-up that blocks its parent inherits the parent's priority.** Never file at 0. |
 | **State** | By the priority you resolved — **importance, not difficulty:** Normal (3) or higher → `Needs Spec` (slated, so `pk next` surfaces it); Low (4) → `Backlog`. **Never Triage** — Triage is for external input (§ Status Definitions); a filer already knows what this is. The one exception is `/work`'s risk-fallback follow-up, which is filed **Approved**: it closes a clause of an already-approved spec, so it is approved by inheritance. |
 | **Project** | **None**, unless the follow-up is inside the parent lane's *completable scope* — "could the lane still be called done with this in it?" — in which case the parent's project. "Same domain" is not scope. Never a different project, never a new one (a project is cut in `/phase-plan`, never filed into by a janitor or a filer). `/work`'s risk-fallback follow-up always takes the parent's project and milestone: it *is* the parent's remaining scope. |
@@ -351,7 +351,7 @@ The catch-all floor is **Low**, not Normal: an item with no importance signal is
 
 ### What the filer reports
 
-The hand-off / summary names the new identifier **and its placement** — `PIPER-950 · Area: Budget Editor · Improvement · Low · Backlog · relates PIPER-940` — so the human can redirect a line on sight. Then `/linear-hygiene --session` at the end of the session is a read-only check that every issue filed this session honoured this contract, not a routine that does the placement for you.
+The hand-off / summary names the new identifier **and its placement** — `PROJ-950 · Area: Budget Editor · Improvement · Low · Backlog · relates PROJ-940` — so the human can redirect a line on sight. Then `/linear-hygiene --session` at the end of the session is a read-only check that every issue filed this session honoured this contract, not a routine that does the placement for you.
 
 ---
 

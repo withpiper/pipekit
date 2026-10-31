@@ -24,7 +24,7 @@ The session is a conversation that ends in an agreement, then a write. The judgm
 
 ## Tooling notes (read before building against this)
 
-- **All Linear reads and writes go through `bin/pk`'s GraphQL path** — `pk status`, `pk portfolio`, `pk next`, `pk issue show`, `pk issue search`, `pk focus`, `pk issue set`, `pk issue relate`, `pk issue comment` — never an MCP server, whatever `Linear transport` says: the tiers, blockers and comments this skill writes must pass `pk`'s workspace guard. A sibling repo that has **its own board** (a different `Team ID`) is read and written **from inside that repo** (`cd <repo> && pk …`) under that repo's own key recipe — `pk` prints it when the key is missing (`op run --env-file=<that repo's op:// reference file> -- pk …`); a shell's direnv env does not follow a `cd` inside a session. A sibling that **shares the primary's board** (same `Team ID` — SiteLine and Piper are one `PIPER` board, two codebases) is never read or written through `pk` at all: the board is read once from the primary, and the sibling contributes only its in-flight evidence — worktrees, PRs, sessions.
+- **All Linear reads and writes go through `bin/pk`'s GraphQL path** — `pk status`, `pk portfolio`, `pk next`, `pk issue show`, `pk issue search`, `pk focus`, `pk issue set`, `pk issue relate`, `pk issue comment` — never an MCP server, whatever `Linear transport` says: the tiers, blockers and comments this skill writes must pass `pk`'s workspace guard. A sibling repo that has **its own board** (a different `Team ID`) is read and written **from inside that repo** (`cd <repo> && pk …`) under that repo's own key recipe — `pk` prints it when the key is missing (`op run --env-file=<that repo's op:// reference file> -- pk …`); a shell's direnv env does not follow a `cd` inside a session. A sibling that **shares the primary's board** (same `Team ID` — one board, two codebases) is never read or written through `pk` at all: the board is read once from the primary, and the sibling contributes only its in-flight evidence — worktrees, PRs, sessions.
 - **Rate limits** — Linear's quota is one shared per-user bucket (`sop/Linear_SOP.md § Rate limits`). Everything here runs serially; never fan out across repos or lanes. The hygiene subagent and your own reads do not overlap in time.
 - **Keep fat payloads out of the main thread.** `/linear-hygiene --check` runs in a subagent (Execution role per `method.config.md § Model Policy`, default `sonnet`) that returns its manifest, not its tool results. Fallback checks against code run on the Grounding role (default `haiku`) under the scout contract in Phase 3. The conversation stays in the main thread, on whatever model the user is running — the judgment is not delegated.
 - **Titles beside IDs, everywhere.** Every issue you print carries its identifier *and* its title (trimmed to about sixty characters) — in the briefing, in every question, in the read-back, in the `[tpm]` comments and in the plan. The user does not know the board by number; an ID-only line is a line they cannot check.
@@ -40,11 +40,11 @@ The session is a conversation that ends in an agreement, then a write. The judgm
 
    ```
    | Issue      | Title                     | Linear      | Worktree             | PR          | Session | Age | Finding                                   |
-   | POC-440    | Ledger reconcile view     | UAT         | yes                  | #1190 open  | waiting | 2d  | needs your review                         |
-   | PIPER-712  | Export date filter        | In Progress | yes                  | #913 merged | —       | 6d  | run pk done                               |
-   | PIPER-698  | Vendor import retry       | In Progress | —                    | —           | —       | 9d  | abandoned? → back to Approved             |
-   | —          | —                         | —           | fix/POC-399-…        | —           | —       | 21d | orphan worktree, no issue state           |
-   | PIPER-1150 | (worktree is 1167's draft)| In Dev      | yes, 3 commits local | —           | —       | 2d  | push it; 1167's blocker 1154 → candidate  |
+   | PROJ-440   | Ledger reconcile view     | UAT         | yes                  | #1190 open  | waiting | 2d  | needs your review                         |
+   | PROJ-712   | Export date filter        | In Progress | yes                  | #913 merged | —       | 6d  | run pk done                               |
+   | PROJ-698   | Vendor import retry       | In Progress | —                    | —           | —       | 9d  | abandoned? → back to Approved             |
+   | —          | —                         | —           | fix/PROJ-399-…       | —           | —       | 21d | orphan worktree, no issue state           |
+   | PROJ-1150  | (worktree is 1167's draft)| In Dev      | yes, 3 commits local | —           | —       | 2d  | push it; 1167's blocker 1154 → candidate  |
    ```
    Findings are attention leaks: a worktree whose PR merged is a `pk done` never run; an In Progress with no worktree and no PR is not in flight and must not count as capacity used; a draft sitting in a worktree pulls its Hard blocker into the candidate set. "Waiting on you" rows go to the top of the briefing — they are the cheapest unblock on the board.
 4. **Placement check.** Run `/linear-hygiene --check` in a subagent and take its manifest. Then decide the sweep:
@@ -70,19 +70,19 @@ Each prior decision is re-presented as a question only when something changed: a
 ### Phase 2 — Briefing (one screen, before any question)
 
 ```
-Board, 2026-10-10 — SiteLine + Piper · 3 lanes live · 14 open · 2 in flight · 1 waiting on you
+Board, 2026-10-10 — <Project> · 3 lanes live · 14 open · 2 in flight · 1 waiting on you
 
-Waiting on you:  POC-440 Ledger reconcile view — review (2d)
-Moving:          I8.P6 Game7 ledger reconcile — 440 in review, 441 Ledger guard / 442 Reconcile view queued
+Waiting on you:  PROJ-440 Ledger reconcile view — review (2d)
+Moving:          I8.P6 <Customer> ledger reconcile — 440 in review, 441 Ledger guard / 442 Reconcile view queued
 Stuck:           I7.P2 export fixes — head 398 Export date filter blocked by 377 Column rename (Low). Priority inversion.
 Idle 12d:        I6.P3 hardening — nobody waiting; 412 Input hardening is an edge case
-Leaks:           PIPER-712 Export date filter — merged, pk done not run
+Leaks:           PROJ-712 Export date filter — merged, pk done not run
 
-Commitments:     Game7 ledger reconcile — due 10-17 — POC-441, 442   (from 10-03)
+Commitments:     <Customer> ledger reconcile — due 10-17 — PROJ-441, 442   (from 10-03)
 Carried forward: WAIT 412 (trigger: 2nd tenant hits it) — unchanged
 Themes:          none recorded — name any grouping or promise the board can't show
 
-My draft:   MUST  Game7: 441 Ledger guard → 442 Reconcile view can slip past Friday
+My draft:   MUST  <Customer>: 441 Ledger guard → 442 Reconcile view can slip past Friday
             MUST  377 Column rename (Low) — 2h, unblocks 398 (High)
             NEXT  I7.P2 head once 377 lands
             WAIT  I6.P3 — fallback verified 10-03; trigger not hit
@@ -94,13 +94,15 @@ Words: a leak is work that looks in flight on the board but isn't (or the revers
 What's wrong with this picture?
 ```
 
+The examples in this skill are single-repo. A multi-repo portfolio (`method.config.md § Portfolio repos`, `§ Plan primary`) is the exception, not the shape of the example: the briefing header then names each repo, the `pk next` read-back carries one verdict per repo, and the runbook pointer is written in the plan-primary repo.
+
 The draft is yours, built from the SOP's ranking rules. It is the thing the user corrects; never open with a questionnaire. The `Words` line glosses the methodology terms the briefing uses — once per term per session, dropped when the user says they know them.
 
 ### Phase 3 — Discussion, until agreed
 
-The user talks in their own words ("Game7 has a date", "I'm nervous about leaving 412", "I promised the export fix too", "the eval loop is one thing to me"). Each turn, three things:
+The user talks in their own words ("<Customer> has a date", "I'm nervous about leaving 412", "I promised the export fix too", "the eval loop is one thing to me"). Each turn, three things:
 
-1. **Update the plan and show only the delta.** "Moved 412 to NEXT. MUST+NEXT is now 80% of the week — something comes off. Candidates: 442 (slips a week; Game7 doesn't need it Friday) or 377."
+1. **Update the plan and show only the delta.** "Moved 412 to NEXT. MUST+NEXT is now 80% of the week — something comes off. Candidates: 442 (slips a week; <Customer> doesn't need it Friday) or 377."
 2. **Push back when the data disagrees**, with two or three options, what each costs, your pick, and what would make your pick wrong. Triggers: a Hard dependency ignored, a priority inversion left standing, an external commitment demoted, capacity past the SOP's bound, a WAIT without a verified fallback. Judgment calls that are the user's alone ("the client matters more") are recorded, not argued.
 3. **Check claims that can be checked.** "412 has a fallback" → a Grounding-role scout reads the code path under this contract: it names the sink or guard with `file:line`, names the fallback (constraint, check, filter) with its `file:line` or migration id, and says whether the path is **outward-facing** (reachable by a client or an unauthenticated user). A summary without those three is rejected and re-run, never summarised into the plan. The result is stated before the decision locks, whichever way it went.
 
@@ -121,8 +123,8 @@ Once per **board**, serially — from this repo for the shared board, from insid
 - `pk focus <LANE> A|B|C|none [--swap]` for tier changes. Tiers are exclusive; the swap was shown in the read-back. Clear tiers before setting them.
 - `pk issue relate <ID> --blocked-by <ID2> --why "<reason>"` for every **Hard** dependency agreed that Linear didn't already hold. Hard only — a Value or Soft ordering goes in the plan, not into a relation (`sop/TPM_SOP.md § What Linear carries`).
 - `pk issue set <ID> --priority N` **only where importance changed.** Never to encode sequence, and never below the issue's floor (`sop/Linear_SOP.md § Filing a follow-up issue → Priority floors`): a WAIT item keeps its floor; being out of focus is what makes it wait.
-- `pk issue comment <ID> "[tpm 2026-10-10] …"` on every item whose place or reason changed, every WAIT item (fallback + trigger), and every commitment-bearing item (`[tpm 2026-10-10] commitment: Game7 · due 10-17`). Format in `sop/TPM_SOP.md § Comments`.
-- **`on-merge` notes** for every write the agreement defers to a merge — "the day 546 merges, C swaps to Finance": `pk issue comment PIPER-546 "[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to Finance settings once this merges"`. `pk done` reads the note back after the merge, prints the command and asks before running it; `--check` lists notes whose issue merged but whose command has not run.
+- `pk issue comment <ID> "[tpm 2026-10-10] …"` on every item whose place or reason changed, every WAIT item (fallback + trigger), and every commitment-bearing item (`[tpm 2026-10-10] commitment: <Customer> · due 10-17`). Format in `sop/TPM_SOP.md § Comments`.
+- **`on-merge` notes** for every write the agreement defers to a merge — "the day 546 merges, C swaps to Finance": `pk issue comment PROJ-546 "[tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to Finance settings once this merges"`. `pk done` reads the note back after the merge, prints the command and asks before running it; `--check` lists notes whose issue merged but whose command has not run.
 
 Then `pk next` once per board and compare with the agreement. A mismatch is reported as a mismatch, with the line that differs — never smoothed over.
 
@@ -143,8 +145,8 @@ In `--check`, rewrite only the *Drift since agreement* sub-section and leave the
 
 MUST 6 · NEXT 7 · WAIT 4 · not these 6 · 6.1 of 15 session-days (MUST 26%)
 Linear: 5 tier moves (A I5.P4 · B I8.P6 · C I3.P1 · I8.P5, I8.P9 → none) · 0 relations · 0 importance changes · 22 comments · 1 on-merge note (546 → pk focus I7.P10 C --swap)
-pk next: matches agreement (SiteLine ✓ · Piper ✓)
-Plan: engineering/WEEKLY_PLAN.md written · runbook Now → pointer · pointer written in ../piper
+pk next: matches agreement ✓
+Plan: engineering/WEEKLY_PLAN.md written · runbook Now → pointer
 Leaks to clear: 1168 → Needs Spec · remove 3 orphan worktrees · push the 1150 draft branch
 ```
 
@@ -167,7 +169,7 @@ Leaks to clear: 1168 → Needs Spec · remove 3 orphan worktrees · push the 115
 | You're about to say… | The rebuttal |
 |---|---|
 | "I know what's next, skip the briefing" | Then `--quick` takes two minutes and the plan stays true. Skipping it is how a merged PR sits un-`done` for a week. |
-| "Just make Game7 A, don't ask about the current A" | Tiers are exclusive. Demoting the current A silently is how B's half-finished lane becomes nobody's. |
+| "Just make <Customer> A, don't ask about the current A" | Tiers are exclusive. Demoting the current A silently is how B's half-finished lane becomes nobody's. |
 | "Set 377 to High so it comes up first" | Priority is importance; `/pk-bug` and the floors read it as such. Sequence is a relation or a plan line. |
 | "412 is an edge case, trust me" | A fallback that hasn't been read in code is a hope. The scout takes thirty seconds — and it names the file and line. |
 | "I'll ask all three questions at once to save a turn" | The user answers the first and the rest is lost. One per turn costs two turns and loses nothing. |
@@ -177,7 +179,7 @@ Leaks to clear: 1168 → Needs Spec · remove 3 orphan worktrees · push the 115
 
 This section grows one corrected mistake at a time (`sop/Skills_SOP.md § Never-do guardrails`). What's here is inherited from incidents on the same surface:
 
-- **Don't fan out Linear reads across repos or lanes.** SiteLine 2026-08-31 — three concurrent board sweeps blocked the board for about an hour and starved four worktree workers. Serial, always.
+- **Don't fan out Linear reads across repos or lanes.** A consumer project, 2026-08 — three concurrent board sweeps blocked the board for about an hour and starved four worktree workers. Serial, always.
 - **Don't drag a comment thread into the main thread for a state read.** `pk issue show` without `--comments` for state; `--comments` only for candidate-set issues whose `[tpm]` history you need (`pipekit-tooling.md § MCP Result Payloads Are Sticky`).
 - **Don't re-stamp in-flight work to "fix" an order.** A workflow-state change re-ranks `sortOrder`; an issue's position once in the pipeline is its state, not its stamp (`sop/Linear_SOP.md § Board shapes`).
 - **Don't take a scout's verdict without its file:line.** First real run, 2026-10-11 — the scout called the two comfortable `menu.js` sinks unmitigated and the outward client-portal cell mitigated; the code said the reverse. "No fallback" survived in the plan with the wrong reason until a human read the code.

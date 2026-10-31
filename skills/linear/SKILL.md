@@ -51,7 +51,7 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
      - `feature/` for new functionality (branch from `dev`)
      - `refactor/` for code restructuring (branch from `dev`)
    - Use kebab-case, keep it short and descriptive
-   - Include the issue ID if natural (e.g., `feature/wit-178-markup-tooltip`)
+   - Include the issue ID if natural (e.g., `feature/proj-178-markup-tooltip`)
 2. **Do the work** — implement the changes as discussed.
 3. **Commit** with conventional commit format: `{type}({scope}): {description}` and include `Closes PROJ-XXX` in the body.
 4. **Push the branch** and verify the Vercel preview deployment succeeds.

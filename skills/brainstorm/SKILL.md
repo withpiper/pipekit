@@ -136,7 +136,7 @@ Thoughts that indicate brainstorm backlog rot is about to start. Paired with `.c
 |------|------------------------|
 | "This is a good idea, just add it to Linear" | Filing without disposition = idea rots in Ideas forever. The HOLD phase (Now/Later/Kill) is not optional. |
 | "More captured ideas is better" | No — more items without disposition = more backlog noise that crowds out real work. Selectivity is the feature. |
-| "Later means we'll get to it eventually" | Not without a trigger condition. "Later" requires a concrete revisit signal (e.g., "when WIT-56 ships") or it becomes "never." |
+| "Later means we'll get to it eventually" | Not without a trigger condition. "Later" requires a concrete revisit signal (e.g., "when PROJ-56 ships") or it becomes "never." |
 | "The feasibility is obvious" | Feasibility claims made without exploring the codebase are wrong a third of the time. Explore, then estimate. |
 | "This idea is too rough to file" | That's what EXPAND is for. Unfiled ideas exist only in the current session; filed-as-rough-with-disposition is always better than lost. |
 

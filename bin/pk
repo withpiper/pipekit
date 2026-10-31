@@ -31,11 +31,17 @@ pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
 }
 
-# The op:// reference file name is per-project (secrets.op in Piper,
-# op-references.conf in SiteLine), so name whichever one this repo carries.
+# The op:// reference file name is per-project: `Secrets reference file` in
+# method.config.md names it; without that key, probe the two names consumers
+# have used so the hint still names whichever one this repo carries.
 pk_op_run_hint() {
   local root f
   root=$(pk_repo_root) || root=""
+  f=$(pk_config "Secrets reference file" "")
+  if [ -n "$f" ]; then
+    echo "op run --env-file=$f -- pk …"
+    return 0
+  fi
   for f in secrets.op op-references.conf; do
     if [ -n "$root" ] && [ -f "$root/$f" ]; then
       echo "op run --env-file=$f -- pk …"
@@ -464,7 +470,7 @@ pk_issue_show_render() {
 # `i<N>.` prefix are the ordered roadmap phases; Projects named `P<N>.` are the
 # ordered sub-phases within them. Order comes from the NAME PREFIX, not Linear's
 # `sortOrder` (an internal drag-rank that does NOT track phase sequence — verified
-# live, Piper 2026-06-21: sortOrder ordered projects P11,P8,P4,P3,P1,...).
+# live on a consumer project, 2026-06: sortOrder ordered projects P11,P8,P4,P3,P1,...).
 # A project name MAY also carry its initiative number as a leading `I<N>.` prefix
 # (v4.5.0+: `I1.P2. label`) — projects are the navigable unit in Linear, so the
 # phase reads at the project level. The parser accepts both `P<N>.` and
@@ -1019,8 +1025,8 @@ pk_linear_set_state() {
     return 0
   fi
   # Ladder gate (opt-in via mode="advance"): forward-only along the canonical
-  # workflow. Prevents promote bundles from pulling Done WITs backward and
-  # from leap-frogging Approved WITs past the verification states.
+  # workflow. Prevents promote bundles from pulling Done issues backward and
+  # from leap-frogging Approved issues past the verification states.
   if [ "$mode" = "advance" ] && [ -n "$current_state" ]; then
     local rank_current rank_target rank_approved
     rank_current=$(pk_state_rank "$current_state")
@@ -1034,7 +1040,7 @@ pk_linear_set_state() {
         return 0
       fi
       # Leap-frog: current is Approved-or-earlier AND target is a post-merge
-      # state (rank 11+ — any "In <env>" or Done). The WIT's commits made it
+      # state (rank 11+ — any "In <env>" or Done). The issue's commits made it
       # into a promote bundle without UAT/In Progress — surface it loudly
       # and refuse the transition. Threshold 11 = first env after UAT in
       # the v2.5.0 ladder (UAT=10, In <FirstEnv>=11).
@@ -1298,7 +1304,7 @@ pk_branch_worktree() {
 # the sentinel and nothing re-checks, so a PR can merge carrying verify evidence
 # that describes code no longer in the diff.
 #
-# Anchor: SiteLine PIPER-490 (PR #774, 2026-07-31). /verify PASS at eca992bb;
+# Anchor: a consumer project, 2026-07. /verify PASS at eca992bb;
 # `pk ship` gated correctly at 21:55Z; then 4f47b160 rewrote 72 lines of the RLS
 # migration's authorization predicate at 22:28Z. Merged 05:41Z with a PASS artifact
 # covering a predicate that no longer existed — and the PR review that read that
@@ -1312,7 +1318,7 @@ pk_branch_worktree() {
 #
 # It deliberately falls back past verify-complete.md to evidence.txt /
 # reality-check.md. The incident that motivated this gate had NO verify-complete.md
-# at all — SiteLine PIPER-490 shipped past that gate via --force, and its verified
+# at all — that consumer issue shipped past that gate via --force, and its verified
 # sha survived only in `# sha:` inside evidence.txt and `- sha:` in
 # reality-check.md. Keying solely on the sentinel would make this check structurally
 # unable to see the failure it exists to catch (pipekit-tooling.md § The
@@ -1332,9 +1338,9 @@ pk_verify_sha_from() {
 #   - Working tree only: `pk ready <ID>` run from the parent repo sees the parent's
 #     checkout, not the feature branch, so a branch-only artifact is invisible.
 #     `pk done` runs from the parent BY DESIGN, so it was blind every time.
-#     (Reproduced on SiteLine: feature/PIPER-553 carries
-#     Logs/Verify/20260801/PIPER-553/verify-complete.md; `main`'s tree has none.)
-#   - Ref only: the sentinel is frequently never committed. SiteLine PIPER-490
+#     (Reproduced on a consumer project: feature/<ID> carried
+#     Logs/Verify/20260801/<ID>/verify-complete.md; `main`'s tree had none.)
+#   - Ref only: the sentinel is frequently never committed. The incident issue
 #     reached PASS and `pk ship` passed on a sentinel that existed on disk in the
 #     worktree, but the commit staged only evidence.txt + reality-check.md — then
 #     `pk done` removed the worktree and the file with it. A git-only read would
@@ -1344,9 +1350,9 @@ pk_verify_sha_from() {
 # wins over a weaker fallback that merely happens to be closer to hand.
 #
 # v5.3.1: a third source, the branch's own worktree. A project that gitignores
-# Logs/Verify (Piper) never commits the evidence, so from the parent neither
+# Logs/Verify never commits the evidence, so from the parent neither
 # source above can see it, and pk ready reported "none" while the worktree held
-# a HEAD-matching sentinel (Piper PIPER-1369).
+# a HEAD-matching sentinel (a consumer project, 2026-10).
 pk_verify_sentinel_latest() {
   local issue="$1" ref="${2:-}" f newest="" sha base p rref="" wt=""
   [ -n "$issue" ] || return 1
@@ -1500,7 +1506,7 @@ pk_secgate_sentinel_for_head() {
 # v4.17.0 — /prod-ready sentinel matcher. /prod-ready writes
 # Logs/ProdReady/<date>/prodready-complete.md on PASS only, recording the
 # `sha:` of the audited source branch head. Not issue-scoped — prod-ready is
-# per-feature/batch at the production boundary, and a promote bundles WITs.
+# per-feature/batch at the production boundary, and a promote bundles issues.
 pk_prodready_sentinel_for_sha() {
   local sha="$1" f
   [ -n "$sha" ] || return 1
@@ -1575,8 +1581,8 @@ pk_branch_issue_id() {
 # globbed feature/ alone, so that branch was invisible to them — pk done errored
 # with "no local feature branch found" (which reads as "unknown issue"), the
 # follow-up PR never reached the Linear ship record, and its local branch was
-# never cleaned up. Across 185 ID-prefixed merged PRs on SiteLine, every one of
-# the five multi-PR issues had this exact shape (PIPER-793).
+# never cleaned up. Across 185 ID-prefixed merged PRs on a consumer project, every
+# one of the five multi-PR issues had this exact shape (2026-09).
 PK_BRANCH_PREFIXES_DEFAULT="feature fix hotfix refactor chore docs"
 PK_BRANCH_PREFIXES="${PK_BRANCH_PREFIXES:-$PK_BRANCH_PREFIXES_DEFAULT}"
 # A whitespace-only override is neither unset nor empty, so `:-` does not catch it,
@@ -1782,9 +1788,9 @@ EOF
 # rule as the branch resolver.
 #
 # One GraphQL search, not one per prefix: `head:` is an anchored-prefix
-# qualifier (measured 2026-10-10 on ethan-piper/SiteLine, gh 2.102.0:
-# `head:feature/PIPER-10` listed every feature/PIPER-10xx PR, `head:PIPER-1086`
-# and `head:feature/PIPER-108-` listed none) and several head: terms in one
+# qualifier (measured 2026-10 on a consumer repo, gh 2.102.0:
+# `head:feature/PROJ-10` listed every feature/PROJ-10xx PR, `head:PROJ-1086`
+# and `head:feature/PROJ-108-` listed none) and several head: terms in one
 # query OR together. The jq filter re-applies the exact globs so a looser
 # server-side match can never hand back someone else's branch. Searching is
 # the one thing REST cannot do here — search/issues returns no head ref — so
@@ -1863,13 +1869,13 @@ pk_link_env_files() {
   fi
 }
 
-# Classify whether a WIT identifier has real implementation evidence in git
+# Classify whether an issue identifier has real implementation evidence in git
 # history reachable from <ref> (default HEAD). Echoes: built | docs-only | none.
 # Doc-only paths (*.md, Logs/, docs/, Strategy/, CHANGELOG) do not count as
-# implementation. Heuristic: assumes commits/merges reference the WIT id
+# implementation. Heuristic: assumes commits/merges reference the issue id
 # (Pipekit's feature/<ID>-slug convention puts it in the merge commit). Used by
 # `pk doctor` to flag false-ships — issues the board calls Done/UAT but git
-# never built. The id-boundary `([^0-9]|$)` stops WIT-49 matching WIT-497.
+# never built. The id-boundary `([^0-9]|$)` stops PROJ-49 matching PROJ-497.
 pk_git_build_evidence() {
   local id="$1" ref="${2:-HEAD}" files nondoc
   files=$(git log "$ref" -E --grep="${id}([^0-9]|$)" --name-only --pretty=format: 2>/dev/null \
@@ -2010,8 +2016,8 @@ pk_gh_pr_create() {
 # opt-in copy-ins — sync lands them under templates/, never in .github/. A
 # consumer that installed one or neither was still being told the full pair
 # "will now fire", which asserts a review that structurally cannot happen.
-# Anchor: SiteLine, 2026-07-29 — `pk ready` named Semgrep on a repo with no
-# Semgrep workflow and no commit that ever added one (tracked as PIPER-475).
+# Anchor: a consumer project, 2026-07 — `pk ready` named Semgrep on a repo with no
+# Semgrep workflow and no commit that ever added one.
 # Same class as pipekit-tooling.md § "Enumerate the Surface Before Claiming
 # Behavior": list .github/workflows/, don't assert from the template set.
 # Prints the `pull_request` branches filter for a workflow, one entry per line.
@@ -2101,7 +2107,7 @@ pk_ready_for_review_list() {
 # Of the ready_for_review workflows, the ones that do NOT also list `synchronize`.
 # Those fire exactly once — on the Draft→Ready flip — so every commit pushed
 # afterwards is unreviewed, and nothing on the PR says so. Observed repeatedly on
-# SiteLine (PIPER-345 `879748e5`, PIPER-499 `778edbec` both merged unreviewed).
+# a consumer project (two PRs, `879748e5` and `778edbec`, both merged unreviewed).
 # `if grep` rather than `grep && continue`: pk runs under `set -euo pipefail`, and
 # a bare `cmd && continue` whose left side fails returns non-zero as a complete
 # command — which would abort pk mid-`ready`, after the Draft flip already landed.
@@ -2130,8 +2136,8 @@ pk_review_without_sync_list() {
 
 # Warn when a PR conflicts with its base. GitHub cannot build refs/pull/N/merge
 # for a conflicting PR, so it dispatches ZERO `pull_request` workflows — no
-# failure, no message, and the check board keeps whatever it last showed. On
-# SiteLine PIPER-174 the sole required gate never ran and nothing on the PR said
+# failure, no message, and the check board keeps whatever it last showed. On a
+# consumer PR (2026-07) the sole required gate never ran and nothing on the PR said
 # so; the board looked settled because only a `pull_request_target` workflow had
 # reported. Warn, never block: resolving the conflict is the user's call, and a
 # conflicting PR is a legitimate intermediate state.
@@ -2369,7 +2375,7 @@ pk_sessions_crosslink() {
 # ── Plan nudge ────────────────────────────────────────────────────────────────
 # /tpm writes the week's agreement to the weekly plan (method.config.md →
 # `Plan path`, default engineering/WEEKLY_PLAN.md, relative to the repo root —
-# or to `Plan primary`, the sibling repo that owns it, e.g. ../SiteLine; v5.1.0).
+# or to `Plan primary`, the sibling repo that owns it, e.g. ../sibling; v5.1.0).
 # The file carries a marker line `<!-- tpm:begin · agreed YYYY-MM-DD`. pk next
 # prints one line when that agreement is older than `Plan stale days` (default
 # 7), or when the marker has no date (the synced skeleton: a plan file exists
@@ -3363,7 +3369,7 @@ Reviewer subagent invocation printed in pk output. Findings will land as a PR re
 # which is the trigger Pipekit's CI templates (templates/ci/semgrep.yml,
 # templates/ci/claude-review.yml) listen for. Use this as the "I'm done
 # iterating, run the outside reviewer now" gesture. No Linear state change
-# (UAT stays UAT — the WIT was already In Review/UAT after pk ship).
+# (UAT stays UAT — the issue was already In Review/UAT after pk ship).
 cmd_ready() {
   local id="" force=false
   while [ $# -gt 0 ]; do
@@ -3407,7 +3413,7 @@ cmd_ready() {
   fi
 
   # Conflict check runs BEFORE the already-Ready early return below: the PR that
-  # motivated this (SiteLine PIPER-174) was already Ready *and* conflicting, so a
+  # motivated this (a consumer PR, 2026-07) was already Ready *and* conflicting, so a
   # check placed after the return would have missed exactly that case.
   pk_warn_if_conflicting "$pr_number"
 
@@ -3418,7 +3424,7 @@ cmd_ready() {
 
   # --- v4.27.0 verify-drift gate ------------------------------------------
   # Computed BEFORE the already-Ready early return, for the same reason as the
-  # conflict check above: the PIPER-490 case was a PR that had ALREADY been
+  # conflict check above: the verify-drift incident was a PR that had ALREADY been
   # flipped when the migration changed under it, so a check placed after the
   # return would have missed exactly the incident that motivated it.
   #
@@ -3428,7 +3434,7 @@ cmd_ready() {
   local _rhead _drift
   # The branch's commit, not this checkout's HEAD: from the parent repo HEAD is
   # the integration branch, and every flip read as drift once v5.3.1 let the
-  # parent find the worktree's evidence (Piper PIPER-1369, PR #1153).
+  # parent find the worktree's evidence (a consumer PR, 2026-10).
   _rhead=$(pk_branch_head "$current")
   if [ "${PK_VERIFY_BYPASS:-0}" = "1" ]; then
     echo "⚠ verify-drift gate bypassed via PK_VERIFY_BYPASS=1" >&2
@@ -3446,7 +3452,7 @@ cmd_ready() {
   # permissive than the gate it exists to reinforce, and a rebase immediately
   # before requesting review would defeat the whole feature. Nor is it crying wolf
   # on ordinary rebases: a rebase pulls in new base commits, so the tree that was
-  # verified genuinely is not the tree at HEAD. (SiteLine review of PR #790.)
+  # verified genuinely is not the tree at HEAD. (A consumer PR review, 2026-08.)
   if [ "$(pk_verify_drift_blocks "$_drift")" = "block" ]; then
     echo "" >&2
     case "$_drift" in
@@ -3562,15 +3568,15 @@ cmd_done() {
     # worktree), where the current branch is 'dev' or 'main', not the branch
     # being cleaned up. Same resolver as pk ready, remote fallback included —
     # cmd_done used to give up at the local miss while cmd_ready fell back,
-    # and the two disagreeing about how to find a branch was half of PIPER-793.
+    # and the two disagreeing about how to find a branch was half of the incident.
     issue="$id"
     current=$(pk_branch_for_issue "$id") || current=""
     if [ -z "$current" ]; then
       # Neither local nor on origin. With delete-branch-on-merge the branch is
       # gone before pk done runs whenever the PR merged outside `pk done --merge`
       # — and before this fallback the command returned here, so the issue sat
-      # In Progress with no Shipped record and nothing saying so (SiteLine
-      # PIPER-1086/1128/1142, 2026-10-09). GitHub still has the PR under its
+      # In Progress with no Shipped record and nothing saying so (three
+      # consumer issues, 2026-10). GitHub still has the PR under its
       # head name.
       pr_json=$(pk_gh_pr_for_issue "$id") || pr_json=""
       if [ -z "$pr_json" ]; then
@@ -3725,7 +3731,7 @@ cmd_done() {
     # Use awk instead of `head -20` — awk reads the full stream so git log
     # never gets SIGPIPE. Under `set -o pipefail`, head's early-exit kills
     # git log mid-stream and the pipeline returns 141, silently aborting
-    # cmd_done with no output (RS-80 in rs-vault, 2026-05-05).
+    # cmd_done with no output (a consumer project, 2026-05).
     commits=$(git log "$range" --pretty=format:'- %h %s' 2>/dev/null | awk 'NR<=20')
     diffstat=$(git diff --shortstat "$range" 2>/dev/null | sed 's/^[[:space:]]*//')
   elif [ -n "$pr_json" ]; then
@@ -3789,8 +3795,8 @@ cmd_done() {
 
   # A second pk done on an already-shipped issue is the follow-up-fix case.
   # Before v4.32.0 it could not get this far — branch resolution errored out and
-  # the extra PR never reached Linear at all (POC-448 lost two PRs, POC-426 and
-  # PIPER-782 were patched by hand five weeks apart). Record it as a follow-up so
+  # the extra PR never reached Linear at all (one consumer issue lost two PRs, two
+  # others were patched by hand five weeks apart). Record it as a follow-up so
   # the thread reads as one issue that shipped twice, not two first ships.
   local body
   if pk_has_shipped_comment "$issue"; then
@@ -4037,7 +4043,7 @@ $cmd" </dev/null || rc=$?
 
 # Extracts the set of issue IDs a promote hop's commits actually OWN, for
 # args: <range> (a git log revision range, e.g. "origin/target..origin/source")
-# <issue_prefix> (e.g. "PIPER"). Prints one ID per line, deduped/sorted.
+# <issue_prefix> (e.g. "PROJ"). Prints one ID per line, deduped/sorted.
 #
 # Matches ONLY:
 #   1. Subject-line IDs (%s) — the normal case: type(scope): message (PREFIX-N)
@@ -4064,8 +4070,8 @@ pk_extract_bundled_issue_ids() {
 
 # Walks `Ship environments` one hop per invocation. Target arg is the
 # destination env. Two-phase Linear state transition (v2.6.0 #3 / F2):
-#   - `pk promote <env>` opens the PR, WITs stay in source state.
-#   - `pk promote <env> --finish` transitions WITs to target state after merge.
+#   - `pk promote <env>` opens the PR, issues stay in source state.
+#   - `pk promote <env> --finish` transitions issues to target state after merge.
 # Replaces the v2.3.0–v2.5.0 optimistic-at-PR-open behavior, which left
 # Linear ~5 minutes ahead of reality while the promote PR was open.
 # Position-based state mapping: last hop → Done, any non-last → In <Env>.
@@ -4154,7 +4160,7 @@ cmd_promote() {
   # ─── Phase 2: --finish — transition Linear states after merge ───
   # Looks up the most recent merged promote PR between source and target,
   # parses its body for the pipekit-promote-tracking marker (containing
-  # bundled WITs), and transitions each WIT to the target state. Falls
+  # bundled issues), and transitions each issue to the target state. Falls
   # back to deriving from PR commits if no marker is found (older PRs).
   if $finish; then
     echo "pk promote --finish: $source → $target"
@@ -4205,12 +4211,12 @@ cmd_promote() {
         } | { grep -oE "${issue_prefix}-[0-9]+" || true; } | sort -u)
       fi
       if [ -n "$issue_ids" ]; then
-        echo "  (no marker; derived WITs from PR commits)"
+        echo "  (no marker; derived issues from PR commits)"
       fi
     fi
 
     if [ -z "$issue_ids" ]; then
-      echo "  No bundled WITs found in PR #$pr_number — nothing to transition."
+      echo "  No bundled issues found in PR #$pr_number — nothing to transition."
       return 0
     fi
 
@@ -4424,8 +4430,8 @@ cmd_promote() {
 
   echo "  3. Open promote PR ($source → $target, $commits_ahead commits)"
 
-  # Compute bundled WITs and embed them in the PR body as a tracking marker.
-  # v2.6.0 #3 / F2: Phase 2 (--finish) reads this marker to know which WITs
+  # Compute bundled issues and embed them in the PR body as a tracking marker.
+  # v2.6.0 #3 / F2: Phase 2 (--finish) reads this marker to know which issues
   # to transition post-merge. Marker format is intentionally stateless and
   # cross-machine-portable (lives on the PR, not in local files).
   local bundled_wits_csv=""
@@ -4441,7 +4447,7 @@ cmd_promote() {
 <!-- pipekit-promote-tracking: source=$source target=$target wits=$bundled_wits_csv -->
 
 After merging in the GitHub UI, run: \`pk promote $target --finish\`
-to transition bundled WITs to \`$target_state\` in Linear."
+to transition bundled issues to \`$target_state\` in Linear."
 
   promote_url=$(pk_gh_pr_create --base "$target" --head "$source" \
     --title "Promote $source → $target ($date)" \
@@ -4449,7 +4455,7 @@ to transition bundled WITs to \`$target_state\` in Linear."
   echo "PR: $promote_url"
 
   # v2.6.0 #3 / F2 — Linear state transitions moved to Phase 2 (--finish).
-  # Bundled WITs stay in the source-env state while the promote PR is open.
+  # Bundled issues stay in the source-env state while the promote PR is open.
   # Eliminates the ~5min window where Linear was ahead of reality.
 
   if $stash_made; then
@@ -4457,11 +4463,11 @@ to transition bundled WITs to \`$target_state\` in Linear."
     echo "Note: your local edits are stashed. Run 'git stash pop' after the promote PR is merged."
   fi
   echo ""
-  echo "Bundled WITs stay in source state until merge."
+  echo "Bundled issues stay in source state until merge."
   if [ -n "$bundled_wits_csv" ]; then
     local bundled_count
     bundled_count=$(echo "$bundled_wits_csv" | tr ',' '\n' | grep -cE '.+')
-    echo "  ($bundled_count WIT(s) tracked: $bundled_wits_csv)"
+    echo "  ($bundled_count issue(s) tracked: $bundled_wits_csv)"
   fi
   echo ""
   echo "After merging in the GitHub UI:"
@@ -5657,7 +5663,7 @@ Subcommands:
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
   pk config|cfg [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish] [--bootstrap] [--force]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
+  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish] [--bootstrap] [--force]  Two-phase: pk promote <env> opens the promote PR (issues stay in source state); pk promote <env> --finish transitions issues to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
   pk deploy [<env>] [-- <args>]   Run the project's configured Deploy command (method.config.md) for <env>. Bare / 'prod' → "Deploy command"; 'pk deploy dev' → "Deploy command dev". Args after -- pass through to the script (e.g. a file list, or --all). Script-deploy projects only — branch-promotion projects deploy via pk promote. Delegates fully: the deploy script owns confirmation + safety.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
@@ -5858,11 +5864,11 @@ cmd_doctor() {
   fi
 
   # --- Linear↔git integrity (false-ship detection) -----------------------
-  # For WITs the board calls built/shipped (UAT, Done), confirm git history
+  # For issues the board calls built/shipped (UAT, Done), confirm git history
   # actually contains implementation referencing the id. A Done/UAT issue with
   # no commits — or only docs commits — is a likely false-ship (marked complete
   # but never built). Advisory: this is a grep heuristic that assumes commits/
-  # merges reference the WIT id (feature/<ID>-slug convention), so it surfaces
+  # merges reference the issue id (feature/<ID>-slug convention), so it surfaces
   # candidates for human review and never hard-fails. Mirror of /strategy-sync
   # 4b, which catches the opposite drift (merged-but-not-Done).
   if [ "$linear_ok" = true ] && [ -n "$root" ]; then
@@ -5984,7 +5990,7 @@ main() {
 
   # -h/--help anywhere in the args prints usage instead of executing.
   # Subcommand arg loops swallowed unknown flags, so `pk ship --help`
-  # actually shipped (SiteLine, 2026-06-04). Exact-arg match only — a
+  # actually shipped (a consumer project, 2026-06). Exact-arg match only — a
   # quoted text arg containing "--help" (e.g. pk delegate) doesn't trip it.
   local arg
   for arg in "$@"; do

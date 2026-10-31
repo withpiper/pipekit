@@ -117,7 +117,7 @@ The verdict is **enforced** (v4.17.0) — a PASS writes the sha-matched sentinel
 The categories are constant; the signals change. Fill the definitions file for your stack.
 
 - **Next.js + Supabase (default):** Auth = `getServerSession`/middleware + RLS policies in `supabase/migrations/`; User input = Server Actions + route handlers; File storage = Supabase Storage buckets; External APIs = `app/api/**/route.ts` webhooks.
-- **PHP / classic server (e.g. SiteLine):** Auth = `requireAuth()` / `validateApiAuth()` in `src/app/api/`; User input = the PHP endpoints + form handlers; File storage = the storage helper + `.htaccess` rules.
+- **PHP / classic server:** Auth = the project's auth-guard helper (a `requireAuth()`-style function on every handler); User input = the PHP endpoints + form handlers; File storage = the storage helper + `.htaccess` rules.
 - **Python (FastAPI/Django):** Auth = the auth dependency/middleware; User input = request models + ORM queries; External APIs = the webhook routers.
 
 For any stack the definitions file must answer, per category: *which paths and keywords mean this category here*, and *what the project-specific correct pattern is* (the auth primitive's name, the rate limiter's location, which tables hold PII). List categories the product genuinely lacks under **Not applicable** with a reason — never silently treat "no payments code" as "payments reviewed."

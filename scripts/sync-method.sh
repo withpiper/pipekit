@@ -77,7 +77,7 @@ REF="main"
 # made absolute-path invocation (bash ~/Projects/pipekit/scripts/sync-method.sh)
 # sync INTO the pipekit repo itself. Now we use $PWD (matches the
 # `cd <project> && bash <pipekit>/scripts/sync-method.sh` flow) and refuse to
-# sync into Pipekit if the cwd's origin matches METHOD_REPO. RS-Vault
+# sync into Pipekit if the cwd's origin matches METHOD_REPO. A consumer's
 # v2.5.0 migration surfaced this.
 PROJECT_ROOT="${PWD:-$(pwd)}"
 
@@ -1205,7 +1205,7 @@ CHLOG
   echo "## Config" >> "$CHANGELOG"
   # Report template config KEYS the project hasn't set yet. Compare key PRESENCE,
   # NOT whole rows. The old check diffed full `| **Key** | value |` rows between
-  # template and project, which garbled the section two ways (RS-Vault, 2026-07-20):
+  # template and project, which garbled the section two ways (a consumer, 2026-07):
   #   1. The template ships placeholder values, so every field a project actually
   #      filled in differed from its placeholder → falsely reported as "new".
   #   2. A project written in code-block form (`Key: value`) matched zero `| **Key** |`

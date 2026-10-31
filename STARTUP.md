@@ -217,7 +217,7 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *`
 | You don't need a skill for... | Because v2 handles it via... |
 |---|---|
 | Open PR feature → dev | `pk ship` (Draft by default v2.6.0+; `pk ready` flips to Ready) |
-| Promote one hop along Ship environments | **Phase 1**: `pk promote <env>` (e.g. `pk promote beta`) — opens promote PR, WITs stay in source state. **Phase 2**: `pk promote <env> --finish` after the PR merges — transitions WITs → `In <Env>` or → Done by chain position. |
+| Promote one hop along Ship environments | **Phase 1**: `pk promote <env>` (e.g. `pk promote beta`) — opens promote PR, issues stay in source state. **Phase 2**: `pk promote <env> --finish` after the PR merges — transitions issues → `In <Env>` or → Done by chain position. |
 | Push branch + get Vercel preview | Vercel auto-fires on PR open |
 | Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` on merge to main |
 | Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
@@ -312,7 +312,7 @@ Before writing any feature code, verify the full v2 daily loop works end-to-end:
 [ ] pk ready                    (flip Draft → Ready when shipping; fires outside reviewers)
 [ ] Merge PR (rebase or merge-commit); verify dev deployment
 [ ] pk done <ID> [--merge]      (cleanup worktree+branch; Linear UAT → In <FirstEnv>)
-[ ] pk promote <env>            (Phase 1 v2.6.0+: open promote PR; WITs stay in source state)
+[ ] pk promote <env>            (Phase 1 v2.6.0+: open promote PR; issues stay in source state)
 [ ] pk promote <env> --finish   (Phase 2 v2.6.0+: after promote PR merges; → In <Env> for intermediate, → Done for final)
 [ ] /pk-exit                    (writes session log to Logs/Sessions/<date>_<HHMM>.md)
 ```

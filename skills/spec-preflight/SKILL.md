@@ -99,7 +99,7 @@ A missing file is a real divergence (fail-loud), not infrastructure noise.
 
 When an explicit-NEW marker is present, record the path as `🆕 expected-new` instead of `✗ missing` — the spec is asserting this file will be created, not that it exists. The Phase 1–3 verdict treats `🆕 expected-new` as `✓` for the file-paths category. The pre-existing files in the same list still get verified normally; only the NEW-marked paths get the downgrade.
 
-Why: WIT-348 and WIT-451 (both Pipekit v2.4.x canary subjects) listed NEW components explicitly in their specs (`line-item-actions.tsx`, `line-item-edit-dialog.tsx`, `move-line-item-dialog.tsx`), each clearly annotated NEW in the Technical Context section. v2.4.0's preflight emitted `✗` for all of them, which over-stated the divergence and forced manual exception-noting in the verdict. v2.4.2 collapses that noise.
+Why: two Pipekit v2.4.x canary subjects on a consumer project listed NEW components explicitly in their specs (`line-item-actions.tsx`, `line-item-edit-dialog.tsx`, `move-line-item-dialog.tsx`), each clearly annotated NEW in the Technical Context section. v2.4.0's preflight emitted `✗` for all of them, which over-stated the divergence and forced manual exception-noting in the verdict. v2.4.2 collapses that noise.
 
 #### 3b — Code citations (line + symbol)
 
@@ -129,7 +129,7 @@ If the Linear route times out or is unavailable on any individual fetch (`pk` su
 
 ### Step 3.6 — Project signal probes
 
-Steps 1–3 verify claims the spec **explicitly makes** (this file exists, that line resolves, this WIT is Done). Step 3.6 probes claims the spec **implies** — by referencing a tool, by proposing a platform-specific mechanism, by drafting a migration, or by anchoring to a non-canonical source. These are the "environmental blindness" gaps the v2.3.x recovery surfaced; without them, downstream agents read a spec that's internally consistent but reality-divergent.
+Steps 1–3 verify claims the spec **explicitly makes** (this file exists, that line resolves, this issue is Done). Step 3.6 probes claims the spec **implies** — by referencing a tool, by proposing a platform-specific mechanism, by drafting a migration, or by anchoring to a non-canonical source. These are the "environmental blindness" gaps the v2.3.x recovery surfaced; without them, downstream agents read a spec that's internally consistent but reality-divergent.
 
 Each probe runs independently. A miss in one does not skip the others. Findings render as a separate category-block under the verdict. Where a probe needs `method.config.md` keys, fall through gracefully if the key is unset.
 
@@ -162,7 +162,7 @@ Each probe runs independently. A miss in one does not skip the others. Findings 
 
 If `Strategy docs path` is unset OR the directory is empty: record `n/a — no Strategy docs configured`. Do not warn — projects without Strategy docs are valid.
 
-Why the downgrade was added: WIT-451's revised spec body cited Strategy/Doc6 §2.1, Strategy/Doc6 §3.3 line 86, and Strategy/Doc2 §3.3.1 throughout — and had an explicit "Authority hierarchy" table naming Strategy as the canonical source for the 5-action button set, conversation surface, and line-item canonical fields. v2.4.0's probe still emitted `⚠ Cross-check spec claims against Strategy` because the trigger ("POC mentioned + Strategy/ exists") fired blindly. The downgrade keeps the probe useful for specs that haven't done the cross-check while letting fully-cited specs pass cleanly.
+Why the downgrade was added: a consumer project's revised spec body cited Strategy/Doc6 §2.1, Strategy/Doc6 §3.3 line 86, and Strategy/Doc2 §3.3.1 throughout — and had an explicit "Authority hierarchy" table naming Strategy as the canonical source for the 5-action button set, conversation surface, and line-item canonical fields. v2.4.0's probe still emitted `⚠ Cross-check spec claims against Strategy` because the trigger ("POC mentioned + Strategy/ exists") fired blindly. The downgrade keeps the probe useful for specs that haven't done the cross-check while letting fully-cited specs pass cleanly.
 
 #### 3.6b — Platform capability (handoff #20)
 
@@ -171,7 +171,7 @@ Why the downgrade was added: WIT-451's revised spec body cited Strategy/Doc6 §2
 **Probe:** (only runs when the trigger fires — if no GUC pattern appears in the spec, this probe renders as `✓ n/a`)
 
 1. Read `Platform` from `method.config.md`. Recognized values: `managed-supabase`, `self-hosted-postgres`, `none`. Default: unset (treated as "unconfigured").
-2. If `Platform: managed-supabase`: managed Supabase blocks the `postgres` role from `ALTER DATABASE … SET <custom>` even when role-owns the DB (verified empirically during WIT-450, handoff #20). Emit `✗` (hard fail) with the known-blocker note.
+2. If `Platform: managed-supabase`: managed Supabase blocks the `postgres` role from `ALTER DATABASE … SET <custom>` even when role-owns the DB (verified empirically on a consumer project, handoff #20). Emit `✗` (hard fail) with the known-blocker note.
 3. If `Platform: self-hosted-postgres`: emit `⚠` reminder to confirm the role has `ALTER DATABASE` privilege on the target DB.
 4. If `Platform` unset or `none`: emit `⚠ Platform key not configured — GUC capability unverified for this deployment` and continue. Spec author should set `Platform` so the next preflight gives a definitive answer.
 
@@ -180,7 +180,7 @@ Why the downgrade was added: WIT-451's revised spec body cited Strategy/Doc6 §2
 ```
 ✗ Platform capability: spec proposes GUC-based mechanism (ALTER DATABASE … SET app.X);
     Platform=managed-supabase blocks this — postgres role lacks SET DATABASE privilege
-    even as db owner (handoff #20, verified at WIT-450 against piper-prod + piper-dev).
+    even as db owner (handoff #20, verified on a consumer project against prod + dev).
     Redesign with a sentinel-table pattern OR change Platform if the deployment moved.
 ```
 
@@ -212,7 +212,7 @@ Why the downgrade was added: WIT-451's revised spec body cited Strategy/Doc6 §2
 ✗ Tooling availability: AC #5 requires Playwright but @playwright/test not in
     package.json (dependencies or devDependencies). The AC is unsatisfiable as
     written. Either:
-      a) bootstrap @playwright/test (separate WIT first), or
+      a) bootstrap @playwright/test (separate issue first), or
       b) rewrite AC against an existing test runner (Vitest is configured).
 ```
 
@@ -241,16 +241,16 @@ If the AC mentions a tool but the same AC also says "to be added" / "follow-up" 
 
       -- CHECK (show_end_date <= onsite_end_date)
       SELECT COUNT(*) FROM projects WHERE NOT (show_end_date <= onsite_end_date);
-      -- count via piper-dev MCP: 1 violator
+      -- count against the dev database (`psql`/SQL editor): 1 violator
 
       -- NOT NULL on projects.production_start
       SELECT COUNT(*) FROM projects WHERE production_start IS NULL;
-      -- count via piper-dev MCP: 0 violators
+      -- count against the dev database (`psql`/SQL editor): 0 violators
 
     Decide per row: backfill, default, or block migration until data is consistent.
 ```
 
-This is the same shape gap as WIT-384's per-PR branch DBs running `with_data: false` — schema-only validation passes, data-incompatibility fails at apply-time against the populated parent. The probe shifts that discovery left, to spec-time.
+This is the same shape gap as a consumer project's per-PR branch DBs running `with_data: false` — schema-only validation passes, data-incompatibility fails at apply-time against the populated parent. The probe shifts that discovery left, to spec-time.
 
 #### When `--accept` is in effect
 
@@ -354,10 +354,10 @@ Verdict: REVISE — Linear status diverges from the spec body.
 Update the spec's "Status: Approved" line (or advance the issue) before pk branch.
 ```
 
-REVISE with the WIT-348 canary pattern (#21 + #22):
+REVISE with the PROJ-348 canary pattern (#21 + #22):
 
 ```
-Pre-flight checks for WIT-348 (Standard tier):
+Pre-flight checks for PROJ-348 (Standard tier):
 
   ─ Empirical claims (Phase 1–3)
   ⚠ File paths: 4/6 exist (renamed: projects.js → database/projects.js,
@@ -374,9 +374,9 @@ Pre-flight checks for WIT-348 (Standard tier):
       Strategy defines 6 lifecycle date fields; spec claims 5. Reconcile before approval.
   ✓ Platform capability: n/a — no GUC pattern in spec
   ✗ Tooling availability: AC #5 requires Playwright but @playwright/test not in
-      package.json. Either bootstrap (separate WIT) or rewrite against Vitest.
+      package.json. Either bootstrap (separate issue) or rewrite against Vitest.
   ⚠ Migration data shape: 5 chronological CHECK constraint(s) on projects (populated).
-      Run violator counts via piper-dev MCP before merging:
+      Run violator counts against the dev database (`psql`/SQL editor) before merging:
         SELECT COUNT(*) FROM projects WHERE NOT (show_end_date <= onsite_end_date);
         SELECT COUNT(*) FROM projects WHERE NOT (project_start_date <= production_start);
         -- (3 more)
@@ -384,7 +384,7 @@ Pre-flight checks for WIT-348 (Standard tier):
 Verdict: REVISE
   - File path renames (2): update §Technical Context paths.
   - Canonical-doc divergence: spec claims 5 fields, Strategy says 6. Reconcile §Goal + ACs.
-  - Tooling absent: AC #5 Playwright requirement unsatisfiable until bootstrap WIT lands.
+  - Tooling absent: AC #5 Playwright requirement unsatisfiable until bootstrap issue lands.
   - Migration data shape: 5 CHECKs on populated table — run violator counts first.
 ```
 
@@ -393,7 +393,7 @@ REVISE downgraded with `--accept`:
 ```
 --accept: Phase 3.6 hard-fails downgraded to warnings.
 
-Pre-flight checks for WIT-348 (Standard tier):
+Pre-flight checks for PROJ-348 (Standard tier):
 
   ─ Empirical claims (Phase 1–3)
   ✓ File paths: 6/6 exist

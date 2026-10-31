@@ -187,7 +187,7 @@ printf '# prodready-complete\n\nstatus: PASS\nsha: %s\nenv: %s\n' \
 
 - **Never** write it on FAIL or WARNINGS-you'd-block-on. A missing sentinel is the blocking signal.
 - The `sha:` pins the audited source-branch head — a feature merged into the source branch *after* this audit correctly invalidates the sentinel (the batch changed; re-run the gate).
-- Not issue-scoped: prod-ready audits the promote batch at the boundary, and a promote bundles WITs.
+- Not issue-scoped: prod-ready audits the promote batch at the boundary, and a promote bundles issues.
 
 - If `ISSUE` resolved and Linear reachable: post a comment — the **Summary** block + a link/path to the report, piped into `pk issue comment "$ISSUE" -`. **Do not** change state.
 - Present to the user: overall status, finding counts, top findings by severity, and the explicit next-action — `Promote to {PROD_ENV}` if PASS, or `Hold — close {n} finding(s) first` if FAIL.

@@ -55,20 +55,20 @@ Version drift: Next.js 14 → 15 alone broke `cookies()`, `headers()`, `draftMod
 
 #### § Enumerate the Surface Before Claiming Behavior
 
-WIT-461 worktree, 2026-05-25 — a session advised "dev-merge doesn't auto-trigger the supabase workflow" knowing about ONE workflow, without `ls .github/workflows/`; a second workflow (`supabase-dev.yml`) DID fire on dev-merge and applied the migration. Correct about the file it knew, wrong about the surface.
+A consumer project, 2026-05 — a session advised "dev-merge doesn't auto-trigger the supabase workflow" knowing about ONE workflow, without `ls .github/workflows/`; a second workflow (`supabase-dev.yml`) DID fire on dev-merge and applied the migration. Correct about the file it knew, wrong about the surface.
 
 The failure is structural to how AI sessions browse the filesystem — they grep for a known string and stop.
 
 #### § The Verification Method Must Be Able to See the Failure
 
-- **Wrapped lines.** PIPER-486, 2026-07-31 — two facts restated across several files survived multiple "fixed everywhere" commits because the pattern only matched the single-line instances.
-- **Agent auto-detection.** The Supabase CLI's global `--agent` flag defaults to `auto` (verified against installed CLI, `supabase migration list --help`: "Override agent detection: yes, no, or auto (default auto)"). SiteLine PIPER-533, 2026-07-31 — `scripts/local-dev/reset-db.sh` piped bare `supabase migration list` into `JSON.parse` without pinning `--agent`, so it worked from inside Claude Code but reported a false failure when a human ran it in a terminal. Fix: `--agent no` (or `--output-format` explicitly).
-- **Green because it ran.** Piper PIPER-699, 2026-08-19 — `anthropics/claude-code-action` refuses to run when the workflow file differs from the default branch's copy (a guard against a PR editing its own reviewer); on a PR that touched the workflow it logged "Action skipped due to workflow validation error", exited 0, and the `claude-review` check went green in 20s having reviewed nothing.
-- **Predictions.** Piper PIPER-699, 2026-08-19 — `pk ready` printed "PR reviewers will now fire: Claude Code Review, Semgrep" on every PR, because its probe scanned `.github/workflows/` for a `ready_for_review` trigger but ignored each workflow's `branches:` filter; on a `feature/* → dev` PR the named reviewer could never fire. This was the *second* recurrence of the same over-claim in that one message — the probe existed only because a hardcoded string had previously named a reviewer the repo did not have (SiteLine, 2026-07-29).
+- **Wrapped lines.** A consumer project, 2026-07 — two facts restated across several files survived multiple "fixed everywhere" commits because the pattern only matched the single-line instances.
+- **Agent auto-detection.** The Supabase CLI's global `--agent` flag defaults to `auto` (verified against installed CLI, `supabase migration list --help`: "Override agent detection: yes, no, or auto (default auto)"). A consumer project, 2026-07 — `scripts/local-dev/reset-db.sh` piped bare `supabase migration list` into `JSON.parse` without pinning `--agent`, so it worked from inside Claude Code but reported a false failure when a human ran it in a terminal. Fix: `--agent no` (or `--output-format` explicitly).
+- **Green because it ran.** A consumer project, 2026-08 — `anthropics/claude-code-action` refuses to run when the workflow file differs from the default branch's copy (a guard against a PR editing its own reviewer); on a PR that touched the workflow it logged "Action skipped due to workflow validation error", exited 0, and the `claude-review` check went green in 20s having reviewed nothing.
+- **Predictions.** The same consumer project, 2026-08 — `pk ready` printed "PR reviewers will now fire: Claude Code Review, Semgrep" on every PR, because its probe scanned `.github/workflows/` for a `ready_for_review` trigger but ignored each workflow's `branches:` filter; on a `feature/* → dev` PR the named reviewer could never fire. This was the *second* recurrence of the same over-claim in that one message — the probe existed only because a hardcoded string had previously named a reviewer the repo did not have (another consumer, 2026-07).
 
 #### § And ask the converse: can this check *cheat*?
 
-Pipekit, 2026-08-02 — a blind-review trial checked out two PRs at their head commits in worktrees; the reviewer read the follow-up fix PRs and cited them ("the later PIPER-554 migration confirms both defects") at confidence 100. Real isolation needs a separate clone with all refs deleted except the pinned commits, reflogs expired, and `gc --prune=now`.
+Pipekit, 2026-08-02 — a blind-review trial checked out two PRs at their head commits in worktrees; the reviewer read the follow-up fix PRs and cited them ("the later PROJ-554 migration confirms both defects") at confidence 100. Real isolation needs a separate clone with all refs deleted except the pinned commits, reflogs expired, and `gc --prune=now`.
 
 #### § MCP Server Configuration
 
@@ -88,11 +88,11 @@ A routine day's Linear work (create an initiative + a handful of projects + a do
 
 #### § Parallel Branch Coordination — re-check before merge
 
-Piper WIT-550, 2026-06-02 — a same-day migration merged to `dev` mid-session collided on merge after passing all local checks.
+A consumer project, 2026-06 — a same-day migration merged to `dev` mid-session collided on merge after passing all local checks.
 
 #### § MCP-applied migrations and disk drift
 
-Piper WIT-514, 2026-05-27 — an MCP-applied RPC stamped `piper-dev`'s history at wall-clock while the disk file shipped with a different timestamp; ~5h of deploy lockup across every in-flight migration PR; reconciled by PR #393 backfilling the disk file at the MCP-stamped version. Full anatomy and recovery: `Database_SOP.md` § MCP-applied migrations.
+A consumer project, 2026-05 — an MCP-applied RPC stamped `<project>-dev`'s history at wall-clock while the disk file shipped with a different timestamp; ~5h of deploy lockup across every in-flight migration PR; reconciled by PR #393 backfilling the disk file at the MCP-stamped version. Full anatomy and recovery: `Database_SOP.md` § MCP-applied migrations.
 
 ### pipekit-discipline.md
 
@@ -104,4 +104,4 @@ A subject that slips past both the PreToolUse hook and `pk ship` onto a protecte
 
 #### § Secrets Managers and Worktrees
 
-Reference pattern: 1Password for Developers, proven on SiteLine POC-85/86 and Piper WIT-559.
+Reference pattern: 1Password for Developers, proven on two consumer projects.

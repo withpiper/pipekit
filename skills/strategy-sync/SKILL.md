@@ -54,15 +54,15 @@ If a Changelog doc exists in the manifest, it is excluded from sync content — 
 3. Query Linear for issues in Done state since the last Strategy doc update date, via the project's Linear route (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent is listed there):
    - `pk gql '{ issues(first:50, filter:{ state:{ name:{ eq:"Done" } }, completedAt:{ gte:"<last-doc-update-date>" } }) { nodes { identifier title completedAt } pageInfo { hasNextPage endCursor } } }'`, paging with `after` while `hasNextPage` — the date filter runs server-side, so the result is already the issues completed after the last doc update
    - One subagent, serial calls — never fan out subagents at Linear (`sop/Linear_SOP.md § Rate limits`)
-4. **Merged-PR cross-check (mandatory — do not skip).** Linear `Done` routinely *lags* git reality: a WIT's PR merges to the integration branch but the issue stays in UAT / In <Env> because the post-merge transition (`pk done`) was skipped, run via the GitHub UI, or failed. Trusting Linear `Done` alone therefore **under-reports shipped work**, and this sync silently skips real features. Cross-check against merged PRs:
-   - Get the integration branch (`method.config.md` → `integration_branch` / `## Ship environments`) and the project's issue-ID prefix (from the Linear team in `method.config.md` — e.g. `WIT-`, `RS-`, `PROJ-`).
+4. **Merged-PR cross-check (mandatory — do not skip).** Linear `Done` routinely *lags* git reality: an issue's PR merges to the integration branch but the issue stays in UAT / In <Env> because the post-merge transition (`pk done`) was skipped, run via the GitHub UI, or failed. Trusting Linear `Done` alone therefore **under-reports shipped work**, and this sync silently skips real features. Cross-check against merged PRs:
+   - Get the integration branch (`method.config.md` → `integration_branch` / `## Ship environments`) and the project's issue-ID prefix (from the Linear team in `method.config.md` — e.g. `RS-`, `PROJ-`).
    - List PRs merged since the last doc-update date (from step 2):
      ```bash
      gh pr list --state merged --base <integration-branch> --limit 100 \
        --json number,title,headRefName,mergedAt \
        --jq '.[] | select(.mergedAt >= "<last-doc-update-date>")'
      ```
-   - Extract issue IDs from each PR's `headRefName` (e.g. `feature/WIT-434-…`) **and** its title/body (bundled `<PREFIX>-\d+`).
+   - Extract issue IDs from each PR's `headRefName` (e.g. `feature/PROJ-434-…`) **and** its title/body (bundled `<PREFIX>-\d+`).
    - **Diff against the Done set from step 3.** Any merged-but-not-Done issue is shipped work — fold it into this sync, and tell the user its Linear state lags so they can reconcile.
    - Non-skippable: this guard is the only thing between a lagging Linear board and a doc-sync that misses real features. (Root cause: post-ship Linear transitions in Pipekit are command-driven, not merge-driven — an upstream `bin/pk` limitation, not a project bug.)
 5. For each shipped issue (Done **or** merged-but-not-Done from step 4): check if it has a light spec (look for `## Light Spec` in the description — `pk issue show <ID> --fields description`)

@@ -39,7 +39,7 @@ echo "pk_git_build_evidence: built / docs-only / none classification"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 
-# Build a throwaway repo with commits referencing assorted WIT ids.
+# Build a throwaway repo with commits referencing assorted issue ids.
 (
   cd "$stage"
   git init -q
@@ -49,23 +49,23 @@ trap 'rm -rf "$stage"' EXIT
 
   mkdir -p src docs supabase/migrations Logs/Sessions
 
-  # WIT-100: real implementation (non-doc file) — expect built
+  # PROJ-100: real implementation (non-doc file) — expect built
   echo "export const x = 1" > src/feature.ts
-  git add -A && git commit -q -m "feat(x): implement thing for WIT-100"
+  git add -A && git commit -q -m "feat(x): implement thing for PROJ-100"
 
-  # WIT-200: docs only — expect docs-only
+  # PROJ-200: docs only — expect docs-only
   echo "# notes" > docs/wit200.md
   echo "- entry" >> Logs/Sessions/2026-06-03_1000.md
-  git add -A && git commit -q -m "docs(x): notes for WIT-200"
+  git add -A && git commit -q -m "docs(x): notes for PROJ-200"
 
-  # WIT-300: never referenced — expect none (no commit mentions it)
+  # PROJ-300: never referenced — expect none (no commit mentions it)
   echo "export const y = 2" > src/other.ts
   git add -A && git commit -q -m "feat(x): unrelated work"
 
-  # WIT-497 / WIT-49 boundary: WIT-497 is docs-only; ensure WIT-49 (absent)
-  # does NOT borrow WIT-497's commit via substring match.
+  # PROJ-497 / PROJ-49 boundary: PROJ-497 is docs-only; ensure PROJ-49 (absent)
+  # does NOT borrow PROJ-497's commit via substring match.
   echo "# false ship notes" > docs/wit497.md
-  git add -A && git commit -q -m "docs(x): close-out notes for WIT-497"
+  git add -A && git commit -q -m "docs(x): close-out notes for PROJ-497"
 )
 
 ref=$(cd "$stage" && git rev-parse --abbrev-ref HEAD)
@@ -73,14 +73,14 @@ run() { ( cd "$stage" && pk_git_build_evidence "$1" "$ref" ); }
 
 assert() { local name="$1" exp="$2" got="$3"; [ "$exp" = "$got" ] && ok "$name ($got)" || nope "$name" "expected $exp, got $got"; }
 
-assert "WIT-100 has implementation"        "built"     "$(run WIT-100)"
-assert "WIT-200 docs-only flagged"          "docs-only" "$(run WIT-200)"
-assert "WIT-300 absent → none"              "none"      "$(run WIT-300)"
-assert "WIT-497 docs-only flagged"          "docs-only" "$(run WIT-497)"
-assert "WIT-49 absent (no substring steal)" "none"      "$(run WIT-49)"
+assert "PROJ-100 has implementation"        "built"     "$(run PROJ-100)"
+assert "PROJ-200 docs-only flagged"          "docs-only" "$(run PROJ-200)"
+assert "PROJ-300 absent → none"              "none"      "$(run PROJ-300)"
+assert "PROJ-497 docs-only flagged"          "docs-only" "$(run PROJ-497)"
+assert "PROJ-49 absent (no substring steal)" "none"      "$(run PROJ-49)"
 
 # Default ref (HEAD) path works without an explicit ref arg.
-got_default=$( cd "$stage" && pk_git_build_evidence "WIT-100" )
+got_default=$( cd "$stage" && pk_git_build_evidence "PROJ-100" )
 assert "default ref resolves to HEAD"       "built"     "$got_default"
 
 echo ""

@@ -78,7 +78,7 @@ derive the current initiative live from the Linear hierarchy; `/roadmap-create` 
 
 **Completability is the load-bearing property.** A project holding 60 open issues is a *pool*, not a
 lane — and the `i{N}.`→`P{N}.` walk structurally cannot see into a pool, so `pk status` will point at
-some idle lane while all the live work sits invisible. (Anchor: SiteLine, 2026-08-02 — 98 of 162 open
+some idle lane while all the live work sits invisible. (Anchor: a consumer project, 2026-08 — 98 of 162 open
 issues sat in three pool projects; `In Progress` read 0 and the real execution order had migrated into
 a gitignored notes file.) The rule that prevents it: **completability lives at the project level,
 eternity lives at the theme/label level.** A project is created only for work that has been *cut* into
@@ -173,7 +173,7 @@ map 1:1 to projects, you don't need this layer — the initiative surface alread
 | **Saved view per label** | one ungrouped view per label; Manual sort is set by hand in the Linear view UI (not settable over the API) |
 | **`sortOrder` step** | `1000` (gap between adjacent issues; leaves slack to insert without a renumber) |
 
-- **Phase labels come from your own `ROADMAP.md` phase names** — the values above are SiteLine-shaped examples, not a contract.
+- **Phase labels come from your own `ROADMAP.md` phase names** — the values above are worked examples, not a contract.
 - **Continuous is named-items-only:** only issues `ROADMAP.md` names by identifier get the pool label — never every open issue in the pool's projects.
 - **Order = real `blockedBy` relations**, never description prose. `Order: Any` marks issues with no intra-phase dependency (safe to run anytime / in parallel).
 - One issue carries **at most one** `Roadmap: Phase *` label (or the pool label) — never two, and never both `Order: Any` and an unresolved `blockedBy`.
@@ -225,7 +225,7 @@ Best for: solo dev, small teams, projects where preview URLs replace a staging e
 | Preview | PR branches | Per-PR preview URLs |
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `main`
-**Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote main` opens the `dev` → `main` PR (Phase 1, no state change); `pk promote main --finish` after the merge transitions WITs to `Done` (Phase 2).
+**Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote main` opens the `dev` → `main` PR (Phase 1, no state change); `pk promote main --finish` after the merge transitions issues to `Done` (Phase 2).
 **Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed, on dev) + auto-pull; `pk promote main --finish` → `Done` (after the promote PR merges; two-phase, not optimistic). `pk done` runs *after* the PR is merged (or pass `--merge` and let pk run `gh pr merge` for you).
 
 ### Three-Tier (dev → beta → main)
@@ -241,7 +241,7 @@ Best for: teams with QA, projects needing a stable UAT environment, regulated in
 
 **Release flow:** `feature/*` → PR to `dev` → PR to `beta` → PR to `main`
 **Promotion mechanism:** `pk ship` opens the feature → `dev` PR as Draft (v2.6.0+; `pk ready` flips to Ready). `pk promote <env>` walks one hop per invocation (`pk promote beta` then `pk promote main`); each hop is two-phase — Phase 1 opens the PR, Phase 2 (`--finish`) transitions Linear states after merge.
-**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed) + auto-pull; `pk promote beta --finish` → `In Beta` (after promote PR merges); `pk promote main --finish` → `Done`. Each `pk promote` is two-phase — WITs stay in source state until `--finish` after the merge.
+**Linear transitions (v2.6.0+):** `pk ship` → `UAT` (PR open as Draft on preview); `pk done` → `In Dev` (merge confirmed) + auto-pull; `pk promote beta --finish` → `In Beta` (after promote PR merges); `pk promote main --finish` → `Done`. Each `pk promote` is two-phase — issues stay in source state until `--finish` after the merge.
 
 ### Environments
 
@@ -353,15 +353,16 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Default deep flag** |  | `true` \| `false` | `false` | `/work` (treats every issue as `--deep` if `true`) |
 | **Ship environments** |  | comma-separated list, ordered | `dev,main` | `pk ship --env=<name>` (multi-env projects only) |
 | **Linear API key env var** |  | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` (Linear API access) |
+| **Secrets reference file** |  | path | (none — `pk` probes `secrets.op`, then `op-references.conf`) | The `op://` reference file `pk doctor`'s "key not set" hint names in its `op run --env-file=<file> -- pk …` recipe. |
 | **Linear transport** |  | `api` \| `mcp` | `api` | Every skill that reads or writes Linear. `api` = `bin/pk` verbs (`pk issue search/show/create/update/set/relate/comment`, `pk project list`, `pk gql` for the long tail — every mutation passes `pk`'s workspace guard, and the key comes from `Linear API key env var`). `mcp` = the Linear MCP server the project registers in `.mcp.json`. Verb table in `sop/Linear_SOP.md § Linear transport`; skills read the value with `pk config "Linear transport" api`. |
 | **Method repo** |  | git URL | `https://github.com/withpiper/pipekit.git` | `pk doctor` (upstream-staleness check); also overridable via the `METHOD_REPO` env var. Only forks on a non-standard remote need to set this. |
 | **Migration dir** |  | e.g. `supabase/migrations/` | (none) | `/pr-security-review` (locate migrations to audit); `/spec-preflight` Probe 3.6d (migration data-shape); `scripts/check-migration-drift.sh` + `templates/ci/migration-drift.yml` (v4.18.0 drift detection — no value → clean skip) |
-| **Platform** |  | `managed-supabase` \| `self-hosted-postgres` \| `none` | `none` | `/spec-preflight` Probe 3.6b — refuses GUC-based prod-safety designs on managed-supabase (handoff #20, verified at WIT-450) |
+| **Platform** |  | `managed-supabase` \| `self-hosted-postgres` \| `none` | `none` | `/spec-preflight` Probe 3.6b — refuses GUC-based prod-safety designs on managed-supabase (handoff #20, verified on a consumer project) |
 | **Spec ready state** |  | Linear state name | `Specced` | `pk spec-cycle` (refuses to trigger if issue is in any other state) |
 | **Spec approved state** |  | Linear state name | `Approved` | `pk spec-cycle` (transitions issue to this state on a Pass verdict) |
 | **Self-reference check** |  | `enabled` \| `disabled` | `disabled` | `pk verify` — runs `scripts/check-no-self-references.sh`; fails if current branch's source still references its own ticket ID (e.g. `RS-29`) in any file the branch did not edit. Catches predecessor-placeholder integration misses (RS-29 rs-vault, 2026-05-05). Bypass on a per-run basis with `AGREED_PLACEHOLDER=1 pk verify` after surfacing matches in the hand-off summary. |
 | **Source root** |  | path | `src/` | `scripts/check-no-self-references.sh` (where to grep) |
-| **Financial review WIT** |  | Linear issue id, or blank | (blank) | `/financial-review` — recurring WIT moved In Progress → In Review → Done each cycle; **blank disables the Linear lifecycle** (run + report only). Finance/calculation-heavy projects only. |
+| **Financial review issue** |  | Linear issue id, or blank | (blank) | `/financial-review` — recurring issue moved In Progress → In Review → Done each cycle; **blank disables the Linear lifecycle** (run + report only). Finance/calculation-heavy projects only. |
 | **Financial review checks** |  | path | `resources/financial-review-checks.md` | `/financial-review` — project checks file (test cmd, calc files, DB-integrity SQL, parity formulas). Scaffold from `pipekit/templates/financial-review-checks.template.md`. |
 | **Prod-ready checks** |  | path | `resources/prod-readiness-checks.md` | `/prod-ready` — project checks file (build command, secret prefixes, monitoring, rate-limit middleware, backups, flags, dashboards). Scaffold from `pipekit/templates/prod-readiness-checks.template.md`. The skill guards the **last** entry in `Ship environments` (the production env). |
 | **Prod-ready report path** |  | path | `Reports/` | `/prod-ready` — where the readiness report is written (`Production_Readiness_<ID>_<date>.md`). |
@@ -375,9 +376,9 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 | **Portfolio staleness days** |  | integer | `14` | `pk portfolio` — a project sub-phase whose newest issue hasn't been touched (Linear `updatedAt`) in more than this many days is flagged `⚠ Nd idle` in the runway. |
 | **Runbook path** |  | path | `engineering/RUNBOOK.md` | The one runbook — how the project runs: `sync-method.sh` writes the `How we run` block, `/tpm` keeps the `Now` block to a one-line pointer at the weekly plan, you own the rest. (v5.0.x wrote the whole agreement here; v5.1.0 moved it to `Plan path`.) |
 | **Plan path** |  | path, or `none` | `engineering/WEEKLY_PLAN.md` | The weekly plan — what the engineer does this week, by session, with the commands to run (`sop/TPM_SOP.md § The weekly plan`). Written only by `/tpm`; created by `sync-method.sh` when missing. `pk next` reads its `agreed` date for the staleness nudge. `none` switches the weekly plan off for this project: sync scaffolds nothing and `pk next` never nudges toward `/tpm` (solo / single-repo projects). |
-| **Plan primary** |  | relative repo path, or blank | (blank = this repo) | `/tpm` and `pk next` — in a multi-repo portfolio, the repo whose weekly plan is the portfolio's; every other repo's runbook `Now` block holds a one-line pointer to it and gets no plan file of its own. Set it in the *non*-primary repos (e.g. `../SiteLine`). An existing `Runbook primary` is honoured when this is blank. |
+| **Plan primary** |  | relative repo path, or blank | (blank = this repo) | `/tpm` and `pk next` — in a multi-repo portfolio, the repo whose weekly plan is the portfolio's; every other repo's runbook `Now` block holds a one-line pointer to it and gets no plan file of its own. Set it in the *non*-primary repos (e.g. `../<primary-repo>`). An existing `Runbook primary` is honoured when this is blank. |
 | **Runbook primary** |  | relative repo path, or blank | (blank = this repo) | Pre-v5.1.0 name for `Plan primary`; still read as its fallback. |
-| **Portfolio repos** |  | comma-separated relative paths | (blank) | `/tpm` — sibling repos reconciled in the same session (e.g. `../piper`). A sibling with the **same `Team ID`** shares this board: it is never read or written through `pk`; only its worktrees, PRs and sessions are read. A sibling with its own board is read and written from inside it, under its own `method.config.md` and key recipe. |
+| **Portfolio repos** |  | comma-separated relative paths | (blank) | `/tpm` — sibling repos reconciled in the same session (e.g. `../<sibling-repo>`). A sibling with the **same `Team ID`** shares this board: it is never read or written through `pk`; only its worktrees, PRs and sessions are read. A sibling with its own board is read and written from inside it, under its own `method.config.md` and key recipe. |
 | **Weekly capacity days** |  | number | `6` | `/tpm` — the week, in **session-days**: working days × the Claude Code sessions you run on an average day. One session, six days → `6`; three sessions, five days → `15` (`sop/TPM_SOP.md § Capacity`). MUST is bounded at 60% of it. |
 | **Tier effort days** |  | `Quick: 0.5, Standard: 2, Heavy: 4` | that | `/tpm` — coarse effort per `tier:*` label, in the same session-days as the week. The default is one session doing everything by hand; with several sessions and `/work` executing, `Quick: 0.1, Standard: 0.5, Heavy: 1` has measured true. Unsized issues are flagged, never guessed. |
 | **Plan stale days** |  | integer | `7` | `pk next` — prints `plan agreed Nd ago → /tpm` once the weekly plan's agreed date is older than this (`plan: no agreement yet → /tpm` while the synced skeleton carries no date). |
@@ -418,7 +419,7 @@ Default deep flag: false
 Ship environments: main
 ```
 
-### Example (Piper)
+### Example (three-tier: dev → beta → main)
 
 ```
 Integration branch: dev

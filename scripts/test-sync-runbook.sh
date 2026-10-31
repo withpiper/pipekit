@@ -419,13 +419,13 @@ assert_file     "sibling/runbook-primary: the runbook itself is still created" "
 P=$(new_proj sibling-plan)
 cat > "$P/method.config.md" <<'EOF'
 ```
-Plan primary: ../SiteLine
+Plan primary: ../sibling
 Plan path: docs/WEEK.md
 ```
 EOF
 run_sync "$P" --dry-run
 assert_eq       "sibling/plan-primary: exit 0" 0 "$SYNC_CODE"
-assert_contains "sibling/plan-primary: SKIP names the primary and the custom path" "SKIP docs/WEEK.md (plan lives in ../SiteLine)" "$SYNC_OUT"
+assert_contains "sibling/plan-primary: SKIP names the primary and the custom path" "SKIP docs/WEEK.md (plan lives in ../sibling)" "$SYNC_OUT"
 assert_not_contains "sibling/plan-primary: no WOULD CREATE for the plan" "WOULD CREATE docs/WEEK.md" "$SYNC_OUT"
 assert_no_file  "sibling/plan-primary: plan not created" "$P/docs/WEEK.md"
 
