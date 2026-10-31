@@ -51,7 +51,7 @@ A complete guide to using Pipekit from project inception through production deli
 
 Pipekit is a structured, AI-assisted software delivery system. It provides a deterministic pipeline from "I have an idea" to "it's in production" with quality gates at every stage.
 
-It was extracted from the Piper production finance platform and is designed to be portable — you sync it into any project and it adapts via a project-specific config file.
+It was extracted from a production finance platform and is designed to be portable — you sync it into any project and it adapts via a project-specific config file.
 
 The method is opinionated about process but flexible about technology. It doesn't care if you use React or Svelte, Postgres or MongoDB. It cares that you spec before you plan, plan before you execute, and review before you ship.
 
@@ -355,7 +355,7 @@ This is where strategy becomes work items. The skill reads your strategy docs an
    - A lane — **or no project at all**, if the requirement isn't part of a coherent batch yet
    - Milestone (Work Package) assignment
 
-> **Both levels are completable, and that's the point (v4.28.0).** The `i{N}.`→`P{N}.` walk reads *into* a project but never *inside* one — it names the lowest live project and stops. So a project that keeps accepting work becomes a pool whose contents are invisible to `pk next`/`pk status`. Keep initiatives and lanes finishable; park uncut work with **no project plus an `Area:` label** and cut it into a lane later via `/phase-plan --cut`. Anchor: SiteLine, 2026-08-02 — 98 of 162 open issues sat in three pool projects while `pk status` pointed at a lane idle for two weeks. Full model in `method.config.md § Initiative Surface`.
+> **Both levels are completable, and that's the point (v4.28.0).** The `i{N}.`→`P{N}.` walk reads *into* a project but never *inside* one — it names the lowest live project and stops. So a project that keeps accepting work becomes a pool whose contents are invisible to `pk next`/`pk status`. Keep initiatives and lanes finishable; park uncut work with **no project plus an `Area:` label** and cut it into a lane later via `/phase-plan --cut`. Anchor: a consumer project, 2026-08 — 98 of 162 open issues sat in three pool projects while `pk status` pointed at a lane idle for two weeks. Full model in `method.config.md § Initiative Surface`.
 
 A narrative `ROADMAP.md` may still be written as an optional legacy/handoff artifact, but it is no longer a required output or a state file the pipeline reads.
 
@@ -603,7 +603,7 @@ It is a **hard gate** as of v4.17.0 — on PASS the gate writes a sha-matched `s
 
 Variants:
 
-- `pk ship --ready` opens the PR Ready immediately (outside reviewers fire on `opened` event). Use for one-shot tiny WITs where iteration won't happen.
+- `pk ship --ready` opens the PR Ready immediately (outside reviewers fire on `opened` event). Use for one-shot tiny issues where iteration won't happen.
 - `pk ship --review` additionally posts a Linear comment flagging review-in-flight + prints the antagonistic reviewer subagent invocation (v2.1.0). The reviewer plays devil's advocate vs `/work` + `/verify` — surfaces cross-cutting concerns the spec didn't think to mention. Don't skip on anything auth, security, financial, or compliance-adjacent.
 
 ### Flip Draft → Ready (v2.6.0+)
@@ -617,11 +617,11 @@ The merge-moment gesture. After iterating on a Draft PR (pushing fixes, addressi
 - Finds the PR for the feature branch (by branch name match)
 - Runs `gh pr ready <#>` — fires `ready_for_review` event
 - Outside reviewers listen for this event and run once, at the merge moment, not on every push. `templates/ci/` ships two (Semgrep, claude-review) but they are **opt-in copy-ins** — sync lands them under `templates/`, never in `.github/workflows/`. `pk ready` probes your workflows for the `ready_for_review` trigger and names the ones that will actually fire; if it reports none installed, no outside review is happening on that PR (v4.25.0+)
-- **Conflicting PRs get no CI at all, silently (v4.26.0+).** GitHub cannot build the merge ref for a conflicting PR, so it dispatches **zero** `pull_request` workflows — required checks simply never run, and the board keeps whatever it last showed. `pk ready` now warns on `CONFLICTING`, before the already-Ready early return (SiteLine's PIPER-174 was already Ready *when* it conflicted, and merged with its only required gate never having run). It warns rather than blocks, and stays silent on `MERGEABLE` and `UNKNOWN` alike — mergeability is computed asynchronously, and pk will not assert a state it did not observe. The tell, if you are reading the board by hand: a check list containing only `pull_request_target` entries means conflicting, not passing
-- **"Runs once" cuts both ways (v4.26.0+).** A reviewer whose `pull_request` types omit `synchronize` reviews the Ready flip and *nothing you push after it* — so the commits that fix its own findings are the ones no reviewer sees, and the PR shows no sign of it. `pk ready` now probes for this and names any such workflow, with the recovery (`gh pr ready --undo <#> && gh pr ready <#>`, which re-fires the event on the current head). Observed on SiteLine: PIPER-345's `879748e5` and PIPER-499's final head `778edbec` both merged unreviewed for exactly this reason. Adding `synchronize` to the workflow trades CI minutes for reviewing every push — a project-level call, so Pipekit reports the gap rather than closing it for you
-- **Stale verify evidence now blocks the flip (v4.27.0+).** `pk ship` proved a verify sentinel matched HEAD *at ship time*. Commits you push afterwards — review fixes, UAT fixes — move HEAD past it, and until now nothing re-checked, so a PR could merge carrying a PASS artifact that described code no longer in the diff. `pk ready` compares the newest verify evidence for the issue against current HEAD and classifies what changed since: evidence/prose only is benign and passes; **source or a migration refuses the flip**. **So does evidence pointing at a commit that no longer exists** (rebase, squash, force-push): drift is then uncomputable, and uncomputable is not clean. That case fails closed on purpose — `pk ship`'s own gate demands an *exact* sha match, so a rebased branch cannot ship at all, and letting it flip to Ready would make this gate looser than the one it reinforces. A rebase immediately before requesting review would otherwise defeat the feature entirely. Migrations get their own message, because a migration edited after the verify that exercised it also breaks the frozen-file invariant (the freeze starts at first application to *any* database, local included) — and the fix for that is a new migration, not an edit. Re-run `/verify`, or `pk ready --force` to flip anyway, which logs a Linear audit comment the same way `pk ship --force` does. The check is computed *before* the already-Ready early return, because the case that motivated it (SiteLine PIPER-490) was a PR that had already been flipped when the migration changed under it. Evidence lookup falls back past `verify-complete.md` to `evidence.txt` / `reality-check.md` — PIPER-490 had no `verify-complete.md` at all, and keying only on the sentinel would have left this gate blind to its own anchor case. Each file is searched for in three places: the checkout you run from, the branch's worktree (v5.3.1; a project that gitignores `Logs/Verify` never commits the evidence, so from the parent only the worktree holds it), and the branch's committed tree
-- **Follow-up branches resolve, not just `feature/` (v4.32.0+).** `pk ready <ID>` and `pk done <ID>` used to glob `feature/<ID>-*` alone, so the second branch the loop legitimately produces — feature merges, UAT surfaces something small, the fix lands on `fix/<ID>-*` — was invisible to both. Both now search `feature/`, `fix/` and `hotfix/`, newest commit first (a follow-up is by definition newer than the branch it follows), and share one resolver so they cannot disagree about where a branch lives. The not-found message names every glob it tried, because the old text named only `feature/<ID>-*` and read as "I don't know this issue" rather than "I looked in the wrong place". Anchor: across 185 ID-prefixed merged PRs on SiteLine, *all five* multi-PR issues had this shape — POC-448 lost two PRs off its ship record, POC-450 got no record at all, and POC-426 and PIPER-782 were patched by hand five weeks apart without the cause being filed (PIPER-793)
-- No Linear state change (UAT stays UAT — the WIT was already In Review/UAT after `pk ship`)
+- **Conflicting PRs get no CI at all, silently (v4.26.0+).** GitHub cannot build the merge ref for a conflicting PR, so it dispatches **zero** `pull_request` workflows — required checks simply never run, and the board keeps whatever it last showed. `pk ready` now warns on `CONFLICTING`, before the already-Ready early return (the anchor case on a consumer project was already Ready *when* it conflicted, and merged with its only required gate never having run). It warns rather than blocks, and stays silent on `MERGEABLE` and `UNKNOWN` alike — mergeability is computed asynchronously, and pk will not assert a state it did not observe. The tell, if you are reading the board by hand: a check list containing only `pull_request_target` entries means conflicting, not passing
+- **"Runs once" cuts both ways (v4.26.0+).** A reviewer whose `pull_request` types omit `synchronize` reviews the Ready flip and *nothing you push after it* — so the commits that fix its own findings are the ones no reviewer sees, and the PR shows no sign of it. `pk ready` now probes for this and names any such workflow, with the recovery (`gh pr ready --undo <#> && gh pr ready <#>`, which re-fires the event on the current head). Observed on a consumer project: two issues' final heads both merged unreviewed for exactly this reason. Adding `synchronize` to the workflow trades CI minutes for reviewing every push — a project-level call, so Pipekit reports the gap rather than closing it for you
+- **Stale verify evidence now blocks the flip (v4.27.0+).** `pk ship` proved a verify sentinel matched HEAD *at ship time*. Commits you push afterwards — review fixes, UAT fixes — move HEAD past it, and until now nothing re-checked, so a PR could merge carrying a PASS artifact that described code no longer in the diff. `pk ready` compares the newest verify evidence for the issue against current HEAD and classifies what changed since: evidence/prose only is benign and passes; **source or a migration refuses the flip**. **So does evidence pointing at a commit that no longer exists** (rebase, squash, force-push): drift is then uncomputable, and uncomputable is not clean. That case fails closed on purpose — `pk ship`'s own gate demands an *exact* sha match, so a rebased branch cannot ship at all, and letting it flip to Ready would make this gate looser than the one it reinforces. A rebase immediately before requesting review would otherwise defeat the feature entirely. Migrations get their own message, because a migration edited after the verify that exercised it also breaks the frozen-file invariant (the freeze starts at first application to *any* database, local included) — and the fix for that is a new migration, not an edit. Re-run `/verify`, or `pk ready --force` to flip anyway, which logs a Linear audit comment the same way `pk ship --force` does. The check is computed *before* the already-Ready early return, because the case that motivated it (a consumer project's PR) was a PR that had already been flipped when the migration changed under it. Evidence lookup falls back past `verify-complete.md` to `evidence.txt` / `reality-check.md` — that PR had no `verify-complete.md` at all, and keying only on the sentinel would have left this gate blind to its own anchor case. Each file is searched for in three places: the checkout you run from, the branch's worktree (v5.3.1; a project that gitignores `Logs/Verify` never commits the evidence, so from the parent only the worktree holds it), and the branch's committed tree
+- **Follow-up branches resolve, not just `feature/` (v4.32.0+).** `pk ready <ID>` and `pk done <ID>` used to glob `feature/<ID>-*` alone, so the second branch the loop legitimately produces — feature merges, UAT surfaces something small, the fix lands on `fix/<ID>-*` — was invisible to both. Both now search `feature/`, `fix/` and `hotfix/`, newest commit first (a follow-up is by definition newer than the branch it follows), and share one resolver so they cannot disagree about where a branch lives. The not-found message names every glob it tried, because the old text named only `feature/<ID>-*` and read as "I don't know this issue" rather than "I looked in the wrong place". Anchor: across 185 ID-prefixed merged PRs on a consumer project, *all five* multi-PR issues had this shape — one lost two PRs off its ship record, one got no record at all, and two were patched by hand five weeks apart without the cause being filed
+- No Linear state change (UAT stays UAT — the issue was already In Review/UAT after `pk ship`)
 
 Idempotent: if the PR is already Ready, prints "No flip needed" and exits 0.
 
@@ -654,14 +654,14 @@ Test the feature against the spec's acceptance criteria under real usage conditi
 ## The Express Lane: `/pk-express`
 
 **Skill:** `/pk-express <ISSUE-ID>` (primary) or `/pk-express "<idea>"` (prepends brainstorm)
-**Input:** A brainstormed WIT, or a raw one-line idea
+**Input:** A brainstormed issue, or a raw one-line idea
 **Output:** An open **Draft PR** (Linear → UAT) — or a pause at one of five gates
 
-For *simple* WITs, `/pk-express` collapses Stages 1–3 into a single hands-off pass. It is connective glue over four stages that already self-drive — it removes the between-stage typing and the two interactive triage/confirm prompts, nothing more:
+For *simple* issues, `/pk-express` collapses Stages 1–3 into a single hands-off pass. It is connective glue over four stages that already self-drive — it removes the between-stage typing and the two interactive triage/confirm prompts, nothing more:
 
 ```
 /brainstorm "<idea>"  →  /light-spec <ID>  →  pk branch <ID>  →  /work <ID>
-   (file the WIT)         (auto-cycle to        (worktree)         (execute → auto /verify
+   (file the issue)       (auto-cycle to        (worktree)         (execute → auto /verify
                            Approved)                                  → auto pk ship → Draft PR)
 ```
 
@@ -695,7 +695,7 @@ feature/* → pk ship (Draft) → pk ready → pk done (UAT → In Dev)
 - `pk ship` opens the feature → dev PR as Draft (Linear → `UAT`)
 - `pk ready` flips Draft → Ready (fires outside reviewers)
 - `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + planning SUMMARY/PLAN-flip
-- `pk promote main` (or `pk promote` with no arg) opens the dev → main PR. WITs stay in `In Dev`.
+- `pk promote main` (or `pk promote` with no arg) opens the dev → main PR. Issues stay in `In Dev`.
 - `pk promote main --finish` (v2.6.0+ Phase 2) after the promote PR merges: transitions the issue → `Done`
 
 **Three-tier** (`dev` → `beta` → `main`):
@@ -707,15 +707,15 @@ feature/* → pk ship (Draft) → pk ready → pk done (UAT→In Dev)
 - `pk ship` opens the feature → dev PR as Draft (Linear → `UAT`)
 - `pk ready` flips Draft → Ready (fires outside reviewers)
 - `pk done <ID>` after merge: cleanup + Linear → `In Dev` + auto-pull + planning SUMMARY/PLAN-flip
-- `pk promote beta` opens dev → beta. WITs stay in `In Dev`. `--finish` after merge transitions → `In Beta`.
-- `pk promote main` opens beta → main. WITs stay in `In Beta`. `--finish` after merge transitions → `Done`.
+- `pk promote beta` opens dev → beta. Issues stay in `In Dev`. `--finish` after merge transitions → `In Beta`.
+- `pk promote main` opens beta → main. Issues stay in `In Beta`. `--finish` after merge transitions → `Done`.
 
 **Auto-machinery** firing on PR open / main merge (Pipekit owns none of these — they're project infrastructure):
 
 - **CI** enforces the pre-deploy gate at every PR. If types, lint, or tests fail, the merge is blocked.
 - **Vercel** deploys preview on PR open and prod on main merge.
 - **GitHub Actions** (Supabase projects only): `db-pr-check.yml` validates migrations on PR open against ephemeral postgres; `db-migrate.yml` applies them on main merge. Lift the workflow pair from rs-vault if your project doesn't have them yet.
-- **Linear transition** (optional, v2.7.1): `templates/ci/linear-transition.yml` advances a merged WIT's Linear state automatically on integration-branch merge — the safety net for when `pk done` is skipped (e.g. a GitHub-UI merge). Forward-only and idempotent. See `templates/ci/README.md` for setup and the note on Linear's native GitHub integration (turn native off on multi-tier projects; this workflow is ladder-aware where native isn't).
+- **Linear transition** (optional, v2.7.1): `templates/ci/linear-transition.yml` advances a merged issue's Linear state automatically on integration-branch merge — the safety net for when `pk done` is skipped (e.g. a GitHub-UI merge). Forward-only and idempotent. See `templates/ci/README.md` for setup and the note on Linear's native GitHub integration (turn native off on multi-tier projects; this workflow is ladder-aware where native isn't).
 
 ---
 
@@ -1166,7 +1166,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 
 | Skill | Invocation | What It Does |
 |-------|------------|-------------|
-| Express | `/pk-express <ISSUE-ID>` (or `"<idea>"`) | Idea→Draft-PR autopilot for **simple** WITs (Quick/Standard only). Chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship). Stops only at 5 gates: not-Now, tier:heavy refusal, spec stalemate, verify flag, Draft PR opened. Resumes from Linear state. |
+| Express | `/pk-express <ISSUE-ID>` (or `"<idea>"`) | Idea→Draft-PR autopilot for **simple** issues (Quick/Standard only). Chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify + ship). Stops only at 5 gates: not-Now, tier:heavy refusal, spec stalemate, verify flag, Draft PR opened. Resumes from Linear state. |
 | Bug | `/pk-bug` | Bug pipeline with regression-test-first discipline: intake → reproduce → failing test → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. |
 
 ### Stage 3: Verify + Ship
@@ -1175,7 +1175,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 |-----------------|------------|-------------|
 | Verify | `/verify` (or `pk verify`) | Pre-deploy gate (types + lint + test); QA subagent if `Require QA review: true` |
 | Ship | `pk ship` | Push, open PR as **Draft** (v2.6.0+) against integration branch, Linear → UAT. Refuses off-format commit subjects (v4.35.0; `--force` waives) |
-| Ship Ready | `pk ship --ready` | Open Ready immediately (v2.6.0+; one-shot tiny WITs) |
+| Ship Ready | `pk ship --ready` | Open Ready immediately (v2.6.0+; one-shot tiny issues) |
 | Ready flip | `pk ready [<ID>]` | Flip Draft → Ready (v2.6.0+); fires outside reviewers. v4.32.0+: matches `fix/`/`hotfix/` branches too |
 | Ship + Review | `pk ship --review` | Adds Linear "review-in-flight" comment + reviewer invocation printed |
 | PR Fix | `/pr-fix` | Pluggable-engine review (`--engine=native` pr-review-toolkit, default · `--engine=builtin` portable fallback) + git-history/prior-PR-comment historical finders (v2.7.0); two-axis severity×confidence triage with INVESTIGATE quadrant; fix / reject / defer; posts Linear summary. `--from-review` ingests GHA review; `--runs=N` raises confidence on recurrence; `--second-opinion=gemini` adds a parallel Gemini Flash read. |
@@ -1187,7 +1187,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 |---------|------------|-------------|
 | Cleanup | `pk done <ID> [--merge]` | Post-merge: verify merge, cleanup worktree+branch, post commits/diffstat to Linear, transition UAT → In `<FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration + writes planning SUMMARY + flips PLAN status. v2.7.0+: resets the parent branch, prints a stack advisory, and reminds you to deploy when a `Deploy command` is configured (script-deploy projects). v4.32.0+: matches `fix/`/`hotfix/` branches, falls back to `origin`, and records a second ship as a follow-up. |
 | Prod Ready | `/prod-ready [<ID>]` | Production-readiness gate (v4.3.0). Runs **once** before the final promote (the last `Ship environments` entry; the merge to `main` on 1-tier). Six operational checks — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. PASS/FAIL report + Linear comment. **Hard gate v4.17.0**: PASS writes a source-branch-sha sentinel; `pk promote <final-env>` refuses without it on projects with a checks file (`--force` / `PK_PRODREADY_BYPASS=1`; 1-tier projects have no promote seam, so it stays advisory there). Portable framework, project checks in `resources/prod-readiness-checks.md`. No-op without a checks file. |
-| Promote — open | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR. WITs stay in source state. PR body embeds bundled-WIT tracker. 2-tier: `pk promote` with no arg picks the only hop. |
+| Promote — open | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR. Issues stay in source state. PR body embeds bundled-issue tracker. 2-tier: `pk promote` with no arg picks the only hop. |
 | Promote — finish | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions matching issues → `In <Env>` (intermediate) or → Done (final). |
 | Deploy (script projects) | `pk deploy [<env>] [-- <args>]` | Run the project's configured `Deploy command` for `<env>` (v4.6.0). Bare / `prod` → `Deploy command`; `pk deploy dev` → `Deploy command dev`. Args after `--` pass through to the script (a file list, `--all`, …). Script-deploy projects only — branch-promotion projects deploy via `pk promote`. Thin delegate: the script owns confirmation + safety. |
 
@@ -1209,7 +1209,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 |-----------------|------------|-------------|
 | Status | `pk status` | Full unscoped Linear board view, led by the focus strip |
 | Sessions | `pk sessions` | Live Claude sessions across every front end, waiting first, with what each is asking for |
-| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done WITs with no real commits on the integration branch, via git evidence), **upstream-staleness check** (v3.1.0 — warns when the synced Pipekit lags the method repo's latest release; offline-soft) |
+| Doctor | `pk doctor` | Diagnostic: config, Linear API, worktree dir, stale artifacts, **false-ship cross-check** (v2.7.0 — flags UAT/Done issues with no real commits on the integration branch, via git evidence), **upstream-staleness check** (v3.1.0 — warns when the synced Pipekit lags the method repo's latest release; offline-soft) |
 | Init | `pk init` | One-time per consuming project: seeds `notepad.md`, `Logs/Sessions/`, checks config |
 | Sync Linear | `/sync-linear` | Reconcile strategy-doc / requirement drift against the Linear initiative hierarchy |
 | Linear | `/linear` | Linear issue workflow helper |

@@ -2,7 +2,7 @@
 #
 # Runs scripts/check-migration-drift.sh on any PR that touches the migration
 # dir, with the PR's base branch as the collision baseline. Catches the
-# parallel-branch timestamp collision (Piper WIT-550) *in CI, at the merge
+# parallel-branch timestamp collision (a consumer project, 2026-06) *in CI, at the merge
 # moment* — the one point where the collision is visible, since both branches'
 # trees are finally comparable. Checks A+B only (git + filesystem, no
 # credentials); the --remote history check stays a local/deploy-time concern.

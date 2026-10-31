@@ -15,12 +15,12 @@
 #     the edit on the default branch first (its own PR), then rebase.
 #     Fix for an already-broken branch:
 #         git checkout origin/<default-branch> -- .github/workflows/<this-file>
-#     (Anchor: SiteLine POC-87, 2026-06-07 — a stripped header comment 401'd the
+#     (Anchor: a consumer project, 2026-06 — a stripped header comment 401'd the
 #     review; first misread as a 1Password/secret failure.)
 #
 # Part of Pipekit's Path 3 reviewer model (v2.6.0): Claude is the
 # semantic outside reviewer; semgrep.yml is the deterministic one.
-# Empirically caught 2 must-fix bugs on Piper PR #331 (2026-05-18)
+# Empirically caught 2 must-fix bugs on a consumer PR (2026-05)
 # that Semgrep and Gemini both missed.
 #
 # Triggers: `opened`, `ready_for_review`, and `synchronize`. The first

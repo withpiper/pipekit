@@ -1,8 +1,8 @@
 # Semgrep custom rule: UUID validation on dynamic route params.
 #
-# Deterministic backup for the failure mode surfaced 2026-05-18 on Piper
-# PR #341 — claude-review caught the analogous UUID-validation pattern
-# on PR #331 (three locations) but missed the same pattern on PR #341.
+# Deterministic backup for the failure mode surfaced 2026-05 on a consumer
+# project — claude-review caught the analogous UUID-validation pattern
+# on one PR (three locations) but missed the same pattern on the next.
 # "Apply standard patterns universally" isn't 100% reliable across LLM
 # reviewers; this rule is the determinism that catches what the LLM misses.
 #
@@ -80,12 +80,9 @@ rules:
     metadata:
       category: security
       cwe: "CWE-20: Improper Input Validation"
-      references:
-        - https://github.com/withpiper/piper/pull/331
-        - https://github.com/withpiper/piper/pull/341
       anchor: |
-        Piper PR #331 (2026-05-18) caught this pattern via claude-review
-        in three files. Piper PR #341 (2026-05-18) had the same pattern
+        A consumer PR (2026-05) caught this pattern via claude-review
+        in three files. A sibling PR the same day had the same pattern
         in one route and claude-review missed it. Adding this rule means
         the deterministic baseline catches the next miss regardless of
         which LLM reviewer is the standing one.

@@ -213,7 +213,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │      • Linear state unchanged (UAT stays UAT)            │
   │                                                          │
   │      Skip this step if you used `pk ship --ready`        │
-  │      (one-shot tiny WITs where iteration won't happen).  │
+  │      (one-shot tiny issues where iteration won't happen).│
   └──────────────────────────────────────────────────────────┘
        │
        ▼
@@ -301,7 +301,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │                                                          │
   │      Do NOT auto-chain past this step. /work, /verify,   │
   │      /pk-exit must NOT invoke pk done or pk promote on   │
-  │      their own. Surfaced 2026-05-13 (WIT-451): worker    │
+  │      their own. Surfaced 2026-05 (canary issue): worker  │
   │      session auto-fired pk done before UAT completed     │
   │      and wiped the worktree mid-test.                    │
   │                                                          │
@@ -381,8 +381,8 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │       pk promote <env>                                   │
   │       • walks Ship environments (e.g. dev,beta,main)     │
   │       • opens source → target PR per hop                 │
-  │       • embeds bundled WIT tracker in PR body            │
-  │       • WITs stay in source state until merge            │
+  │       • embeds bundled issue tracker in PR body          │
+  │       • issues stay in source state until merge          │
   │       • 2-tier: pk promote (no arg) picks the only hop   │
   │                                                          │
   │     ── human merges PR in GitHub UI ──                   │
@@ -390,7 +390,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     Phase 2 — finish the promote post-merge:             │
   │       pk promote <env> --finish                          │
   │       • finds the merged promote PR                      │
-  │       • parses the marker for bundled WITs               │
+  │       • parses the marker for bundled issues             │
   │       • transitions each issue:                          │
   │           intermediate hop  →  In <Env>  (e.g. In Beta)  │
   │           final hop         →  Done                      │
@@ -508,14 +508,14 @@ If `method.config.md § Phase Label Layer` is configured, the board mirrors `ROA
 | 4 | Verify | `/verify` | `./bin/pk verify` | worktree | local-only |
 | 5 | Ship | `pk ship` | `./bin/pk ship` | worktree | push + gh pr create as **Draft** (v2.6.0+) + writes Linear (UAT) |
 | 5 | (Variant) | `pk ship --env=<env>` | `./bin/pk ship --env=<env>` | worktree | + targets specific environment |
-| 5 | (Variant) | `pk ship --ready` | `./bin/pk ship --ready` | worktree | open Ready instead of Draft (v2.6.0+; for one-shot tiny WITs) |
+| 5 | (Variant) | `pk ship --ready` | `./bin/pk ship --ready` | worktree | open Ready instead of Draft (v2.6.0+; for one-shot tiny issues) |
 | **5a** | **Flip Draft → Ready** | **`pk ready [<ID>]`** | **`./bin/pk ready [<ID>]`** | **worktree or parent** | **fires `ready_for_review` GH event → outside reviewers run (v2.6.0+). Refuses if source/a migration changed since `/verify`, or the verified sha is unreachable after a rebase (v4.27.0+) — re-verify or `--force`** |
 | **5b** | **Antagonistic review** | **`pk ship --review`** | **`./bin/pk ship --review`** | **worktree** | **prints reviewer invocation; posts Linear "review in flight" comment (v2.1.0)** |
 | **5c** | **/pr-fix triage** | **`/pr-fix`** | **— (skill)** | **worktree** | **interactive findings triage; cross-spec handoff scan; posts Linear summary (v2.1.0)** |
 | **5d** | **/pr-security-review (opt-in)** | **`/pr-security-review`** | **— (skill)** | **worktree** | **security-focused PR review for migrations / RLS / SECURITY DEFINER / auth (v2.1.0)** |
 | 7 | Cleanup | `pk done <ID> [--merge]` | `./bin/pk done <ID> [--merge]` | parent, dev | verifies PR merged (or `--merge` runs `gh pr merge` first), removes worktree, posts journal highlights to Linear, transitions Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). **v2.6.0+**: also auto-pulls the integration branch. `--confirmed` accepted for backward compat (no-op). |
-| **8** | **Promote — open** | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | **v2.6.0+ two-phase**: opens promote PR, embeds bundled-WIT tracker in PR body, **WITs stay in source state until merge**. Refuses if any bundled issue is still in `UAT`; pass `--confirmed` after env-UAT sign-off. |
-| **8b** | **Promote — finish** | **`pk promote <env> --finish`** | **`./bin/pk promote <env> --finish`** | **parent, dev** | **v2.6.0+**: after the promote PR merges, transitions bundled WITs → `In <Env>` (intermediate) or → Done (final). Reads the tracker from the merged PR body; falls back to PR commits for older promote PRs without the marker. |
+| **8** | **Promote — open** | `pk promote <env> [--confirmed] [--stash\|--take-remote]` | `./bin/pk promote <env> [--confirmed] [--stash\|--take-remote]` | parent, dev | **v2.6.0+ two-phase**: opens promote PR, embeds bundled-issue tracker in PR body, **issues stay in source state until merge**. Refuses if any bundled issue is still in `UAT`; pass `--confirmed` after env-UAT sign-off. |
+| **8b** | **Promote — finish** | **`pk promote <env> --finish`** | **`./bin/pk promote <env> --finish`** | **parent, dev** | **v2.6.0+**: after the promote PR merges, transitions bundled issues → `In <Env>` (intermediate) or → Done (final). Reads the tracker from the merged PR body; falls back to PR commits for older promote PRs without the marker. |
 | **8′** | **Deploy (script projects)** | `pk deploy [<env>] [-- <args>]` | `./bin/pk deploy [<env>] [-- <args>]` | parent | **v4.6.0**: the script-deploy analog of promote (steps 8/8b). Runs the configured `Deploy command` for `<env>` (bare / `prod` → `Deploy command`; `pk deploy dev` → `Deploy command dev`); args after `--` pass to the script. Thin delegate — the script owns confirmation + safety. Used by projects that ship by script, not branch promotion (`Promote to main: false` + a `Deploy command`). |
 | meta | Diagnose | `pk doctor` | `./bin/pk doctor` | anywhere | config + API ping |
 | meta | Bootstrap | `pk init` | `./bin/pk init` | repo root | walks setup |
@@ -636,7 +636,6 @@ A Phase 2.5 issue (RS-63) explicitly handed off integration work to its successo
 
 ### beta candidates
 
-- **beta.1** — multi-env `pk ship --env=<env>` for Piper (Vercel + Supabase branch + LaunchDarkly)
 - **beta.1** — skills directory reorg: `skills/{loop,stage0,orthogonal}/` subdirs
 - **beta.2** — GitHub Actions workflow `pr-review.yml` — antagonistic review on PR open (CI-side)
 

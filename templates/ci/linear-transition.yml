@@ -12,7 +12,7 @@
 # human remembering a command. On a merged PR into the integration
 # branch, it extracts every <PREFIX>-NNN it can find (branch name + PR
 # title + body) and advances each issue to TARGET_STATE — idempotent
-# and forward-only, so it never fights `pk done` or pulls a WIT back.
+# and forward-only, so it never fights `pk done` or pulls an issue back.
 #
 # It does NOT replace `pk done`/`pk promote --finish` (those also clean
 # up worktrees and post commits). It's the safety net
@@ -57,13 +57,13 @@ jobs:
       # ── Per-project config (edit these to match method.config.md) ──────
       LINEAR_TEAM_NAME: "YOUR_TEAM_NAME"   # method.config.md → "Team name"
       ISSUE_PREFIX: "PROJ"                  # method.config.md → "Issue prefix"
-      # The state merged WITs advance to. Multi-tier: "In <FirstEnv>" (e.g.
+      # The state merged issues advance to. Multi-tier: "In <FirstEnv>" (e.g.
       # "In Dev") when this watches the integration-branch merge. Single-tier
       # (integration branch == main): "Done".
       TARGET_STATE: "In Dev"
-      # Safety: only transition a WIT that is CURRENTLY in one of these
-      # pre-merge states. Prevents pulling a Done/promoted WIT backward and
-      # prevents leap-frogging an Approved WIT that landed in a bundle without
+      # Safety: only transition an issue that is CURRENTLY in one of these
+      # pre-merge states. Prevents pulling a Done/promoted issue backward and
+      # prevents leap-frogging an Approved issue that landed in a bundle without
       # going through UAT. Comma-separated, names must match your workflow.
       PRE_MERGE_STATES: "UAT,In Progress,Building,In Review"
       # ───────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ jobs:
       PR_TITLE: ${{ github.event.pull_request.title }}
       PR_BODY: ${{ github.event.pull_request.body }}
     steps:
-      - name: Transition merged WITs in Linear
+      - name: Transition merged issues in Linear
         run: |
           set -uo pipefail
 
@@ -106,7 +106,7 @@ jobs:
             echo "No ${ISSUE_PREFIX}-NNN reference found in branch/title/body — nothing to transition."
             exit 0
           fi
-          echo "Found WIT(s): ${IDS[*]}"
+          echo "Found issue(s): ${IDS[*]}"
 
           # ── Resolve the TARGET_STATE workflow-state id once ───────────────
           state_q='query($team: String!, $name: String!) { workflowStates(filter: {team: {name: {eq: $team}}, name: {eq: $name}}) { nodes { id name } } }'
@@ -141,8 +141,8 @@ jobs:
               continue
             fi
 
-            # Forward-only guard: only advance a WIT that is currently in a
-            # pre-merge state. A WIT already past this hop (promoted/Done) or
+            # Forward-only guard: only advance an issue that is currently in a
+            # pre-merge state. An issue already past this hop (promoted/Done) or
             # one that never reached UAT (leap-frog) is left for a human.
             if ! printf '%s\n' "$allowed" | grep -qxF "$current"; then
               echo "::warning::$id is in '$current' (not a pre-merge state) — leaving for manual review, not transitioning to '$TARGET_STATE'."
@@ -167,4 +167,4 @@ jobs:
             echo "::error::$failures Linear transition(s) failed — reconcile manually (pk done <ID> or the Linear UI)."
             exit 1
           fi
-          echo "Done — ${#IDS[@]} WIT(s) processed."
+          echo "Done — ${#IDS[@]} issue(s) processed."
