@@ -27,13 +27,13 @@
 | Dependency check | ✅ required |
 | Milestone-readiness (siblings specced) | ⏭ skipped |
 | PLAN.md + plan review | ⏭ skipped |
-| Execution | ✅ via batch runner / `/linear-todo-runner` |
+| Execution | ✅ `/work` (or `/pk-express`) |
 | QA agent | ⏭ skipped (CI + UAT only) |
 | Strategy sync | ⏭ skipped |
 
 ## Routing
 
-`/work` routes Quick tier directly to in-context execution (or `/linear-todo-runner` for batch parallel execution of multiple Quick issues). No PLAN.md generated — the AC section is the executable plan.
+`/work` routes Quick tier directly to in-context execution. No PLAN.md generated — the AC section is the executable plan.
 
 ## Required artifacts
 

@@ -28,7 +28,7 @@ Inside Standard, complexity still routes execution:
 
 | Complexity | Route |
 |------------|-------|
-| Low (~2–4h) | `/linear-todo-runner`, AC-as-plan |
+| Low (~2–4h) | `/work`, AC-as-plan |
 | Medium (~6–10h) | `/work` plan → plan review → native execute → QA |
 | High (~12–20h+) | `/work` plan → plan review → native execute → QA, likely multi-task |
 

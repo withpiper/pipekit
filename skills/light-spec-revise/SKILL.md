@@ -301,4 +301,3 @@ The skill MUST NEVER:
 
 - `/light-spec` — creates the spec; Phase 6 sets up the feedback loop this skill closes.
 - `pk branch` + `/work` — consumes `Pass`-verdict specs for planning + execution (v2 daily loop).
-- `/spec-validator` — heavier validator for full Strategy docs (not Light Specs).

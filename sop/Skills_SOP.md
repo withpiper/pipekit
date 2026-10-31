@@ -66,12 +66,9 @@ These skills work across any project that follows the method. They read `method.
 | `/linear` | Linear issue workflow helper | Anytime |
 | `/sync-linear` | Reconcile strategy-doc drift against the Linear initiative hierarchy | Anytime |
 | `/pipekit-help` | Read project state, recommend next pipeline step | Anytime |
-| `/spec-validator` | Validate spec completeness | Stage 1: Spec |
 | `/repo-security-review` | Periodic **whole-repo** security audit (v4.31.0, renamed from `/security-review` — collided with Claude Code's built-in). Parallel area agents → adversarial verification → evidence-classified score report. Portable **framework**; project audit areas in `resources/repo-security-areas.md` (scaffolded from `templates/repo-security-areas.template.md`). No-op without an areas file. Distinct from `/pr-security-review` (PR-scoped) and `/security-gate` (feature-scoped). | Anytime |
 | `/financial-review` | Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable **framework**; concrete checks live in a per-project checks file (`resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`). No-op on projects without a checks file. | Anytime (domain: finance) |
-| `/skill-index` | Sync skill index after changes | Anytime |
 | `/tpm` | Technical program manager for the board — a working session that agrees what must ship, what can wait and why, across every repo in `§ Portfolio repos`; writes the agreement to Linear (`pk focus`, relations, importance, `on-merge` notes) and the weekly plan (`§ Plan path`, `engineering/WEEKLY_PLAN.md`), a task list by session. Runs `/linear-hygiene` first when drift touches the candidates. `--quick` (≤3 questions), `--check` (read-only drift). Rubric in `sop/TPM_SOP.md`. User-typed only. | Anytime (weekly planning); when `pk next` says the plan is stale |
-| `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
 
@@ -125,7 +122,7 @@ Skills that gate ship/merge decisions (`/verify`, `/pr-fix`, `/pr-security-revie
 
 **Output-producing skills** (a report, spec, verdict, or changelog a human reads — `/light-spec`, `/verify`, the gate reports, `/release-changelog`): where the output shape is easy to get subtly wrong, show a **good/weak example pair** — one output that's right and one that looks right but isn't, with the difference named. One pair, not a gallery.
 
-These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill-index`) — they'd be noise. Apply only where misuse has a meaningful cost.
+These sections are *not* required for low-stakes skills (`/sync-linear`, `/linear`) — they'd be noise. Apply only where misuse has a meaningful cost.
 
 ### Key Conventions
 
@@ -317,7 +314,7 @@ Some files in a Pipekit project are **canonical** — they encode conventions th
 
 Protection is enforced by **hook**, not by skill prose. A `PreToolUse` hook on `Edit` and `Write` blocks the call when the target path matches the protected set; the agent receives `EditPermissionDenied` (or `HookFeedbackBlocked`, depending on the hook variant). This is intentional: hooks win over `bypassPermissions` mode because hook-level guards are the project's last line of defense, and orchestrator-spawned agents are not exempt from project policy.
 
-The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/SKILL.md` § Permission-denial protocol and the parallel block in `skills/work/SKILL.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
+The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see the parallel block in `skills/work/SKILL.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
 
 When you add a new skill that spawns file-editing agents, copy the permission-denial block verbatim. When you protect a new path with a hook, document the protection in `method.config.md` so future readers know which paths are agent-write-locked and why.
 

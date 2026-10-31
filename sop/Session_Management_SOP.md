@@ -92,7 +92,6 @@ Subagents aren't just for parallelism — they're for **keeping tool output nois
 | Skill | Why subagent |
 |-------|-------------|
 | `/light-spec` Phase 2 | Codebase exploration produces tons of grep/read output; only the conclusions matter for the spec |
-| `/06-linear-todo-runner` | Parallel worktree agents per issue; each one's execution output stays isolated |
 | `/concept --docs` | Ingesting user documents produces long reads; only the extracted context matters |
 | `/strategy-sync` | Comparing codebase to strategy docs scans many files |
 
@@ -117,8 +116,7 @@ Two things have shifted since that calibration (Fable 5 / Opus 4.8 era, per Anth
 | `/light-spec`, `/roadmap-create` | `xhigh` | Intelligence-sensitive AI-to-AI contracts |
 | `pk status`, `pk next`, `/phase-plan --status` | `high` | Lookup/summary tasks |
 | `/update-method` routine syncs | `medium` | Mechanical, low ambiguity |
-| `/06-linear-todo-runner` worker agents | `xhigh` | Each worker executes a full spec — needs high capability |
-| Codebase-wide audits, large migrations, multi-issue batches | `ultracode` | Claude Code's `/effort` menu option: pins `xhigh` **and** lets Claude auto-decide when to spawn a dynamic workflow (parallel subagents, verify-before-integrate). Token-heavy — reserve for work that genuinely spans many files or issues. Overlaps `/06-linear-todo-runner`'s hand-rolled parallel queue. |
+| Codebase-wide audits, large migrations, multi-issue batches | `ultracode` | Claude Code's `/effort` menu option: pins `xhigh` **and** lets Claude auto-decide when to spawn a dynamic workflow (parallel subagents, verify-before-integrate). Token-heavy — reserve for work that genuinely spans many files or issues. |
 
 Don't port effort settings between model releases blindly — experiment when you upgrade. As of the 4.7 calibration, `xhigh` worked well as the default for most Pipekit skills; on current models, expect `high` (or lower) to match it on all but the hardest steps — confirm on your model before relying on either.
 

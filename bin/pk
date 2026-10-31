@@ -2704,7 +2704,7 @@ pk_next_focus_lanes() {
     echo "No focus lane has a ready Approved issue — spec one (/light-spec) or clear its blockers."
   fi
   if [ "$ready_total" -ge 2 ]; then
-    echo "$ready_total focus-lane issues are build-ready and unblocked → /06-linear-todo-runner --dry-run"
+    echo "$ready_total focus-lane issues are build-ready and unblocked → pk branch + /work each (or /pk-express for Quick ones)"
   fi
   echo ""
   local supporting sup_count
