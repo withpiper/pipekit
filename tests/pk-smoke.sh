@@ -371,20 +371,20 @@ unit_group() { ( cd "$REPO_ROOT" && source "$PK" && pk_issues_group_render ); }
 # The orphan here carries Urgent (1) — it must STILL sink last (orphans are an
 # anomaly to home, not normal work), proving orphan-last beats priority order.
 GROUP_IN='[
-  {"identifier":"POC-3","title":"client ask","priority":3,"project":{"name":"Export"}},
-  {"identifier":"POC-1","title":"margin core","priority":2,"project":{"name":"Margin"}},
-  {"identifier":"POC-9","title":"orphan","priority":1,"project":null},
-  {"identifier":"POC-4","title":"label tweak","priority":3,"project":{"name":"Export"}}
+  {"identifier":"PROJ-3","title":"client ask","priority":3,"project":{"name":"Export"}},
+  {"identifier":"PROJ-1","title":"margin core","priority":2,"project":{"name":"Margin"}},
+  {"identifier":"PROJ-9","title":"orphan","priority":1,"project":null},
+  {"identifier":"PROJ-4","title":"label tweak","priority":3,"project":{"name":"Export"}}
 ]'
 out=$(printf '%s' "$GROUP_IN" | unit_group)
 # Margin (High=2) group leads; Export (Normal=3) next; orphan last despite Urgent.
 exp='  Margin:
-    POC-1 — margin core
+    PROJ-1 — margin core
   Export:
-    POC-3 — client ask
-    POC-4 — label tweak
+    PROJ-3 — client ask
+    PROJ-4 — label tweak
   (no project):
-    POC-9 — orphan'
+    PROJ-9 — orphan'
 [ "$out" = "$exp" ] && ok "group: projects by top priority; orphans last even when Urgent" \
   || fail "group: projects by top priority; orphans last even when Urgent" "got:
 $out"
@@ -651,9 +651,9 @@ case "$RUN_OUT" in
 esac
 
 # Regression: `pk ship --help` once parsed --help as a ship arg and ran the
-# ship (SiteLine, 2026-06-04). Any subcommand + -h/--help must print usage,
+# ship (a consumer project, 2026-06). Any subcommand + -h/--help must print usage,
 # exit 0, and never touch gh.
-echo "== --help guard (regression: SiteLine 2026-06-04) =="
+echo "== --help guard (regression: --help parsed as a ship arg) =="
 
 for sub in ship done promote branch next ready status focus; do
   : > "$GH_LOG"
@@ -927,7 +927,7 @@ FIXTURE=""
 # pk_ready_for_review_workflows names the reviewers that will ACTUALLY fire on
 # a Draft → Ready flip, by listing .github/workflows/ — replacing a hardcoded
 # "(Semgrep, claude-review)" that asserted both on every project. Anchor:
-# SiteLine 2026-07-29 — no Semgrep workflow, ever; pk claimed it would fire.
+# a consumer project, 2026-07 — no Semgrep workflow, ever; pk claimed it would fire.
 
 echo "== ready_for_review reviewer probe (sourced) =="
 
@@ -955,9 +955,9 @@ on:
 out=$(unit_rfr)
 [ "$out" = "Claude Code Review" ] && ok "rfr: single reviewer named from workflow name:" || fail "rfr: single reviewer named from workflow name:" "out='$out'"
 
-# The SiteLine case: claude-review installed, Semgrep never was. The old
+# The incident case: claude-review installed, Semgrep never was. The old
 # hardcoded string named Semgrep here; the probe must not.
-case "$out" in *Semgrep*) fail "rfr: uninstalled Semgrep not claimed (SiteLine class)" "out='$out'" ;; *) ok "rfr: uninstalled Semgrep not claimed (SiteLine class)" ;; esac
+case "$out" in *Semgrep*) fail "rfr: uninstalled Semgrep not claimed (incident class)" "out='$out'" ;; *) ok "rfr: uninstalled Semgrep not claimed (incident class)" ;; esac
 
 write_wf semgrep.yml 'name: Semgrep
 on:
@@ -988,10 +988,10 @@ FIXTURE=""
 
 # ── Unit tests: reviewer probe respects the base-branch filter ───────────────
 # Second recurrence of the over-claim class. The probe learned to scan
-# .github/workflows/ (SiteLine 2026-07-29, above) but still ignored each
+# .github/workflows/ (2026-07, above) but still ignored each
 # workflow's `branches:` filter, so a reviewer scoped to [beta, main] was
 # announced on a feature -> dev PR that it could never fire on.
-# Anchor: Piper PIPER-699 / PR #674, 2026-08-19 — `pk ready` printed
+# Anchor: a consumer PR, 2026-08 — `pk ready` printed
 # "PR reviewers will now fire: Claude Code Review, Semgrep" on a dev-based PR;
 # only Semgrep ran. The PR looked reviewed and nothing said otherwise.
 
@@ -1075,7 +1075,7 @@ FIXTURE=""
 # ── Unit tests: fires-once-only reviewer probe (sourced) ─────────────────────
 # pk_review_workflows_without_sync names ready_for_review reviewers that omit
 # `synchronize`, i.e. that review the Ready flip and nothing you push after it.
-# Anchor: SiteLine PIPER-345 `879748e5` and PIPER-499 `778edbec` both merged
+# Anchor: two consumer PRs, `879748e5` and `778edbec` (2026-07), both merged
 # with their final head unreviewed, recorded in three separate session logs.
 
 echo "== fires-once-only reviewer probe (sourced) =="
@@ -1095,13 +1095,13 @@ on:
 out=$(unit_nosync)
 [ -z "$out" ] && ok "nosync: reviewer carrying synchronize is not flagged" || fail "nosync: reviewer carrying synchronize is not flagged" "out='$out'"
 
-# The real SiteLine shape: ready_for_review, no synchronize.
+# The real incident shape: ready_for_review, no synchronize.
 write_wf claude-code-review.yml 'name: Claude Code Review
 on:
   pull_request:
     types: [opened, ready_for_review]'
 out=$(unit_nosync)
-[ "$out" = "Claude Code Review" ] && ok "nosync: fires-once reviewer flagged (SiteLine class)" || fail "nosync: fires-once reviewer flagged (SiteLine class)" "out='$out'"
+[ "$out" = "Claude Code Review" ] && ok "nosync: fires-once reviewer flagged (incident class)" || fail "nosync: fires-once reviewer flagged (incident class)" "out='$out'"
 
 # A commented-out synchronize triggers nothing — must still count as no-sync.
 write_wf claude-code-review.yml 'name: Claude Code Review
@@ -1133,7 +1133,7 @@ FIXTURE=""
 # ── Unit tests: conflicting-PR warning (sourced) ─────────────────────────────
 # A conflicting PR gets ZERO pull_request workflows — GitHub cannot build the
 # merge ref — so required checks never run and the board keeps its last state.
-# Anchor: SiteLine PIPER-174 merged with its sole required gate never having run.
+# Anchor: a consumer PR (2026-07) merged with its sole required gate never having run.
 # Must warn on CONFLICTING and stay silent on every other value, including
 # UNKNOWN: asserting a state we did not observe is the bug class, not the fix.
 
@@ -1410,7 +1410,7 @@ cleanup
 # pk ship prints a method.config.md § Ship Reminders message for each rule whose
 # ERE matches a file the branch changes over its base. Informational: it never
 # blocks and never changes pk ship's exit code. The case that motivated it: a
-# backend change the PR preview does not run (Piper PIPER-1366).
+# backend change the PR preview does not run (a consumer project, 2026-10).
 
 echo "== ship reminders =="
 
@@ -1497,7 +1497,7 @@ cleanup
 echo "== board reads fail loudly without a Linear key =="
 make_fixture
 write_config '```
-Team name: Piper
+Team name: Eng
 Integration branch: main
 ```'
 RUN_OUT=$(cd "$FIXTURE" && env -u LINEAR_API_KEY PATH="$FIXTURE/shim:$PATH" "$PK" status 2>&1); RUN_CODE=$?
@@ -1520,8 +1520,8 @@ cleanup
 
 # ── Unit tests: verify-drift (ship→merge window, v4.27.0) ────────────────────
 # `pk ship` proves the sentinel matched at ship time; commits landing during PR
-# review move HEAD past it and nothing re-checks. Anchor: SiteLine PIPER-490
-# (PR #774) merged with a PASS artifact describing an RLS predicate that a
+# review move HEAD past it and nothing re-checks. Anchor: a consumer PR
+# (2026-07) merged with a PASS artifact describing an RLS predicate that a
 # post-ship commit had rewritten.
 
 echo "== verify drift: classifier (pure, v4.27.0) =="
@@ -1560,7 +1560,7 @@ sl() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_latest "$@" ); }
 out=$(sl NOPE-1); rc=$?
 [ $rc -ne 0 ] && ok "sentinel latest: no artifacts → rc!=0" || fail "sentinel latest: no artifacts → rc!=0" "rc=$rc out='$out'"
 
-# The PIPER-490 shape: no verify-complete.md, sha only in evidence.txt as "# sha:".
+# The incident shape: no verify-complete.md, sha only in evidence.txt as "# sha:".
 # Keying solely on the sentinel would make this gate blind to its own anchor case.
 mkdir -p "$FIXTURE/Logs/Verify/20260731/ABC-490"
 printf '# sha: %s\n# tier: heavy\n' "$HEAD_SHA" > "$FIXTURE/Logs/Verify/20260731/ABC-490/evidence.txt"
@@ -1612,11 +1612,11 @@ printf '# sha: %s\n' "$WT_SHA" > "$FIXTURE/Logs/Verify/20260101/ABC-7/evidence.t
 out=$(sl2 ABC-7 feature/ABC-7-thing)
 [ "${out##*$'\t'}" = "$BRANCH_SHA" ] && ok "branch ref: branch verify-complete.md outranks working-tree evidence.txt" || fail "branch ref: branch verify-complete.md outranks working-tree evidence.txt" "got '$out'"
 
-# An uncommitted sentinel in the worktree is the PIPER-490 case — it must still win.
+# An uncommitted sentinel in the worktree is the incident case — it must still win.
 WT_SENT="3333333333333333333333333333333333333333"
 printf 'sha: %s\n' "$WT_SENT" > "$FIXTURE/Logs/Verify/20260101/ABC-7/verify-complete.md"
 out=$(sl2 ABC-7 feature/ABC-7-thing)
-[ "${out##*$'\t'}" = "$WT_SENT" ] && ok "branch ref: uncommitted worktree sentinel still wins (PIPER-490 case)" || fail "branch ref: uncommitted worktree sentinel still wins" "got '$out'"
+[ "${out##*$'\t'}" = "$WT_SENT" ] && ok "branch ref: uncommitted worktree sentinel still wins (incident case)" || fail "branch ref: uncommitted worktree sentinel still wins" "got '$out'"
 
 out=$(sl2 ABC-7 no/such/branch); rc=$?
 [ $rc -eq 0 ] && ok "branch ref: unresolvable ref degrades to working tree, no crash" || fail "branch ref: unresolvable ref degrades to working tree" "rc=$rc"
@@ -1626,7 +1626,7 @@ FIXTURE=""
 echo "== verify drift: worktree lookup (v5.3.1) =="
 # A project that gitignores Logs/Verify never commits the evidence, so from the
 # parent neither the checkout nor the branch's tree holds it; only the branch's
-# worktree does (Piper PIPER-1369: pk ready reported "none" with a HEAD-matching
+# worktree does (a consumer project, 2026-10: pk ready reported "none" with a HEAD-matching
 # sentinel sitting in the worktree).
 
 make_fixture
@@ -1664,7 +1664,7 @@ out=$( cd "$FIXTURE" && source "$PK" && pk_branch_worktree no/such/branch )
 
 # v5.3.2: pk ready from the parent must compare against the BRANCH's commit. Its
 # HEAD there is the integration branch, so a fresh branch read as source drift
-# (Piper PIPER-1369, PR #1153: verified 1447fc0c, compared against dev's a9476f26).
+# (a consumer PR, 2026-10: verified 1447fc0c, compared against dev's a9476f26).
 printf 'sha: %s\n' "$WT_HEAD" > "$WT/Logs/Verify/20260101/ABC-8/verify-complete.md"
 bh() { ( cd "$FIXTURE" && source "$PK" && pk_branch_head "$@" ); }
 [ "$(bh feature/ABC-8-wt)" = "$WT_HEAD" ] && ok "branch head: from the parent, the branch's commit, not the parent's HEAD" || fail "branch head: from the parent, the branch's commit" "got '$(bh feature/ABC-8-wt)' want $WT_HEAD"
@@ -1729,7 +1729,7 @@ gitf add -A >/dev/null 2>&1; gitf commit -q -m src
 H=$(gitf rev-parse HEAD)
 [ "$(dr ABC-1 "$H" 2>/dev/null)" = "source" ] && ok "drift report: post-verify source change → source" || fail "drift report: post-verify source change → source" "got $(dr ABC-1 "$H" 2>/dev/null)"
 
-# The PIPER-490 shape: a migration rewritten after the verify that exercised it.
+# The incident shape: a migration rewritten after the verify that exercised it.
 printf 'select 1;\n' > "$FIXTURE/supabase/migrations/20260101_a.sql"
 gitf add -A >/dev/null 2>&1; gitf commit -q -m mig
 H=$(gitf rev-parse HEAD)
@@ -1894,7 +1894,7 @@ rm -rf "$PR_REMOTE"
 cleanup
 FIXTURE=""
 
-# ── CLI tests: pk done worktree guard (regression: SiteLine dead-session) ─────
+# ── CLI tests: pk done worktree guard (regression: dead-session) ──────────────
 # pk done removes the feature worktree, so it must refuse when invoked from
 # inside one. The bug: the guard gated on `root != wt_path`, but pk_repo_root()
 # is `git rev-parse --show-toplevel`, which from inside a linked worktree returns
@@ -1903,7 +1903,7 @@ FIXTURE=""
 # tests pin: refuse from inside, before any gh pr merge; don't misfire from the
 # parent.
 
-echo "== done worktree guard (regression: SiteLine dead-session) =="
+echo "== done worktree guard (regression: dead-session) =="
 
 make_fixture
 write_config '```
@@ -1952,12 +1952,12 @@ git -C "$FIXTURE" worktree remove --force "$WT_DIR" 2>/dev/null
 cleanup
 FIXTURE=""
 
-# ── CLI tests: pk done after delete-branch-on-merge (SiteLine, 2026-10-09) ────
+# ── CLI tests: pk done after delete-branch-on-merge (2026-10) ─────────────────
 # A PR merged in the GitHub UI on a repo with delete-branch-on-merge leaves no
 # branch locally or on origin by the time pk done runs. The resolver only knew
 # those two places, so pk done errored "no branch found" before the merge check
 # ever ran, and the issue sat In Progress with no Shipped record and nothing
-# saying so (PIPER-1086/1128/1142). GitHub still has the merged PR under its
+# saying so (three consumer issues). GitHub still has the merged PR under its
 # head name. These tests stub gh with the REAL `gh pr list --json` shape
 # (headRefName, headRefOid, mergeCommit{oid}, mergedAt, state) and the Linear
 # write path, and assert on what reaches Linear — never on a mocked verdict.
@@ -2288,7 +2288,7 @@ else
   [ $? -eq 0 ] && ok "hook: always exit 0 (advisory)" || fail "hook: always exit 0 (advisory)" "nonzero exit"
 
   # ── PreToolUse (v4.35.0): the same script DENIES an off-format commit before it
-  # runs. Anchor: piper PR #771, 2026-09-02 — the PostToolUse nudge fired, the
+  # runs. Anchor: a consumer PR, 2026-09 — the PostToolUse nudge fired, the
   # session pushed with a raw `git push` anyway, and an unscoped subject is now
   # permanent on a protected branch (squash is off). PostToolUse cannot block.
   pre() { printf '%s' "$1" | bash "$HOOK" 2>&1; }   # $1 = PreToolUse JSON on stdin
@@ -2304,7 +2304,7 @@ else
   esac
 
   # The incident shape: a compound command whose commit is not command-initial.
-  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"cd ~/Projects/piper && git commit -m \"docs: runbook records X\""}}')
+  out=$(pre '{"hook_event_name":"PreToolUse","tool_input":{"command":"cd ~/Projects/<project> && git commit -m \"docs: runbook records X\""}}')
   case "$out" in
     *'"permissionDecision": "deny"'*) ok "hook/pre: cd && git commit (incident shape) is denied" ;;
     *) fail "hook/pre: cd && git commit (incident shape) is denied" "output: $out" ;;
@@ -2382,19 +2382,19 @@ case "$(unit_guard "TID-uuid" "" 1 "" "")" in
   *)      fail "guard: team id not visible → fail closed" "got: $(unit_guard "TID-uuid" "" 1 "" "")" ;;
 esac
 
-case "$(unit_guard "TID-uuid" "piper-poc" "" "" "")" in
+case "$(unit_guard "TID-uuid" "acme-eng" "" "" "")" in
   skip:*) ok "guard: unreachable → skip (fail open)" ;;
-  *)      fail "guard: unreachable → skip (fail open)" "got: $(unit_guard "TID-uuid" "piper-poc" "" "" "")" ;;
+  *)      fail "guard: unreachable → skip (fail open)" "got: $(unit_guard "TID-uuid" "acme-eng" "" "" "")" ;;
 esac
 
-case "$(unit_guard "" "piper-poc" 1 "" "piper-poc")" in
+case "$(unit_guard "" "acme-eng" 1 "" "acme-eng")" in
   ok) ok "guard: slug matches org urlKey → ok" ;;
-  *)  fail "guard: slug matches org urlKey → ok" "got: $(unit_guard "" "piper-poc" 1 "" "piper-poc")" ;;
+  *)  fail "guard: slug matches org urlKey → ok" "got: $(unit_guard "" "acme-eng" 1 "" "acme-eng")" ;;
 esac
 
-case "$(unit_guard "" "piper-poc" 1 "" "other-org")" in
+case "$(unit_guard "" "acme-eng" 1 "" "other-org")" in
   fail:*) ok "guard: slug mismatch → fail closed" ;;
-  *)      fail "guard: slug mismatch → fail closed" "got: $(unit_guard "" "piper-poc" 1 "" "other-org")" ;;
+  *)      fail "guard: slug mismatch → fail closed" "got: $(unit_guard "" "acme-eng" 1 "" "other-org")" ;;
 esac
 
 case "$(unit_guard "" "" 1 "" "")" in
@@ -2403,7 +2403,7 @@ case "$(unit_guard "" "" 1 "" "")" in
 esac
 
 # ── CLI tests: check-migration-drift.sh (gap #1 Tier 2, v4.18.0) ─────────────
-# Git-only checks A (branch collision vs base tail — the WIT-550 class) and
+# Git-only checks A (branch collision vs base tail — the collision class) and
 # B (duplicate versions on disk). The --remote check needs a live supabase
 # link and is not smoke-testable; A+B are what the CI template runs.
 
@@ -2447,13 +2447,13 @@ out=$(cd "$FIXTURE" && "$DRIFT_SH" --base main 2>&1); rc=$?
 [ $rc -eq 0 ] && case "$out" in *"no migration drift"*) ok "drift: later-than-tail migration is clean" ;; *) fail "drift: later-than-tail migration is clean" "out: $out" ;; esac \
   || fail "drift: later-than-tail migration is clean" "rc=$rc out: $out"
 
-# (3) Collision: feature adds a migration EARLIER than the base tail (WIT-550).
+# (3) Collision: feature adds a migration EARLIER than the base tail.
 git -C "$FIXTURE" checkout -q main && git -C "$FIXTURE" checkout -qb feat/collide
 echo "select 2;" > "$FIXTURE/db/migrations/20260102000000_backdated.sql"
 git -C "$FIXTURE" add -A && git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -qm "backdated migration"
 out=$(cd "$FIXTURE" && "$DRIFT_SH" --base main 2>&1); rc=$?
-[ $rc -eq 1 ] && case "$out" in *"branch collision"*) ok "drift: earlier-than-tail migration flagged (WIT-550 class)" ;; *) fail "drift: earlier-than-tail migration flagged (WIT-550 class)" "out: $out" ;; esac \
-  || fail "drift: earlier-than-tail migration flagged (WIT-550 class)" "rc=$rc (want 1)"
+[ $rc -eq 1 ] && case "$out" in *"branch collision"*) ok "drift: earlier-than-tail migration flagged (collision class)" ;; *) fail "drift: earlier-than-tail migration flagged (collision class)" "out: $out" ;; esac \
+  || fail "drift: earlier-than-tail migration flagged (collision class)" "rc=$rc (want 1)"
 
 # (4) Duplicate version prefixes on disk → exit 1.
 git -C "$FIXTURE" checkout -q main
@@ -2470,7 +2470,7 @@ out=$(cd "$FIXTURE" && "$DRIFT_SH" --base origin/nope 2>&1); rc=$?
 cleanup
 FIXTURE=""
 
-# (6) Nested package (SiteLine's apps/legacy/ layout): the package's own config
+# (6) Nested package (a consumer's apps/legacy/ layout): the package's own config
 # and migration dir are found, and a backdated migration there is still flagged.
 make_fixture
 PKG="$FIXTURE/apps/legacy"
@@ -2500,7 +2500,7 @@ FIXTURE=""
 # reality-check.md is the fallback pk_verify_sentinel_latest reads when
 # verify-complete.md is absent, so a missing `sha:` line silently downgrades the
 # drift gate to "no evidence". Prose-rendered markdown drifts: measured on
-# SiteLine 2026-08-02, the heredoc-written verify-complete.md carried a sha in
+# a consumer project, 2026-08, the heredoc-written verify-complete.md carried a sha in
 # 191/192 files while the prose-rendered reality-check.md managed 167/195, with
 # the miss rate rising month over month. Step 7 must stay a heredoc.
 
@@ -2724,7 +2724,7 @@ rm -rf "$WF_TMP"
 # override SKILL.md but NOT skill.json — whose `description` is what Claude routes
 # on. A project pinning a superseded skill to a redirect stub kept the stub in
 # prose and had the metadata reverted to upstream on every sync, silently.
-# Anchor: SiteLine, 2026-08-26 — repo-security-review, guarded since 2026-08-20,
+# Anchor: a consumer project, 2026-08 — repo-security-review, guarded since 2026-08-20,
 # had been leaking its json description back on each sync the whole time.
 
 echo "== sync-method overrides cover non-.md skill files =="
@@ -2772,14 +2772,14 @@ esac
 
 rm -rf "$OVR_TMP"
 
-# ── Branch resolution matches follow-up prefixes (v4.32.0, PIPER-793) ─────────
+# ── Branch resolution matches follow-up prefixes (v4.32.0) ────────────────────
 # pk ready and pk done both globbed feature/<ID>-* alone, so a follow-up fix on
 # fix/<ID>-* was invisible: pk done errored "no local feature branch found"
 # (which reads as "unknown issue"), the second PR never reached the Linear ship
 # record, and the branch was never cleaned up. cmd_done also lacked the remote
 # fallback cmd_ready had, so it gave up whenever the local branch was gone.
-# Anchor: SiteLine — all five multi-PR issues across 185 ID-prefixed merged PRs
-# had this shape; POC-426 and PIPER-782 were hand-patched five weeks apart.
+# Anchor: a consumer project — all five multi-PR issues across 185 ID-prefixed
+# merged PRs had this shape; two were hand-patched five weeks apart.
 
 echo "== branch resolution: feature|fix|hotfix, newest wins, remote fallback =="
 
@@ -2884,7 +2884,7 @@ case "$BR_OUT" in
 esac
 
 # Every prefix in PK_BRANCH_PREFIXES must actually resolve. The original bug
-# (PIPER-793) was a prefix list narrower than the naming convention it served;
+# (2026-09) was a prefix list narrower than the naming convention it served;
 # the re-widening is only safe if each entry is exercised here.
 for pair in "refactor/PK-5-extract:PK-5" "chore/PK-6-deps:PK-6" "docs/PK-7-guide:PK-7"; do
   want=${pair%%:*}; id=${pair##*:}
@@ -2896,7 +2896,7 @@ for pair in "refactor/PK-5-extract:PK-5" "chore/PK-6-deps:PK-6" "docs/PK-7-guide
 done
 
 # PK_BRANCH_PREFIXES is caller-overridable. The override is the point of the
-# env var, so it gets the coverage the hardcoded list lacked (PIPER-793).
+# env var, so it gets the coverage the hardcoded list lacked.
 BR_OUT=$(cd "$BR_TMP/repo" && PATH="$BR_TMP/shim:$PATH" PK_BRANCH_PREFIXES="wip" "$PK" ready PK-11 2>&1)
 case "$BR_OUT" in
   *"wip/PK-11-override"*) ok "PK_BRANCH_PREFIXES override resolves a custom prefix" ;;
@@ -2968,7 +2968,7 @@ esac
 
 rm -rf "$BR_TMP"
 
-# ── Follow-up ship records (v4.32.0, PIPER-793) ──────────────────────────────
+# ── Follow-up ship records (v4.32.0) ─────────────────────────────────────────
 # A second pk done on an already-shipped issue must read as a follow-up, not as
 # a repeat of the first ship. Fails closed: anything that isn't a provable prior
 # ship (no key, unreachable Linear, malformed response) is treated as a first
@@ -3793,7 +3793,8 @@ printf '%s\n' "$RUN_OUT" | grep -q '^  pk project list \[--all\] \[--json\]' && 
 # A direnv-less shell should self-serve from the message instead of falling
 # back to an MCP: every "Linear API key not set" site carries the op run hint,
 # and the hint names the reference file this repo actually carries (v5.1.2 —
-# secrets.op in Piper, op-references.conf in SiteLine).
+# `Secrets reference file` in method.config.md, else whichever of the two
+# conventional names is on disk).
 
 echo "== missing key names the op run route =="
 
@@ -3818,6 +3819,15 @@ printf '%s' "$RUN_OUT" | grep -q 'Linear API key not set' && printf '%s' "$RUN_O
 no_key_pk doctor
 printf '%s' "$RUN_OUT" | grep -q '✗ Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=secrets.op -- pk' \
   && ok "no key: pk doctor's line names op run" || fail "no key: doctor" "exit $RUN_CODE: $RUN_OUT"
+# The config key outranks the on-disk probes, and need not point at a file.
+write_config '```
+Team name: Eng
+Integration branch: main
+Secrets reference file: config/app.op
+```'
+no_key_pk doctor
+printf '%s' "$RUN_OUT" | grep -q '✗ Linear API key not set' && printf '%s' "$RUN_OUT" | grep -qF 'op run --env-file=config/app.op -- pk' \
+  && ok "no key: Secrets reference file in config → the hint names it over secrets.op" || fail "no key: config key" "exit $RUN_CODE: $RUN_OUT"
 rm -f "$FIXTURE/secrets.op"
 grep -c 'Linear API key not set' "$PK" | grep -qx "$(grep -c 'Linear API key not set.*pk_op_run_hint' "$PK")" \
   && ok "no key: every 'Linear API key not set' site in bin/pk carries the op run hint" \
@@ -3876,10 +3886,10 @@ cleanup
 
 # Runbook primary: the marker is read from the sibling repo's runbook.
 NUDGE_PARENT=$(mktemp -d)
-mkdir -p "$NUDGE_PARENT/repo" "$NUDGE_PARENT/SiteLine"
+mkdir -p "$NUDGE_PARENT/repo" "$NUDGE_PARENT/sibling"
 git -C "$NUDGE_PARENT/repo" init -q -b main
-printf '```\nRunbook primary: ../SiteLine\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
-write_runbook "$NUDGE_PARENT/SiteLine/engineering/RUNBOOK.md" "$(days_ago 10)"
+printf '```\nRunbook primary: ../sibling\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
+write_runbook "$NUDGE_PARENT/sibling/engineering/RUNBOOK.md" "$(days_ago 10)"
 v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_runbook_nudge )
 [ "$v" = "runbook agreed 10d ago → /tpm" ] && ok "nudge: Runbook primary reads the sibling repo's runbook" || fail "nudge: primary" "got '$v'"
 rm -rf "$NUDGE_PARENT"
@@ -3968,14 +3978,14 @@ cleanup
 # Plan primary, and Runbook primary alone (a consumer synced before v5.1.0):
 # both read the sibling repo's plan.
 NUDGE_PARENT=$(mktemp -d)
-mkdir -p "$NUDGE_PARENT/repo" "$NUDGE_PARENT/SiteLine"
+mkdir -p "$NUDGE_PARENT/repo" "$NUDGE_PARENT/sibling"
 git -C "$NUDGE_PARENT/repo" init -q -b main
-write_plan "$NUDGE_PARENT/SiteLine/engineering/WEEKLY_PLAN.md" "$(days_ago 10)"
-write_runbook "$NUDGE_PARENT/SiteLine/engineering/RUNBOOK.md" "$(days_ago 0)"
-printf '```\nPlan primary: ../SiteLine\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
+write_plan "$NUDGE_PARENT/sibling/engineering/WEEKLY_PLAN.md" "$(days_ago 10)"
+write_runbook "$NUDGE_PARENT/sibling/engineering/RUNBOOK.md" "$(days_ago 0)"
+printf '```\nPlan primary: ../sibling\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
 v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_plan_nudge )
 [ "$v" = "plan agreed 10d ago → /tpm" ] && ok "plan nudge: Plan primary reads the sibling repo's plan" || fail "plan nudge: Plan primary" "got '$v'"
-printf '```\nRunbook primary: ../SiteLine\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
+printf '```\nRunbook primary: ../sibling\n```\n' > "$NUDGE_PARENT/repo/method.config.md"
 v=$( cd "$NUDGE_PARENT/repo" && source "$PK" && pk_plan_nudge )
 [ "$v" = "plan agreed 10d ago → /tpm" ] && ok "plan nudge: Runbook primary alone still finds the sibling's plan" || fail "plan nudge: Runbook primary fallback" "got '$v'"
 rm -rf "$NUDGE_PARENT"
@@ -4068,7 +4078,7 @@ fi
 echo "== issue create: Area guard =="
 
 # Four filers once created issues with no Area: label on a board whose
-# method.config.md lists them (SiteLine, 2026-10-27). The guard fires before
+# method.config.md lists them (a consumer project, 2026-10). The guard fires before
 # any network call, so these run with no token and must fail on the guard
 # (or, past it, on anything but the guard).
 make_fixture
@@ -4109,7 +4119,7 @@ esac
 # ── pk verify: every gate command counts, not just the last (v5.2.4) ──────────
 # The gate is one bash script. Its exit status used to be the LAST command's, so
 # an early failure under a green last line passed `pk verify` and let
-# `pk promote` open its PR (Piper PIPER-1362: three `pnpm: command not found`
+# `pk promote` open its PR (a consumer project, 2026-10: three `pnpm: command not found`
 # lines, then a skipped `if` leg exiting 0).
 
 echo "== pk verify gate exit status (v5.2.4) =="
@@ -4193,13 +4203,14 @@ rm -rf "$GE_REMOTE"
 
 # ── Synced docs carry no consumer's retired names (v5.2.5) ───────────────────
 # Every sync copies these files over the consumer's, so a consumer-specific name
-# here reverts that consumer's own fix on each run (Piper PIPER-1363: `vercel
-# --prod`, retired by PIPER-1309; `../SiteLine`, gone since Piper's repo merge;
-# `/sync-legacy`, a skill Piper deleted). Use a generic placeholder instead.
+# here reverts that consumer's own fix on each run (a consumer project, 2026-10:
+# `vercel --prod`, retired; a `../<ProperName>` sibling path, gone since that
+# consumer's repo merge; `/sync-legacy`, a skill it deleted). Use a generic
+# placeholder instead.
 
 echo "== synced docs: no consumer-retired names (v5.2.5) =="
 
-RETIRED_HITS=$(cd "$REPO_ROOT" && grep -rnE 'vercel --prod|\.\./SiteLine|/sync-legacy' \
+RETIRED_HITS=$(cd "$REPO_ROOT" && grep -rnE 'vercel --prod|\.\./[A-Z][A-Za-z]+|/sync-legacy' \
   skills templates sop agents workflows RUNBOOK.md method.md GUIDE.md 2>/dev/null)
 if [ -z "$RETIRED_HITS" ]; then ok "synced docs name no consumer-retired command or path"
 else fail "synced docs name no consumer-retired command or path" "$(echo "$RETIRED_HITS" | cut -c1-140 | head -5)"; fi
@@ -4208,6 +4219,19 @@ else fail "synced docs name no consumer-retired command or path" "$(echo "$RETIR
 # retired with them, PHASES.md as a live input, and doc paths that never
 # existed. Each of these was found cited as current after it was gone.
 echo "== synced docs: no pipekit-retired skill names or dead paths =="
+
+# And no former consumer's name or issue prefix anywhere a sync can carry it —
+# the synced surface, bin/pk, the template and the tests. The one upstream
+# org URL and README's one-line note on the old word for "issue" are the
+# exceptions; `wits=` is pk promote's PR-body wire format, lowercase, and
+# stays. Bracketed letters keep the pattern from matching itself here.
+echo "== synced docs: no former consumer named (v5.4.0) =="
+
+CONSUMER_HITS=$(cd "$REPO_ROOT" && grep -rnE '\bP[i]per\b|\bp[i]per\b|S[i]teLine|S[i]ghtline|\bW[I]Ts?\b|\bW[I]T-[0-9]+|\bP[O]C-[0-9]+|\bP[I]PER-[0-9]+|G[a]me7|withp[i]per\.ai' \
+  skills templates sop agents workflows bin method.config.template.md RUNBOOK.md method.md GUIDE.md CLAUDE.md README.md STARTUP.md scripts tests 2>/dev/null \
+  | grep -v 'withpiper/pipekit' | grep -v 'Older docs say' || true)
+if [ -z "$CONSUMER_HITS" ]; then ok "synced docs, bin/pk, template and tests name no former consumer"
+else fail "synced docs, bin/pk, template and tests name no former consumer" "$(echo "$CONSUMER_HITS" | cut -c1-140 | head -5)"; fi
 
 STALE_HITS=$(cd "$REPO_ROOT" && grep -rnE '/0[0-9]-[a-z]|/10-strategy-sync|/task-processor|/linear-todo-runner|/skill-index|/spec-validator|PHASES\.md fallback|legacy .PHASES\.md|Linear SOP\.md|CLAUDE_SKILLS_GUIDE|pipekit-post-archive|templates/agents/plan-reviewer' \
   skills templates sop agents workflows bin/pk RUNBOOK.md method.md GUIDE.md CLAUDE.md README.md 2>/dev/null)

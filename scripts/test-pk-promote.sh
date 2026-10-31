@@ -135,10 +135,10 @@ echo "owner/repo extraction from origin URL"
 extract_owner_repo() {
   echo "$1" | sed -E 's#\.git$##' | sed -E 's#^.*github\.com[:/]##'
 }
-assert_eq "https URL"        "withpiper/piper" "$(extract_owner_repo 'https://github.com/withpiper/piper.git')"
-assert_eq "https no .git"    "withpiper/piper" "$(extract_owner_repo 'https://github.com/withpiper/piper')"
-assert_eq "ssh URL"          "withpiper/piper" "$(extract_owner_repo 'git@github.com:withpiper/piper.git')"
-assert_eq "ssh no .git"      "withpiper/piper" "$(extract_owner_repo 'git@github.com:withpiper/piper')"
+assert_eq "https URL"        "example-org/example-repo" "$(extract_owner_repo 'https://github.com/example-org/example-repo.git')"
+assert_eq "https no .git"    "example-org/example-repo" "$(extract_owner_repo 'https://github.com/example-org/example-repo')"
+assert_eq "ssh URL"          "example-org/example-repo" "$(extract_owner_repo 'git@github.com:example-org/example-repo.git')"
+assert_eq "ssh no .git"      "example-org/example-repo" "$(extract_owner_repo 'git@github.com:example-org/example-repo')"
 
 echo ""
 if [ "$fail" -eq 0 ]; then

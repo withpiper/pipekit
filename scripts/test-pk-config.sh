@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-pk-config.sh — fixture-based tests for bin/pk helpers.
 #
-# Covers regressions from the v2.3.1 canary (WIT-280):
+# Covers regressions from the v2.3.1 canary:
 #   #15  pk_config silently returned defaults for code-block Key: Value configs
 #   #3   /verify Step 0 Integration branch parser shared the same blind spot
 #   #4   /verify Step 2 awk gate-extractor self-terminated on its own start line
@@ -42,8 +42,8 @@ with_fixture() {
   )
 }
 
-# ─── Fixture 1: Piper-style code-block V2 keys ──────────────────────────────
-piper_cfg='# method.config.md (Piper-style)
+# ─── Fixture 1: three-tier code-block V2 keys ───────────────────────────────
+three_tier_cfg='# method.config.md (three-tier)
 
 ## V2 keys
 
@@ -57,15 +57,15 @@ Ship environments: dev,beta,main
 ```
 '
 
-echo "Fixture 1: code-block Key: Value (Piper-style)"
-assert_eq "Migration dir"       "supabase/migrations" "$(with_fixture "$piper_cfg" "Migration dir" "db/migrate")"
-assert_eq "Integration branch"  "dev"           "$(with_fixture "$piper_cfg" "Integration branch")"
-assert_eq "Ship environments"   "dev,beta,main" "$(with_fixture "$piper_cfg" "Ship environments" "dev,main")"
-assert_eq "Require QA review"   "true"          "$(with_fixture "$piper_cfg" "Require QA review" "false")"
-assert_eq "Promote to main"     "true"          "$(with_fixture "$piper_cfg" "Promote to main" "true")"
+echo "Fixture 1: code-block Key: Value (three-tier)"
+assert_eq "Migration dir"       "supabase/migrations" "$(with_fixture "$three_tier_cfg" "Migration dir" "db/migrate")"
+assert_eq "Integration branch"  "dev"           "$(with_fixture "$three_tier_cfg" "Integration branch")"
+assert_eq "Ship environments"   "dev,beta,main" "$(with_fixture "$three_tier_cfg" "Ship environments" "dev,main")"
+assert_eq "Require QA review"   "true"          "$(with_fixture "$three_tier_cfg" "Require QA review" "false")"
+assert_eq "Promote to main"     "true"          "$(with_fixture "$three_tier_cfg" "Promote to main" "true")"
 
-# ─── Fixture 2: rs-vault-style single-tier code-block ───────────────────────
-rsvault_cfg='## V2 keys
+# ─── Fixture 2: one-tier code-block ─────────────────────────────────────────
+one_tier_cfg='## V2 keys
 
 ```
 Migration dir: db/migrate
@@ -75,10 +75,10 @@ Ship environments: main
 ```
 '
 
-echo "Fixture 2: code-block Key: Value (rs-vault-style)"
-assert_eq "Migration dir"      "db/migrate" "$(with_fixture "$rsvault_cfg" "Migration dir" "supabase/migrations")"
-assert_eq "Integration branch" "main"   "$(with_fixture "$rsvault_cfg" "Integration branch")"
-assert_eq "Promote to main"    "false"  "$(with_fixture "$rsvault_cfg" "Promote to main" "true")"
+echo "Fixture 2: code-block Key: Value (one-tier)"
+assert_eq "Migration dir"      "db/migrate" "$(with_fixture "$one_tier_cfg" "Migration dir" "supabase/migrations")"
+assert_eq "Integration branch" "main"   "$(with_fixture "$one_tier_cfg" "Integration branch")"
+assert_eq "Promote to main"    "false"  "$(with_fixture "$one_tier_cfg" "Promote to main" "true")"
 
 # ─── Fixture 3: legacy markdown-table format ────────────────────────────────
 legacy_cfg='## V2 keys
