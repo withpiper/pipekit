@@ -346,6 +346,7 @@ Keys consumed by `bin/pk` and the `/work` + `/verify` skills. All have sensible 
 |-----|-------|--------|---------|---------|
 | **Integration branch** |  | `dev` \| `main` | derived from § Git Architecture | `pk ship` (PR base) |
 | **Promote to main** |  | `true` \| `false` | `true` if integration is `dev` | `pk promote` (skips if `false`) |
+| **Merge method** |  | `merge` \| `squash` \| `rebase` | `merge` | `pk done --merge` (the `gh pr merge` strategy for the feature → integration landing) and the reminder `pk ship` prints. Avoid `squash` when the integration branch is itself promoted by PR — it orphans the feature SHAs and every later promote sees phantom conflicts. |
 | **Deploy command** |  | shell command | (none) | `pk deploy` / `pk done` — for **script-deploy** projects (deploy is a script, not branch promotion). `pk deploy` (or `pk deploy prod`) runs this command; `pk done` also surfaces it after merge as a "merged ≠ deployed" reminder. Advisory; never auto-run. Leave blank for branch-per-env projects that use `pk promote`. |
 | **Deploy command `<env>`** |  | shell command | (none) | `pk deploy <env>` — per-environment override (key is **space-suffixed**, e.g. `Deploy command dev`, because `pk_config` splits on the first colon). `pk deploy dev` runs `Deploy command dev`; `pk deploy` / `pk deploy prod` fall back to the bare `Deploy command`. Add one row per env you deploy to (`dev`, `staging`, …). |
 | **Require QA review** |  | `true` \| `false` | `false` | `/verify` (auto-spawns QA subagent if `true`) |

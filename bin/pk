@@ -170,6 +170,19 @@ pk_integration_branch() {
 # integrates on a branch other than main has that branch and main to promote
 # through; one that integrates on main is single-tier. One reader for every
 # verb — pk done ("" → Done) and pk promote ("dev,main") used to disagree.
+# gh pr merge strategy for the feature → integration landing (pk done --merge)
+# and the reminder pk ship prints. Squash is the one to avoid when the
+# integration branch is itself promoted by PR: it orphans the feature SHAs and
+# every later promote sees phantom conflicts.
+pk_merge_method() {
+  local m
+  m=$(pk_config "Merge method" "merge")
+  case "$m" in
+    merge|squash|rebase) echo "$m" ;;
+    *) echo "ERROR: Merge method must be merge, squash or rebase (method.config.md has '$m')." >&2; return 2 ;;
+  esac
+}
+
 pk_ship_envs() {
   local chain integ
   chain=$(pk_config "Ship environments" "")
@@ -3274,21 +3287,16 @@ cmd_ship() {
     fi
   fi
 
-  # Merge-strategy reminder. Squash is disabled repo-wide (v2.2.0+) — it
-  # creates orphan SHAs that diverge dev and main, causing phantom conflicts
-  # on every subsequent dev → main promote. See sop/Git_and_Deployment.md
-  # § Merge Strategy by Hop.
-  case "$target" in
-    dev|beta)
-      echo ""
-      echo "⚑ Merge with: 'Rebase and merge' or 'Create a merge commit'."
-      echo "  (Squash is disabled repo-wide — causes phantom conflicts on promotes.)"
-      ;;
-    main)
-      echo ""
-      echo "⚑ Merge with: 'Create a merge commit' (one anchor commit per promotion)."
-      ;;
+  # Merge-strategy reminder — what pk done --merge will use.
+  local merge_method merge_label
+  merge_method=$(pk_merge_method 2>/dev/null) || merge_method="merge"
+  case "$merge_method" in
+    squash) merge_label="Squash and merge" ;;
+    rebase) merge_label="Rebase and merge" ;;
+    *)      merge_label="Create a merge commit" ;;
   esac
+  echo ""
+  echo "⚑ Merge with: '$merge_label' (Merge method in method.config.md; pk done --merge uses it)."
 
   # Path-matched reminders from method.config.md § Ship Reminders (v5.3.0),
   # e.g. "this backend change is not on the preview; deploy it to dev before
@@ -3300,14 +3308,9 @@ cmd_ship() {
     printf '%s\n' "$_reminders"
   fi
 
-  # Linear: → In Review / UAT (state name varies; try common ones)
-  local target_state
-  case "$target" in
-    main) target_state="UAT" ;;
-    dev|beta) target_state="UAT" ;;
-    *) target_state="In Review" ;;
-  esac
-  pk_linear_set_state "$issue" "$target_state" || pk_linear_set_state "$issue" "In Review" || true
+  # Linear: → UAT (the PR is open on the preview); "In Review" for boards
+  # without a UAT state.
+  pk_linear_set_state "$issue" "UAT" || pk_linear_set_state "$issue" "In Review" || true
 
   # Antagonistic review (opt-in via --review). Surfaces issues that /work
   # and /verify don't catch — security posture, test coverage gaps, double-
@@ -3639,18 +3642,19 @@ cmd_done() {
     esac
   fi
 
-  # Optional: merge the PR for the user (v2.5.0, M3 opt-in).
-  # Merge-commit per repo policy (squash is disabled, --merge produces an
-  # anchor commit on the integration branch). If the PR is already merged,
+  # Optional: merge the PR for the user (v2.5.0, M3 opt-in), with the
+  # strategy from `Merge method` (default merge). If the PR is already merged,
   # this is a clean no-op courtesy of gh's idempotent behavior.
   if $do_merge; then
+    local merge_method
+    merge_method=$(pk_merge_method) || return 2
     if [ -n "$pr_json" ]; then
       # Resolved from a merged PR: there is no branch for gh to merge by name,
       # and failing here would strand the issue exactly as the missing fallback did.
       echo "PR #${pr_number} is already merged — nothing for --merge to do."
     else
-      echo "Merging PR for $current..."
-      if ! gh pr merge "$current" --merge 2>&1; then
+      echo "Merging PR for $current (--$merge_method)..."
+      if ! gh pr merge "$current" "--$merge_method" 2>&1; then
         echo "ERROR: gh pr merge failed. Resolve (conflicts? failing CI? not approved?) and rerun." >&2
         return 1
       fi
@@ -5885,6 +5889,7 @@ cmd_config() {
   for entry in \
     "Integration branch" \
     "Promote to main" \
+    "Merge method|merge" \
     "Require QA review" \
     "Default deep flag" \
     "Ship environments|$(pk_ship_envs)" \

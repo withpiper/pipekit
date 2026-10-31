@@ -164,6 +164,22 @@ Ship environments: main
 ```'
 v=$(unit_first_env); [ "$v" = "Done" ] && ok "ship envs: an explicit chain wins over the derivation" || fail "ship envs: explicit wins" "got '$v'"
 
+# Merge method: the gh pr merge strategy pk done --merge uses, validated.
+unit_merge() { ( cd "$FIXTURE" && source "$PK" && pk_merge_method 2>/dev/null ); }
+write_config '```
+Team name: Eng
+```'
+v=$(unit_merge); [ "$v" = "merge" ] && ok "merge method: blank → merge" || fail "merge method: blank → merge" "got '$v'"
+write_config '```
+Merge method: rebase
+```'
+v=$(unit_merge); [ "$v" = "rebase" ] && ok "merge method: rebase honoured" || fail "merge method: rebase honoured" "got '$v'"
+write_config '```
+Merge method: fast-forward
+```'
+v=$(unit_merge); code=$?
+[ $code -eq 2 ] && [ -z "$v" ] && ok "merge method: unknown value refused (exit 2)" || fail "merge method: unknown value refused" "exit $code, got '$v'"
+
 cleanup
 
 # ── Unit tests: native phase derivation (sourced mode, no network) ───────────
