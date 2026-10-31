@@ -1,6 +1,6 @@
 ---
 name: light-spec
-description: Structured spec generation with auto-cycled agent review + tier auto-derive (v2.7.0-rc1+). Use when a Linear issue moves to spec stage. Use when writing/refining a feature spec before /work. Use when /spec-validator flags gaps.
+description: Structured spec generation with auto-cycled agent review + tier auto-derive (v2.7.0-rc1+). Use when a Linear issue moves to spec stage. Use when writing/refining a feature spec before /work. Use when the Spec Review Agent flags gaps.
 ---
 
 # Light Spec Skill
@@ -221,7 +221,7 @@ Draft the split as: issue A (migration + the client changes it forces) → block
 
 ### Phase 6 — Spec Review Cycle (automated)
 
-Enter the cycle automatically once Phase 5 publishes. Do **not** prompt the user before pass 1 — the cycle is the whole point of `/01-light-spec`. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
+Enter the cycle automatically once Phase 5 publishes. Do **not** prompt the user before pass 1 — the cycle is the whole point of `/light-spec`. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
 
 The user can opt out only by interrupting (Ctrl-C). Confirmation prompts appear on passes 2 and 3 inside the loop below — that is the designed bail-out point.
 
@@ -239,7 +239,7 @@ loop:
                    "✓ Spec approved on pass {pass}. ➜ next: pk branch PROJ-XXX"
                  EXIT.
 
-    Revise     → invoke /02-light-spec-revise PROJ-XXX.
+    Revise     → invoke /light-spec-revise PROJ-XXX.
 
                  Pass-aware confirmation:
                    - pass == 1: auto-invoke. No prompt.
@@ -254,12 +254,12 @@ loop:
 
     Stalemate  → pk's 3-comment guard fired before triggering. Tell the user:
                    "Agent already reviewed 3x — likely stalemate. Run
-                    /02-light-spec-revise PROJ-XXX with the override path."
+                    /light-spec-revise PROJ-XXX with the override path."
                  EXIT.
 
     Timeout    → no agent response in 5 min. Tell the user:
                    "Agent didn't respond. Inspect Linear UI; rerun
-                    /01-light-spec PROJ-XXX when ready."
+                    /light-spec PROJ-XXX when ready."
                  EXIT.
 
     Malformed  → tell the user the agent comment couldn't be parsed and
@@ -267,7 +267,7 @@ loop:
 
   if pass == 3 and verdict was Revise:
     Tell the user: "3 passes complete. /02 has the override path if the
-    agent is stuck — rerun /02-light-spec-revise PROJ-XXX."
+    agent is stuck — rerun /light-spec-revise PROJ-XXX."
     EXIT.
 
   pass += 1
@@ -283,7 +283,6 @@ Tell the user how to proceed:
 
 > **Next steps:**
 > - To turn this spec into a plan and execute it: `pk branch PROJ-XXX`, then `/work PROJ-XXX` from inside the worktree
-> - To batch-process with other specced issues: `/linear-todo-runner` (requires Acceptance Criteria section)
 > - To refine further: `/light-spec PROJ-XXX` to iterate
 
 ---
@@ -321,7 +320,7 @@ Same as `/brainstorm`, but with planning implications. Phase 3.6 maps these to `
 | Complexity | Planning implication | Auto-derived tier (v2.7.0-rc1+) |
 |---|---|---|
 | **Trivial** | Single-step change, no decomposition. Often a typo/copy/rename. | `tier:quick` |
-| **Low (~2-4h)** | `/work` plans inline — spec is sufficient for `/linear-todo-runner` to pick up directly if AC section is complete. | `tier:quick` |
+| **Low (~2-4h)** | `/work` plans inline from the spec — a complete AC section is the plan. | `tier:quick` |
 | **Medium (~6-10h)** | Benefits from a single planning pass. The light spec provides enough for `/work` to generate a task DAG. | `tier:standard` |
 | **High (~12-20h+)** | Likely a larger task DAG across an initiative. The light spec seeds `/work`'s `--deep` parallel-grounding decomposition. | `tier:heavy` |
 | **Very High / Critical** | Cross-phase, cross-team, or migrates load-bearing infrastructure. Always heavy. | `tier:heavy` |
@@ -373,5 +372,3 @@ After the spec is drafted and posted to Linear, emit an inline `➜ Next:` line 
 
 - `/brainstorm` — lighter: feasibility-only, no structured spec
 - `/sync-linear` — reconciles strategy-doc drift against the Linear initiative hierarchy
-- `/linear-todo-runner` — executes specced issues in parallel (requires AC section)
-- `/spec-validator` — validates full Strategy docs (heavier than light specs)

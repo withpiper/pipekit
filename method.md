@@ -4,7 +4,7 @@
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
-> **The machine-readable NEXT.md is retired; a curated roadmap file is legitimate.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer that skills auto-wrote. That artifact is retired — `pk next` (reads Linear directly + scopes to the current initiative via the **Linear-native initiative surface** — `i{N}.` initiatives / `P{N}.` projects, v4.1.0; the legacy `PHASES.md` + `linear-map.json` fall back automatically for un-migrated projects) is the canonical "what's next?" answer, and **skills never write a roadmap file**.
+> **The machine-readable NEXT.md is retired; a curated roadmap file is legitimate.** v1 used `NEXT.md` at the project root as a machine-readable "what to do next" pointer that skills auto-wrote. That artifact is retired — `pk next` (reads Linear directly + scopes to the current initiative via the **Linear-native initiative surface** — `i{N}.` initiatives / `P{N}.` projects, v4.1.0) is the canonical "what's next?" answer, and **skills never write a roadmap file**.
 >
 > What v2's retirement over-rotated on (corrected in v3.1.0): a **hand-curated visual roadmap** at the project root — phases, themes, standing backlogs, the orientation picture Linear's board view doesn't give — is a first-class *optional* artifact. Keep one if you like seeing the whole arc in a file (`NEXT.md` or `ROADMAP.md` by convention). Two rules keep it safe:
 > - **Human-owned.** Skills and agents never write it, and never read it as operational state. It can go stale without breaking anything — it's narrative, not state.
@@ -329,7 +329,7 @@ The corollary: isolation is mandatory only where independence or a clean contrac
 
 - Inside `/light-spec` (capture → draft → publish are one stage)
 - Inside `/work` for the duration of one issue (plan + execute are designed to share context)
-- Reading-only sessions: `pk status`, `pk next`, `/00-roadmap-review`, `/pipekit-help`
+- Reading-only sessions: `pk status`, `pk next`, `/roadmap-review`, `/pipekit-help`
 
 ### Why this matters more than it looks
 
@@ -371,7 +371,7 @@ or dependency reaches for one. The boundaries below make ownership explicit.
 
 ### Rules of Engagement
 
-1. **The initiative surface is Linear-native and Pipekit-owned.** Initiatives (`i{N}.`) → Projects (`I{N}.P{N}.`) → Issues live in Linear. `/roadmap-create` authors them; `/phase-plan` advances them; `pk next`/`pk status` derive the current initiative live (accepting both `I{N}.P{N}.` and legacy bare `P{N}.`). No committed initiative file — the legacy `PHASES.md`/`linear-map.json` are a read-only fallback only.
+1. **The initiative surface is Linear-native and Pipekit-owned.** Initiatives (`i{N}.`) → Projects (`I{N}.P{N}.`) → Issues live in Linear. `/roadmap-create` authors them; `/phase-plan` advances them; `pk next`/`pk status` derive the current initiative live (accepting both `I{N}.P{N}.` and legacy bare `P{N}.`). No committed initiative file; `PHASES.md` and `linear-map.json` are retired.
 2. **Pipekit owns the visibility layer.** Linear issues, the initiative surface, strategy docs, and project config are Pipekit's. (v2 retired the `NEXT.md` mirror; v4.1.0 retired `PHASES.md`/`linear-map.json` — `pk next` reads "what's next?" live from Linear.)
 3. **The roadmap is authored directly into Linear** — at `/roadmap-create`. The Linear Initiative→Project hierarchy *is* the roadmap, named by the `i{N}.`/`I{N}.P{N}.` convention. There is no separate initiative skeleton to merge into.
 4. **Pipekit owns gates and build.** `pk branch` opens Linear → In Progress; `/work` plans inline and executes on the native-on-Workflow backend (the sole executor as of v4.0.0); `/verify` runs the pre-deploy gate; `pk ship` transitions Linear → UAT (PR open on preview); `pk done` verifies merge, transitions Linear UAT → `In <FirstEnv>` (e.g. `In Dev`), cleans up the worktree; `pk promote <env>` walks `Ship environments` one hop at a time and transitions issues → `In <Env>` (intermediate) or → Done (final). The plan-review gate lives in the standalone `/review-plan` skill, which spawns the `plan-reviewer` agent on the plan-review tier (`method.config.md § Model Policy`, default `opus`/`xhigh`) between `/work`'s inline plan and execution.
@@ -379,7 +379,7 @@ or dependency reaches for one. The boundaries below make ownership explicit.
    **Pipekit's execution surface:**
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Pipekit-shipped.
    2. **`/work` executes inline on the native-on-Workflow backend** — the sole executor as of v4.0.0.
-   3. **Initiative surface read live from Linear** — `pk next`, `pk status`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/sync-linear`, `/10-strategy-sync` derive initiative context from the Linear Initiative/Project hierarchy.
+   3. **Initiative surface read live from Linear** — `pk next`, `pk status`, `/phase-plan`, `/roadmap-review`, `/light-spec`, `/sync-linear`, `/strategy-sync` derive initiative context from the Linear Initiative/Project hierarchy.
    4. **Strategy-sync nudge** — after a milestone ships, `/strategy-sync` is prompted via `/pk-exit` + convention.
    5. **Pipekit-side ephemeral state** lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds the `pending-strategy-sync` marker and per-issue pipeline-state records consumed by `pk *` commands. Out-of-repo by design — v1.6.0 placed these at `.pipekit/`, where an active-plan file-guard hook silently blocked writes (#13); the relocation made writes succeed unconditionally.
 5. **When drift is suspected, stop and reconcile.** Symptoms: a plan references a Linear issue that doesn't exist; a Linear issue has no corresponding plan. Resolve the mismatch before continuing — drift compounds.

@@ -83,7 +83,7 @@ For resume into Phases 3–8, `cd` into the existing `<ISSUE-ID>` worktree first
 
 **Goal:** create a well-formed Linear issue.
 
-1. Ask the user the questions in `templates/intake.md`. If a one-liner was passed, prefill the description hint.
+1. Ask the user the questions in this skill's `templates/intake.md`. If a one-liner was passed, prefill the description hint.
 2. **Priority heuristic** to show the user (Linear `priority` field — native, no custom labels):
    - `Urgent` (1) — data loss / auth bypass / money / production down
    - `High` (2) — core flow broken (e.g. sign-out failing for magic-link users)
@@ -95,7 +95,7 @@ For resume into Phases 3–8, `cd` into the existing `<ISSUE-ID>` worktree first
    - Status: backlog-type (e.g. `Backlog` or `Parked` — anything with `statusType=backlog`)
    - Priority: 1–4 per the heuristic above
    - Labels: `Bug` (no severity labels — priority is the native field) **plus** an `Area:` label chosen for this bug's own work from `method.config.md § Area Labels`, and a `Repo:` label from `§ Repo Labels` where that section is populated. `pk issue create` refuses a create with no `Area:` on a board that configures them; a bug filed as bare `Bug` is the drift `/linear-hygiene` exists to catch (SiteLine PIPER-1294, 2026-10-27). Full placement contract: `sop/Linear_SOP.md § Filing a follow-up issue`.
-   - Body: filled `templates/intake.md`
+   - Body: the filled intake template
 5. Echo `<ISSUE-ID>` to the user. Advance to Phase 2.
 
 ---
@@ -230,7 +230,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 
 **Mandatory for priority ≤ Medium (1–3). Optional but recommended for low.**
 
-1. Append a Linear comment using `templates/postmortem.md`:
+1. Append a Linear comment using this skill's `templates/postmortem.md`:
    - What broke (1 sentence)
    - Which gate should have caught it
    - One change to prevent recurrence

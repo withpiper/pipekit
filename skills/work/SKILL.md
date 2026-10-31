@@ -12,7 +12,7 @@ You drive one Linear issue from spec to verified commits. Read the spec, infer t
 ## Triggers
 
 - `/work <ISSUE-ID>` — primary (tier from the Linear `tier:*` label, default Standard)
-- `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec-validator + code survey + security review; no-op on Quick, already forced on Heavy
+- `/work <ISSUE-ID> --deep` — Standard-tier shortcut to spec validation + code survey + security review; no-op on Quick, already forced on Heavy
 - `/work <ISSUE-ID> --resume` — continue an execution that stopped (see § Resume)
 - `/work <ISSUE-ID> --no-rollover` — build, but do not auto-run `/verify`
 - "work on RS-30" / "let's do PIP-123"
@@ -79,7 +79,6 @@ The description must contain `## Light Spec` or `## Acceptance Criteria`. If nei
 Best-effort, never blocking:
 
 ```bash
-[ -x "$HOME/.claude/scripts/set-topic.sh" ] && "$HOME/.claude/scripts/set-topic.sh" "<ISSUE-ID> — <title>"
 printf '\033]0;%s\007' "<ISSUE-ID>"
 ```
 
@@ -87,7 +86,7 @@ printf '\033]0;%s\007' "<ISSUE-ID>"
 
 Take the first of `tier:quick`, `tier:standard`, `tier:heavy` in `labels`; default **Standard**. Print `Tier: <quick|standard|heavy>`. Per-tier semantics are canonical in `pipekit/templates/tier-{quick,standard,heavy}.md`.
 
-- **Quick**: light by design. `--deep` is ignored. Mention once that `/06-linear-todo-runner` batches several Quick issues in parallel.
+- **Quick**: light by design. `--deep` is ignored.
 - **Heavy**: `--deep` behaviour is forced, the security review is forced at Step 6, and `/strategy-sync` is required before the initiative closes (after this issue merges, not before its `pk done`). Say so up front so the human can plan.
 
 ## Step 3 — Plan
@@ -104,7 +103,7 @@ Send both `Agent` calls in one message. Each prompt opens with the intent line, 
 
 > Linear issue `<ISSUE-ID>` — `<title>`. Goal: `<one sentence from the spec>`.
 
-1. **Spec validator.** `subagent_type: "general-purpose"` (or a project-local `spec-validator`), on the plan-review tier per `method.config.md § Model Policy` (default `opus` / `xhigh`). Prompt: the full description, then the rubric — a one-sentence Goal; at least three testable Acceptance Criteria; concrete file paths and line refs rather than "the auth module"; dependencies listed; no open questions. Return **Pass**, **Concerns** (specific gaps with refs), or **Block** (a gap that prevents planning). Conclusions only.
+1. **Spec validator.** `subagent_type: "general-purpose"`, on the plan-review tier per `method.config.md § Model Policy` (default `opus` / `xhigh`). Prompt: the full description, then the rubric — a one-sentence Goal; at least three testable Acceptance Criteria; concrete file paths and line refs rather than "the auth module"; dependencies listed; no open questions. Return **Pass**, **Concerns** (specific gaps with refs), or **Block** (a gap that prevents planning). Conclusions only.
 2. **Code survey.** `subagent_type: "Explore"`, on the grounding tier (default `haiku` / `low`). Prompt: the file paths, tables, and packages the spec names; for each, its purpose, the key types and functions present, and the patterns the surrounding code uses so new work fits. Conclusions only.
 
 Synthesize both into the plan.

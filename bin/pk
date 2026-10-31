@@ -2704,7 +2704,7 @@ pk_next_focus_lanes() {
     echo "No focus lane has a ready Approved issue — spec one (/light-spec) or clear its blockers."
   fi
   if [ "$ready_total" -ge 2 ]; then
-    echo "$ready_total focus-lane issues are build-ready and unblocked → /06-linear-todo-runner --dry-run"
+    echo "$ready_total focus-lane issues are build-ready and unblocked → pk branch + /work each (or /pk-express for Quick ones)"
   fi
   echo ""
   local supporting sup_count
@@ -4783,7 +4783,7 @@ pk_spec_cycle_latest_agent_body_since() {
 # v4.24.0 it read "replacing the existing ## Agent Review section with the new
 # review", so pass 2 destroyed pass 1's rationale and pass 3 destroyed both —
 # silently, on every project running spec-cycle. Two things were being lost:
-# the earlier passes' blocking-issue reasoning (which /02-light-spec-revise
+# the earlier passes' blocking-issue reasoning (which /light-spec-revise
 # reads to tell a resolved blocker from a re-raised one), and any human
 # commentary in that section — including the stalemate-override note that
 # /02 § Phase 6 option 3 writes there, the one record /02's own hard
@@ -4841,7 +4841,7 @@ cmd_spec_cycle() {
   fi
   if [ "$current_state" != "$ready_state" ]; then
     echo "ERROR: $id is in '$current_state', not '$ready_state'." >&2
-    echo "  Run /01-light-spec $id first to publish a spec." >&2
+    echo "  Run /light-spec $id first to publish a spec." >&2
     return 1
   fi
 
@@ -4850,7 +4850,7 @@ cmd_spec_cycle() {
   prior_count=$(pk_spec_cycle_agent_count "$id")
   if [ "$prior_count" -ge 3 ]; then
     echo "STALEMATE: $id has $prior_count prior agent reviews." >&2
-    echo "  Run /02-light-spec-revise $id and use the override path." >&2
+    echo "  Run /light-spec-revise $id and use the override path." >&2
     echo "VERDICT: Stalemate"
     return 1
   fi
@@ -4893,7 +4893,7 @@ cmd_spec_cycle() {
     Revise|revise|REVISE)
       echo "✗ verdict: Revise"
       echo
-      echo "  ➜ next: /02-light-spec-revise $id"
+      echo "  ➜ next: /light-spec-revise $id"
       echo "VERDICT: Revise"
       ;;
     *)

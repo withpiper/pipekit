@@ -576,6 +576,30 @@ is_retired() {
   return 1
 }
 
+# Skills upstream renamed (the numbered dirs: the registered command is the
+# directory name, so `/01-light-spec` and `/light-spec` would both exist) or
+# retired outright. A consumer's copy came from a sync, so it goes — unless
+# pipekit/.local-skills declares it project-owned, in which case it stays and
+# is reported like any other local skill.
+UPSTREAM_REMOVED_SKILLS="00-roadmap-review 01-light-spec 02-light-spec-revise 10-strategy-sync 06-linear-todo-runner task-processor skill-index spec-validator launch launch-native branch end-session start-session linear-status"
+RETIRED_REMOVED=""
+
+for s in $UPSTREAM_REMOVED_SKILLS; do
+  [ -d "$PROJECT_ROOT/.claude/skills/$s" ] || continue
+  if grep -qx "$s" "$LOCAL_MANIFEST" 2>/dev/null; then
+    echo "  KEEP skill: $s (retired upstream; declared project-local)"
+    continue
+  fi
+  if $DRY_RUN; then
+    echo "  WOULD REMOVE skill: $s (retired or renamed upstream)"
+  else
+    rm -rf "${PROJECT_ROOT:?}/.claude/skills/$s"
+    echo "  REMOVED skill: $s (retired or renamed upstream)"
+    RETIRED_REMOVED="$RETIRED_REMOVED $s"
+  fi
+  CHANGES=$((CHANGES + 1))
+done
+
 for skill in $PORTABLE_SKILLS; do
   src="$TEMP/skills/$skill"
   dst="$PROJECT_ROOT/.claude/skills/$skill"
@@ -1135,6 +1159,14 @@ CHLOG
   if [ -n "$LOCAL_SKILLS" ]; then
     echo "### Project-local (declared in pipekit/.local-skills)" >> "$CHANGELOG"
     for s in $LOCAL_SKILLS; do
+      echo "- \`/$s\`" >> "$CHANGELOG"
+    done
+    echo "" >> "$CHANGELOG"
+  fi
+
+  if [ -n "$RETIRED_REMOVED" ]; then
+    echo "### Removed (retired or renamed upstream)" >> "$CHANGELOG"
+    for s in $RETIRED_REMOVED; do
       echo "- \`/$s\`" >> "$CHANGELOG"
     done
     echo "" >> "$CHANGELOG"

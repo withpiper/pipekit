@@ -101,6 +101,12 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/linear-hygiene` | Classifies unclassified/untriaged issues (placement, not disposition) and flags board-shape drift — pool smell, spent lanes, walk-skip hazards. Never creates a project. The backstop since v4.37.0: mid-flow filers place follow-ups at creation per `sop/Linear_SOP.md § Filing a follow-up issue`; `--session` checks this session's filings. |
 | `/tpm` | Technical program manager for the board (v5.0.0): a working session that reconciles what is really in flight across `§ Portfolio repos`, runs `/linear-hygiene` when drift touches the candidates, drafts MUST / NEXT / WAIT with the capacity arithmetic, and argues from `sop/TPM_SOP.md` until agreed. Writes tiers (`pk focus`), Hard-dependency relations and `[tpm]` comments to Linear, proves the order with `pk next`, and writes the weekly plan (`§ Plan path`, `engineering/WEEKLY_PLAN.md`, v5.1.0): a task list by session with the commands to run and the merge days, titles beside every ID; the runbook's `Now` block points at it. Leaves `[tpm] on-merge:` notes that `pk done` reads back. User-typed only; `--quick`, `--check`. |
 | `/pipekit-help` | Recommends the next pipeline step from project state. |
+| `/brainstorm`, `/brainstorm-review` | A raw idea → a triaged Linear issue (feasibility, not a spec); batch Now/Later/Kill triage of the untriaged pool. |
+| `/roadmap-review` | Audits roadmap health before a new initiative is specced — dependency order, spec coverage, lanes. |
+| `/sync-linear` | Reconciles strategy-doc drift against the Linear `i{N}.`/`I{N}.P{N}.` hierarchy; Linear wins. |
+| `/linear` | Issue-workflow helper for transitions and structured comments outside the loop (`pk issue …` underneath). |
+| `/review-plan` | Standalone `plan-reviewer` pass over a `.pk-work/<ID>-PLAN.md` in a fresh chat; `/work --deep` runs the same agent inline. |
+| `/financial-review` | Periodic DB ↔ server ↔ UI parity audit for calculation-heavy projects; checks live in a per-project file. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what shipped. |
 | `/release-changelog` | Draft CHANGELOG entry from commits between tags. |
 | `/pipekit-update` | Pull latest Pipekit into a consuming project. |

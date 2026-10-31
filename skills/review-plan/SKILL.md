@@ -73,8 +73,7 @@ If missing, surface a clear message and offer to sync:
 ```
 plan-reviewer agent not found at .claude/agents/plan-reviewer.md.
 Run `bash scripts/sync-method.sh` to install canonical Pipekit agents,
-or manually copy from your Pipekit checkout (templates/agents/plan-reviewer.md
-in older syncs, agents/plan-reviewer.md in current).
+or copy agents/plan-reviewer.md from your Pipekit checkout.
 
 Falling back to direct presentation: I'll show the PLAN.md structure
 and let you review manually.
@@ -134,7 +133,7 @@ Based on the verdict:
 |---------|----------------|
 | **Pass** | "Plan is execution-safe. Proceed to execution when ready." |
 | **Revise** (non-blocking only) | "Plan can proceed but here are improvements to apply during execution: {list}. Proceed to execution when you've decided which to address." |
-| **Block** | "Do not execute. Re-run `/work`'s planning to address the Fast Path items, or amend the spec via `/02-light-spec-revise PROJ-XXX` if scope/framing is wrong. Specifically: {list of blocking issues}." |
+| **Block** | "Do not execute. Re-run `/work`'s planning to address the Fast Path items, or amend the spec via `/light-spec-revise PROJ-XXX` if scope/framing is wrong. Specifically: {list of blocking issues}." |
 
 Always quote the agent's own Fast Path to Pass section verbatim — those are the concrete moves the user has to make.
 
@@ -144,7 +143,7 @@ Emit an inline `➜ Next:` line in your terminal output. Pointer logic:
 
 - **Pass** → proceed to execution (`/work`)
 - **Revise** → proceed to execution (`/work`) (with note about non-blocking improvements)
-- **Block** → re-plan via `/work` (if plan-revise scope) or `/02-light-spec-revise PROJ-XXX` (if spec/framing scope)
+- **Block** → re-plan via `/work` (if plan-revise scope) or `/light-spec-revise PROJ-XXX` (if spec/framing scope)
 
 Do **not** write a `NEXT.md` file — v2 retired the mirror; `pk next` reads "what's next?" live from Linear.
 
@@ -182,7 +181,7 @@ Thoughts that mean "slow down on the review." Paired with `.claude/rules/pipekit
 | Skill | Relationship |
 |-------|-------------|
 | `/work` (native) | Plans **inline** and files the plan at `.pk-work/<ID>-PLAN.md`; run `/review-plan` against it before execution, then proceed to execution. `/work` does not spawn plan-reviewer directly. |
-| `/02-light-spec-revise` | Route here when plan-reviewer's Block verdict points at spec-level issues (framing, missing AC, scope ambiguity). |
+| `/light-spec-revise` | Route here when plan-reviewer's Block verdict points at spec-level issues (framing, missing AC, scope ambiguity). |
 | `plan-reviewer` agent | The actual review work happens here; this skill orchestrates the invocation. |
 
 ---

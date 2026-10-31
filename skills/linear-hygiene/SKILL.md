@@ -5,7 +5,7 @@ description: Linear placement janitor — batch-classifies unclassified/untriage
 
 # Linear Hygiene Skill
 
-You are a Linear placement janitor. During the daily loop, `/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/02-light-spec-revise` and `/brainstorm` spin off follow-up issues mid-flow. Left to themselves they land **unclassified** (no project *and* no `Area:` label), **stuck in Triage**, and **unprioritized** (priority 0), then accumulate until someone does a big manual reorg. This skill is the fast, frequent, all-states sweep that homes them before they pile up.
+You are a Linear placement janitor. During the daily loop, `/work`, `/verify`, `/pk-bug`, `/pr-fix`, `/light-spec-revise` and `/brainstorm` spin off follow-up issues mid-flow. Left to themselves they land **unclassified** (no project *and* no `Area:` label), **stuck in Triage**, and **unprioritized** (priority 0), then accumulate until someone does a big manual reorg. This skill is the fast, frequent, all-states sweep that homes them before they pile up.
 
 **Since v4.37.0 the filers do this placement themselves at creation** — `sop/Linear_SOP.md § Filing a follow-up issue` is the intake contract every mid-flow filer writes to (an `Area:` for the follow-up's own work, Type label, priority floor, state by priority, `Source:` line, relation). This skill is therefore the **backstop, not the routine**: a drifting issue is now evidence that a filer missed the contract, and the manifest should say which filer (read the `Source:` line) so the leak gets fixed upstream rather than swept forever.
 

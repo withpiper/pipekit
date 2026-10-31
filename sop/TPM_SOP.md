@@ -84,7 +84,7 @@ Two items may run side by side only when **all four** hold; otherwise they are s
 3. No shared unmerged foundation (a migration or shared module one of them is waiting on).
 4. Provably disjoint file scope — read the specs; "probably" fails.
 
-Fail closed. A pair that fails only criterion 4 on mechanical overlap (both add a trigger to the same table, both regenerate the schema dump) is **built in parallel and merged in sequence** — the plan says which merges first and on which day. Two or more focus-lane heads that pass the bar and are Approved are the signal for `/06-linear-todo-runner --dry-run`.
+Fail closed. A pair that fails only criterion 4 on mechanical overlap (both add a trigger to the same table, both regenerate the schema dump) is **built in parallel and merged in sequence** — the plan says which merges first and on which day. Two or more focus-lane heads that pass the bar and are Approved can run as parallel `pk branch` + `/work` sessions.
 
 ## WAIT discipline
 

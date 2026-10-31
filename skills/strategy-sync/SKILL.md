@@ -151,17 +151,6 @@ After updating primary docs, check consistency across all docs in the manifest:
 4. **Cross-references:** Are all § references between docs still valid?
 5. Flag inconsistencies for manual review — do NOT auto-fix cross-doc issues without approval
 
-### Phase 7b — Clear Post-Archive Marker
-
-If `$STATE_DIR/pending-strategy-sync` exists (resolve `STATE_DIR=$(bash scripts/pipekit-state-dir.sh)`), it was written by `scripts/pipekit-post-archive.sh` to signal that a milestone archive left strategy docs potentially stale. (v1.7.0+: location moved out-of-repo, where no repo-side file-guard can block the write.) After Phase 6 applies approved updates, remove the marker:
-
-```bash
-STATE_DIR=$(bash scripts/pipekit-state-dir.sh)
-rm -f "$STATE_DIR/pending-strategy-sync"
-```
-
-If no approved updates were applied (user skipped all diffs), leave the marker in place so the nudge persists into the next session.
-
 ### Phase 8 — Summary
 
 ```markdown

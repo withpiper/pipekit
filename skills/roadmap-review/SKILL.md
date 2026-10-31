@@ -220,7 +220,7 @@ Run these checks (all report-only — fixes fold into the end-of-skill fix promp
 ### Phase 4 — Dependency Validation
 
 1. Read light specs for issues that have them — extract dependency contracts (e.g., "PROJ-8 is a hard blocker for PROJ-7")
-2. Read the WP dependency graph from `pipekit/sop/Linear SOP.md` (Dependency Graph section)
+2. Read the dependency graph from Linear itself — the `blocked by` / `blocks` relations on each issue
 3. For each declared dependency:
    - Read the issue's relations — `pk gql '{ issue(id:"<ID>") { identifier relations { nodes { type relatedIssue { identifier } } } inverseRelations { nodes { type issue { identifier } } } } }'`
    - Check that `blockedBy`/`blocks` relations exist in Linear

@@ -152,7 +152,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │     • verdict: proceed | revise: <feedback> | abort      │
   │     • executes plan on native-on-Workflow                │
   │     • atomic commits, gate-aware                         │
-  │     • --deep adds spec-validator + plan-review +         │
+  │     • --deep adds spec-validation + plan-review +        │
   │       security-review subagents                          │
   │     • on clean exit → auto-invokes [4] /verify           │
   └──────────────────────────────────────────────────────────┘

@@ -264,7 +264,7 @@ Do **not** apply Non-Blocking Improvements silently or in bulk.
 
    Omit sub-sections that had zero entries.
 
-3. Do NOT re-trigger the Spec Review Agent from this skill. Re-triggering is owned by `pk spec-cycle`, which the caller (`/01-light-spec` Phase 6 cycle) invokes after this skill returns. If this skill was run standalone (not via the cycle), tell the user: _"➜ next: pk spec-cycle PROJ-XXX"_.
+3. Do NOT re-trigger the Spec Review Agent from this skill. Re-triggering is owned by `pk spec-cycle`, which the caller (`/light-spec` Phase 6 cycle) invokes after this skill returns. If this skill was run standalone (not via the cycle), tell the user: _"➜ next: pk spec-cycle PROJ-XXX"_.
 
 ### Phase 10 — Next-step output
 
@@ -301,4 +301,3 @@ The skill MUST NEVER:
 
 - `/light-spec` — creates the spec; Phase 6 sets up the feedback loop this skill closes.
 - `pk branch` + `/work` — consumes `Pass`-verdict specs for planning + execution (v2 daily loop).
-- `/spec-validator` — heavier validator for full Strategy docs (not Light Specs).

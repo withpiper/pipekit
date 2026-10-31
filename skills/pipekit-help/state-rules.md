@@ -57,12 +57,12 @@ The foundation contract (see `method.md` § Foundation Contract) is the set of a
 **Recommend:** `/work <issue>`
 **Why:** Issue is in worktree-and-branch state but no plan has been generated yet. `/work` plans inline (parallel grounding) then executes on the native-on-Workflow backend. Start a fresh chat first (see method.md § Fresh-Chat Discipline).
 
-## 5. Quick tier — direct to batch runner
+## 5. Quick tier — straight to /work
 
-**Match:** Issue label includes `tier:quick` AND Linear status is "Building" AND no batch run has fired (no batch-runner output for this issue in recent transcripts).
+**Match:** Issue label includes `tier:quick` AND Linear status is "Building" AND `/work` has not run for it yet.
 
-**Recommend:** `/linear-todo-runner`
-**Why:** Quick tier skips planning; AC is the plan.
+**Recommend:** `/work <ID>` (or `/pk-express <ID>` for a hands-off pass)
+**Why:** Quick tier skips planning; the AC section is the plan and `/work` executes it directly.
 
 ## 6. Spec exists but not approved
 

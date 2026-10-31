@@ -478,7 +478,7 @@ After the spec is written, the Spec Review Agent evaluates it for planning readi
 
 If the verdict is **Revise**, the spec goes back to `/light-spec` for iteration. This loop continues until the agent passes.
 
-**Review history accumulates (v4.25.0+).** Each pass appends a `### Review N — <date> — <verdict>` block to the issue description's `## Agent Review` section; nothing prior is rewritten. That trail is load-bearing: `/02-light-spec-revise` reads earlier passes to tell a resolved blocker from a re-raised one, and the same section holds the human stalemate-override note its Phase 6 writes. Through v4.24.0 the trigger prompt told the agent to *replace* the section, so pass 2 destroyed pass 1 and pass 3 destroyed both — silently. The per-pass verdict **comments** on the issue were never affected; only the consolidated in-description trail was.
+**Review history accumulates (v4.25.0+).** Each pass appends a `### Review N — <date> — <verdict>` block to the issue description's `## Agent Review` section; nothing prior is rewritten. That trail is load-bearing: `/light-spec-revise` reads earlier passes to tell a resolved blocker from a re-raised one, and the same section holds the human stalemate-override note its Phase 6 writes. Through v4.24.0 the trigger prompt told the agent to *replace* the section, so pass 2 destroyed pass 1 and pass 3 destroyed both — silently. The per-pass verdict **comments** on the issue were never affected; only the consolidated in-description trail was.
 
 **Config note (v2.7.0+):** `/light-spec` publishes the spec to the configured **`Spec ready state`** in `method.config.md` — not a hardcoded `Specced`. `pk spec-cycle` requires that same state on entry, so the interlock holds on any board: a two-state workflow (e.g. `Needs Spec → Approved`, no `Specced` state) just sets `Spec ready state: Needs Spec`. If publishing fails because the configured state doesn't exist in Linear, that's a `method.config.md` ↔ workflow mismatch to fix, not a skill bug.
 
@@ -538,7 +538,7 @@ Tier inference (Quick / Standard / Heavy) drives which gates apply. Tier is **al
 
 `/work` plans in your current Claude session (parallel `Agent` calls for grounding), materializes a task DAG to `.pk-work/<ID>-PLAN.md`, then hands it as data to the saved `pk-execute` workflow (`.claude/workflows/pk-execute.js`, synced by Pipekit) — one agent per task, verify before commit, the expected HEAD threaded task to task, optional disjoint-file parallel waves with an integration step — and writes the `.pk-work/<ID>-SUMMARY.md` trail from the structured results. Trivial plans (≤2 tasks/files, no migration) run inline. Artifacts are gitignored (executor contract only — no UAT/known-issue/sprint state). There is no backend selection — native-on-Workflow is the only executor (a stale `Backend:` row in `method.config.md` is ignored).
 
-`--deep` adds spec-validator + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
+`--deep` adds spec-validation + plan-review + security-review subagents for the planning step. Use it when scope is fuzzy or risk is high.
 
 **All commits include the issue ID** in the message format: `feat(scope): description (PROJ-1)`. CLAUDE.md conventions are followed (the native backend reads it via your session).
 
@@ -1151,7 +1151,6 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Light Spec | `/light-spec PROJ-1` | Create spec for an issue |
 | Light Spec Revise | `/light-spec-revise PROJ-1` | Apply Spec Review Agent feedback surgically |
 | Spec Preflight | `/spec-preflight PROJ-1` | Empirical pre-flight checks before `pk branch` (file paths, symbol/line refs, baselines, Linear status). Read-only. |
-| Spec Validator | `/spec-validator` | Validate spec completeness |
 
 ### Stage 2: Plan + Build (the v2 daily loop)
 
@@ -1160,7 +1159,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Find next | `pk next` | Focus lanes first (tier A/B/C = Linear project priority), then initiative-aware: groups Linear by status (In Progress / Approved / Needs Spec) with per-group hints |
 | Branch | `pk branch <ID>` | Worktree + feature branch + Linear → In Progress (idempotent) |
 | Work | `/work <ID>` | Plan + execute on native-on-Workflow. Verdict gate before code. |
-| Work Deep | `/work <ID> --deep` | Adds spec-validator + plan-review + security-review subagents |
+| Work Deep | `/work <ID> --deep` | Adds spec-validation + plan-review + security-review subagents |
 | Plan Review | `/review-plan` | Spawn `plan-reviewer` against the inline `PLAN.md` (optional gate) |
 
 ### Fast lanes (autopilots over the loop)

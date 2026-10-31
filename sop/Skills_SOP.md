@@ -31,7 +31,7 @@ These skills work across any project that follows the method. They read `method.
 | `/concept` | Project-level ideation — produce a concept brief | Stage 0: Foundation |
 | `/define` | Distill concept into full project definition | Stage 0: Foundation |
 | `/strategy-create` | Bootstrap strategy docs from project definition | Stage 0: Foundation |
-| `/roadmap-create` | Create ROADMAP.md and populate Linear | Stage 0: Foundation |
+| `/roadmap-create` | Author the roadmap into Linear (`i{N}.` initiatives → `I{N}.P{N}.` projects → issues) | Stage 0: Foundation |
 | `/phase-plan` | Select and manage execution phases | Stage 0: Foundation / Ongoing |
 | `/startup` | Full project bootstrap orchestrator | Stage 0 (all steps) |
 | `/roadmap-review` | Pre-pipeline health check (Stage 0 gate) | Stage 0 → Stage 1 gate |
@@ -51,11 +51,11 @@ These skills work across any project that follows the method. They read `method.
 | `pk ready [<ID>]` | Flip Draft PR to Ready (v2.6.0+). Fires `ready_for_review` → outside reviewers (Semgrep + claude-review per `templates/ci/`) run. No Linear state change. | Stage 3: Verify + Ship |
 | `/pr-fix` | Pluggable-engine PR review (`--engine=native` pr-review-toolkit default · `--engine=builtin` dependency-free fallback, fail-loud) + historical finders (git-history blame-regression + prior-PR-comments reapplication, v2.7.0, both engines); two-axis severity×confidence triage with INVESTIGATE quadrant; fixed / rejected / deferred + Linear summary. `--from-review` ingests GHA comments; `--runs=N` raises confidence on recurrence; `--second-opinion=gemini` adds a parallel Gemini Flash read. | Stage 3: Verify + Ship |
 | `/pr-security-review` | Security-focused antagonistic review for migrations / RLS / SECURITY DEFINER / auth | Stage 3: Verify + Ship |
-| `/security-gate [<ID>]` | Feature-scoped security gate (v4.4.0, gap #3). Runs at the Building → UAT seam — after `/verify`, before `pk ship`. Classifies the feature diff into six sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); none matched → instant PASS, a match → category checklist vs the diff → PASS/FAIL report + Linear comment. **Advisory** — doesn't block `pk ship`. Distinct from `/repo-security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Portable **framework**; project category signals in `resources/security-categories.md` (scaffolded from `templates/security-categories.template.md`). No-op without a categories file. | Stage 3: Verify + Ship |
+| `/security-gate [<ID>]` | Feature-scoped security gate (v4.4.0, gap #3). Runs at the Building → UAT seam — after `/verify`, before `pk ship`. Classifies the feature diff into six sensitive categories (auth/payments/user-input/external-APIs/file-storage/PII); none matched → instant PASS, a match → category checklist vs the diff → PASS/FAIL report + Linear comment. A **hard gate** on projects with a categories file — `pk ship` refuses without a sha-matched PASS sentinel (`--force-secgate` waives). Distinct from `/repo-security-review` (repo-wide audit) and `/pr-security-review` (PR-scoped). Portable **framework**; project category signals in `resources/security-categories.md` (scaffolded from `templates/security-categories.template.md`). No-op without a categories file. | Stage 3: Verify + Ship |
 | `/pk-bug` | Bug pipeline: intake → reproduce → regression-test-first → fix → ship → postmortem. Wraps `/work` + `pk ship` with discipline gates. | Anytime (parallel pipeline) |
 | `/pk-express` | Idea→Draft-PR autopilot for **simple** WITs: chains `/brainstorm` → `/light-spec` (auto-cycle to Approved) → `pk branch` → `/work` (auto verify+ship), advancing on success and stopping only at attention gates (not-Now, tier:heavy, spec stalemate, verify flags, Draft PR). Quick/Standard tier only. | Anytime (express lane) |
 | `pk done <ID> [--merge]` | Post-merge cleanup: worktree+branch, commits to Linear, Linear UAT → `In <FirstEnv>` (or → Done for 1-tier). v2.6.0+: also auto-pulls integration. `--merge` lets pk run `gh pr merge` first. | Stage 4: Release |
-| `/prod-ready [<ID>]` | Production-readiness gate (v4.3.0). Run **once** before the final `pk promote` (the last `Ship environments` entry; the merge to `main` on 1-tier). Verifies operational preconditions `/verify` doesn't — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. PASS/FAIL report + Linear comment. **Advisory** — doesn't block `pk promote`. Portable **framework**; concrete checks live in a per-project checks file (`resources/prod-readiness-checks.md`, scaffolded from `templates/prod-readiness-checks.template.md`). No-op on projects without a checks file. | Stage 4: Release |
+| `/prod-ready [<ID>]` | Production-readiness gate (v4.3.0). Run **once** before the final `pk promote` (the last `Ship environments` entry; the merge to `main` on 1-tier). Verifies operational preconditions `/verify` doesn't — monitoring wired, no secrets in the built bundle, rate limits on new public routes, backups active, flag on risky paths, dashboard chart. PASS/FAIL report + Linear comment. A **hard gate** on projects with a checks file — the final `pk promote` refuses without its sentinel (`--force` waives). Portable **framework**; concrete checks live in a per-project checks file (`resources/prod-readiness-checks.md`, scaffolded from `templates/prod-readiness-checks.template.md`). No-op on projects without a checks file. | Stage 4: Release |
 | `pk promote <env>` | Phase 1 (v2.6.0+): opens promote PR along `Ship environments`. WITs stay in source state. 2-tier: `pk promote` with no arg picks the only hop. | Stage 4: Release |
 | `pk promote <env> --finish` | Phase 2 (v2.6.0+): after the promote PR merges, transitions WITs → `In <Env>` (intermediate, e.g. `In Beta`) or → Done (final). | Stage 4: Release |
 | `/strategy-sync` | Update Strategy docs after shipping | Stage 5: Doc Loop |
@@ -66,12 +66,9 @@ These skills work across any project that follows the method. They read `method.
 | `/linear` | Linear issue workflow helper | Anytime |
 | `/sync-linear` | Reconcile strategy-doc drift against the Linear initiative hierarchy | Anytime |
 | `/pipekit-help` | Read project state, recommend next pipeline step | Anytime |
-| `/spec-validator` | Validate spec completeness | Stage 1: Spec |
 | `/repo-security-review` | Periodic **whole-repo** security audit (v4.31.0, renamed from `/security-review` — collided with Claude Code's built-in). Parallel area agents → adversarial verification → evidence-classified score report. Portable **framework**; project audit areas in `resources/repo-security-areas.md` (scaffolded from `templates/repo-security-areas.template.md`). No-op without an areas file. Distinct from `/pr-security-review` (PR-scoped) and `/security-gate` (feature-scoped). | Anytime |
 | `/financial-review` | Periodic financial-accuracy review for finance/calculation-heavy projects — cross-layer parity audit (DB view ↔ calc ↔ UI), severity-ranked report, recurring-WIT lifecycle. Portable **framework**; concrete checks live in a per-project checks file (`resources/financial-review-checks.md`, scaffolded from `templates/financial-review-checks.template.md`). No-op on projects without a checks file. | Anytime (domain: finance) |
-| `/skill-index` | Sync skill index after changes | Anytime |
 | `/tpm` | Technical program manager for the board — a working session that agrees what must ship, what can wait and why, across every repo in `§ Portfolio repos`; writes the agreement to Linear (`pk focus`, relations, importance, `on-merge` notes) and the weekly plan (`§ Plan path`, `engineering/WEEKLY_PLAN.md`), a task list by session. Runs `/linear-hygiene` first when drift touches the candidates. `--quick` (≤3 questions), `--check` (read-only drift). Rubric in `sop/TPM_SOP.md`. User-typed only. | Anytime (weekly planning); when `pk next` says the plan is stale |
-| `/task-processor` | Process Linear tasks systematically | Stage 2: Plan + Build |
 | `/pipekit-update` | Pull latest Pipekit from GitHub into project | Anytime |
 | `/release-changelog` | Generate draft CHANGELOG entry from git commits between tags. Output to stdout for human review + edit. | Pipekit-internal release work |
 
@@ -125,7 +122,7 @@ Skills that gate ship/merge decisions (`/verify`, `/pr-fix`, `/pr-security-revie
 
 **Output-producing skills** (a report, spec, verdict, or changelog a human reads — `/light-spec`, `/verify`, the gate reports, `/release-changelog`): where the output shape is easy to get subtly wrong, show a **good/weak example pair** — one output that's right and one that looks right but isn't, with the difference named. One pair, not a gallery.
 
-These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill-index`) — they'd be noise. Apply only where misuse has a meaningful cost.
+These sections are *not* required for low-stakes skills (`/sync-linear`, `/linear`) — they'd be noise. Apply only where misuse has a meaningful cost.
 
 ### Key Conventions
 
@@ -138,9 +135,9 @@ These sections are *not* required for low-stakes skills (`/sync-linear`, `/skill
 
 v2 retired the v1 `NEXT.md` mirror. The single source of truth for "what should I do next?" is **Linear**, accessed via:
 
-- **`pk next`** — initiative-aware: derives the current initiative live from the Linear-native surface (lowest non-`Completed` `i{N}.` initiative → its lowest open `P{N}.` project, by numeric name prefix; legacy `PHASES.md`/`linear-map.json` fall back), then groups that initiative's Linear issues by status with per-group hints. Falls back to global "next Approved" when no initiative context. Best when you know you want to pick up the next issue.
+- **`pk next`** — initiative-aware: derives the current initiative live from the Linear-native surface (lowest non-`Completed` `i{N}.` initiative → its lowest open `P{N}.` project, by numeric name prefix), then groups that initiative's Linear issues by status with per-group hints. Falls back to global "next Approved" when no initiative context. Best when you know you want to pick up the next issue.
 - **`pk status`** — full unscoped board view across all initiatives. Best when you want the wider picture.
-- **`/pipekit-help`** — context-aware skill recommendation based on full project state (Linear, `PHASES.md`, recent transitions, pipeline-state files). Best when you're not sure *which step* in the pipeline to run next.
+- **`/pipekit-help`** — context-aware skill recommendation based on full project state (Linear, recent transitions, pipeline-state files). Best when you're not sure *which step* in the pipeline to run next.
 
 Skills should **not** write a `NEXT.md` file. Skills MAY still print `➜ Next:` inline at the end of their output as a courtesy hint to the current user, but the persistence layer is Linear, not a sidecar markdown file.
 
@@ -317,7 +314,7 @@ Some files in a Pipekit project are **canonical** — they encode conventions th
 
 Protection is enforced by **hook**, not by skill prose. A `PreToolUse` hook on `Edit` and `Write` blocks the call when the target path matches the protected set; the agent receives `EditPermissionDenied` (or `HookFeedbackBlocked`, depending on the hook variant). This is intentional: hooks win over `bypassPermissions` mode because hook-level guards are the project's last line of defense, and orchestrator-spawned agents are not exempt from project policy.
 
-The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see `skills/06-linear-todo-runner/SKILL.md` § Permission-denial protocol and the parallel block in `skills/work/SKILL.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
+The corresponding skill-side discipline: every skill that spawns an agent expected to call `Edit`/`Write` includes a **permission-denial-stop instruction** in the agent's task description (see the parallel block in `skills/work/SKILL.md`). Without that instruction, agents tend to retry on denial, exhaust attempts, and report partial progress — the user only finds out the work was blocked after burning turns. With it, the agent stops on first denial and surfaces the denied path, intended change, and rationale, so the user can either grant the exception (revise hook), redirect the work, or abort the issue.
 
 When you add a new skill that spawns file-editing agents, copy the permission-denial block verbatim. When you protect a new path with a hook, document the protection in `method.config.md` so future readers know which paths are agent-write-locked and why.
 
