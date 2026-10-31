@@ -4307,18 +4307,24 @@ cmd_promote() {
   local dirty stash_made=false
   dirty=$(git status --porcelain | grep -E '^( M|M | A|A )' || true)
   if [ -n "$dirty" ]; then
+    # Porcelain v1: two status columns, a space, then the path — quoted when
+    # it holds a space. Splitting on whitespace truncated such a path.
+    local dirty_paths=() line path
+    while IFS= read -r line; do
+      path=${line:3}
+      path=${path#\"}; path=${path%\"}
+      [ -n "$path" ] && dirty_paths+=("$path")
+    done <<< "$dirty"
     if $take_remote; then
       echo "  → --take-remote: discarding local edits to tracked files:"
       echo "$dirty" | sed 's/^/      /'
       git fetch origin "$source" --quiet
-      while IFS= read -r line; do
-        local path
-        path=$(echo "$line" | awk '{print $2}')
-        [ -n "$path" ] && git checkout "origin/$source" -- "$path"
-      done <<< "$dirty"
+      for path in "${dirty_paths[@]}"; do
+        git checkout "origin/$source" -- "$path"
+      done
     elif $stash; then
       echo "  → --stash: stashing local edits before pull"
-      git stash push -m "pk promote auto-stash $(date +%s)" -- $(echo "$dirty" | awk '{print $2}') >/dev/null
+      git stash push -m "pk promote auto-stash $(date +%s)" -- "${dirty_paths[@]}" >/dev/null
       stash_made=true
     else
       echo ""
