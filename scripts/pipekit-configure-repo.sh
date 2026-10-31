@@ -15,8 +15,8 @@
 # Why no squash anywhere?
 # v1.7.0–v2.1.x oscillated on this. v1.7.0 banned merge-commits everywhere
 # (caused phantom conflicts via a different topology). v1.8.0.6 split the
-# rules: rebase/merge for feature → dev, squash for dev → main. Both Piper
-# and rs-vault hit phantom conflicts under v1.8.0.6 — squash on dev → main
+# rules: rebase/merge for feature → dev, squash for dev → main. Consumers
+# hit phantom conflicts under v1.8.0.6 — squash on dev → main
 # is the cause, not the cure. Squash collapses N atomic dev commits into
 # one orphan commit on main; the next promote's merge-base sees divergent
 # histories touching the same files and fails.
