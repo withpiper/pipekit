@@ -85,6 +85,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/prod-ready [<ID>]` | Production-readiness gate, run once before the final `pk promote`. Hard gate on projects with a checks file: the final promote refuses without its sentinel (`--force` / `PK_PRODREADY_BYPASS=1` to waive). |
 | `pk promote <env>` | Opens the promote PR along `Ship environments`; refuses if a bundled issue is still in UAT (`--confirmed` after env-UAT signoff). After it merges, `pk promote <env> --finish` transitions issues → `In <Env>` / Done. |
 | `/pk-exit` | Narrative session log to `Logs/Sessions/`. Run manually as the last command of every session — never auto-chained. |
+| `pk doctor` · `pk config [<key>]` · `pk deploy [<env>]` | Setup diagnosis — deps, template placeholders, the running binary vs this project's `bin/pk`, missing Linear workflow states · read one config key (what skills call for `Linear transport`, `Merge method`, …) · run the configured `Deploy command` on script-deploy projects. |
 
 **Orthogonal:**
 

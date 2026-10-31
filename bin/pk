@@ -6,28 +6,17 @@
 # All subcommands are idempotent against Linear+git ground truth.
 # Recovery = rerun the command. Read state, decide what's left, do only that.
 #
-# Subcommands:
-#   pk next                 — what should I do now? (Linear + git → next command)
-#   pk status               — quick triage of in-flight + UAT + Approved
-#   pk sessions             — live Claude Code sessions on this machine, waiting first
-#   pk focus [<TAG> <tier>] — read or set focus-lane tiers (Linear project priority)
-#   pk issue <verb> <ID>    — show / search / create / update / set --priority / relate --blocked-by / comment
-#   pk project list         — the team's projects: name · state · tier · progress
-#   pk gql '<query>' [vars] — guarded GraphQL passthrough for the long tail
-#   pk portfolio            — cross-initiative map: all i<N>. + active runway
-#   pk branch <ID>          — create worktree+branch, Linear → In Progress
-#   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
-#   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
-#   pk verify               — light verify (run test cmd from method.config.md)
-#   pk config [<key>]       — read a V2 key from method.config.md (or dump all)
-#   pk promote [<env>]      — promote one hop along Ship environments; transitions
-#                             matching issues → Released (intermediate) or Done (final).
-#                             No arg auto-picks the next ready hop (earliest with unpromoted commits).
-#   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
-#   pk spec-cycle <ID>      — trigger Spec Review Agent v5, poll, dispatch on verdict
+# Subcommands (pk help has the flags):
+#   pk next | status | sessions | focus | portfolio   — read the board / this machine
+#   pk issue <verb> | project list | gql             — Linear verbs skills use (api transport)
+#   pk branch → ship → ready → done → promote         — the daily loop; done moves
+#                             UAT → In <FirstEnv> (Done on 1-tier), promote --finish → next env / Done
+#   pk deploy | verify | config | log                — script-deploy, pre-deploy gate, config, journal
+#   pk delegate | spec-cycle                         — Linear Agent hand-offs (Spec Review Agent)
+#   pk doctor | init | install | version             — setup
 #
 # Linear access: GraphQL via $LINEAR_API_KEY (env var name configurable in
-# method.config.md → "Linear API key env var"). If absent, scripts that need
+# method.config.md → "Linear API key env var"). If absent, verbs that need
 # Linear print a clear "set LINEAR_API_KEY" and exit.
 
 set -euo pipefail
@@ -5662,19 +5651,20 @@ Subcommands:
   pk project list [--all] [--json]   The team's projects in I<N>.P<N>. order: name · state · tier (priority 1/2/3 → A/B/C, else —) · progress %. completed/canceled hidden unless --all.
   pk gql '<query>' ['<vars-json>' | --vars '<json>']   Guarded GraphQL passthrough for the long tail (initiatives, project/label create, …); '-' reads the query from stdin. Pretty-prints the response; exit 1 with the error messages on stderr when it carries errors. Mutations still pass the workspace guard.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
-  pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
+  pk branch <ISSUE-ID> [--no-install]   Create worktree+branch, Linear → In Progress (--no-install: skip the worktree dependency install)
   pk ship [--env=<env>] [--review] [--ready] [--force] [--force-secgate]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/. --force waives the verify gate only; --force-secgate separately waives an armed /security-gate (both log a Linear audit comment).
   pk ready [<ID>] [--force]       Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch. Refuses if source or a migration changed after the /verify that vouches for the branch — re-run /verify, or --force to flip anyway (logs a Linear comment).
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
-  pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
+  pk config|cfg [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
+  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish] [--bootstrap] [--force]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
   pk deploy [<env>] [-- <args>]   Run the project's configured Deploy command (method.config.md) for <env>. Bare / 'prod' → "Deploy command"; 'pk deploy dev' → "Deploy command dev". Args after -- pass through to the script (e.g. a file list, or --all). Script-deploy projects only — branch-promotion projects deploy via pk promote. Delegates fully: the deploy script owns confirmation + safety.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)
   pk init                         Walkthrough config check + setup hints
-  pk install [--force]            Symlink pk onto \$PATH (so 'pk' replaces './bin/pk')
+  pk install [--force]            Symlink pk onto $PATH (so 'pk' replaces './bin/pk')
+  pk version                      Print the running pk's version (pk doctor compares it with this project's bin/pk)
   pk log                          Show journal for current feature branch
   pk help                         Show this help
 
