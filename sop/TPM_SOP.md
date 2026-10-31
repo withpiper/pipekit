@@ -98,7 +98,7 @@ A WAIT with no trigger is neglect with a label. A WAIT row reaches the read-back
 
 ## Themes
 
-The user groups work by meaning — "the eval loop", "the Game7 board" — and the grouping crosses lanes. The lane read cannot see it. So the briefing asks for themes and promises the board cannot show, and each theme the user names is checked: which issues it really covers, which of the named issues are something else (a bug in a neighbouring lane that merely sounds related), and whether it has three buildable issues. Three or more → a lane, cut with `/phase-plan --cut`. Fewer → a `Themes` line in the plan, carried forward so the next session sees it without being told again. Anchor: 2026-10-11, the user's "Eval Loop" was one real Langfuse theme across two initiatives plus three Smart Start / Drop Zone bugs that were not eval work.
+The user groups work by meaning — "the eval loop", "the <Customer> board" — and the grouping crosses lanes. The lane read cannot see it. So the briefing asks for themes and promises the board cannot show, and each theme the user names is checked: which issues it really covers, which of the named issues are something else (a bug in a neighbouring lane that merely sounds related), and whether it has three buildable issues. Three or more → a lane, cut with `/phase-plan --cut`. Fewer → a `Themes` line in the plan, carried forward so the next session sees it without being told again. Anchor: 2026-10-11, the user's "Eval Loop" was one real Langfuse theme across two initiatives plus three Smart Start / Drop Zone bugs that were not eval work.
 
 ## How to ask
 
@@ -131,19 +131,19 @@ One file per portfolio, in the primary repo (`§ Plan path`, default `engineerin
 ```
 # <Project> — Week of Mon 2026-10-12
 <!-- tpm:begin · agreed 2026-10-11 · derived from Linear · written by /tpm, regenerate don't edit -->
-**Agreed Sun 2026-10-11.** One commitment: Game7 gets the reconciliation ledger, live on app.withpiper.ai, by Fri 2026-10-16.
+**Agreed Sun 2026-10-11.** One commitment: <Customer> gets the reconciliation ledger, live on app.example.com, by Fri 2026-10-16.
 Capacity 15 session-days. Planned: MUST 3.9 + NEXT 2.2 = 6.1.   (Assumptions: … — only after "just do it")
 
 ## Start now
 | Session | Run | What | Merge |
-| 1 | `pk branch PIPER-1132` | Ledger versions: never-publish guard + reconcile_note column | Mon 10-12 — first migration of the week |
-| 2 | `pk branch PIPER-986`  | Store each budget version's key metrics once in the DB      | Tue 10-13 — after 1132 |
-| 3 | `pk branch PIPER-546`  | Three remaining stored-XSS sinks                             | when green — no migration |
+| 1 | `pk branch PROJ-1132` | Ledger versions: never-publish guard + reconcile_note column | Mon 10-12 — first migration of the week |
+| 2 | `pk branch PROJ-986`  | Store each budget version's key metrics once in the DB      | Tue 10-13 — after 1132 |
+| 3 | `pk branch PROJ-546`  | Three remaining stored-XSS sinks                             | when green — no migration |
 
-## Session 1 — Game7 ledger  (lane A · I5.P4 Vendor Invoices vs Quotes)
-- [ ] **[PIPER-1132](…) Ledger versions: never-publish guard …** · siteline · Standard 0.5 · migration
+## Session 1 — <Customer> ledger  (lane A · I5.P4 Vendor Invoices vs Quotes)
+- [ ] **[PROJ-1132](…) Ledger versions: never-publish guard …** · Standard 0.5 · migration
       Before merging: … Then merge **Mon 10-12**.
-- [ ] **[PIPER-1130](…) Reconcile view on Compare …** · siteline · Heavy 1.0 · after 1132 · merge by **Wed 10-14**
+- [ ] **[PROJ-1130](…) Reconcile view on Compare …** · Heavy 1.0 · after 1132 · merge by **Wed 10-14**
 - [ ] **Ship it.** `pk ship` → `pk promote beta` → `pk promote main` (Thu). Friday is slack.
 
 ## Session 2 — …            ## Session 3 — …            ## Free slot — …
@@ -152,10 +152,10 @@ Capacity 15 session-days. Planned: MUST 3.9 + NEXT 2.2 = 6.1.   (Assumptions: �
 Drop in this order: 1071 … → spec 1134 …. Sequence spills: 1167 if 1154 is late · …
 
 ## Lanes — the picture
-| Tier | Lane | Flow | Repo |
-| A | I5.P4 Vendor Invoices vs Quotes | 1132 Ledger guard ▸ 1130 Reconcile view ▸ sync-legacy ▸ promote → Game7 Fri | siteline → piper |
-| B | I8.P6 Dashboard Redesign        | 986 Store metrics ⇢ spec 997 Read-only surfaces                            | siteline |
-| C | I3.P1 XSS output-encoding       | 546 Three sinks → swap C to I7.P10                                        | siteline |
+| Tier | Lane | Flow |
+| A | I5.P4 Vendor Invoices vs Quotes | 1132 Ledger guard ▸ 1130 Reconcile view ▸ promote → <Customer> Fri |
+| B | I8.P6 Dashboard Redesign        | 986 Store metrics ⇢ spec 997 Read-only surfaces                            |
+| C | I3.P1 XSS output-encoding       | 546 Three sinks → swap C to I7.P10                                        |
 ▸ hard dependency (in Linear as blocked by) · ⇢ soft order · → then
 
 ## Don't merge together
@@ -174,7 +174,7 @@ Drop in this order: 1071 … → spec 1134 …. Sequence spills: 1167 if 1154 is
 | Issue | Why it can wait | Comes back when |
 
 ## Not this week, and why
-PIPER-1155 … — lane out of focus · … (six words each)
+PROJ-1155 … — lane out of focus · … (six words each)
 
 ## Themes  (carried until they are lanes)
 Eval loop: 1115 + 963 + 1114 — under the three-issue floor until 1115's spec yields build issues.
@@ -187,6 +187,8 @@ Eval loop: 1115 + 963 + 1114 — under the three-issue floor until 1115's spec y
 <!-- tpm:end -->
 ```
 
+The example is a single-repo portfolio; a multi-repo portfolio adds a `Repo` column to the Start-now and Lanes tables and names the repo beside each issue line.
+
 The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `plan agreed Nd ago → /tpm` past `§ Plan stale days` (default 7), and `plan: no agreement yet → /tpm` while the synced skeleton's marker carries no date. The runbook's `## Now` block holds one pointer line to the plan — `This week → engineering/WEEKLY_PLAN.md · agreed 2026-10-11` — and in the other repos of the portfolio `Portfolio weekly plan → ../<primary-repo>/engineering/WEEKLY_PLAN.md · agreed 2026-10-11`: one document, reachable from either repo, never two versions. Two repos on **one** Linear board (same `Team ID`) are the common solo shape — one board, two codebases: the board is read and written once, from the primary, and the sibling's worktrees, PRs and sessions are the only thing the session reads from it.
 
 Before v5.1.0 the agreement was the `## Now` block of the runbook itself. The runbook is how the project runs and is read when something is unfamiliar; the plan is read every morning. A consumer whose runbook still holds a full block gets it moved on the next `/tpm`.
@@ -196,10 +198,10 @@ Before v5.1.0 the agreement was the `## Now` block of the runbook itself. The ru
 Every Linear write the session makes leaves its reason on the issue, so the next reader (human or `/tpm`) doesn't re-derive it:
 
 ```
-[tpm 2026-10-10] MUST — Game7 commitment, due 10-17; head of I8.P6
+[tpm 2026-10-10] MUST — <Customer> commitment, due 10-17; head of I8.P6
 [tpm 2026-10-10] WAIT — fallback: boundary validation rejects (verified in src/api/validate.ts:88); trigger: 2nd tenant hits it
-[tpm 2026-10-10] blocked by POC-377 — Hard: 398 reads the column 377 adds
-[tpm 2026-10-10] commitment: Game7 · due 2026-10-17
+[tpm 2026-10-10] blocked by PROJ-377 — Hard: 398 reads the column 377 adds
+[tpm 2026-10-10] commitment: <Customer> · due 2026-10-17
 [tpm 2026-10-11] on-merge: pk focus I7.P10 C --swap · tier C moves to Finance settings once this merges
 ```
 

@@ -1,6 +1,6 @@
 # Completion Claims SOP
 
-**v4.33.0** — Last updated: 2026-09-02  *(**v4.33.0 — class 2 "AC wrong" added to RECONCILE precedence, with the closure rule:** an artifact-vs-AC contradiction resolves by changing one side, never by deferring it as a trade-off and shipping with both standing. Class 2 counts against the doubt-theater flag. Anchor: SiteLine PIPER-770, 2026-08-25.)*
+**v4.33.0** — Last updated: 2026-09-02  *(**v4.33.0 — class 2 "AC wrong" added to RECONCILE precedence, with the closure rule:** an artifact-vs-AC contradiction resolves by changing one side, never by deferring it as a trade-off and shipping with both standing. Class 2 counts against the doubt-theater flag. Anchor: a consumer project, 2026-08.)*
 
 The full completion-claims loop. The trigger and short form live in
 `.claude/rules/pipekit-discipline.md § Completion Claims` (always loaded);
@@ -92,7 +92,7 @@ merge-blocking, and it should not be read that way. Amending a stale AC is a
 two-line edit, not a schedule risk. The requirement is that the disagreement
 is *resolved*, not that the artifact always yields.
 
-*Anchor: SiteLine PIPER-770, 2026-08-25 — a pre-merge adversarial review
+*Anchor: a consumer project, 2026-08 — a pre-merge adversarial review
 caught the artifact contradicting its own spec's stated confirmation contract
 and recorded the verdict "honest UI, unamended spec": the code was right and
 the AC was wrong. It was classified a trade-off and deferred to a follow-up,
