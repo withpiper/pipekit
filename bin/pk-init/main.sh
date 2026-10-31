@@ -100,7 +100,7 @@ else
 fi
 
 DRAFT="$STATE_DIR/method.config.md.draft"
-bash "$HERE/render.sh" "$BASELINE" "$STATE" > "$DRAFT"
+PK_INIT_MODE="$MODE" bash "$HERE/render.sh" "$BASELINE" "$STATE" > "$DRAFT"
 echo ""
 echo "Draft:    $DRAFT"
 echo "Target:   $TARGET"

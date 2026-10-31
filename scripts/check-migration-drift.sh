@@ -42,8 +42,10 @@ read_config() {
     v=$(pk config "$key" "" 2>/dev/null || true)
   fi
   if [ -z "$v" ] && [ -f method.config.md ]; then
-    # Table row: | **Key** | value | …   — or colon form: Key: value
-    v=$(grep -E "^\| \*\*${key}\*\* \|" method.config.md 2>/dev/null \
+    # Table row: | **Key** | value | …   — or colon form: Key: value. The row
+    # may be column-padded (one consumer aligned its V2 table and this grep,
+    # which wanted exactly one space, skipped the key and exited 0 in CI).
+    v=$(grep -E "^\|[[:space:]]*\*\*${key}\*\*[[:space:]]*\|" method.config.md 2>/dev/null \
         | head -1 | awk -F'|' '{print $3}' | sed 's/[` ]//g' || true)
     [ -z "$v" ] && v=$(grep -E "^${key}:" method.config.md 2>/dev/null \
         | head -1 | cut -d: -f2- | sed 's/^ *//; s/ *$//' || true)
@@ -71,8 +73,10 @@ if [ -z "$DIR" ]; then
   exit 0
 fi
 if [ ! -d "$DIR" ]; then
-  echo "  ⚠ check-migration-drift: 'Migration dir' is '$DIR' but the directory doesn't exist — skipping"
-  exit 0
+  # Configured but absent is a config error, not "not a migration project":
+  # exiting 0 here let a CI job go green having checked nothing.
+  echo "  ✗ check-migration-drift: 'Migration dir' is '$DIR' but the directory doesn't exist — fix method.config.md or remove the key"
+  exit 1
 fi
 
 # Version prefix = leading digits of the basename (>=4 digits to count as

@@ -89,8 +89,19 @@ content=$(echo "$content" | awk -v val="$integration_branch" '
   /^\| \*\*Integration branch\*\* \|/ { sub(/^\| \*\*Integration branch\*\* \|[^|]*\|/, "| **Integration branch** | `" val "` |") } 1
 ')
 
-# Pre-Deploy Gate block — replace the example pnpm turbo lines if we have detections.
-if [ -n "$gate_lines" ]; then
+# Pre-Deploy Gate block — replace the template's example lines with the
+# detected scripts. Never in --update mode: the baseline is then the project's
+# own config, and a gate with hand-added security checks must not shrink to
+# the three scripts detection knows about. Detected commands the existing
+# gate lacks are named on stderr instead.
+if [ -n "$gate_lines" ] && [ "${PK_INIT_MODE:-bootstrap}" = "update" ]; then
+  existing_gate=$(printf '%s\n' "$content" | awk '/^## Pre-Deploy Gate/{f=1;next} f&&/^```bash/{g=1;next} g&&/^```/{exit} g')
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    printf '%s\n' "$existing_gate" | grep -qxF "$cmd" \
+      || echo "note: detected '$cmd' is not in your Pre-Deploy Gate — add it if you want it enforced" >&2
+  done <<< "$gate_lines"
+elif [ -n "$gate_lines" ]; then
   gate_file=$(mktemp)
   printf '%s' "$gate_lines" > "$gate_file"
   content=$(echo "$content" | awk -v gate_file="$gate_file" '
