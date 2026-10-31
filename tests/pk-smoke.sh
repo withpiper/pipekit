@@ -1341,6 +1341,15 @@ mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-400"
 printf 'sha: %s\n' "$SR_HEAD" > "$FIXTURE/Logs/Verify/20260101/ABC-400/verify-complete.md"
 git init -q --bare "$FIXTURE/.remote.git"
 git -C "$FIXTURE" remote add origin "$FIXTURE/.remote.git"
+# The PR already exists, so pk ship needs no Linear title lookup; CI has no key.
+cat > "$FIXTURE/shim/gh" <<EOF
+#!/usr/bin/env bash
+echo "gh \$*" >> "$GH_LOG"
+case "\$1 \$2" in
+  "pr view") echo '{"state":"OPEN","url":"https://example.test/pr/1","number":1,"baseRefName":"main"}' ;;
+esac
+exit 0
+EOF
 run_pk ship
 SR_RC_WITH=$RUN_CODE
 case "$RUN_OUT" in
