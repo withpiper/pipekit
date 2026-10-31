@@ -5237,15 +5237,17 @@ cmd_issue_search() {
   q="query(@TEAM_DECL@, $decl) { issues(filter: {$filt}, first: \$n, orderBy: updatedAt) { nodes { id identifier title priority state { name } project { id name } } } }"
   resp=$(pk_linear_team_gql "$q" "$vars") || return 1
   nodes=$(printf '%s' "$resp" | jq -c '.data.issues.nodes // []')
+  if [ -n "$as_json" ]; then
+    # A JSON caller gets JSON on every path — "no issues match" on stdout
+    # broke every skill that piped an empty result into jq.
+    printf '%s\n' "$nodes" | jq .
+    return 0
+  fi
   if [ "$(printf '%s' "$nodes" | jq 'length')" = "0" ]; then
     echo "no issues match"
     return 0
   fi
-  if [ -n "$as_json" ]; then
-    printf '%s\n' "$nodes" | jq .
-  else
-    printf '%s' "$nodes" | jq -r '.[] | "\(.identifier)  \(.state.name // "?")  \(.project.name // "—")  \(.title // "")"'
-  fi
+  printf '%s' "$nodes" | jq -r '.[] | "\(.identifier)  \(.state.name // "?")  \(.project.name // "—")  \(.title // "")"'
 }
 
 # pk issue create --title "<t>" [--description-file <path> | -] [--state <name>]
@@ -5651,7 +5653,7 @@ Subcommands:
   pk issue set <ID> --priority N  Set issue priority (0 none · 1 urgent · 2 high · 3 medium · 4 low); prints old → new, no-op when unchanged.
   pk issue relate <ID> --blocked-by <ID2> [--why "<text>"]   Make ID2 block ID (skips if the relation exists); --why also posts "[tpm] blocked by ID2 — text" on ID.
   pk issue comment <ID> "<body>"  Post a comment on ID (body also from --body-file <path>, or - for stdin).
-  pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]   Title search in the team (default 20, max 50): one line per issue — identifier, state, project (— if none), title. Prints "no issues match" on an empty result.
+  pk issue search <query> [--state <name>] [--label <name>] [--project <name>] [--limit N] [--json]   Title search in the team (default 20, max 50): one line per issue — identifier, state, project (— if none), title. Prints "no issues match" on an empty result (--json prints []).
   pk issue create --title "<t>" [--description-file <path> | -] [--state <name>] [--label <name>]… [--no-area] [--project <name>|none] [--priority N] [--parent <ID>] [--json]   Create an issue in the team; names resolve to ids (unknown → error, never a guess); prints "created <ID>  <url>". With `Area labels` configured, refuses without an `Area:` label (--no-area waives).
   pk issue update <ID> [--title "<t>"] [--state <name>] [--add-label <name>]… [--remove-label <name>]… [--project <name>|none] [--description-file <path> | -] [--priority N] [--sort-order <float>] [--json]   Update only what differs, in ONE write (sortOrder with projectId/stateId, since a move re-ranks it); one "old → new" line per changed field, "no changes" when every value already holds.
   pk project list [--all] [--json]   The team's projects in I<N>.P<N>. order: name · state · tier (priority 1/2/3 → A/B/C, else —) · progress %. completed/canceled hidden unless --all.
@@ -5895,7 +5897,7 @@ cmd_doctor() {
         ev=$(pk_git_build_evidence "$id" "$ref")
         case "$ev" in
           none)      echo "  ⚠ $st $id — no commits reference it on $ref (possible false-ship)"; suspect=$((suspect+1)) ;;
-          docs-only) echo "  ⚠ $st $id — only docs commits reference it (no implementation found)"; suspect=$((suspect+1)) ;;
+          docs-only) echo "  ⓘ $st $id — only docs commits reference it (fine if the issue was docs-only; otherwise a possible false-ship)" ;;
         esac
       done <<< "$ids"
     done
