@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.35.0** — Last updated: 2026-09-02  *(**v4.35.0 — § Commit Messages gains Enforcement:** PreToolUse deny at commit time, `pk ship` refusal at push time, `--force` waiver with audit comment. Carries v2.6.0 — two-phase `pk promote`, `pk ship` Draft default, `pk ready`.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; one consumer's shared-beta+prod-DB sequencing (85 lines, unused) deleted)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---

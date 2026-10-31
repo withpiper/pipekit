@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.3.2** — Last updated: 2026-10-31 17:00  *(**v5.3.2 — `pk ready <ID>` from the parent checkout compares the evidence against the branch's commit, not the checkout's HEAD**; v5.3.1 made the parent find the evidence, and every fresh branch then read as drift.)*
+**v5.4.0** — Last updated: 2026-10-31 18:34  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; `Financial review WIT` → `Financial review issue`.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

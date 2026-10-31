@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md). This SOP is the rubric `/tpm` argues from; the session mechanics live in the skill.
 
-**v5.2.5** — Last updated: 2026-10-31 14:00  *(**v5.2.5 — the weekly-plan example names `pk ship` and a `../<primary-repo>` pointer instead of one consumer's retired skill and sibling path.** Carries **v5.1.0 — the agreement is written to a weekly plan (`engineering/WEEKLY_PLAN.md`), a dev-facing task list by session, not to the runbook; capacity is counted in session-days; `on-merge` notes defer a write to the merge that triggers it; titles beside IDs, one question per turn, the scout contract. Lessons of the first real run, 2026-10-11.** Carries v5.0.1 — the judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; the example week is a generic single-repo week)*
 
 ---
 

@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.31.0** — Last updated: 2026-08-07  *(**v4.31.0 — the whole-repo audit this gate is contrasted against is now `/repo-security-review`.** Renamed from `/security-review` (collided with Claude Code's built-in) and genericized to a project areas file. § Why a gate and the four-skill comparison table repointed; the coverage-before-filtering and adversarial-verification lineage this SOP cites is unchanged — that machinery moved verbatim. Carries v4.20.0: `pk ship --force` no longer waives this gate (`--force-secgate` does). Carries v4.17.0: the hard gate — PASS writes a sha-matched `secgate-complete.md` and `pk ship` refuses without one on categories-armed projects.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; the PHP row names a generic auth-guard helper, not one project's)*
 
 **Source of truth:** The concrete category signals for a project live in its definitions file (`resources/security-categories.md`, scaffolded from `templates/security-categories.template.md`) and `method.config.md`. This SOP provides the methodology that applies regardless of stack.
 

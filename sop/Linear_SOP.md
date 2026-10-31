@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.2.1** — Last updated: 2026-10-24  *(**v5.2.1 — a follow-up's `Area:` is chosen for its own work at filing, not inherited from the parent.** Carries v5.1.2 — the missing-key recipe names the repo's own op:// reference file, not always `op-references.conf`.** Carries v5.0.0 — **§ Linear transport: the route is a project decision (`Linear transport: api | mcp`, default `api`), skills name operations, and the verb table here maps each one to its `pk` form and its MCP tool.** `pk issue search/create/update`, `pk project list` and the guarded `pk gql` passthrough mean no skill needs raw `curl`. Carries v4.37.0 — § Filing a follow-up issue: the intake contract every mid-flow filer writes to. Parent's `Area:` inherited, Type label, the priority-floor table (canonical here; `/linear-hygiene` cites it), state by priority — never Triage — a `Source:` first line and a relation, in one create call. Carries v4.33.0 — § Rate limits: Linear's quota is one per-User bucket shared by every session's `mcp-linear` server.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; the op:// reference file comes from `Secrets reference file`)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 

@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.1.0** — Last updated: 2026-10-11  *(**v5.1.0 — `/tpm` row: writes the weekly plan, not the runbook.** Carries v5.0.0 — § Key Conventions 3: skills use the project's Linear route (`Linear transport`, `api` default) and never hardcode an MCP tool name; `/tpm` added (user-typed only; rubric in `sop/TPM_SOP.md`), `/lane-map` retired; the scaffold-once mechanism stays without a worked example.** Carries v4.37.0 — `/linear-hygiene` is the backstop; follow-ups are placed at creation per `sop/Linear_SOP.md § Filing a follow-up issue`.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — the catalog matches what ships: `task-processor`, `linear-todo-runner`, `skill-index`, `spec-validator` retired; `/security-gate` and `/prod-ready` are hard gates, not "Advisory"; v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue")*
 
 ---
 
