@@ -30,7 +30,7 @@ You are a method sync coordinator. Your job is to pull the latest Pipekit conten
 
 The same `/pipekit-update v<tag>` command works in two places:
 
-- **Downstream** (consuming project, e.g. piper, rs-vault) — sync FROM Pipekit's GitHub release.
+- **Downstream** (consuming project, e.g. rs-vault) — sync FROM Pipekit's GitHub release.
 - **Upstream** (the Pipekit repo itself, e.g. `~/Projects/pipekit`) — `git pull` + checkout the tag locally.
 
 Auto-detect:
@@ -41,7 +41,7 @@ mode="downstream"
 # Pipekit's canonical origins: withpiper/pipekit or any pipekit-shaped fork.
 # Also require a sentinel (method.md + CHANGELOG.md at root) to avoid false
 # positives in consuming projects that happen to have "pipekit" in a URL.
-if echo "$origin_url" | grep -qE '[:/](withpiper|ethan-piper|Ethros19)/pipekit(\.git)?$' \
+if echo "$origin_url" | grep -qE '[:/](withpiper|Ethros19)/pipekit(\.git)?$' \
    && [ -f method.md ] && [ -f CHANGELOG.md ] && [ -f bin/pk ]; then
   mode="upstream"
 fi

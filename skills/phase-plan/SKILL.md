@@ -119,7 +119,7 @@ Next steps:
    - **Display settings are settable via the API** — `viewPreferencesCreate(input: {type: organization, viewType: project, projectId: …, preferences: {"issueGrouping": "none", "viewOrdering": "manual"}})`. A wrong key or value **stores fine and silently does nothing**, and project-scoped rows have no API read surface, so verify one in the browser after the first use. See `sop/Linear_SOP.md` § API gotchas.
    - **The stamp is authoritative for queued issues only.** A workflow-state change re-ranks `sortOrder`, so once an issue enters the pipeline its position is its state, not its stamp. Don't re-stamp in-flight work to "fix" the order.
 6. **Create and populate.** Create the lane — `pk gql 'mutation($in: ProjectCreateInput!) { projectCreate(input:$in) { success project { id name } } }' '{"in":{"teamIds":["<TEAM>"],"name":"I{N}.P{M}. <label>","description":"<one line>","content":"<serialization notes>"}}'` — then, with the `project.id` the create returned, link it to the initiative (`ProjectCreateInput` has no `initiativeId` and no `state`): `pk gql 'mutation($in: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input:$in) { success } }' '{"in":{"initiativeId":"<INIT>","projectId":"<PROJ>"}}'` and set its status: `pk gql 'mutation($id: String!, $in: ProjectUpdateInput!) { projectUpdate(id:$id, input:$in) { success } }' '{"id":"<PROJ>","in":{"statusId":"<STATUS>"}}'` (`started`-type status if this is the lane you're starting now, else `planned`; ids from `pk gql '{ organization { projectStatuses { id name type } } }'`) — then, **one member at a time, serially**: `pk issue update <ID> --project I{N}.P{M} --sort-order <stamp>` — project and run-order stamp in the **one** write (a separate state or project write would re-rank `sortOrder`; `sop/Linear_SOP.md § API gotchas`), and verify the echoed `sortOrder` line.
-   - **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** Triage them out first, or the lane will render short and read as half-empty. (Anchor: SiteLine PIPER-559.)
+   - **Issues in a Triage-type state are invisible in project views and excluded from project scope counts.** Triage them out first, or the lane will render short and read as half-empty. (Anchor: a consumer project.)
    - **Leave `Area:` labels alone** — they persist through the cut. That's what keeps the backlog views honest.
 7. **Sanity-gate before the first write.** Count the candidate set, then re-survey it fresh and compare (tolerance ±5). A batch board mutation that starts from a stale survey is very hard to unwind.
 
@@ -219,7 +219,7 @@ Move issues between projects in Linear (the membership *is* the batch):
   on hope leaves stalled phases.
 - **Over-stuffing a project** → keep ~3–8 issues. Re-scope via `--rebalance`, or cut a second lane (`--cut`).
 - **Creating a project to hold "everything about X"** → that's a pool, and the walk can't see into it. The
-  home for uncut work is *no project* plus an `Area:` label. (Anchor: SiteLine, 2026-08-02 — 98 of 162 open
+  home for uncut work is *no project* plus an `Area:` label. (Anchor: a consumer project, 2026-08 — 98 of 162 open
   issues sat in three pool projects; `pk status` pointed at a lane idle since 07-17 while 100% of live work
   was invisible, and the real execution order had migrated into a gitignored notes file.)
 - **Deleting an empty placeholder lane** → it's the thing stopping the walk from skipping that initiative.

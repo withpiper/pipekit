@@ -21,7 +21,7 @@ Different from `/repo-security-review` (repo-wide security audit) and `/pr-secur
 | Key | Purpose | Default |
 |-----|---------|---------|
 | **Project display name** | Used in the report header + comments | (project name) |
-| **Financial review WIT** | Recurring Linear issue id for the review (e.g. `WIT-101`). **Blank → skip the Linear lifecycle entirely** (just run + report). | (blank) |
+| **Financial review issue** | Recurring Linear issue id for the review (e.g. `PROJ-101`). **Blank → skip the Linear lifecycle entirely** (just run + report). | (blank) |
 | **Financial review checks** | Path to the project checks file | `resources/financial-review-checks.md` |
 | **Reports path** | Where to write the review report | `Reports/` |
 | **Spec ready state** / state names | Linear state names for transitions (see below) | per board |
@@ -43,13 +43,13 @@ The checks file defines, for this project: the **test command**, the **calculati
 
 ## Step 1 — Open the review (Linear lifecycle)
 
-If `Financial review WIT` is set:
-- Move it to **In Progress** — `pk issue update <WIT> --state "In Progress"` (state by name; see Config above).
-- Post a comment: `pk issue comment <WIT> "Starting financial accuracy review — {YYYY-MM-DD}"`
+If `Financial review issue` is set:
+- Move it to **In Progress** — `pk issue update <ID> --state "In Progress"` (state by name; see Config above).
+- Post a comment: `pk issue comment <ID> "Starting financial accuracy review — {YYYY-MM-DD}"`
 
 If blank, skip — proceed straight to the audit and just produce the report.
 
-> Recurring-WIT note: for a recurring Linear issue, **Done** means "this cycle's review is complete"; Linear's recurrence re-opens it next cycle.
+> Recurring-issue note: for a recurring Linear issue, **Done** means "this cycle's review is complete"; Linear's recurrence re-opens it next cycle.
 
 ## Step 2 — Read current state + baseline tests
 
@@ -78,8 +78,8 @@ Flag any change touching financial logic for manual review.
 
 ## Step 5 — Update Linear by findings
 
-If `Financial review WIT` is set:
-- **Critical or High findings:** move to **In Review** (`pk issue update <WIT> --state "In Review"`), post a comment summarizing findings + proposed fixes (`pk issue comment <WIT> …`). Work each fix, posting a comment per fix with evidence. After all fixes verified, move to **Done** (`pk issue update <WIT> --state Done`).
+If `Financial review issue` is set:
+- **Critical or High findings:** move to **In Review** (`pk issue update <ID> --state "In Review"`), post a comment summarizing findings + proposed fixes (`pk issue comment <ID> …`). Work each fix, posting a comment per fix with evidence. After all fixes verified, move to **Done** (`pk issue update <ID> --state Done`).
 - **Only Medium/Low, or clean:** proceed to the report; move to **Done** after it's written.
 
 If blank, skip transitions.
@@ -134,7 +134,7 @@ Write `<Reports path>/Financial_Review_{YYYY-MM-DD}.md`:
 
 ## Step 7 — Close + summarize
 
-- If `Financial review WIT` set: move to **Done** (`pk issue update <WIT> --state Done`), post `pk issue comment <WIT> "Review complete — {STATUS}. Report: <path>"`.
+- If `Financial review issue` set: move to **Done** (`pk issue update <ID> --state Done`), post `pk issue comment <ID> "Review complete — {STATUS}. Report: <path>"`.
 - Present the user: overall status, discrepancy count, top findings by severity, comparison to the previous review, recommended actions.
 
 ## Severity rubric
@@ -150,4 +150,4 @@ Write `<Reports path>/Financial_Review_{YYYY-MM-DD}.md`:
 2. **Evidence-based** — every finding cites a query result or `file:line`.
 3. **Regression-aware** — always check what changed recently.
 4. **Consistent** — run the same checks-file checklist every cycle so trends are comparable.
-5. **Framework here, checks in the project** — never hardcode a project's schema, paths, or WIT in this skill; they live in the checks file and `method.config.md`.
+5. **Framework here, checks in the project** — never hardcode a project's schema, paths, or issue id in this skill; they live in the checks file and `method.config.md`.

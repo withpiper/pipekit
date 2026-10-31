@@ -94,7 +94,7 @@ For resume into Phases 3–8, `cd` into the existing `<ISSUE-ID>` worktree first
    - Team: from `method.config.md`
    - Status: backlog-type (e.g. `Backlog` or `Parked` — anything with `statusType=backlog`)
    - Priority: 1–4 per the heuristic above
-   - Labels: `Bug` (no severity labels — priority is the native field) **plus** an `Area:` label chosen for this bug's own work from `method.config.md § Area Labels`, and a `Repo:` label from `§ Repo Labels` where that section is populated. `pk issue create` refuses a create with no `Area:` on a board that configures them; a bug filed as bare `Bug` is the drift `/linear-hygiene` exists to catch (SiteLine PIPER-1294, 2026-10-27). Full placement contract: `sop/Linear_SOP.md § Filing a follow-up issue`.
+   - Labels: `Bug` (no severity labels — priority is the native field) **plus** an `Area:` label chosen for this bug's own work from `method.config.md § Area Labels`, and a `Repo:` label from `§ Repo Labels` where that section is populated. `pk issue create` refuses a create with no `Area:` on a board that configures them; a bug filed as bare `Bug` is the drift `/linear-hygiene` exists to catch (a consumer project, 2026-10). Full placement contract: `sop/Linear_SOP.md § Filing a follow-up issue`.
    - Body: the filled intake template
 5. Echo `<ISSUE-ID>` to the user. Advance to Phase 2.
 
@@ -240,7 +240,7 @@ After main deploys, Linear should auto-transition to `Done` (per the existing au
 
    Gate on the artifact instead. An Urgent bug is closed out when its issue carries **both** a `# Postmortem` comment and a filled-in reviewer sign-off. `/linear-hygiene` Phase 2c reports issues missing either.
 
-   *Anchor: SiteLine PIPER-766, 2026-08-25 — an Urgent bug auto-closed on merge and sat `Done` with no postmortem. It got written a day later only because the operator went looking, and it was the postmortem that found the actual gate: an ESLint rule (`no-inner-declarations`) dropped from `eslint:recommended` in v9, silently off ever since. The fix alone would have left that open for the next occurrence.*
+   *Anchor: a consumer project, 2026-08 — an Urgent bug auto-closed on merge and sat `Done` with no postmortem. It got written a day later only because the operator went looking, and it was the postmortem that found the actual gate: an ESLint rule (`no-inner-declarations`) dropped from `eslint:recommended` in v9, silently off ever since. The fix alone would have left that open for the next occurrence.*
 3. If "one change to prevent recurrence" is concrete (e.g. "add Playwright e2e for every auth-method × sign-out combo"), create a follow-up Linear issue or add a rule to `.claude/rules/`. The issue is filed to `sop/Linear_SOP.md § Filing a follow-up issue`: `Source: <BUG-ID> postmortem` as the body's first line, the bug's `Area:` label, a Type label (usually `Tech Debt` or `Chore` — the prevention is rarely itself a Bug), priority from the floor table, state by that priority, `relates` to the bug. Name the new identifier and its placement in the postmortem comment.
 
 ---

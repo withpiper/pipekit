@@ -160,7 +160,7 @@ Fan out the toolkit's specialists in parallel as **read-only** subagents (they r
 
 | Agent | Spawn when |
 |---|---|
-| `pr-review-toolkit:code-reviewer` | ALWAYS — general correctness + cross-WIT integration |
+| `pr-review-toolkit:code-reviewer` | ALWAYS — general correctness + cross-issue integration |
 | `pr-review-toolkit:silent-failure-hunter` | Error-handling patterns in diff, or any API / mutation / migration |
 | `pr-review-toolkit:pr-test-analyzer` | Any non-test source file changed |
 | `pr-review-toolkit:type-design-analyzer` | New or changed exported types |

@@ -141,7 +141,7 @@ else
     # Claude Code's Bash tool runs, ${PIPESTATUS[0]} expanded to empty: every gate
     # command recorded `exit: 0` and `return $rc` fell through to the printf's
     # status. A red gate was indistinguishable from a green one, and the evidence
-    # file preserved the false 0. Observed on SiteLine PIPER-425, 2026-07-29.
+    # file preserved the false 0. Observed on a consumer project, 2026-07.
     local rc=$?
     printf 'exit: %d\nduration: %ds\n\n' "$rc" "$(($(date +%s) - start))" >> "$VERIFY_DIR/evidence.txt"
     return $rc
@@ -190,7 +190,7 @@ Three vacuous shapes, each observed shipping:
 
 The check is one question: **would this test still pass against the code before the fix?** If yes, it is not evidence. Re-point it, or say plainly that the change is unverified.
 
-**Anchor — SiteLine, 2026-07-29/30.** PIPER-491 cited two assertions as security evidence that could not fail (one fixture seeded only in-scope projects; one compared two identical computations through a seam the fix had deleted) — and then made the *same* vacuous-fixture mistake again on `clientInfo` in the very pass writing that lesson up. PIPER-497 shipped four separate vacuous assertions before mutation checks caught them. Where the discipline was applied first, it paid immediately: PIPER-164's guard, authored red-first, failed on exactly its 5 divergent sites and exposed a resolver hole that would have silently exempted a CORS-granting function.
+**Anchor — a consumer project, 2026-07.** One issue cited two assertions as security evidence that could not fail (one fixture seeded only in-scope projects; one compared two identical computations through a seam the fix had deleted) — and then made the *same* vacuous-fixture mistake again on `clientInfo` in the very pass writing that lesson up. A second issue shipped four separate vacuous assertions before mutation checks caught them. Where the discipline was applied first, it paid immediately: a third issue's guard, authored red-first, failed on exactly its 5 divergent sites and exposed a resolver hole that would have silently exempted a CORS-granting function.
 
 ### Step 3.6 — A mocked model cannot violate the provider's limits
 
@@ -255,7 +255,7 @@ A harness that does not follow this convention is treated as failed on any non-z
 
 A failed run gets status NEEDS WORK, as for a gate failure above, except that the hand-off prints the `real-api-run:` record and the log path instead of the output's last lines. Fix the code, or the harness if the harness is wrong, and re-run. A flaky run is re-run, not accepted. With no harness declared, `/verify` does not invent one: Flag check G surfaces the gap. Like every leg, the harness re-runs at each new sha (Step 9).
 
-**Anchor — Piper PIPER-1042, 2026-10-04.** Every quote upload failed with a 422 because the extraction schema carried 17 union parameters against Anthropic's limit of 16. Every test mocked the model, so nothing counted unions until the first real-API harness run, after the feature had shipped.
+**Anchor — a consumer project, 2026-10.** Every quote upload failed with a 422 because the extraction schema carried 17 union parameters against Anthropic's limit of 16. Every test mocked the model, so nothing counted unions until the first real-API harness run, after the feature had shipped.
 
 Continue to step 4 only if QA is enabled.
 
@@ -400,11 +400,11 @@ If `RUN_ADVERSARIAL=false`, skip to Step 6.
 
 **Sensitive-path patterns** mirror `/pr-fix`'s plan (which lands Week 4). Defaults:
 - **Paths:** `supabase/migrations/`, `/auth/`, `/middleware\.`, `/rls\.`, `/policies\.`
-- **Content (added lines only — `^+`, never context or removed lines):** `SECURITY DEFINER`, `GRANT EXECUTE`, `REVOKE EXECUTE`, `CREATE POLICY`, `ALTER POLICY`. A file that merely *lists* one of these terms in an unchanged context line doesn't trigger — only a line the diff actually adds does (PIPER-494).
+- **Content (added lines only — `^+`, never context or removed lines):** `SECURITY DEFINER`, `GRANT EXECUTE`, `REVOKE EXECUTE`, `CREATE POLICY`, `ALTER POLICY`. A file that merely *lists* one of these terms in an unchanged context line doesn't trigger — only a line the diff actually adds does (a consumer project).
 
 The reasoning: these are the exact surfaces where shipping without adversarial review historically caused incidents — RLS bypasses, missing `search_path` on SECURITY DEFINER functions, GRANT scope creep. Trivial-but-not-quick standard issues that don't touch these surfaces stay opt-in (no token blowup on `tier:standard` typo fixes). Project-specific path/content overrides can be added to `method.config.md` in a future `[verify.sensitive_paths]` block (deferred to v2.7.1+).
 
-**This "sensitive" definition is not, and isn't meant to be, the same one `/security-gate`'s six categories use or the same one a project's own CI enforces.** Three separate classifiers can legitimately disagree, because they do different jobs: this one decides whether to spawn an *adversarial review subagent*; `/security-gate`'s decides which *checklist* to run against a feature diff; a project's own CI check (e.g. a doc-update requirement keyed on its own path/keyword tiers) enforces something specific to that project's process. Raised as a gap by PIPER-494 and left out of scope there — it isn't one; each classifier is scoped to what it gates, and a project is free to define a narrower or broader one in its own CI without pipekit needing to match it.
+**This "sensitive" definition is not, and isn't meant to be, the same one `/security-gate`'s six categories use or the same one a project's own CI enforces.** Three separate classifiers can legitimately disagree, because they do different jobs: this one decides whether to spawn an *adversarial review subagent*; `/security-gate`'s decides which *checklist* to run against a feature diff; a project's own CI check (e.g. a doc-update requirement keyed on its own path/keyword tiers) enforces something specific to that project's process. Raised as a gap on a consumer project and left out of scope there — it isn't one; each classifier is scoped to what it gates, and a project is free to define a narrower or broader one in its own CI without pipekit needing to match it.
 
 ### Step 5a — Spawn the adversarial subagent
 
@@ -412,7 +412,7 @@ Use `subagent_type: "general-purpose"` (same agent as QA — only the prompt dif
 
 Configure with `allowed-tools: Read, Bash, Write`. Run it on the **plan-review / adversarial** tier per `method.config.md § Model Policy` (default `opus`, effort `xhigh`) — adversarial review benefits from deeper reasoning. Set `ADVERSARIAL_TIER` to the model that role resolves to before spawning, and `ADVERSARIAL_RAN_ON` to the model that actually produced `adversarial.md` afterwards (empty if nothing did); Steps 6 and 7 read both.
 
-**The tier holds (v4.36.0).** If the subagent on that tier dies before writing its file — API rate limit, timeout, killed — retry it on the **same** tier (twice, a minute apart) before doing anything else. A run on a lower tier is not the adversarial review: if you fall back to one, or exhaust the retries and skip it, that is a flag in its own right regardless of how many findings come back (Flag check E), and the reality-check's Antagonistic section names the tier that actually ran. Anchor: SiteLine PIPER-412, 2026-09-02 — the opus run was rate-limited, the sonnet fallback returned three findings, and the two that decided the ship (the new cells never `ROUND` while every cached value is cent-rounded; a multiplier the spec excludes) were both missed. The identical diff reviewed on opus surfaced them in cycle one.
+**The tier holds (v4.36.0).** If the subagent on that tier dies before writing its file — API rate limit, timeout, killed — retry it on the **same** tier (twice, a minute apart) before doing anything else. A run on a lower tier is not the adversarial review: if you fall back to one, or exhaust the retries and skip it, that is a flag in its own right regardless of how many findings come back (Flag check E), and the reality-check's Antagonistic section names the tier that actually ran. Anchor: a consumer project, 2026-09 — the opus run was rate-limited, the sonnet fallback returned three findings, and the two that decided the ship (the new cells never `ROUND` while every cached value is cent-rounded; a multiplier the spec excludes) were both missed. The identical diff reviewed on opus surfaced them in cycle one.
 
 Use Task tool with:
 
@@ -478,7 +478,7 @@ The check above governs review cycles **within one run**. The runaway this secti
 
 When two or more fire, the move is to **cut the branch, not to run another round** — ship the converged half and move the rest to a follow-up issue filed to `sop/Linear_SOP.md § Filing a follow-up issue` (`Source: <ISSUE-ID>`, an `Area:` label for the follow-up's own work, a Type label, priority from the floor table, state by that priority, `relates` to the parent — one create call, placement named in the hand-off). `/light-spec` Phase 3.75 is the spec-time gate that prevents the common case (a schema change bundled with a rewrite of the client that consumes it).
 
-**Anchor — PIPER-486/487, 2026-07-30.** Two CRITICALs, a 1,816-line migration across 23 schema objects, and a rewrite of an admin tab inside an 8,000-line page on one branch. Rounds 1–5 each found a High **inside the previous round's fix commit**; the one clean round (6, zero findings, three reviewers) was the one that reviewed a *reduction*; round 7's additions produced 22 findings. The branch was cut at round 7 and shipped at round 8. Every signal above was present by round 2 and none was named until round 7.
+**Anchor — a consumer project, 2026-07.** Two CRITICALs, a 1,816-line migration across 23 schema objects, and a rewrite of an admin tab inside an 8,000-line page on one branch. Rounds 1–5 each found a High **inside the previous round's fix commit**; the one clean round (6, zero findings, three reviewers) was the one that reviewed a *reduction*; round 7's additions produced 22 findings. The branch was cut at round 7 and shipped at round 8. Every signal above was present by round 2 and none was named until round 7.
 
 ## Step 6 — Human-decision flag enumeration
 
@@ -696,7 +696,7 @@ For `TIER != quick`, write `$VERIFY_DIR/reality-check.md`.
 
 **Write the header block with the heredoc below, not by rendering it as markdown.** The `sha:` line is load-bearing beyond this file: when `verify-complete.md` is absent — it is written only on PASS, and is sometimes never committed — `reality-check.md` is what `pk ready` / `pk done` fall back to when deciding whether the recorded verification still covers HEAD (`pk_verify_sentinel_latest`, v4.27.1+). A missing `sha:` line silently downgrades that gate to "no evidence found".
 
-Model-rendered markdown drifts; a heredoc does not. Measured on SiteLine, 2026-08-02: `verify-complete.md`, written by the Step 8 heredoc, carried a `sha:` line in **191 of 192** committed files, while `reality-check.md`, previously rendered as prose, carried one in only **167 of 195** — and the miss rate was *rising* (8% in June, 24% in July, 33% in August), because nothing in a prose template fails when a line goes missing.
+Model-rendered markdown drifts; a heredoc does not. Measured on a consumer project, 2026-08: `verify-complete.md`, written by the Step 8 heredoc, carried a `sha:` line in **191 of 192** committed files, while `reality-check.md`, previously rendered as prose, carried one in only **167 of 195** — and the miss rate was *rising* (8% in June, 24% in July, 33% in August), because nothing in a prose template fails when a line goes missing.
 
 ```bash
 # STATUS is the verdict from the status-logic table in Step 8 (gate red → NEEDS
@@ -852,7 +852,7 @@ Verify complete: <VERIFY_DIR>/verify-complete.md  (present only on PASS)
 
 ### Every cited check is in this run's evidence.txt (v4.36.0)
 
-The hand-off, the reality-check, and any Linear or PR text written from them may cite only checks that appear as a `==> $` block in **this run's** `evidence.txt` — the configured gate rows and any extra leg you ran (an artifact build, an E2E suite, a checker on fresh exports). `evidence.txt` is overwritten per run (Step 2), so a check that was not re-run at this sha is absent by construction. A result from an earlier run, from before a session resume, or from a scratchpad that no longer exists is not evidence at this sha: re-run it, or say it was not run. Anchor: SiteLine PIPER-412, 2026-09-02 — a session resumed after a machine pause closed with "fresh artifacts pass the checker, 1,940 checks", a claim from the pre-pause `/work` step; the artifacts had been wiped with the scratchpad, and the run's `evidence.txt` had no such leg.
+The hand-off, the reality-check, and any Linear or PR text written from them may cite only checks that appear as a `==> $` block in **this run's** `evidence.txt` — the configured gate rows and any extra leg you ran (an artifact build, an E2E suite, a checker on fresh exports). `evidence.txt` is overwritten per run (Step 2), so a check that was not re-run at this sha is absent by construction. A result from an earlier run, from before a session resume, or from a scratchpad that no longer exists is not evidence at this sha: re-run it, or say it was not run. Anchor: a consumer project, 2026-09 — a session resumed after a machine pause closed with "fresh artifacts pass the checker, 1,940 checks", a claim from the pre-pause `/work` step; the artifacts had been wiped with the scratchpad, and the run's `evidence.txt` had no such leg.
 
 ### Auto-ship rollover (Pass + zero flags only, only when invoked with --auto-ship)
 
@@ -865,11 +865,11 @@ Auto-ship fires when **all three** conditions hold:
 Behavior:
 
 1. Print: `✓ /verify Pass + 0 flags — auto-running pk ship`
-2. Run `pk ship` via bash. Use no flags — `pk ship` reads `Integration branch` from `method.config.md` to pick the destination, which gives `dev` for Piper-style multi-env projects and `main` for single-env projects (correct in both cases). v2.6.0+: opens the PR as **Draft**; outside reviewers (Semgrep + claude-review per `templates/ci/`) do not fire yet.
+2. Run `pk ship` via bash. Use no flags — `pk ship` reads `Integration branch` from `method.config.md` to pick the destination, which gives `dev` for multi-env projects and `main` for single-env projects (correct in both cases). v2.6.0+: opens the PR as **Draft**; outside reviewers (Semgrep + claude-review per `templates/ci/`) do not fire yet.
 3. If `pk ship` succeeds: print its output (PR URL + Linear transition) and exit. The hand-off should remind the user that outside reviewers will fire when they run `pk ready <ID>` — that's the merge-moment gesture, not part of the auto-flow.
 4. If `pk ship` fails (push rejected, gh CLI error, branch protection): surface the error verbatim and STOP. Do NOT auto-retry — push failures usually mean branch protection, lockfile drift, or remote conflicts that need human eyes.
 
-`--review` (antagonistic review) stays opt-in; the user runs `pk ship --review` separately if they want it. The Draft default is also opt-out-able via `pk ship --ready` for one-shot tiny WITs where iteration won't happen.
+`--review` (antagonistic review) stays opt-in; the user runs `pk ship --review` separately if they want it. The Draft default is also opt-out-able via `pk ship --ready` for one-shot tiny issues where iteration won't happen.
 
 ### Pass-with-flags pause (the F6 gate — load-bearing)
 

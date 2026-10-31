@@ -1,6 +1,6 @@
 ---
 name: pk-express
-description: Idea→Draft-PR autopilot for simple (Quick/Standard) WITs — chains /brainstorm → /light-spec → pk branch → /work, stopping only at attention gates. /pk-express "<idea>" or resume with <ISSUE-ID>.
+description: Idea→Draft-PR autopilot for simple (Quick/Standard) issues — chains /brainstorm → /light-spec → pk branch → /work, stopping only at attention gates. /pk-express "<idea>" or resume with <ISSUE-ID>.
 ---
 
 # /pk-express Skill
@@ -11,11 +11,11 @@ It is the connective glue over four stages that already self-drive:
 
 ```
 /brainstorm "<idea>"  →  /light-spec <ID>  →  pk branch <ID>  →  /work <ID>
-   (file the WIT)        (auto-cycle to        (worktree)         (execute → auto /verify
+   (file the issue)      (auto-cycle to        (worktree)         (execute → auto /verify
                           Approved)                                 --auto-ship → Draft PR)
 ```
 
-`/light-spec` already loops `pk spec-cycle` ⇄ `/light-spec-revise` to Approved; `/work` already auto-rolls into `/verify --auto-ship`. This skill removes the *between-stage* typing and the two interactive triage/confirm prompts, so a simple WIT runs start to finish untouched.
+`/light-spec` already loops `pk spec-cycle` ⇄ `/light-spec-revise` to Approved; `/work` already auto-rolls into `/verify --auto-ship`. This skill removes the *between-stage* typing and the two interactive triage/confirm prompts, so a simple issue runs start to finish untouched.
 
 ## North star
 
@@ -79,7 +79,7 @@ Next:   <the single command or decision to unblock>
 
 ### Stage 0 — Resolve entry
 
-**`/pk-express <ISSUE-ID>` (take an existing WIT through to completion) is the primary form** — you've already brainstormed/captured the idea; this drives it from wherever it is to a Draft PR. `/pk-express "<idea>"` is the convenience form that prepends the brainstorm step.
+**`/pk-express <ISSUE-ID>` (take an existing issue through to completion) is the primary form** — you've already brainstormed/captured the idea; this drives it from wherever it is to a Draft PR. `/pk-express "<idea>"` is the convenience form that prepends the brainstorm step.
 
 Read the issue's current Linear state and jump in:
 
@@ -88,7 +88,7 @@ Read the issue's current Linear state and jump in:
 | `Triage` / `Ideas` / untriaged | Stage 1 (brainstorm disposition only, no re-file) | then follow Stage 1's state-branch (Approved → Stage 3, Spec-ready-state → Stage 2) |
 | `Needs Spec` (the `Spec ready state`) | Stage 2 | needs a spec |
 | `Specced` (mid-cycle) | Stage 2's cycle loop | resume reviewing |
-| `Approved` (the `Spec approved state`) | **Stage 3** | spec done/skipped → branch + work. **The clean WIT path.** |
+| `Approved` (the `Spec approved state`) | **Stage 3** | spec done/skipped → branch + work. **The clean issue path.** |
 | `In Progress` (worktree exists) | Stage 4 | resume work |
 | `UAT` or later | — | already past the lane; report and **stop (gate 5)** |
 
@@ -132,7 +132,7 @@ Invoke `/work <ID>` (Skill tool, `skill="work"`) — run it as if from inside th
 - **Pass + 0 flags** → Draft PR is open → **terminal success (gate 5).**
 - **Any flag / non-Pass** → `/verify` already paused → surface its verdict verbatim and **stop (gate 4).**
 
-Do **not** invoke `pk ready`, `pk done`, or `pk promote` — ever. Those are the deliberate human gates the express lane hands back at gate 5 (the `pk done` auto-run prohibition is the WIT-451 canary, 2026-05-13).
+Do **not** invoke `pk ready`, `pk done`, or `pk promote` — ever. Those are the deliberate human gates the express lane hands back at gate 5 (the `pk done` auto-run prohibition is a consumer-project canary, 2026-05).
 
 ### Terminal hand-off (success)
 

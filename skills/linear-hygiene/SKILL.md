@@ -27,8 +27,8 @@ It answers **"where does it belong?"** (placement), not **"is it worth doing?"**
 
 ## Tooling notes (read before building against this)
 
-- **Reaches Linear through the project's route** — `Linear transport` in `method.config.md`, `api` by default (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of every operation below is listed there). The whole-board sweeps are `pk gql` queries with their filters server-side, paged `first: 50` with `after`; the placement writes are `pk issue update`. **One `pk issue update` carries `--project` + `--priority` + `--state` + `--add-label` together** — a single `issueUpdate` underneath, the shape verified live on SiteLine, 2026-06-19.
-- **Rate-limit discipline — Linear's quota is one shared, per-User bucket** (canonical, with the numbers and the anchor, in `sop/Linear_SOP.md` § Rate limits; this skill reads the *whole board*, so every rule there applies here): never fan out subagents at Linear — one subagent, serial calls, for the whole Phase 1–2 read and again for the Phase 5 writes; page in chunks of 50; on rate-limit wait once, retry once, then stop and report partial; the error is HTTP 400 `RATELIMITED`, not 429; one successful small call proves "not blocked this instant", never "quota recovered". Prefer running when no `/work` sessions are live (`pk sessions`). Anchor: SiteLine 2026-08-31 — three concurrent sweeps paging 250 blocked the board ~1h and starved four worktree workers.
+- **Reaches Linear through the project's route** — `Linear transport` in `method.config.md`, `api` by default (verb table: `sop/Linear_SOP.md § Linear transport`; the `mcp` route's equivalent of every operation below is listed there). The whole-board sweeps are `pk gql` queries with their filters server-side, paged `first: 50` with `after`; the placement writes are `pk issue update`. **One `pk issue update` carries `--project` + `--priority` + `--state` + `--add-label` together** — a single `issueUpdate` underneath, the shape verified live on a consumer project, 2026-06.
+- **Rate-limit discipline — Linear's quota is one shared, per-User bucket** (canonical, with the numbers and the anchor, in `sop/Linear_SOP.md` § Rate limits; this skill reads the *whole board*, so every rule there applies here): never fan out subagents at Linear — one subagent, serial calls, for the whole Phase 1–2 read and again for the Phase 5 writes; page in chunks of 50; on rate-limit wait once, retry once, then stop and report partial; the error is HTTP 400 `RATELIMITED`, not 429; one successful small call proves "not blocked this instant", never "quota recovered". Prefer running when no `/work` sessions are live (`pk sessions`). Anchor: a consumer project, 2026-08 — three concurrent sweeps paging 250 blocked the board ~1h and starved four worktree workers.
 - If `pk config "Linear transport" api` is `mcp`: the verb table's `mcp` column names the server it assumes; the first-party `mcp.linear.app` remote uses snake_case names and lacks the label-create / issue-relation tools the deferred items below rely on — remap per `sop/Linear_SOP.md § Linear transport` before running.
 
 ## Execution Steps
@@ -102,7 +102,7 @@ Unlike Phase 2b, this check is **not** lanes-gated — run it whether or not `§
 - **Home (for orphans / unclassified).** On the lanes model the default home is **no project**, not a project. Work through this ladder in order and stop at the first hit:
 
   1. **An existing lane — only if the issue is inside that lane's completable scope.** "It's the same domain" is not scope; the test is whether the lane could still be called *done* with this issue in it. If the body names a parent issue (`follow-up to/from <ID>`, `Source: <ID>`, `Related: <ID>`, `Split from <ID>`, where `<ID>` is any Linear identifier `[A-Z]+-N` — match every prefix, not just the workspace's current one: a prefix migration leaves older bodies citing the old prefix) → `pk issue show <parent> --fields id,project` → the **parent's project** is the highest-confidence candidate, but still apply the scope test before proposing it.
-  2. **Otherwise: no project + the right `Area:` label.** Match title/body against the configured Area labels. Classify the issue's own text, never the lane it came from: in a 2026-09-27 SiteLine sample about a fifth of Area labels disagreed with their issue's text, many because the label had followed the source lane rather than the domain. This is the correct terminal state for uncut work — the issue is homed the moment it carries an Area label, and stays there until a human cuts it into a lane via `/phase-plan --cut`.
+  2. **Otherwise: no project + the right `Area:` label.** Match title/body against the configured Area labels. Classify the issue's own text, never the lane it came from: in a 2026-09 consumer-project sample about a fifth of Area labels disagreed with their issue's text, many because the label had followed the source lane rather than the domain. This is the correct terminal state for uncut work — the issue is homed the moment it carries an Area label, and stays there until a human cuts it into a lane via `/phase-plan --cut`.
   3. If the Area is ambiguous → present the **top-2 candidates** for a human pick in the manifest.
 
   **Never file into a pool-shaped project, and never create a project.** Filing an issue into a project just to get it out of the orphan list is what grows a pool — the exact drift Phase 2b flags. A project is created only by a deliberate lane cut.
@@ -120,13 +120,13 @@ Print ONE table, **sorted by inferred priority descending** so important follow-
 
 | Issue | Drift | → Home | → Priority | → State | Filer | Title |
 |-------|-------|--------|-----------|---------|-------|-------|
-| POC-232 | ⬛🔶 | (no project) · Area: Security | Normal | Needs Spec | /verify ← POC-230 | Compare removed-block… |
-| POC-241 | 🔶⚪ | (no project) · Area: Platform | Low | Backlog | — | Tidy footer spacing… |
-| POC-244 | 🏚️ | I3.P2. Access truth — in lane scope | Normal | Needs Spec | /work ← POC-240 R2 | Admin scope check… |
-| POC-250 | 🅿️ | Backlog + `Parked` label | — | Backlog | — | Deferred export idea… |
+| PROJ-232 | ⬛🔶 | (no project) · Area: Security | Normal | Needs Spec | /verify ← PROJ-230 | Compare removed-block… |
+| PROJ-241 | 🔶⚪ | (no project) · Area: Platform | Low | Backlog | — | Tidy footer spacing… |
+| PROJ-244 | 🏚️ | I3.P2. Access truth — in lane scope | Normal | Needs Spec | /work ← PROJ-240 R2 | Admin scope check… |
+| PROJ-250 | 🅿️ | Backlog + `Parked` label | — | Backlog | — | Deferred export idea… |
 | ...
 
-⚠️ Needs your pick: POC-NNN → [Area: Security | Area: Budget Editor]
+⚠️ Needs your pick: PROJ-NNN → [Area: Security | Area: Budget Editor]
 ```
 
 **Filer** is read off the body's `Source:` line (the intake contract's first line) — the parent ID plus whatever the filer appended (`R<N>`, `postmortem`, `PR #n finding #k`, `review improvement #N`) names the skill that filed it. `—` means no `Source:` line: either external input (a human, `/brainstorm`) or a filer that skipped the contract entirely, which is itself the finding. A filer that shows up here twice is a skill to fix, not an issue to sweep.
@@ -153,8 +153,8 @@ Then, **only if Phase 2c found anything**, a third block — also advisory, also
 
 | Issue | Finding | Priority | Closed | Recommended |
 |-------|---------|----------|--------|-------------|
-| PIPER-766 | ✍️ unsigned postmortem | Urgent | 2026-08-25 | reviewer sign-off owed |
-| PIPER-741 | 🧾 postmortem debt | High | 2026-08-19 | /pk-bug PIPER-741 |
+| PROJ-766 | ✍️ unsigned postmortem | Urgent | 2026-08-25 | reviewer sign-off owed |
+| PROJ-741 | 🧾 postmortem debt | High | 2026-08-19 | /pk-bug PROJ-741 |
 ```
 
 **In `--check` mode, stop here** — print every block (or "✓ board is tidy — no drift") and make no writes.
@@ -195,7 +195,7 @@ Suggest `/brainstorm-review` for items that need a Now/Later/Kill **verdict** �
 - **Don't couple `Area:` labels to lane membership — in either direction.** Area says *what domain this is*; the project says *which batch it's in*. They are orthogonal, and each inference is wrong on its own:
   - **Never remove or change an `Area:` label because of a lane move.** Area classification persists through project membership — an issue cut into a lane keeps the label it was triaged with, and that's what makes the `Area: * — backlog` views honest.
   - **Never infer an `Area:` label from the lane an issue sits in.** A lane can legitimately mix areas.
-  *(This rule's predecessor guarded the `Roadmap: *` phase labels, which the lanes model doesn't have. Anchor for why the class of bug matters: SiteLine POC-382 was re-parented into a Phase-A project during a placement pass and silently picked up a stray `Roadmap: Phase A` label that contradicted `ROADMAP.md`. Same shape — placement quietly writing a classification it doesn't own.)*
+  *(This rule's predecessor guarded the `Roadmap: *` phase labels, which the lanes model doesn't have. Anchor for why the class of bug matters: on a consumer project, an issue was re-parented into a Phase-A project during a placement pass and silently picked up a stray `Roadmap: Phase A` label that contradicted `ROADMAP.md`. Same shape — placement quietly writing a classification it doesn't own.)*
 - **Don't infer or apply a phase-visualization label from a re-homed `projectId`** *(boards on the phase-spans-projects shape — `method.config.md § Phase Label Layer` filled in)*. **Project membership ≠ phase-label membership** — a phase-arc project routinely holds a mix of phase-labeled and non-phase work. Phase-label placement is owned by `/roadmap-review`'s Phase-Label Layer pass, not by this placement janitor.
 - **Don't create a project, ever.** Not to home an orphan, not to hold a leftover. Projects are cut deliberately in `/phase-plan`; a project created by a janitor is a pool by construction.
 - **Don't act on the board-shape block.** Pool smell, spent lanes, walk-skip hazards and status drift are reported for a human to route to `/phase-plan`. Completing a lane or cutting one is a planning decision with roadmap consequences.
