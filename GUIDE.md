@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.2.5** — Last updated: 2026-10-31 14:00  *(**v5.2.5 — synced docs no longer name one consumer's retired commands or paths** (a deploy CLI, a sibling-repo path, a deleted skill), so a sync stops reverting that consumer's own fixes; a smoke guard keeps them out.)*
+**v5.3.0** — Last updated: 2026-10-31 15:00  *(**v5.3.0 — `pk ship` prints path-matched reminders from `method.config.md § Ship Reminders`**, e.g. "this backend change is not on the preview; deploy it to dev before UAT"; informational, never blocks.)*
 
 ---
 
@@ -599,6 +599,7 @@ It is a **hard gate** as of v4.17.0 — on PASS the gate writes a sha-matched `s
 - Pushes the feature branch (skips if already current)
 - Opens a PR via `gh pr create --draft` against the integration branch from `method.config.md` (`Integration branch: dev` for most projects). The Draft state means outside reviewers (Semgrep + claude-review per `templates/ci/`) do NOT fire during iteration. v2.6.0+.
 - Transitions Linear from In Progress → UAT (or → In Review per project config)
+- Prints a `⚑` reminder for each `method.config.md § Ship Reminders` rule whose pattern matches a file the branch changes (v5.3.0), e.g. "this backend change is not on the preview; deploy it to dev before UAT". Informational: it never blocks or deploys.
 
 Variants:
 

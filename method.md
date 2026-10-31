@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.2.5** — Last updated: 2026-10-31 14:00  *(**v5.2.5 — synced docs no longer name one consumer's retired commands or paths** (a deploy CLI, a sibling-repo path, a deleted skill), so a sync stops reverting that consumer's own fixes; a smoke guard keeps them out.)*
+**v5.3.0** — Last updated: 2026-10-31 15:00  *(**v5.3.0 — `pk ship` prints path-matched reminders from `method.config.md § Ship Reminders`**, e.g. "this backend change is not on the preview; deploy it to dev before UAT"; informational, never blocks.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
