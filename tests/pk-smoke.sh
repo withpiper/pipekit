@@ -1503,6 +1503,50 @@ out=$(sl2 ABC-7 no/such/branch); rc=$?
 cleanup
 FIXTURE=""
 
+echo "== verify drift: worktree lookup (v5.3.1) =="
+# A project that gitignores Logs/Verify never commits the evidence, so from the
+# parent neither the checkout nor the branch's tree holds it; only the branch's
+# worktree does (Piper PIPER-1369: pk ready reported "none" with a HEAD-matching
+# sentinel sitting in the worktree).
+
+make_fixture
+gitf() { git -C "$FIXTURE" -c user.email=t@t -c user.name=t "$@"; }
+WT="$FIXTURE/.wt/ABC-8"
+gitf worktree add -q -b feature/ABC-8-wt "$WT" main
+gitw() { git -C "$WT" -c user.email=t@t -c user.name=t "$@"; }
+WT_VERIFIED=$(gitw rev-parse HEAD)
+mkdir -p "$WT/Logs/Verify/20260101/ABC-8"
+printf 'sha: %s\n' "$WT_VERIFIED" > "$WT/Logs/Verify/20260101/ABC-8/verify-complete.md"   # never committed
+mkdir -p "$WT/src"; echo x > "$WT/src/app.js"
+gitw add src; gitw commit -q -m "fix(app): pushed after verify"
+WT_HEAD=$(gitw rev-parse HEAD)
+
+sl3() { ( cd "$FIXTURE" && source "$PK" && pk_verify_sentinel_latest "$@" ); }
+out=$(sl3 ABC-8 feature/ABC-8-wt)
+[ "${out##*$'\t'}" = "$WT_VERIFIED" ] && ok "worktree: parent finds uncommitted evidence in the branch's worktree" || fail "worktree: parent finds uncommitted evidence in the branch's worktree" "got '$out'"
+case "${out%%$'\t'*}" in
+  "$(cd "$WT" && pwd -P)"/Logs/Verify/*) ok "worktree: reported path is the worktree's file" ;;
+  *) fail "worktree: reported path is the worktree's file" "got '${out%%$'\t'*}'" ;;
+esac
+
+drw() { ( cd "$FIXTURE" && source "$PK" && pk_verify_drift_report "$@" 2>/dev/null ); }
+[ "$(drw ABC-8 "$WT_HEAD" feature/ABC-8-wt)" = "source" ] && ok "worktree: source commit after verify is caught from the parent" || fail "worktree: source commit after verify is caught from the parent" "got '$(drw ABC-8 "$WT_HEAD" feature/ABC-8-wt)'"
+[ "$(drw ABC-8 "$WT_VERIFIED" feature/ABC-8-wt)" = "fresh" ] && ok "worktree: HEAD at the verified sha is fresh" || fail "worktree: HEAD at the verified sha is fresh" "got '$(drw ABC-8 "$WT_VERIFIED" feature/ABC-8-wt)'"
+
+# Inside the worktree, the working-tree source answers and the helper skips itself.
+out=$( cd "$WT" && source "$PK" && pk_branch_worktree feature/ABC-8-wt )
+[ -z "$out" ] && ok "worktree: the current checkout is not its own extra source" || fail "worktree: the current checkout is not its own extra source" "got '$out'"
+out=$( cd "$WT" && source "$PK" && pk_verify_sentinel_latest ABC-8 feature/ABC-8-wt )
+[ "${out##*$'\t'}" = "$WT_VERIFIED" ] && ok "worktree: lookup from inside the worktree still works" || fail "worktree: lookup from inside the worktree still works" "got '$out'"
+
+out=$( cd "$FIXTURE" && source "$PK" && pk_branch_worktree no/such/branch )
+[ -z "$out" ] && ok "worktree: a branch with no worktree adds no source" || fail "worktree: a branch with no worktree adds no source" "got '$out'"
+
+grep -q 'means ship was forced or skipped' "$PK" && fail "pk ready: 'none' message no longer blames a forced ship" "old wording still present" || ok "pk ready: 'none' message no longer blames a forced ship"
+gitf worktree remove --force "$WT" >/dev/null 2>&1 || true
+cleanup
+FIXTURE=""
+
 echo "== verify drift: class list not duplicated (v4.27.1 regression guard) =="
 # cmd_done restated `source|migrations` inline and so never matched `unreachable`
 # once cmd_ready started blocking on it. pk_verify_drift_blocks is the single

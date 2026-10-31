@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.3.0** — Last updated: 2026-10-31 15:00  *(**v5.3.0 — `pk ship` prints path-matched reminders from `method.config.md § Ship Reminders`**, e.g. "this backend change is not on the preview; deploy it to dev before UAT"; informational, never blocks.)*
+**v5.3.1** — Last updated: 2026-10-31 16:00  *(**v5.3.1 — `pk ready` and `pk done` also look for `/verify` evidence in the branch's worktree**, so the drift check works from the parent checkout when `Logs/Verify` is gitignored.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.3.0                (or latest tag)
+1. ./scripts/sync-method.sh v5.3.1                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
