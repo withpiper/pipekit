@@ -110,6 +110,24 @@ Migration dir: supabase/migrations
 v=$(unit_config "Migration dir" "")
 [ "$v" = "supabase/migrations" ] && ok "config: code-block wins over table" || fail "config: code-block wins over table" "got '$v', want 'supabase/migrations'"
 
+# The template's V2 table: a blank Value cell, or a cell holding a format hint
+# instead of a value, must fall through to the default — a fresh `pk init`
+# project used to resolve its Linear key to the literal "name, e.g. LINEAR_API_KEY".
+write_config '# Config
+
+| Key | Value | Format | Default | Used by |
+|-----|-------|--------|---------|---------|
+| **Linear API key env var** |  | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` |
+| **Linear transport** | `api` \| `mcp` | | `api` | skills |
+| **Migration dir** | e.g. `supabase/migrations/` | | (none) | reviews |
+'
+v=$(unit_config "Linear API key env var" "LINEAR_API_KEY")
+[ "$v" = "LINEAR_API_KEY" ] && ok "config: blank table cell → default" || fail "config: blank table cell → default" "got '$v'"
+v=$(unit_config "Linear transport" "api")
+[ "$v" = "api" ] && ok "config: 'a \| b' hint cell → default" || fail "config: 'a \| b' hint cell → default" "got '$v'"
+v=$(unit_config "Migration dir" "")
+[ -z "$v" ] && ok "config: 'e.g. …' hint cell → default" || fail "config: 'e.g. …' hint cell → default" "got '$v'"
+
 cleanup
 
 # ── Unit tests: native phase derivation (sourced mode, no network) ───────────

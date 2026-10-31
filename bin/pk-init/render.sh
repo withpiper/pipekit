@@ -83,9 +83,10 @@ if [ -n "$team_id" ]; then
   content=${content//00000000-0000-0000-0000-000000000000/$team_id}
 fi
 
-# Integration branch (V2 keys row)
+# Integration branch (V2 keys row) — the template ships the Value cell blank;
+# fill it so pk reads the detected branch instead of its default.
 content=$(echo "$content" | awk -v val="$integration_branch" '
-  /^\| \*\*Integration branch\*\*/ { sub(/`dev` \\\| `main`/, "`" val "`") } 1
+  /^\| \*\*Integration branch\*\* \|/ { sub(/^\| \*\*Integration branch\*\* \|[^|]*\|/, "| **Integration branch** | `" val "` |") } 1
 ')
 
 # Pre-Deploy Gate block — replace the example pnpm turbo lines if we have detections.

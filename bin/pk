@@ -64,21 +64,20 @@ pk_config_path() {
 
 # Read a value from method.config.md by label. Accepts two formats:
 #
-#   1) Plain Key: Value lines inside any fenced code block (current style,
-#      used by Piper, rs-vault, and the consumer-facing examples in
-#      method.config.template.md):
+#   1) Plain Key: Value lines inside any fenced code block (the examples at
+#      the end of method.config.template.md):
 #
 #        ```
 #        Integration branch: dev
 #        Ship environments: dev,beta,main
 #        ```
 #
-#   2) Legacy markdown-table rows (still rendered for documentation):
+#   2) Markdown-table rows — the template's own layout, column 2 is the value:
 #
 #        | **Integration branch** | `dev` | ... |
 #
-# Code-block form is tried first since that is what consumers actually set.
-# Falls back to the table form, then to the supplied default.
+# Code-block form is tried first, then the table form, then the supplied
+# default. A blank value in either form means "use the default".
 
 # pk_supabase_workdir <migration dir> — the directory holding the supabase/ folder that
 # owns the configured migration dir, for `supabase --workdir`. "supabase/migrations/" → ".",
@@ -132,11 +131,17 @@ pk_config() {
     return 0
   fi
 
-  # Form 2: legacy markdown-table row `| **Label** | value | ... |`.
+  # Form 2: markdown-table row `| **Label** | value | ... |`. A cell that is
+  # a format hint rather than a value (`a \| b` alternatives, "e.g. …") reads
+  # as unset: the template once shipped hints in the Value column and every
+  # fresh project resolved its Linear key to the literal "name, e.g. …".
   local line
   line=$(grep -E "^\| \*\*${label}\*\*" "$path" 2>/dev/null | head -1 || true)
   if [ -n "$line" ]; then
     value=$(echo "$line" | awk -F'|' '{print $3}' | sed 's/`//g; s/\*\*//g; s/^ *//; s/ *$//')
+    case "$value" in
+      *'\'*|'e.g.'*) value="" ;;
+    esac
     if [ -n "$value" ]; then
       echo "$value"
       return 0
