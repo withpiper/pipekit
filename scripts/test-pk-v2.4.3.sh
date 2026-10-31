@@ -118,7 +118,7 @@ if echo "$err_body" | grep -q "unknown arg"; then
 else
   ok "cmd_done --confirmed flag accepted by arg parser"
 fi
-if echo "$err_body" | grep -qE "no local feature branch found|not in a git repo"; then
+if echo "$err_body" | grep -qE "no branch found for|no local feature branch found|not in a git repo"; then
   ok "cmd_done with fake ID reaches the expected refusal path"
 else
   nope "cmd_done with fake ID should refuse on missing branch" "$err_body"
