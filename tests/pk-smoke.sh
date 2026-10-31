@@ -128,6 +128,23 @@ v=$(unit_config "Linear transport" "api")
 v=$(unit_config "Migration dir" "")
 [ -z "$v" ] && ok "config: 'e.g. …' hint cell → default" || fail "config: 'e.g. …' hint cell → default" "got '$v'"
 
+# The key variable's NAME comes from the config and reaches the process env
+# by indirect expansion — never eval. A non-name reads as unset and says so.
+write_config '```
+Linear API key env var: PKTEST_LINEAR_KEY
+```'
+v=$( cd "$FIXTURE" && source "$PK" && PKTEST_LINEAR_KEY=lin_test pk_linear_api_key 2>/dev/null )
+[ "$v" = "lin_test" ] && ok "api key: resolved from the named env var" || fail "api key: resolved from the named env var" "got '$v'"
+write_config '```
+Linear API key env var: x:-}; touch INJECTED; :${y
+```'
+v=$( cd "$FIXTURE" && source "$PK" && pk_linear_api_key 2>"$FIXTURE/.err" )
+if [ -z "$v" ] && [ ! -e "$FIXTURE/INJECTED" ] && grep -q "not a variable name" "$FIXTURE/.err"; then
+  ok "api key: non-name var reads as unset, nothing executed"
+else
+  fail "api key: non-name var reads as unset, nothing executed" "got '$v' injected=$([ -e "$FIXTURE/INJECTED" ] && echo yes || echo no) err=$(cat "$FIXTURE/.err")"
+fi
+
 cleanup
 
 # ── Unit tests: native phase derivation (sourced mode, no network) ───────────

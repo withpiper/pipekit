@@ -211,7 +211,15 @@ pk_linear_api_key() {
     done
   fi
   # Last resort: process env. Useful for ambient overrides + projects without .env.
-  val=$(eval echo "\${$var:-}")
+  # Indirect expansion, not eval: the name comes from method.config.md, and a
+  # row left at the template's hint text must read as unset, not execute.
+  case "$var" in
+    ''|[0-9]*|*[!A-Za-z0-9_]*)
+      echo "pk: 'Linear API key env var' is not a variable name: '$var'" >&2
+      echo ""
+      return 0 ;;
+  esac
+  val="${!var:-}"
   if [ -n "$val" ]; then
     echo "$val"
     return 0
