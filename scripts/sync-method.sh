@@ -838,9 +838,12 @@ esac
 RUNBOOK_SKELETON="$TEMP/templates/RUNBOOK.skeleton.md"
 PLAN_REL=$(config_value "Plan path")
 [ -n "$PLAN_REL" ] || PLAN_REL="engineering/WEEKLY_PLAN.md"
+# `none`: the project keeps no weekly plan — nothing scaffolded, and the
+# runbook's Now block says so instead of pointing at a file.
 case "$PLAN_REL" in
-  /*) PLAN_PATH="$PLAN_REL" ;;
-  *)  PLAN_PATH="$PROJECT_ROOT/$PLAN_REL" ;;
+  none) PLAN_PATH="" ;;
+  /*)   PLAN_PATH="$PLAN_REL" ;;
+  *)    PLAN_PATH="$PROJECT_ROOT/$PLAN_REL" ;;
 esac
 PLAN_SKELETON="$TEMP/templates/WEEKLY_PLAN.skeleton.md"
 LEGACY_RUNBOOK="$PROJECT_ROOT/pipekit/RUNBOOK.md"
@@ -918,7 +921,11 @@ else
         *)
           line=$(rb_subst "$line" '{{PROJECT_NAME}}' "$RB_NAME")
           line=$(rb_subst "$line" '{{PK_VERSION}}' "$RB_VERSION")
-          line=$(rb_subst "$line" '{{PLAN_PATH}}' "$PLAN_REL")
+          if [ "$PLAN_REL" = "none" ]; then
+            case "$line" in *'{{PLAN_PATH}}'*) line='_(no weekly plan on this project — `Plan path: none`)_' ;; esac
+          else
+            line=$(rb_subst "$line" '{{PLAN_PATH}}' "$PLAN_REL")
+          fi
           printf '%s\n' "$line" ;;
       esac
     done < "$RUNBOOK_SKELETON"
@@ -1015,7 +1022,9 @@ else
   echo "Weekly plan ($PLAN_REL):"
   PLAN_PRIMARY=$(config_value "Plan primary")
   [ -n "$PLAN_PRIMARY" ] || PLAN_PRIMARY=$(config_value "Runbook primary")
-  if [ -n "$PLAN_PRIMARY" ]; then
+  if [ "$PLAN_REL" = "none" ]; then
+    echo "  SKIP weekly plan (Plan path: none)"
+  elif [ -n "$PLAN_PRIMARY" ]; then
     echo "  SKIP $PLAN_REL (plan lives in $PLAN_PRIMARY)"
   elif [ ! -f "$PLAN_SKELETON" ]; then
     echo "  SKIP $PLAN_REL (source not found)"
@@ -1048,6 +1057,7 @@ if ! $DRY_RUN; then
   # Compare method files. The runbook and the weekly plan live at their own
   # paths, hashed into the same snapshot just before they were written.
   for f in method.md GUIDE.md STARTUP.md "$RUNBOOK_REL" "$PLAN_REL"; do
+    [ "$f" = "none" ] && continue
     case "$f" in
       "$RUNBOOK_REL") dst="$RUNBOOK_PATH" ;;
       "$PLAN_REL")    dst="$PLAN_PATH" ;;

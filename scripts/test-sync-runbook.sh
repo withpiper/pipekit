@@ -427,6 +427,24 @@ assert_contains "sibling/plan-primary: SKIP names the primary and the custom pat
 assert_not_contains "sibling/plan-primary: no WOULD CREATE for the plan" "WOULD CREATE docs/WEEK.md" "$SYNC_OUT"
 assert_no_file  "sibling/plan-primary: plan not created" "$P/docs/WEEK.md"
 
+# ─── 11. Plan path: none → no plan, runbook says so ─────────────────────────
+echo "11. Plan path: none → plan SKIPped, runbook Now block names no file"
+P=$(new_proj no-plan)
+cat > "$P/method.config.md" <<'EOF'
+```
+Plan path: none
+```
+EOF
+run_sync "$P"
+assert_eq       "none: exit 0" 0 "$SYNC_CODE"
+assert_contains "none: SKIP line" "SKIP weekly plan (Plan path: none)" "$SYNC_OUT"
+assert_no_file  "none: no plan file" "$P/engineering/WEEKLY_PLAN.md"
+assert_no_file  "none: no file literally called none" "$P/none"
+assert_file     "none: the runbook itself is still created" "$P/engineering/RUNBOOK.md"
+content=$(cat "$P/engineering/RUNBOOK.md")
+assert_contains     "none: Now body says there is no plan" "no weekly plan on this project" "$content"
+assert_not_contains "none: Now body does not point at 'none'" "→ none" "$content"
+
 echo ""
 if [ "$fail" -eq 0 ]; then
   printf '✓ %d assertions passed\n' "$pass"

@@ -2423,11 +2423,14 @@ pk_tpm_marker_nudge() {
 }
 
 pk_plan_nudge() {
-  local root rb_primary rb_stale plan_file rb_file
+  local root rb_primary rb_stale plan_rel plan_file rb_file
   root=$(pk_repo_root) || return 0
+  plan_rel=$(pk_config "Plan path" "$PK_PLAN_PATH_DEFAULT")
+  # `none`: this project keeps no weekly plan, so there is nothing to agree.
+  [ "$plan_rel" = "none" ] && return 0
   rb_primary=$(pk_config "Runbook primary" "")
   rb_stale=$(pk_config "Runbook stale days" "$PK_RUNBOOK_STALE_DAYS_DEFAULT")
-  plan_file=$(pk_tpm_file "$root" "$(pk_config "Plan path" "$PK_PLAN_PATH_DEFAULT")" "$(pk_config "Plan primary" "$rb_primary")")
+  plan_file=$(pk_tpm_file "$root" "$plan_rel" "$(pk_config "Plan primary" "$rb_primary")")
   if [ -f "$plan_file" ]; then
     pk_tpm_marker_nudge "$plan_file" "plan" "$(pk_config "Plan stale days" "$rb_stale")" "$PK_PLAN_STALE_DAYS_DEFAULT"
     return 0

@@ -3895,6 +3895,16 @@ v=$(unit_nudge)
 rm -f "$FIXTURE/engineering/WEEKLY_PLAN.md"
 v=$(unit_plan_nudge)
 [ -z "$v" ] && ok "plan nudge: plan removed → back to the runbook (fresh → nothing)" || fail "plan nudge: fallback after removal" "got '$v'"
+# `Plan path: none`: no weekly plan on this project, so no nudge — not even
+# the runbook's, which would otherwise send a solo project to /tpm forever.
+write_config '```
+Plan path: none
+```'
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "YYYY-MM-DD"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 30)"
+v=$(unit_plan_nudge); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "plan nudge: Plan path none → silent (plan and runbook ignored)" || fail "plan nudge: Plan path none" "exit $code, got '$v'"
+rm -f "$FIXTURE/engineering/WEEKLY_PLAN.md" "$FIXTURE/engineering/RUNBOOK.md"
 rm -f "$FIXTURE/engineering/RUNBOOK.md"
 v=$(unit_plan_nudge); code=$?
 [ $code -eq 0 ] && [ -z "$v" ] && ok "plan nudge: neither file → nothing, exit 0" || fail "plan nudge: neither file" "exit $code, got '$v'"
