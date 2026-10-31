@@ -613,6 +613,20 @@ for skill in $PORTABLE_SKILLS; do
     continue
   fi
 
+  # A project that switched the weekly plan off has no use for /tpm; the
+  # skill listing would cost every session something for a command it opted
+  # out of. A declared-local copy is the project's and stays.
+  if [ "$skill" = "tpm" ] && [ "$(config_value "Plan path")" = "none" ] && ! grep -qx tpm "$LOCAL_MANIFEST" 2>/dev/null; then
+    if [ -d "$dst" ]; then
+      if $DRY_RUN; then echo "  WOULD REMOVE skill: tpm (Plan path: none)"
+      else rm -rf "${PROJECT_ROOT:?}/.claude/skills/tpm"; echo "  REMOVED skill: tpm (Plan path: none)"; RETIRED_REMOVED="$RETIRED_REMOVED tpm"; fi
+      CHANGES=$((CHANGES + 1))
+    else
+      echo "  SKIP skill: tpm (Plan path: none)"
+    fi
+    continue
+  fi
+
   if is_scaffold_once "$skill"; then
     if [ -d "$dst" ]; then
       echo "  OK skill: $skill (scaffold-once, local — not touched)"

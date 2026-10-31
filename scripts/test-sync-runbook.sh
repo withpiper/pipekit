@@ -74,8 +74,9 @@ NO_RUNBOOK=0      # 1 → upstream has no RUNBOOK.md (the smoke-suite fixture sh
 # consumer without method.config.md gets it cp'd, and set -e dies if absent.
 make_method() {
   local m="$1"
-  mkdir -p "$m/skills/demo" "$m/templates" "$m/bin"
+  mkdir -p "$m/skills/demo" "$m/skills/tpm" "$m/templates" "$m/bin"
   echo 'upstream demo body' > "$m/skills/demo/SKILL.md"
+  echo 'upstream tpm body' > "$m/skills/tpm/SKILL.md"
   cp "$repo_root/templates/RUNBOOK.skeleton.md" "$m/templates/RUNBOOK.skeleton.md"
   cp "$repo_root/templates/WEEKLY_PLAN.skeleton.md" "$m/templates/WEEKLY_PLAN.skeleton.md"
   printf '#!/bin/bash\nPK_VERSION="9.9.9"\n' > "$m/bin/pk"
@@ -446,6 +447,17 @@ assert_file     "none: the runbook itself is still created" "$P/engineering/RUNB
 content=$(cat "$P/engineering/RUNBOOK.md")
 assert_contains     "none: Now body says there is no plan" "no weekly plan on this project" "$content"
 assert_not_contains "none: Now body does not point at 'none'" "→ none" "$content"
+assert_no_file  "none: the tpm skill is not installed" "$P/.claude/skills/tpm/SKILL.md"
+assert_contains "none: tpm skip reported" "SKIP skill: tpm (Plan path: none)" "$SYNC_OUT"
+assert_file     "none: other skills still sync" "$P/.claude/skills/demo/SKILL.md"
+# A copy from an earlier sync goes the same way.
+mkdir -p "$P/.claude/skills/tpm" && echo 'old synced tpm' > "$P/.claude/skills/tpm/SKILL.md"
+run_sync "$P"
+assert_no_file  "none: a previously synced tpm copy is removed" "$P/.claude/skills/tpm/SKILL.md"
+assert_contains "none: tpm removal reported" "REMOVED skill: tpm (Plan path: none)" "$SYNC_OUT"
+P2=$(new_proj with-plan)
+run_sync "$P2"
+assert_file     "plan on: tpm installs normally" "$P2/.claude/skills/tpm/SKILL.md"
 
 # ─── 12. --help writes nothing; unknown flag refuses; bin/pk-init ships ──────
 echo "12. --help / unknown flag write nothing; bin/pk-init/ is synced"
