@@ -26,7 +26,15 @@ DISCORD_POST.md
 .claude/workflows/
 .claude/worktrees/
 temp/
-archive/scratch/
+
+# Author-side material, kept on disk but not in the public tree: this repo's
+# own session logs (/pk-exit), superseded design docs, handoff notes and
+# one-off research, editor state. None of it is consumed by the pipeline or
+# synced to consumers.
+Logs/
+archive/
+resources/
+.obsidian/
 
 # personal notepad — replaces v1 NEXT.md; free-form, never committed
 notepad.md

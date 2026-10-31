@@ -27,7 +27,7 @@ A fourth guards the migration chain (gap #1 Tier 3, v4.18.0):
 
 It runs `scripts/check-migration-drift.sh` (synced by `sync-method.sh`) with the PR base as the baseline — catching the parallel-branch timestamp collision (Piper WIT-550) at the merge moment, the only point where both branches' trees are comparable. Copy to `.github/workflows/`, adjust the `paths:` filter to your `Migration dir`. No secrets needed — the `--remote` history check stays a local/deploy-time concern.
 
-Held back for v2.6.x: GitHub Copilot, GPT-4-based reviewers, and Codex GHAs — disqualified on the **IP-absorption pattern** (see `archive/v2.6.0-candidates.md` § "Why OpenAI/Microsoft are disqualified"), not on quality grounds.
+Held back for v2.6.x: GitHub Copilot, GPT-4-based reviewers, and Codex GHAs — disqualified on the **IP-absorption pattern** (their terms let the vendor train on submitted code), not on quality grounds.
 
 ## Installation
 
@@ -197,7 +197,7 @@ If the native integration is **on**, it already moves a merged issue toward a "c
 | Single-tier (merge to `main` → `Done`) | fine to leave on | optional safety net (idempotent, harmless) |
 | Multi-tier (env ladder) | turn **off** — it skips the ladder | **the** transition mechanism (one per hop, ladder-aware) |
 
-The original state-lag this workflow fixes (`resources/linear-state-lag.md`) was observed on a **multi-tier** project, where the native integration is the wrong tool and manual `pk done` was the only path — exactly the gap this closes.
+The original state-lag this workflow fixes was observed on a **multi-tier** project, where the native integration is the wrong tool and manual `pk done` was the only path — exactly the gap this closes.
 
 ### Validation
 

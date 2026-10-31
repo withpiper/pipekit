@@ -4,7 +4,7 @@
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
-The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — preserved under `archive/v1-skills/` for reference only.
+The v2 daily loop on one page. Read top-to-bottom. v1 commands (`/branch`, `/launch`, …) are retired.
 
 ---
 
@@ -119,7 +119,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │         Needs Spec   (with /light-spec hint)             │
   │     • surfaces "Other initiatives: N Approved outside" footer │
   │     • falls back to global "next Approved" when no       │
-  │       i{N}. initiatives present (PHASES.md fallback)     │
+  │       i{N}. initiatives exist on the board               │
   │     • optional: pk status   (full unscoped board view)   │
   └──────────────────────────────────────────────────────────┘
        │
