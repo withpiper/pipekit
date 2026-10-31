@@ -871,6 +871,33 @@ case "$RUN_OUT" in
   *"latest release is v99.0.0"*) ok "doctor: warns when behind latest release (rc tags ignored)" ;;
   *) fail "doctor: warns when behind latest release (rc tags ignored)" "$(echo "$RUN_OUT" | grep -i 'pipekit v\|latest' | head -2)" ;;
 esac
+
+# A pk from another clone, run against this project, is named with both
+# versions and fails doctor — it used to report the running pk's version as
+# the project's sync state, so a stale symlink looked up to date.
+mkdir -p "$FIXTURE/bin" && printf '#!/usr/bin/env bash\nPK_VERSION="1.2.3"\n' > "$FIXTURE/bin/pk"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$METHOD_FIXTURE" "$PK" doctor 2>&1)
+case "$RUN_OUT" in
+  *"not this project's bin/pk (v1.2.3)"*) ok "doctor: a foreign pk is named, with the project's own version" ;;
+  *) fail "doctor: a foreign pk is named, with the project's own version" "$(echo "$RUN_OUT" | grep -i 'bin/pk' | head -2)" ;;
+esac
+case "$RUN_OUT" in
+  *"synced Pipekit is v1.2.3"*) ok "doctor: staleness reads the project's bin/pk version" ;;
+  *) fail "doctor: staleness reads the project's bin/pk version" "$(echo "$RUN_OUT" | grep -i 'synced' | head -2)" ;;
+esac
+rm -rf "${FIXTURE:?}/bin"
+
+# Template placeholders fail doctor instead of passing as a configured team.
+write_config '```
+Project name: your-project
+Team name: YourTeam
+Team ID: 00000000-0000-0000-0000-000000000000
+```'
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$FIXTURE/no-such-repo.git" "$PK" doctor 2>&1)
+case "$RUN_OUT" in
+  *"template placeholder for: 'Project name' 'Team name' 'Team ID'"*) ok "doctor: template placeholders are an error, not a configured team" ;;
+  *) fail "doctor: template placeholders are an error, not a configured team" "$(echo "$RUN_OUT" | grep -i 'team\|placeholder' | head -3)" ;;
+esac
 rm -rf "$METHOD_FIXTURE"
 
 # ── CLI tests: ship guard rails ──────────────────────────────────────────────
