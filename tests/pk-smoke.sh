@@ -647,6 +647,20 @@ case "$RUN_OUT" in
   *) fail "pk --help runs none of its own text" "backticked text missing from usage" ;;
 esac
 
+# ── CLI tests: ship guard rails ──────────────────────────────────────────────
+
+echo "== ship guard rails =="
+
+# ship swallowed unknown flags, so a typo (`--revew`) shipped anyway. Every
+# other verb rejects with exit 2 before touching gh; ship now matches.
+: > "$GH_LOG"
+run_pk ship --revew
+if [ $RUN_CODE -eq 2 ] && [ ! -s "$GH_LOG" ]; then
+  case "$RUN_OUT" in *"unknown arg"*) ok "ship: unknown flag rejected (exit 2, no gh)" ;; *) fail "ship: unknown flag rejected (exit 2, no gh)" "output: $RUN_OUT" ;; esac
+else
+  fail "ship: unknown flag rejected (exit 2, no gh)" "exit $RUN_CODE gh=$(cat "$GH_LOG")"
+fi
+
 # ── CLI tests: promote derivation / guard rails ──────────────────────────────
 
 echo "== promote guard rails =="

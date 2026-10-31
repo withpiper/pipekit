@@ -3091,7 +3091,7 @@ cmd_ship() {
       --ready) ready=true; shift ;;
       --force-secgate) force_secgate=true; shift ;;
       --force) force=true; shift ;;
-      *) shift ;;
+      *) echo "ERROR: unknown arg for pk ship: $1" >&2; return 2 ;;
     esac
   done
 
