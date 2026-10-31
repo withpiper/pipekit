@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.4.1** — Last updated: 2026-10-31 18:38  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; the financial-review issue key is `Financial review issue`.)*
+**v5.4.2** — Last updated: 2026-10-31 18:54  *(**v5.4.2 — the rs-vault handoff:** `check-migration-drift.sh` reads a padded table row and fails on a configured-but-missing dir; `pk init --update` keeps the project's Pre-Deploy Gate; `pk issue search --json` prints `[]` on an empty result; no `/tpm` skill under `Plan path: none`; `pk doctor` treats a docs-only issue as information.)*
 
 ---
 

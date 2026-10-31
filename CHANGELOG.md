@@ -51,6 +51,10 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v5.4.2 — 2026-10-31
+
+> **The first consumer to apply v5.4.x wrote a handoff back; this release works it (#221).** Three bugs, each reproduced: `check-migration-drift.sh`'s fallback parser (the only one in CI, where `pk` is not on PATH) wanted exactly one space between the key and the pipe, so a column-padded `Migration dir` row was skipped and `migration-drift.yml` went green having checked nothing — it is tolerant now, and a configured-but-missing directory exits 1 instead of 0. `pk init --update` rewrote the project's Pre-Deploy Gate from the three scripts detection knows about, so a ten-command gate with seven security checks would have shrunk silently — in update mode the block is left alone and the missing detected commands are named on stderr. `pk issue search --json` printed "no issues match" on an empty result, so `jq` failed exactly when nothing matched — it prints `[]`. Two observations landed too: the sync no longer installs `/tpm` on a project that set `Plan path: none` (and removes an earlier copy unless `pipekit/.local-skills` declares it), and `pk doctor`'s integrity check reports a docs-only issue as information rather than a suspected false-ship. `sop/Linear_SOP.md` gains a section on the Spec Review Agent trigger: `pk spec-cycle` posts it through the same `commentCreate` mutation as `pk issue comment` and has since v2.7.0, so dropping a Linear MCP server loses nothing. Smoke 530 (nine new cases), sync-runbook 171.
+
 ## v5.4.1 — 2026-10-31
 
 > **The v5.4.0 release commit tripped the guard it shipped.** The new smoke check fails on a former consumer's name or issue prefix anywhere in the synced surface — and the fifteen doc stamps written for v5.4.0 quoted the renamed config key and the retired word verbatim, so the release merged with the smoke red (the merge chain piped the test's exit status into `grep` and `tail`, which hid it). The stamps now describe the change without the literals; nothing else moved. The tag that should be synced is this one.
