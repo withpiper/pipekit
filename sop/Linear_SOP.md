@@ -199,6 +199,10 @@ The roadmap's initiative order lives in the **Linear hierarchy** (Initiative `i{
 
 ---
 
+## The Spec Review Agent trigger on the `api` route
+
+`pk spec-cycle <ID>` posts the `@linear review this spec …` trigger with the same `commentCreate` mutation `pk issue comment` uses, then polls the issue's comments for the verdict. Linear resolves the `@linear` mention in an API-posted comment body exactly as it does for one typed in the UI — the cycle has run this way on consumer boards since v2.7.0, so a project that dropped its Linear MCP server loses nothing here. If a verdict never arrives, `pk spec-cycle` says so at its poll limit rather than hanging.
+
 ## Workflow States
 
 ### Pipeline
