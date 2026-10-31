@@ -4204,6 +4204,16 @@ RETIRED_HITS=$(cd "$REPO_ROOT" && grep -rnE 'vercel --prod|\.\./SiteLine|/sync-l
 if [ -z "$RETIRED_HITS" ]; then ok "synced docs name no consumer-retired command or path"
 else fail "synced docs name no consumer-retired command or path" "$(echo "$RETIRED_HITS" | cut -c1-140 | head -5)"; fi
 
+# Nor Pipekit's own retired names: the numbered skill dirs, the four skills
+# retired with them, PHASES.md as a live input, and doc paths that never
+# existed. Each of these was found cited as current after it was gone.
+echo "== synced docs: no pipekit-retired skill names or dead paths =="
+
+STALE_HITS=$(cd "$REPO_ROOT" && grep -rnE '/0[0-9]-[a-z]|/10-strategy-sync|/task-processor|/linear-todo-runner|/skill-index|/spec-validator|PHASES\.md fallback|legacy .PHASES\.md|Linear SOP\.md|CLAUDE_SKILLS_GUIDE|pipekit-post-archive|templates/agents/plan-reviewer' \
+  skills templates sop agents workflows bin/pk RUNBOOK.md method.md GUIDE.md CLAUDE.md README.md 2>/dev/null)
+if [ -z "$STALE_HITS" ]; then ok "synced docs name no retired skill or dead path"
+else fail "synced docs name no retired skill or dead path" "$(echo "$STALE_HITS" | cut -c1-140 | head -5)"; fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
