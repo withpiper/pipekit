@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.3.0"
+PK_VERSION="5.3.1"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1212,6 +1212,23 @@ pk_verify_sentinel_for_head() {
   return 1
 }
 
+# Path of the linked worktree that has <branch> checked out, or nothing. The
+# checkout we are in is excluded: its files are already the working-tree source.
+pk_branch_worktree() {
+  local branch="$1" here wt
+  [ -n "$branch" ] || return 0
+  here=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+  here=$(cd "$here" 2>/dev/null && pwd -P) || return 0
+  wt=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${branch}" '
+    /^worktree / { wt = substr($0, 10) }
+    $1 == "branch" && $2 == b { print wt; exit }
+  ')
+  [ -n "$wt" ] && [ -d "$wt" ] || return 0
+  wt=$(cd "$wt" 2>/dev/null && pwd -P) || return 0
+  [ "$wt" = "$here" ] && return 0
+  printf '%s\n' "$wt"
+}
+
 # v4.27.0 — the ship→merge window.
 #
 # `pk ship`'s gate above is point-in-time: it proves a sentinel matched HEAD at
@@ -1263,8 +1280,13 @@ pk_verify_sha_from() {
 # Preference order is per-artifact, not per-source: verify-complete.md from EITHER
 # source outranks evidence.txt from either, so the authoritative sentinel always
 # wins over a weaker fallback that merely happens to be closer to hand.
+#
+# v5.3.1: a third source, the branch's own worktree. A project that gitignores
+# Logs/Verify (Piper) never commits the evidence, so from the parent neither
+# source above can see it, and pk ready reported "none" while the worktree held
+# a HEAD-matching sentinel (Piper PIPER-1369).
 pk_verify_sentinel_latest() {
-  local issue="$1" ref="${2:-}" f newest="" sha base p rref=""
+  local issue="$1" ref="${2:-}" f newest="" sha base p rref="" wt=""
   [ -n "$issue" ] || return 1
 
   # Resolve the ref once; tolerate a branch that only exists on the remote.
@@ -1272,6 +1294,7 @@ pk_verify_sentinel_latest() {
     if git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null 2>&1; then rref="$ref"
     elif git rev-parse --verify --quiet "origin/${ref}^{commit}" >/dev/null 2>&1; then rref="origin/${ref}"
     fi
+    wt=$(pk_branch_worktree "$ref")
   fi
 
   for base in verify-complete.md evidence.txt reality-check.md; do
@@ -1284,6 +1307,19 @@ pk_verify_sentinel_latest() {
     if [ -n "$newest" ]; then
       sha=$(pk_verify_sha_from < "$newest")
       if [ -n "$sha" ]; then printf '%s\t%s\n' "$newest" "$sha"; return 0; fi
+    fi
+
+    # 1b. The branch's worktree, when it is not the checkout we are in.
+    if [ -n "$wt" ]; then
+      newest=""
+      for f in "$wt"/Logs/Verify/*/"${issue}"/"${base}"; do
+        [ -f "$f" ] || continue
+        newest="$f"
+      done
+      if [ -n "$newest" ]; then
+        sha=$(pk_verify_sha_from < "$newest")
+        if [ -n "$sha" ]; then printf '%s\t%s\n' "$newest" "$sha"; return 0; fi
+      fi
     fi
 
     # 2. The branch's tree.
@@ -3392,7 +3428,9 @@ cmd_ready() {
         # and pk ship already gates on a missing sentinel. But silence here is how a
         # forced ship becomes invisible downstream, so say it out loud.
         echo "  ℹ No /verify evidence found for ${id} — nothing to check drift against." >&2
-        echo "    (pk ship gates on this; seeing it here means ship was forced or skipped.)" >&2
+        echo "    Searched Logs/Verify/*/${id}/ in this checkout, in ${current}'s worktree, and in ${current}'s tree." >&2
+        echo "    pk ship refuses without a HEAD-matching sentinel, so evidence missing from all three" >&2
+        echo "    means the ship was forced, or the worktree holding it is gone." >&2
         ;;
     esac
   fi
