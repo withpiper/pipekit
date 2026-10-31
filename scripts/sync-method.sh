@@ -9,8 +9,10 @@
 #   ./scripts/sync-method.sh --auto-install   # After sync, auto-run pk install --force
 #                                             # (no prompt) so the global pk stays in
 #                                             # lockstep with the synced bin/pk.
+#   ./scripts/sync-method.sh --help       # Usage; writes nothing
 #
 # What it syncs:
+#   bin/pk, bin/pk-init/ <- The pk CLI and the config bootstrap `pk init` runs
 #   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills)
 #   pipekit/templates/  <- Spec and review templates
 #   pipekit/method.md   <- The deeper methodology overview
@@ -79,14 +81,32 @@ REF="main"
 # v2.5.0 migration surfaced this.
 PROJECT_ROOT="${PWD:-$(pwd)}"
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/sync-method.sh [<ref>] [--dry-run] [--auto-install] [--target=<dir>]
+
+Pull Pipekit (skills, SOPs, templates, rules, workflows, bin/pk) into the
+consuming project at the current directory.
+
+  <ref>            tag or branch to sync from (default: main)
+  --dry-run        show what would change; write nothing
+  --auto-install   after the sync, run pk install --force without prompting
+  --target=<dir>   the project to sync into (default: the current directory)
+  -h, --help       this text
+EOF
+}
+
 # Parse flags without mutating $@ — the self-update guard below re-execs with
 # "$@", and a shift here would silently drop --dry-run across the re-exec.
+# An unknown flag is an error, not a warning: `--help` used to warn and then
+# run a full sync into the current directory.
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
     --auto-install) AUTO_INSTALL=true ;;
     --target=*) PROJECT_ROOT="${arg#--target=}" ;;
-    -*) echo "WARN: unknown flag: $arg" >&2 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "ERROR: unknown flag: $arg" >&2; usage >&2; exit 2 ;;
     *) REF="$arg" ;;
   esac
 done
@@ -342,6 +362,10 @@ if [ -d "$TEMP/bin" ]; then
   mkdir -p "$PROJECT_ROOT/bin"
   sync_file "$TEMP/bin/pk" "$PROJECT_ROOT/bin/pk" "bin/pk"
   [ -f "$PROJECT_ROOT/bin/pk" ] && chmod +x "$PROJECT_ROOT/bin/pk"
+  # pk init resolves pk-init/main.sh beside the pk binary; without this a
+  # synced project could never bootstrap its own method.config.md.
+  sync_dir "$TEMP/bin/pk-init" "$PROJECT_ROOT/bin/pk-init" "bin/pk-init/"
+  [ -d "$PROJECT_ROOT/bin/pk-init" ] && chmod +x "$PROJECT_ROOT/bin/pk-init/"*.sh 2>/dev/null || true
 fi
 
 # --- Sync v2 templates ---

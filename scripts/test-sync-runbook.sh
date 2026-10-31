@@ -79,6 +79,8 @@ make_method() {
   cp "$repo_root/templates/RUNBOOK.skeleton.md" "$m/templates/RUNBOOK.skeleton.md"
   cp "$repo_root/templates/WEEKLY_PLAN.skeleton.md" "$m/templates/WEEKLY_PLAN.skeleton.md"
   printf '#!/bin/bash\nPK_VERSION="9.9.9"\n' > "$m/bin/pk"
+  mkdir -p "$m/bin/pk-init"
+  printf '#!/bin/bash\necho pk-init\n' > "$m/bin/pk-init/main.sh"
   printf '# Method Configuration\n\n| **Project name** | `your-project` |\n' > "$m/method.config.template.md"
   if [ "$NO_RUNBOOK" -eq 0 ]; then
     printf '# Pipekit Runbook\n\n**v9.9.9** — stamp line\n\n%s\n' "$BODY" > "$m/RUNBOOK.md"
@@ -444,6 +446,22 @@ assert_file     "none: the runbook itself is still created" "$P/engineering/RUNB
 content=$(cat "$P/engineering/RUNBOOK.md")
 assert_contains     "none: Now body says there is no plan" "no weekly plan on this project" "$content"
 assert_not_contains "none: Now body does not point at 'none'" "→ none" "$content"
+
+# ─── 12. --help writes nothing; unknown flag refuses; bin/pk-init ships ──────
+echo "12. --help / unknown flag write nothing; bin/pk-init/ is synced"
+P=$(new_proj flags)
+run_sync "$P" --help
+assert_eq       "help: exit 0" 0 "$SYNC_CODE"
+assert_contains "help: usage printed" "Usage: scripts/sync-method.sh" "$SYNC_OUT"
+assert_no_file  "help: nothing synced" "$P/bin/pk"
+run_sync "$P" --bogus
+assert_eq       "unknown flag: exit 2" 2 "$SYNC_CODE"
+assert_contains "unknown flag: named" "unknown flag: --bogus" "$SYNC_ERR"
+assert_no_file  "unknown flag: nothing synced" "$P/bin/pk"
+run_sync "$P"
+assert_eq       "pk-init: sync exit 0" 0 "$SYNC_CODE"
+assert_file     "pk-init: main.sh synced beside bin/pk" "$P/bin/pk-init/main.sh"
+[ -x "$P/bin/pk-init/main.sh" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "  FAIL pk-init: main.sh executable"; }
 
 echo ""
 if [ "$fail" -eq 0 ]; then
