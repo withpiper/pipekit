@@ -166,6 +166,24 @@ pk_integration_branch() {
   git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main"
 }
 
+# The Ship environments chain, derived when the key is blank: a project that
+# integrates on a branch other than main has that branch and main to promote
+# through; one that integrates on main is single-tier. One reader for every
+# verb — pk done ("" → Done) and pk promote ("dev,main") used to disagree.
+pk_ship_envs() {
+  local chain integ
+  chain=$(pk_config "Ship environments" "")
+  if [ -n "$chain" ]; then
+    echo "$chain"
+    return 0
+  fi
+  integ=$(pk_integration_branch)
+  case "$integ" in
+    ''|main) echo "" ;;
+    *)       echo "$integ,main" ;;
+  esac
+}
+
 pk_linear_api_key_var() {
   pk_config "Linear API key env var" "LINEAR_API_KEY"
 }
@@ -822,7 +840,7 @@ pk_state_rank() {
       local env_name env_lower chain idx=0 found=-1 e
       env_name="${state#In }"
       env_lower=$(echo "$env_name" | tr '[:upper:]' '[:lower:]')
-      chain=$(pk_config "Ship environments" "")
+      chain=$(pk_ship_envs)
       if [ -z "$chain" ]; then
         echo 0
         return
@@ -859,7 +877,7 @@ pk_capitalize() {
 # 1-tier:  "Done"  (first env == final env; nothing more to promote to)
 pk_first_env_state_name() {
   local chain envs_arr=()
-  chain=$(pk_config "Ship environments" "")
+  chain=$(pk_ship_envs)
   if [ -z "$chain" ]; then
     echo "Done"
     return
@@ -881,7 +899,7 @@ pk_first_env_state_name() {
 pk_env_state_name() {
   local env="$1"
   local chain envs_arr=()
-  chain=$(pk_config "Ship environments" "")
+  chain=$(pk_ship_envs)
   if [ -z "$chain" ]; then
     echo "Done"
     return
@@ -2809,7 +2827,7 @@ cmd_status() {
   # (v2.5.0). Final env's state is "Done" — not shown in `pk status` since
   # it's terminal, not in-flight.
   local chain envs_arr=()
-  chain=$(pk_config "Ship environments" "")
+  chain=$(pk_ship_envs)
   if [ -n "$chain" ]; then
     IFS=',' read -ra envs_arr <<< "$chain"
     local last_idx=$((${#envs_arr[@]} - 1))
@@ -4067,7 +4085,7 @@ cmd_promote() {
 
   # Resolve Ship environments chain. Trim whitespace per element.
   local ship_envs envs_arr=()
-  ship_envs=$(pk_config "Ship environments" "dev,main")
+  ship_envs=$(pk_ship_envs)
   IFS=',' read -ra envs_arr <<< "$ship_envs"
   local i
   for i in "${!envs_arr[@]}"; do
@@ -5869,7 +5887,7 @@ cmd_config() {
     "Promote to main" \
     "Require QA review" \
     "Default deep flag" \
-    "Ship environments" \
+    "Ship environments|$(pk_ship_envs)" \
     "Linear API key env var" \
     "Linear transport|api" \
     "Migration dir" \

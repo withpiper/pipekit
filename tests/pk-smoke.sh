@@ -145,6 +145,25 @@ else
   fail "api key: non-name var reads as unset, nothing executed" "got '$v' injected=$([ -e "$FIXTURE/INJECTED" ] && echo yes || echo no) err=$(cat "$FIXTURE/.err")"
 fi
 
+# Ship environments left blank derives from the integration branch, and pk done
+# and pk promote read the same derivation (they used to default differently).
+unit_first_env() { ( cd "$FIXTURE" && source "$PK" && pk_first_env_state_name ); }
+unit_ship_envs() { ( cd "$FIXTURE" && source "$PK" && pk_ship_envs ); }
+write_config '```
+Integration branch: dev
+```'
+v=$(unit_ship_envs); [ "$v" = "dev,main" ] && ok "ship envs: blank + dev integration → dev,main" || fail "ship envs: blank + dev integration → dev,main" "got '$v'"
+v=$(unit_first_env); [ "$v" = "In Dev" ] && ok "ship envs: pk done lands on In Dev for a dev-integrated project" || fail "ship envs: pk done lands on In Dev" "got '$v'"
+write_config '```
+Integration branch: main
+```'
+v=$(unit_first_env); [ "$v" = "Done" ] && ok "ship envs: blank + main integration → single-tier (Done)" || fail "ship envs: blank + main → Done" "got '$v'"
+write_config '```
+Integration branch: dev
+Ship environments: main
+```'
+v=$(unit_first_env); [ "$v" = "Done" ] && ok "ship envs: an explicit chain wins over the derivation" || fail "ship envs: explicit wins" "got '$v'"
+
 cleanup
 
 # ── Unit tests: native phase derivation (sourced mode, no network) ───────────
