@@ -1286,6 +1286,88 @@ CF_NONE=$(cd "$FIXTURE" && source "$PK" && pk_offformat_subjects "")
 
 cleanup
 
+# ── Ship reminders (v5.3.0) ──────────────────────────────────────────────────
+# pk ship prints a method.config.md § Ship Reminders message for each rule whose
+# ERE matches a file the branch changes over its base. Informational: it never
+# blocks and never changes pk ship's exit code. The case that motivated it: a
+# backend change the PR preview does not run (Piper PIPER-1366).
+
+echo "== ship reminders =="
+
+make_fixture
+write_config '```
+Integration branch: main
+```
+
+## Ship Reminders
+
+```text
+# backend paths the preview does not run
+^app/api/ => PHP changed: deploy this branch to dev before UAT
+^db/migrations/ => Migration changed: apply it to the dev DB before UAT
+docs/( => broken pattern
+```'
+git -C "$FIXTURE" update-ref refs/remotes/origin/main "$(git -C "$FIXTURE" rev-parse main)"
+git -C "$FIXTURE" checkout -q -b feat/ABC-400-reminders
+mkdir -p "$FIXTURE/app/api" "$FIXTURE/web"
+echo x > "$FIXTURE/app/api/save.php"; echo x > "$FIXTURE/web/page.ts"
+git -C "$FIXTURE" add app web
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q -m "feat(api): save"
+
+SR_OUT=$(cd "$FIXTURE" && source "$PK" && pk_ship_reminders origin/main 2>"$FIXTURE/.sr-err")
+SR_ERR=$(cat "$FIXTURE/.sr-err")
+case "$SR_OUT" in
+  *"⚑ PHP changed: deploy this branch to dev before UAT"*) ok "ship reminders: a matching rule prints its message" ;;
+  *) fail "ship reminders: a matching rule prints its message" "got: $SR_OUT" ;;
+esac
+case "$SR_OUT" in
+  *"Migration changed"*) fail "ship reminders: a rule with no matching file is silent" "got: $SR_OUT" ;;
+  *) ok "ship reminders: a rule with no matching file is silent" ;;
+esac
+case "$SR_OUT" in
+  *"backend paths"*) fail "ship reminders: # lines are comments" "got: $SR_OUT" ;;
+  *) ok "ship reminders: # lines are comments" ;;
+esac
+case "$SR_ERR" in
+  *"not a valid ERE, skipped: docs/("*) ok "ship reminders: an invalid pattern warns and the rest still run" ;;
+  *) fail "ship reminders: an invalid pattern warns and the rest still run" "stderr: $SR_ERR" ;;
+esac
+SR_NONE=$(cd "$FIXTURE" && source "$PK" && pk_ship_reminders "")
+[ -z "$SR_NONE" ] && ok "ship reminders: no base ref is a skip" || fail "ship reminders: no base ref is a skip" "got: $SR_NONE"
+
+# E2E: the reminder reaches pk ship's output; the exit code is what it would be without it.
+SR_HEAD=$(git -C "$FIXTURE" rev-parse HEAD)
+mkdir -p "$FIXTURE/Logs/Verify/20260101/ABC-400"
+printf 'sha: %s\n' "$SR_HEAD" > "$FIXTURE/Logs/Verify/20260101/ABC-400/verify-complete.md"
+git init -q --bare "$FIXTURE/.remote.git"
+git -C "$FIXTURE" remote add origin "$FIXTURE/.remote.git"
+# The PR already exists, so pk ship needs no Linear title lookup; CI has no key.
+cat > "$FIXTURE/shim/gh" <<EOF
+#!/usr/bin/env bash
+echo "gh \$*" >> "$GH_LOG"
+case "\$1 \$2" in
+  "pr view") echo '{"state":"OPEN","url":"https://example.test/pr/1","number":1,"baseRefName":"main"}' ;;
+esac
+exit 0
+EOF
+run_pk ship
+SR_RC_WITH=$RUN_CODE
+case "$RUN_OUT" in
+  *"⚑ PHP changed: deploy this branch to dev before UAT"*) ok "ship reminders: pk ship prints the reminder" ;;
+  *) fail "ship reminders: pk ship prints the reminder" "output: $(echo "$RUN_OUT" | tail -6)" ;;
+esac
+write_config '```
+Integration branch: main
+```'
+run_pk ship
+case "$RUN_OUT" in
+  *"⚑ PHP changed"*) fail "ship reminders: no section, no reminder" "output: $(echo "$RUN_OUT" | tail -6)" ;;
+  *) ok "ship reminders: no section, no reminder" ;;
+esac
+[ "$SR_RC_WITH" = "$RUN_CODE" ] && ok "ship reminders: pk ship exit code unchanged ($RUN_CODE)" || fail "ship reminders: pk ship exit code unchanged" "with=$SR_RC_WITH without=$RUN_CODE"
+
+cleanup
+
 # ── Board reads fail loudly without a Linear key (v4.35.0) ───────────────────
 # cmd_status and cmd_next swallow per-state read errors so one flaky call can't
 # blank the board — which meant an UNSET key rendered every column "(none)",

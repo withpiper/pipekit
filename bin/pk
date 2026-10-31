@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.2.5"
+PK_VERSION="5.3.0"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1520,6 +1520,55 @@ pk_offformat_subjects() {
   [ -n "$base" ] || return 0
   git log --no-merges --format='%h %s' "${base}..HEAD" 2>/dev/null \
     | grep -vE "^[0-9a-f]+ ($PK_COMMIT_TYPES)\([^)]+\): ." || true
+}
+
+# Rules from method.config.md § Ship Reminders: the first fenced block, one
+# `<ERE> => <message>` per line, `#` lines and blanks ignored.
+pk_ship_reminder_rules() {
+  local path
+  path=$(pk_config_path) || return 0
+  [ -f "$path" ] || return 0
+  awk '
+    /^## Ship Reminders[[:space:]]*$/ { in_section=1; next }
+    in_section && /^## / { exit }
+    in_section && /^```/ {
+      if (in_fence) exit
+      in_fence=1
+      next
+    }
+    in_section && in_fence && /=>/ && !/^[[:space:]]*#/ { print }
+  ' "$path" 2>/dev/null || true
+}
+
+# One "⚑ <message>" line per Ship Reminders rule whose ERE matches a file the
+# branch changes over <base>. Informational only: prints nothing when there is
+# no base, no section or no match, and never returns non-zero.
+pk_ship_reminders() {
+  local base="$1"
+  [ -n "$base" ] || return 0
+  local rules changed
+  rules=$(pk_ship_reminder_rules)
+  [ -n "$rules" ] || return 0
+  changed=$(git -c core.quotePath=false diff --name-only "${base}...HEAD" 2>/dev/null || true)
+  [ -n "$changed" ] || return 0
+  local line pattern message rc
+  while IFS= read -r line; do
+    pattern="${line%%=>*}"
+    message="${line#*=>}"
+    pattern=$(printf '%s' "$pattern" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    message=$(printf '%s' "$message" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    [ -n "$pattern" ] && [ -n "$message" ] || continue
+    rc=0
+    # A here-string, not a pipe: under pipefail an early `grep -q` exit can
+    # SIGPIPE the writer, and 141 would read as an invalid pattern.
+    grep -qE -- "$pattern" <<< "$changed" 2>/dev/null || rc=$?
+    case "$rc" in
+      0) echo "⚑ $message" ;;
+      1) ;;
+      *) echo "pk: Ship Reminders pattern is not a valid ERE, skipped: $pattern" >&2 ;;
+    esac
+  done <<< "$rules"
+  return 0
 }
 
 # A missing key must read as an error, not as an empty board. cmd_status and
@@ -3160,6 +3209,16 @@ cmd_ship() {
       echo "⚑ Merge with: 'Create a merge commit' (one anchor commit per promotion)."
       ;;
   esac
+
+  # Path-matched reminders from method.config.md § Ship Reminders (v5.3.0),
+  # e.g. "this backend change is not on the preview; deploy it to dev before
+  # UAT". Printed on every ship, PR new or existing; never blocks.
+  local _reminders
+  _reminders=$(pk_ship_reminders "$(pk_ship_base_ref "${env:-}")")
+  if [ -n "$_reminders" ]; then
+    echo ""
+    printf '%s\n' "$_reminders"
+  fi
 
   # Linear: → In Review / UAT (state name varies; try common ones)
   local target_state

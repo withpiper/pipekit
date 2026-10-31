@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v5.1.0** — Last updated: 2026-10-11  *(**v5.1.0 — `Plan path` (`engineering/WEEKLY_PLAN.md`), `Plan primary`, `Plan stale days` for the weekly plan `/tpm` now writes; `Weekly capacity days` and `Tier effort days` are session-days; `Runbook primary` / `Runbook stale days` stay as fallbacks.** Carries v5.0.1 — `Portfolio repos`: a sibling on the same `Team ID` shares the board and contributes only its in-flight state. Carries v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
+**v5.3.0** — Last updated: 2026-10-31  *(**v5.3.0 — `## Ship Reminders`: path-matched `<ERE> => <message>` rules `pk ship` prints after opening the PR; informational only.** Carries v5.1.0 — `Plan path` (`engineering/WEEKLY_PLAN.md`), `Plan primary`, `Plan stale days` for the weekly plan `/tpm` now writes; `Weekly capacity days` and `Tier effort days` are session-days; `Runbook primary` / `Runbook stale days` stay as fallbacks.** Carries v5.0.1 — `Portfolio repos`: a sibling on the same `Team ID` shares the board and contributes only its in-flight state. Carries v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 
@@ -327,6 +327,15 @@ Commands that must pass before any deployment. Adjust per project stack.
 pnpm turbo run check-types
 pnpm turbo run lint
 pnpm turbo run test
+```
+
+## Ship Reminders
+
+Optional (v5.3.0). After `pk ship` opens or finds the PR, it prints `⚑ <message>` for every rule below whose pattern (an ERE) matches a file the branch changes over its base. Informational only: it never blocks, never deploys, and never changes `pk ship`'s exit code. Use it for a step the PR preview cannot do for you, such as a backend change you deploy to a shared dev environment by hand before UAT. One rule per line, `<ERE> => <message>`; `#` lines are comments; the pattern cannot contain `=>`. No section, or an empty block, prints nothing.
+
+```text
+# ^api/ => API changed: the preview runs the shared dev API. Deploy this branch to dev before UAT.
+# ^supabase/migrations/ => Migration changed: apply it to the dev database before UAT.
 ```
 
 ## V2 keys
