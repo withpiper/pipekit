@@ -4,7 +4,7 @@
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
-The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — preserved under `archive/v1-skills/` for reference only.
+The v2 daily loop on one page. Read top-to-bottom. v1 commands (`/branch`, `/launch`, …) are retired.
 
 ---
 

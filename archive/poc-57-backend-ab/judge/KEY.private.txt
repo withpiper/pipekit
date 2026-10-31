@@ -1,2 +1,0 @@
-A=native-1
-B=vbw-1

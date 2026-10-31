@@ -1,5 +1,0 @@
-{
-  "name": "end-session",
-  "description": "End a work session by capturing reflections, committing work, and creating a session log",
-  "invocable": true
-}
