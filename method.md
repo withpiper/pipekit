@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.4.1** — Last updated: 2026-10-31 18:38  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; the financial-review issue key is `Financial review issue`.)*
+**v5.4.2** — Last updated: 2026-10-31 18:54  *(**v5.4.2 — the rs-vault handoff:** `check-migration-drift.sh` reads a padded table row and fails on a configured-but-missing dir; `pk init --update` keeps the project's Pre-Deploy Gate; `pk issue search --json` prints `[]` on an empty result; no `/tpm` skill under `Plan path: none`; `pk doctor` treats a docs-only issue as information.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

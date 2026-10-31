@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone; the op:// reference file comes from `Secrets reference file`)*
+**v5.4.2** — Last updated: 2026-10-31  *(v5.4.2 — § The Spec Review Agent trigger on the `api` route: `pk spec-cycle` posts it with the same `commentCreate` as `pk issue comment`; nothing is lost by dropping a Linear MCP server)*
 
 Project-specific values (workspace, team ID, state IDs) live in your project's `method.config.md`.
 
