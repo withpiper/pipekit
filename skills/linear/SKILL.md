@@ -79,7 +79,7 @@ The workflow has 5 phases. At each phase transition, update the Linear issue sta
 2. When the user says to merge:
    - **Merge the PR** using `gh pr merge` (default merge commit, not squash).
    - For **normal flow** (merged to `dev`): the change deploys automatically to the dev environment via Vercel.
-   - For **production** (merged to `main`): verify `vercel --prod` deployment succeeds.
+   - For **production** (merged to `main`): verify the production deployment of the merge commit succeeded and the production URL serves it. Deploy from git, never from a CLI upload of a working tree.
    - For **hotfixes** (merged to `main`): immediately cherry-pick back to both `dev` and `beta`.
    - **Post a comment** confirming deployment target.
 3. **Transition state per environment.** Under v2.5.0, state maps 1:1 to environment via env-named statuses:

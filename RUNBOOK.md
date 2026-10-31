@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.2.4** — Last updated: 2026-10-31 12:30  *(**v5.2.4 — `pk verify` and `pk promote` fail when any gate command fails**, not only the last: the gate runs under errexit, names the failing command, and reads stdin from /dev/null.)*
+**v5.2.5** — Last updated: 2026-10-31 14:00  *(**v5.2.5 — synced docs no longer name one consumer's retired commands or paths** (a deploy CLI, a sibling-repo path, a deleted skill), so a sync stops reverting that consumer's own fixes; a smoke guard keeps them out.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands are retired — p
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.2.4                (or latest tag)
+1. ./scripts/sync-method.sh v5.2.5                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
@@ -446,7 +446,7 @@ Then it re-runs `pk next` and shows that the order on the board is the order you
 Written for the person at the keyboard, not as a Linear digest. Top to bottom:
 
 - **Start now** — one row per session: the `pk branch <ID>` to type, what it is, the merge day.
-- **Session 1 / 2 / 3 …** — a checklist per session with repo, effort and merge day; the "Ship it" rungs spelled out (`/sync-legacy`, `pk promote <env>`, …).
+- **Session 1 / 2 / 3 …** — a checklist per session with repo, effort and merge day; the "Ship it" rungs spelled out (`pk ship`, `pk promote <env>`, …).
 - **Free slot** · **If the week runs long** — what to pick up with spare time; what to drop first.
 - **Lanes — the picture** — tiers A / B / C and the flow inside each: `▸` hard dependency (in Linear as `blocked by`), `⇢` soft order, `→` then.
 - **Don't merge together** · **Merge calendar** — migrations one per day, and which branches must not land on the same day.
