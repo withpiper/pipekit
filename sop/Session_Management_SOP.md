@@ -2,7 +2,7 @@
 
 > How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.8 and adapted for Pipekit's pipeline.
 
-**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; the retired parallel runner is gone from the subagent and effort tables)*
+**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone; the retired parallel runner is gone from the subagent and effort tables)*
 
 ---
 

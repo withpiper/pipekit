@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — the V2 keys table gains a Format column and ships its Value cells blank (`pk` read the old hint text as the value); new rows `Merge method`, `Secrets reference file`; `Plan path` accepts `none`; `Financial review WIT` → `Financial review issue`; the worked example is "three-tier")*
+**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — the V2 keys table gains a Format column and ships its Value cells blank (`pk` read the old hint text as the value); new rows `Merge method`, `Secrets reference file`; `Plan path` accepts `none`; the financial-review issue key is `Financial review issue`; the worked example is "three-tier")*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 

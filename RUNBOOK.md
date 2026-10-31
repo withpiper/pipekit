@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.4.0** — Last updated: 2026-10-31 18:34  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; `Financial review WIT` → `Financial review issue`.)*
+**v5.4.1** — Last updated: 2026-10-31 18:38  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; the financial-review issue key is `Financial review issue`.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands (`/branch`, `/lau
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.4.0                (or latest tag)
+1. ./scripts/sync-method.sh v5.4.1                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)

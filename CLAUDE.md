@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v5.4.0** — Last updated: 2026-10-31  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; `Financial review WIT` → `Financial review issue`.)*
+**v5.4.1** — Last updated: 2026-10-31  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; the financial-review issue key is `Financial review issue`.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

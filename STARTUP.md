@@ -1,6 +1,6 @@
 # Project Startup Guide
 
-**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — no pointer at a private repo; issues, not WITs)*
+**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — no pointer at a private repo; issues called issues)*
 
 > **Reference document.** For the interactive flow, use `/startup` — it orchestrates the full bootstrap process, chaining `/concept`, `/define`, `/strategy-create`, `/roadmap-create`, `/phase-plan`, and infrastructure setup. This document provides background context and detailed checklists that the skills reference.
 
