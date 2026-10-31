@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.2.4** — Last updated: 2026-10-31 12:30  *(**v5.2.4 — `pk verify` and `pk promote` fail when any gate command fails**, not only the last: the gate runs under errexit, names the failing command, and reads stdin from /dev/null.)*
+**v5.2.5** — Last updated: 2026-10-31 14:00  *(**v5.2.5 — synced docs no longer name one consumer's retired commands or paths** (a deploy CLI, a sibling-repo path, a deleted skill), so a sync stops reverting that consumer's own fixes; a smoke guard keeps them out.)*
 
 ---
 

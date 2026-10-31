@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md). This SOP is the rubric `/tpm` argues from; the session mechanics live in the skill.
 
-**v5.1.0** — Last updated: 2026-10-11  *(**v5.1.0 — the agreement is written to a weekly plan (`engineering/WEEKLY_PLAN.md`), a dev-facing task list by session, not to the runbook; capacity is counted in session-days; `on-merge` notes defer a write to the merge that triggers it; titles beside IDs, one question per turn, the scout contract. Lessons of the first real run, 2026-10-11.** Carries v5.0.1 — the judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
+**v5.2.5** — Last updated: 2026-10-31 14:00  *(**v5.2.5 — the weekly-plan example names `pk ship` and a `../<primary-repo>` pointer instead of one consumer's retired skill and sibling path.** Carries **v5.1.0 — the agreement is written to a weekly plan (`engineering/WEEKLY_PLAN.md`), a dev-facing task list by session, not to the runbook; capacity is counted in session-days; `on-merge` notes defer a write to the merge that triggers it; titles beside IDs, one question per turn, the scout contract. Lessons of the first real run, 2026-10-11.** Carries v5.0.1 — the judgment rules behind `/tpm`: diagnose scope/capacity/dependency, stakes per item, Hard/Value/Soft dependencies, unblock-first ranking, a 60% capacity bound on MUST, the independence bar for parallel work, WAIT with a verified fallback and a re-entry trigger. Replaces `Lane_Map_SOP.md`: the picker is now the conversation.)*
 
 ---
 
@@ -144,7 +144,7 @@ Capacity 15 session-days. Planned: MUST 3.9 + NEXT 2.2 = 6.1.   (Assumptions: �
 - [ ] **[PIPER-1132](…) Ledger versions: never-publish guard …** · siteline · Standard 0.5 · migration
       Before merging: … Then merge **Mon 10-12**.
 - [ ] **[PIPER-1130](…) Reconcile view on Compare …** · siteline · Heavy 1.0 · after 1132 · merge by **Wed 10-14**
-- [ ] **Ship it.** `/sync-legacy` → `pk promote beta` → `pk promote main` (Thu). Friday is slack.
+- [ ] **Ship it.** `pk ship` → `pk promote beta` → `pk promote main` (Thu). Friday is slack.
 
 ## Session 2 — …            ## Session 3 — …            ## Free slot — …
 
@@ -187,7 +187,7 @@ Eval loop: 1115 + 963 + 1114 — under the three-issue floor until 1115's spec y
 <!-- tpm:end -->
 ```
 
-The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `plan agreed Nd ago → /tpm` past `§ Plan stale days` (default 7), and `plan: no agreement yet → /tpm` while the synced skeleton's marker carries no date. The runbook's `## Now` block holds one pointer line to the plan — `This week → engineering/WEEKLY_PLAN.md · agreed 2026-10-11` — and in the other repos of the portfolio `Portfolio weekly plan → ../SiteLine/engineering/WEEKLY_PLAN.md · agreed 2026-10-11`: one document, reachable from either repo, never two versions. Two repos on **one** Linear board (same `Team ID`) are the common solo shape — one board, two codebases: the board is read and written once, from the primary, and the sibling's worktrees, PRs and sessions are the only thing the session reads from it.
+The `agreed YYYY-MM-DD` on the begin line is a contract: `pk next` reads it and prints `plan agreed Nd ago → /tpm` past `§ Plan stale days` (default 7), and `plan: no agreement yet → /tpm` while the synced skeleton's marker carries no date. The runbook's `## Now` block holds one pointer line to the plan — `This week → engineering/WEEKLY_PLAN.md · agreed 2026-10-11` — and in the other repos of the portfolio `Portfolio weekly plan → ../<primary-repo>/engineering/WEEKLY_PLAN.md · agreed 2026-10-11`: one document, reachable from either repo, never two versions. Two repos on **one** Linear board (same `Team ID`) are the common solo shape — one board, two codebases: the board is read and written once, from the primary, and the sibling's worktrees, PRs and sessions are the only thing the session reads from it.
 
 Before v5.1.0 the agreement was the `## Now` block of the runbook itself. The runbook is how the project runs and is read when something is unfamiliar; the plan is read every morning. A consumer whose runbook still holds a full block gets it moved on the next `/tpm`.
 

@@ -3908,6 +3908,19 @@ if [ $RUN_CODE -ne 0 ] && [ $o -eq 0 ] && [ $p -eq 0 ]; then ok "promote: failin
 else fail "promote: failing gate line stops before the PR opens" "rc=$RUN_CODE opened=$o gh_pr_create=$p out: $(echo "$RUN_OUT" | tail -3)"; fi
 rm -rf "$GE_REMOTE"
 
+# ── Synced docs carry no consumer's retired names (v5.2.5) ───────────────────
+# Every sync copies these files over the consumer's, so a consumer-specific name
+# here reverts that consumer's own fix on each run (Piper PIPER-1363: `vercel
+# --prod`, retired by PIPER-1309; `../SiteLine`, gone since Piper's repo merge;
+# `/sync-legacy`, a skill Piper deleted). Use a generic placeholder instead.
+
+echo "== synced docs: no consumer-retired names (v5.2.5) =="
+
+RETIRED_HITS=$(cd "$REPO_ROOT" && grep -rnE 'vercel --prod|\.\./SiteLine|/sync-legacy' \
+  skills templates sop agents workflows RUNBOOK.md method.md GUIDE.md 2>/dev/null)
+if [ -z "$RETIRED_HITS" ]; then ok "synced docs name no consumer-retired command or path"
+else fail "synced docs name no consumer-retired command or path" "$(echo "$RETIRED_HITS" | cut -c1-140 | head -5)"; fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo
