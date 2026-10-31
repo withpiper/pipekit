@@ -221,7 +221,7 @@ Draft the split as: issue A (migration + the client changes it forces) → block
 
 ### Phase 6 — Spec Review Cycle (automated)
 
-Enter the cycle automatically once Phase 5 publishes. Do **not** prompt the user before pass 1 — the cycle is the whole point of `/01-light-spec`. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
+Enter the cycle automatically once Phase 5 publishes. Do **not** prompt the user before pass 1 — the cycle is the whole point of `/light-spec`. The cycle calls `pk spec-cycle`, which owns the agent trigger, the polling, and the state transition on Pass — so this skill never posts the `@linear` comment directly.
 
 The user can opt out only by interrupting (Ctrl-C). Confirmation prompts appear on passes 2 and 3 inside the loop below — that is the designed bail-out point.
 
@@ -239,7 +239,7 @@ loop:
                    "✓ Spec approved on pass {pass}. ➜ next: pk branch PROJ-XXX"
                  EXIT.
 
-    Revise     → invoke /02-light-spec-revise PROJ-XXX.
+    Revise     → invoke /light-spec-revise PROJ-XXX.
 
                  Pass-aware confirmation:
                    - pass == 1: auto-invoke. No prompt.
@@ -254,12 +254,12 @@ loop:
 
     Stalemate  → pk's 3-comment guard fired before triggering. Tell the user:
                    "Agent already reviewed 3x — likely stalemate. Run
-                    /02-light-spec-revise PROJ-XXX with the override path."
+                    /light-spec-revise PROJ-XXX with the override path."
                  EXIT.
 
     Timeout    → no agent response in 5 min. Tell the user:
                    "Agent didn't respond. Inspect Linear UI; rerun
-                    /01-light-spec PROJ-XXX when ready."
+                    /light-spec PROJ-XXX when ready."
                  EXIT.
 
     Malformed  → tell the user the agent comment couldn't be parsed and
@@ -267,7 +267,7 @@ loop:
 
   if pass == 3 and verdict was Revise:
     Tell the user: "3 passes complete. /02 has the override path if the
-    agent is stuck — rerun /02-light-spec-revise PROJ-XXX."
+    agent is stuck — rerun /light-spec-revise PROJ-XXX."
     EXIT.
 
   pass += 1

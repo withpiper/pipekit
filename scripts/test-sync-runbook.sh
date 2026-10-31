@@ -463,6 +463,27 @@ assert_eq       "pk-init: sync exit 0" 0 "$SYNC_CODE"
 assert_file     "pk-init: main.sh synced beside bin/pk" "$P/bin/pk-init/main.sh"
 [ -x "$P/bin/pk-init/main.sh" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "  FAIL pk-init: main.sh executable"; }
 
+# ─── 13. Renamed / retired upstream skills are removed unless declared local ─
+echo "13. renamed or retired upstream skill → removed; declared-local copy kept"
+P=$(new_proj retired-skills)
+mkdir -p "$P/.claude/skills/01-light-spec" "$P/.claude/skills/task-processor" "$P/.claude/skills/branch" "$P/pipekit"
+echo 'old numbered copy' > "$P/.claude/skills/01-light-spec/SKILL.md"
+echo 'old retired copy' > "$P/.claude/skills/task-processor/SKILL.md"
+echo 'my own branch skill' > "$P/.claude/skills/branch/SKILL.md"
+echo 'branch' > "$P/pipekit/.local-skills"
+run_sync "$P" --dry-run
+assert_eq       "retired-skills/dry: exit 0" 0 "$SYNC_CODE"
+assert_contains "retired-skills/dry: would remove the renamed one" "WOULD REMOVE skill: 01-light-spec" "$SYNC_OUT"
+assert_file     "retired-skills/dry: nothing removed" "$P/.claude/skills/01-light-spec/SKILL.md"
+run_sync "$P"
+assert_eq       "retired-skills: exit 0" 0 "$SYNC_CODE"
+assert_contains "retired-skills: renamed dir removed" "REMOVED skill: 01-light-spec" "$SYNC_OUT"
+assert_no_file  "retired-skills: 01-light-spec gone" "$P/.claude/skills/01-light-spec/SKILL.md"
+assert_no_file  "retired-skills: task-processor gone" "$P/.claude/skills/task-processor/SKILL.md"
+assert_file     "retired-skills: declared-local branch kept" "$P/.claude/skills/branch/SKILL.md"
+assert_contains "retired-skills: KEEP reported for the declared one" "KEEP skill: branch" "$SYNC_OUT"
+assert_contains "retired-skills: changelog lists the removal" "### Removed (retired or renamed upstream)" "$(cat "$P/pipekit/.sync-changelog.md")"
+
 echo ""
 if [ "$fail" -eq 0 ]; then
   printf '✓ %d assertions passed\n' "$pass"

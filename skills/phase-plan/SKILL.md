@@ -226,7 +226,7 @@ Move issues between projects in Linear (the membership *is* the batch):
 
 ## Next-step output
 
-After initiative work, emit an inline `➜ Next:` line pointing to the highest-leverage first `/01-light-spec`
+After initiative work, emit an inline `➜ Next:` line pointing to the highest-leverage first `/light-spec`
 call. Do **not** write a `NEXT.md` — `pk next` reads "what's next?" live from Linear.
 
 ## Related

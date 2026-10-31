@@ -2493,7 +2493,7 @@ FIXTURE=""
 # Through v4.24.0 the trigger told the Linear agent to REPLACE the existing
 # `## Agent Review` section, so pass 2 destroyed pass 1's rationale and pass 3
 # destroyed both — including the human stalemate-override note that
-# /02-light-spec-revise writes there and forbids deleting. Pure string
+# /light-spec-revise writes there and forbids deleting. Pure string
 # generation, so no fixture or Linear call needed.
 
 # ── /verify Step 7 writes the sha deterministically (v4.27.2) ────────────────

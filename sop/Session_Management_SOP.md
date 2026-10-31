@@ -91,7 +91,7 @@ Subagents aren't just for parallelism — they're for **keeping tool output nois
 
 | Skill | Why subagent |
 |-------|-------------|
-| `/01-light-spec` Phase 2 | Codebase exploration produces tons of grep/read output; only the conclusions matter for the spec |
+| `/light-spec` Phase 2 | Codebase exploration produces tons of grep/read output; only the conclusions matter for the spec |
 | `/06-linear-todo-runner` | Parallel worktree agents per issue; each one's execution output stays isolated |
 | `/concept --docs` | Ingesting user documents produces long reads; only the extracted context matters |
 | `/strategy-sync` | Comparing codebase to strategy docs scans many files |

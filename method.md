@@ -329,7 +329,7 @@ The corollary: isolation is mandatory only where independence or a clean contrac
 
 - Inside `/light-spec` (capture → draft → publish are one stage)
 - Inside `/work` for the duration of one issue (plan + execute are designed to share context)
-- Reading-only sessions: `pk status`, `pk next`, `/00-roadmap-review`, `/pipekit-help`
+- Reading-only sessions: `pk status`, `pk next`, `/roadmap-review`, `/pipekit-help`
 
 ### Why this matters more than it looks
 
@@ -379,7 +379,7 @@ or dependency reaches for one. The boundaries below make ownership explicit.
    **Pipekit's execution surface:**
    1. **One direct agent spawn** — `plan-reviewer` in `/review-plan`. Pipekit-shipped.
    2. **`/work` executes inline on the native-on-Workflow backend** — the sole executor as of v4.0.0.
-   3. **Initiative surface read live from Linear** — `pk next`, `pk status`, `/phase-plan`, `/00-roadmap-review`, `/01-light-spec`, `/sync-linear`, `/10-strategy-sync` derive initiative context from the Linear Initiative/Project hierarchy.
+   3. **Initiative surface read live from Linear** — `pk next`, `pk status`, `/phase-plan`, `/roadmap-review`, `/light-spec`, `/sync-linear`, `/strategy-sync` derive initiative context from the Linear Initiative/Project hierarchy.
    4. **Strategy-sync nudge** — after a milestone ships, `/strategy-sync` is prompted via `/pk-exit` + convention.
    5. **Pipekit-side ephemeral state** lives **outside the repo** at `${XDG_CACHE_HOME:-$HOME/.cache}/pipekit/<repo-basename>/`, resolved by `scripts/pipekit-state-dir.sh`. It holds the `pending-strategy-sync` marker and per-issue pipeline-state records consumed by `pk *` commands. Out-of-repo by design — v1.6.0 placed these at `.pipekit/`, where an active-plan file-guard hook silently blocked writes (#13); the relocation made writes succeed unconditionally.
 5. **When drift is suspected, stop and reconcile.** Symptoms: a plan references a Linear issue that doesn't exist; a Linear issue has no corresponding plan. Resolve the mismatch before continuing — drift compounds.
