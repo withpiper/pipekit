@@ -110,6 +110,76 @@ Migration dir: supabase/migrations
 v=$(unit_config "Migration dir" "")
 [ "$v" = "supabase/migrations" ] && ok "config: code-block wins over table" || fail "config: code-block wins over table" "got '$v', want 'supabase/migrations'"
 
+# The template's V2 table: a blank Value cell, or a cell holding a format hint
+# instead of a value, must fall through to the default — a fresh `pk init`
+# project used to resolve its Linear key to the literal "name, e.g. LINEAR_API_KEY".
+write_config '# Config
+
+| Key | Value | Format | Default | Used by |
+|-----|-------|--------|---------|---------|
+| **Linear API key env var** |  | name, e.g. `LINEAR_API_KEY` | `LINEAR_API_KEY` | `pk *` |
+| **Linear transport** | `api` \| `mcp` | | `api` | skills |
+| **Migration dir** | e.g. `supabase/migrations/` | | (none) | reviews |
+'
+v=$(unit_config "Linear API key env var" "LINEAR_API_KEY")
+[ "$v" = "LINEAR_API_KEY" ] && ok "config: blank table cell → default" || fail "config: blank table cell → default" "got '$v'"
+v=$(unit_config "Linear transport" "api")
+[ "$v" = "api" ] && ok "config: 'a \| b' hint cell → default" || fail "config: 'a \| b' hint cell → default" "got '$v'"
+v=$(unit_config "Migration dir" "")
+[ -z "$v" ] && ok "config: 'e.g. …' hint cell → default" || fail "config: 'e.g. …' hint cell → default" "got '$v'"
+
+# The key variable's NAME comes from the config and reaches the process env
+# by indirect expansion — never eval. A non-name reads as unset and says so.
+write_config '```
+Linear API key env var: PKTEST_LINEAR_KEY
+```'
+v=$( cd "$FIXTURE" && source "$PK" && PKTEST_LINEAR_KEY=lin_test pk_linear_api_key 2>/dev/null )
+[ "$v" = "lin_test" ] && ok "api key: resolved from the named env var" || fail "api key: resolved from the named env var" "got '$v'"
+write_config '```
+Linear API key env var: x:-}; touch INJECTED; :${y
+```'
+v=$( cd "$FIXTURE" && source "$PK" && pk_linear_api_key 2>"$FIXTURE/.err" )
+if [ -z "$v" ] && [ ! -e "$FIXTURE/INJECTED" ] && grep -q "not a variable name" "$FIXTURE/.err"; then
+  ok "api key: non-name var reads as unset, nothing executed"
+else
+  fail "api key: non-name var reads as unset, nothing executed" "got '$v' injected=$([ -e "$FIXTURE/INJECTED" ] && echo yes || echo no) err=$(cat "$FIXTURE/.err")"
+fi
+
+# Ship environments left blank derives from the integration branch, and pk done
+# and pk promote read the same derivation (they used to default differently).
+unit_first_env() { ( cd "$FIXTURE" && source "$PK" && pk_first_env_state_name ); }
+unit_ship_envs() { ( cd "$FIXTURE" && source "$PK" && pk_ship_envs ); }
+write_config '```
+Integration branch: dev
+```'
+v=$(unit_ship_envs); [ "$v" = "dev,main" ] && ok "ship envs: blank + dev integration → dev,main" || fail "ship envs: blank + dev integration → dev,main" "got '$v'"
+v=$(unit_first_env); [ "$v" = "In Dev" ] && ok "ship envs: pk done lands on In Dev for a dev-integrated project" || fail "ship envs: pk done lands on In Dev" "got '$v'"
+write_config '```
+Integration branch: main
+```'
+v=$(unit_first_env); [ "$v" = "Done" ] && ok "ship envs: blank + main integration → single-tier (Done)" || fail "ship envs: blank + main → Done" "got '$v'"
+write_config '```
+Integration branch: dev
+Ship environments: main
+```'
+v=$(unit_first_env); [ "$v" = "Done" ] && ok "ship envs: an explicit chain wins over the derivation" || fail "ship envs: explicit wins" "got '$v'"
+
+# Merge method: the gh pr merge strategy pk done --merge uses, validated.
+unit_merge() { ( cd "$FIXTURE" && source "$PK" && pk_merge_method 2>/dev/null ); }
+write_config '```
+Team name: Eng
+```'
+v=$(unit_merge); [ "$v" = "merge" ] && ok "merge method: blank → merge" || fail "merge method: blank → merge" "got '$v'"
+write_config '```
+Merge method: rebase
+```'
+v=$(unit_merge); [ "$v" = "rebase" ] && ok "merge method: rebase honoured" || fail "merge method: rebase honoured" "got '$v'"
+write_config '```
+Merge method: fast-forward
+```'
+v=$(unit_merge); code=$?
+[ $code -eq 2 ] && [ -z "$v" ] && ok "merge method: unknown value refused (exit 2)" || fail "merge method: unknown value refused" "exit $code, got '$v'"
+
 cleanup
 
 # ── Unit tests: native phase derivation (sourced mode, no network) ───────────
@@ -603,6 +673,29 @@ for sub in ship done promote branch next ready status focus; do
   ok "pk $sub --help: usage, exit 0, no gh"
 done
 
+# The usage text carries backticks; an unquoted heredoc ran them as commands
+# and printed "Area: command not found" on every --help and unknown-subcommand path.
+run_pk --help
+case "$RUN_OUT" in
+  *"command not found"*) fail "pk --help runs none of its own text" "$(echo "$RUN_OUT" | grep 'command not found' | head -1)" ;;
+  *'`Area:`'*) ok "pk --help runs none of its own text" ;;
+  *) fail "pk --help runs none of its own text" "backticked text missing from usage" ;;
+esac
+
+# ── CLI tests: ship guard rails ──────────────────────────────────────────────
+
+echo "== ship guard rails =="
+
+# ship swallowed unknown flags, so a typo (`--revew`) shipped anyway. Every
+# other verb rejects with exit 2 before touching gh; ship now matches.
+: > "$GH_LOG"
+run_pk ship --revew
+if [ $RUN_CODE -eq 2 ] && [ ! -s "$GH_LOG" ]; then
+  case "$RUN_OUT" in *"unknown arg"*) ok "ship: unknown flag rejected (exit 2, no gh)" ;; *) fail "ship: unknown flag rejected (exit 2, no gh)" "output: $RUN_OUT" ;; esac
+else
+  fail "ship: unknown flag rejected (exit 2, no gh)" "exit $RUN_CODE gh=$(cat "$GH_LOG")"
+fi
+
 # ── CLI tests: promote derivation / guard rails ──────────────────────────────
 
 echo "== promote guard rails =="
@@ -777,6 +870,33 @@ RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$METHOD_FIXTU
 case "$RUN_OUT" in
   *"latest release is v99.0.0"*) ok "doctor: warns when behind latest release (rc tags ignored)" ;;
   *) fail "doctor: warns when behind latest release (rc tags ignored)" "$(echo "$RUN_OUT" | grep -i 'pipekit v\|latest' | head -2)" ;;
+esac
+
+# A pk from another clone, run against this project, is named with both
+# versions and fails doctor — it used to report the running pk's version as
+# the project's sync state, so a stale symlink looked up to date.
+mkdir -p "$FIXTURE/bin" && printf '#!/usr/bin/env bash\nPK_VERSION="1.2.3"\n' > "$FIXTURE/bin/pk"
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$METHOD_FIXTURE" "$PK" doctor 2>&1)
+case "$RUN_OUT" in
+  *"not this project's bin/pk (v1.2.3)"*) ok "doctor: a foreign pk is named, with the project's own version" ;;
+  *) fail "doctor: a foreign pk is named, with the project's own version" "$(echo "$RUN_OUT" | grep -i 'bin/pk' | head -2)" ;;
+esac
+case "$RUN_OUT" in
+  *"synced Pipekit is v1.2.3"*) ok "doctor: staleness reads the project's bin/pk version" ;;
+  *) fail "doctor: staleness reads the project's bin/pk version" "$(echo "$RUN_OUT" | grep -i 'synced' | head -2)" ;;
+esac
+rm -rf "${FIXTURE:?}/bin"
+
+# Template placeholders fail doctor instead of passing as a configured team.
+write_config '```
+Project name: your-project
+Team name: YourTeam
+Team ID: 00000000-0000-0000-0000-000000000000
+```'
+RUN_OUT=$(cd "$FIXTURE" && PATH="$FIXTURE/shim:$PATH" METHOD_REPO="$FIXTURE/no-such-repo.git" "$PK" doctor 2>&1)
+case "$RUN_OUT" in
+  *"template placeholder for: 'Project name' 'Team name' 'Team ID'"*) ok "doctor: template placeholders are an error, not a configured team" ;;
+  *) fail "doctor: template placeholders are an error, not a configured team" "$(echo "$RUN_OUT" | grep -i 'team\|placeholder' | head -3)" ;;
 esac
 rm -rf "$METHOD_FIXTURE"
 
@@ -3802,6 +3922,16 @@ v=$(unit_nudge)
 rm -f "$FIXTURE/engineering/WEEKLY_PLAN.md"
 v=$(unit_plan_nudge)
 [ -z "$v" ] && ok "plan nudge: plan removed → back to the runbook (fresh → nothing)" || fail "plan nudge: fallback after removal" "got '$v'"
+# `Plan path: none`: no weekly plan on this project, so no nudge — not even
+# the runbook's, which would otherwise send a solo project to /tpm forever.
+write_config '```
+Plan path: none
+```'
+write_plan "$FIXTURE/engineering/WEEKLY_PLAN.md" "YYYY-MM-DD"
+write_runbook "$FIXTURE/engineering/RUNBOOK.md" "$(days_ago 30)"
+v=$(unit_plan_nudge); code=$?
+[ $code -eq 0 ] && [ -z "$v" ] && ok "plan nudge: Plan path none → silent (plan and runbook ignored)" || fail "plan nudge: Plan path none" "exit $code, got '$v'"
+rm -f "$FIXTURE/engineering/WEEKLY_PLAN.md" "$FIXTURE/engineering/RUNBOOK.md"
 rm -f "$FIXTURE/engineering/RUNBOOK.md"
 v=$(unit_plan_nudge); code=$?
 [ $code -eq 0 ] && [ -z "$v" ] && ok "plan nudge: neither file → nothing, exit 0" || fail "plan nudge: neither file" "exit $code, got '$v'"

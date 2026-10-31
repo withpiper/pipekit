@@ -9,8 +9,10 @@
 #   ./scripts/sync-method.sh --auto-install   # After sync, auto-run pk install --force
 #                                             # (no prompt) so the global pk stays in
 #                                             # lockstep with the synced bin/pk.
+#   ./scripts/sync-method.sh --help       # Usage; writes nothing
 #
 # What it syncs:
+#   bin/pk, bin/pk-init/ <- The pk CLI and the config bootstrap `pk init` runs
 #   pipekit/sop/        <- SOPs (Code Quality, Git, Linear, Skills)
 #   pipekit/templates/  <- Spec and review templates
 #   pipekit/method.md   <- The deeper methodology overview
@@ -79,14 +81,32 @@ REF="main"
 # v2.5.0 migration surfaced this.
 PROJECT_ROOT="${PWD:-$(pwd)}"
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/sync-method.sh [<ref>] [--dry-run] [--auto-install] [--target=<dir>]
+
+Pull Pipekit (skills, SOPs, templates, rules, workflows, bin/pk) into the
+consuming project at the current directory.
+
+  <ref>            tag or branch to sync from (default: main)
+  --dry-run        show what would change; write nothing
+  --auto-install   after the sync, run pk install --force without prompting
+  --target=<dir>   the project to sync into (default: the current directory)
+  -h, --help       this text
+EOF
+}
+
 # Parse flags without mutating $@ — the self-update guard below re-execs with
 # "$@", and a shift here would silently drop --dry-run across the re-exec.
+# An unknown flag is an error, not a warning: `--help` used to warn and then
+# run a full sync into the current directory.
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
     --auto-install) AUTO_INSTALL=true ;;
     --target=*) PROJECT_ROOT="${arg#--target=}" ;;
-    -*) echo "WARN: unknown flag: $arg" >&2 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "ERROR: unknown flag: $arg" >&2; usage >&2; exit 2 ;;
     *) REF="$arg" ;;
   esac
 done
@@ -342,6 +362,10 @@ if [ -d "$TEMP/bin" ]; then
   mkdir -p "$PROJECT_ROOT/bin"
   sync_file "$TEMP/bin/pk" "$PROJECT_ROOT/bin/pk" "bin/pk"
   [ -f "$PROJECT_ROOT/bin/pk" ] && chmod +x "$PROJECT_ROOT/bin/pk"
+  # pk init resolves pk-init/main.sh beside the pk binary; without this a
+  # synced project could never bootstrap its own method.config.md.
+  sync_dir "$TEMP/bin/pk-init" "$PROJECT_ROOT/bin/pk-init" "bin/pk-init/"
+  [ -d "$PROJECT_ROOT/bin/pk-init" ] && chmod +x "$PROJECT_ROOT/bin/pk-init/"*.sh 2>/dev/null || true
 fi
 
 # --- Sync v2 templates ---
@@ -838,9 +862,12 @@ esac
 RUNBOOK_SKELETON="$TEMP/templates/RUNBOOK.skeleton.md"
 PLAN_REL=$(config_value "Plan path")
 [ -n "$PLAN_REL" ] || PLAN_REL="engineering/WEEKLY_PLAN.md"
+# `none`: the project keeps no weekly plan — nothing scaffolded, and the
+# runbook's Now block says so instead of pointing at a file.
 case "$PLAN_REL" in
-  /*) PLAN_PATH="$PLAN_REL" ;;
-  *)  PLAN_PATH="$PROJECT_ROOT/$PLAN_REL" ;;
+  none) PLAN_PATH="" ;;
+  /*)   PLAN_PATH="$PLAN_REL" ;;
+  *)    PLAN_PATH="$PROJECT_ROOT/$PLAN_REL" ;;
 esac
 PLAN_SKELETON="$TEMP/templates/WEEKLY_PLAN.skeleton.md"
 LEGACY_RUNBOOK="$PROJECT_ROOT/pipekit/RUNBOOK.md"
@@ -918,7 +945,11 @@ else
         *)
           line=$(rb_subst "$line" '{{PROJECT_NAME}}' "$RB_NAME")
           line=$(rb_subst "$line" '{{PK_VERSION}}' "$RB_VERSION")
-          line=$(rb_subst "$line" '{{PLAN_PATH}}' "$PLAN_REL")
+          if [ "$PLAN_REL" = "none" ]; then
+            case "$line" in *'{{PLAN_PATH}}'*) line='_(no weekly plan on this project — `Plan path: none`)_' ;; esac
+          else
+            line=$(rb_subst "$line" '{{PLAN_PATH}}' "$PLAN_REL")
+          fi
           printf '%s\n' "$line" ;;
       esac
     done < "$RUNBOOK_SKELETON"
@@ -1015,7 +1046,9 @@ else
   echo "Weekly plan ($PLAN_REL):"
   PLAN_PRIMARY=$(config_value "Plan primary")
   [ -n "$PLAN_PRIMARY" ] || PLAN_PRIMARY=$(config_value "Runbook primary")
-  if [ -n "$PLAN_PRIMARY" ]; then
+  if [ "$PLAN_REL" = "none" ]; then
+    echo "  SKIP weekly plan (Plan path: none)"
+  elif [ -n "$PLAN_PRIMARY" ]; then
     echo "  SKIP $PLAN_REL (plan lives in $PLAN_PRIMARY)"
   elif [ ! -f "$PLAN_SKELETON" ]; then
     echo "  SKIP $PLAN_REL (source not found)"
@@ -1048,6 +1081,7 @@ if ! $DRY_RUN; then
   # Compare method files. The runbook and the weekly plan live at their own
   # paths, hashed into the same snapshot just before they were written.
   for f in method.md GUIDE.md STARTUP.md "$RUNBOOK_REL" "$PLAN_REL"; do
+    [ "$f" = "none" ] && continue
     case "$f" in
       "$RUNBOOK_REL") dst="$RUNBOOK_PATH" ;;
       "$PLAN_REL")    dst="$PLAN_PATH" ;;

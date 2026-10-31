@@ -6,28 +6,17 @@
 # All subcommands are idempotent against Linear+git ground truth.
 # Recovery = rerun the command. Read state, decide what's left, do only that.
 #
-# Subcommands:
-#   pk next                 — what should I do now? (Linear + git → next command)
-#   pk status               — quick triage of in-flight + UAT + Approved
-#   pk sessions             — live Claude Code sessions on this machine, waiting first
-#   pk focus [<TAG> <tier>] — read or set focus-lane tiers (Linear project priority)
-#   pk issue <verb> <ID>    — show / search / create / update / set --priority / relate --blocked-by / comment
-#   pk project list         — the team's projects: name · state · tier · progress
-#   pk gql '<query>' [vars] — guarded GraphQL passthrough for the long tail
-#   pk portfolio            — cross-initiative map: all i<N>. + active runway
-#   pk branch <ID>          — create worktree+branch, Linear → In Progress
-#   pk ship [--env=<env>]   — push, gh pr create, Linear → UAT
-#   pk done                 — verify PR merged, cleanup worktree+branch (no state change)
-#   pk verify               — light verify (run test cmd from method.config.md)
-#   pk config [<key>]       — read a V2 key from method.config.md (or dump all)
-#   pk promote [<env>]      — promote one hop along Ship environments; transitions
-#                             matching issues → Released (intermediate) or Done (final).
-#                             No arg auto-picks the next ready hop (earliest with unpromoted commits).
-#   pk delegate <ID> <txt>  — post @Linear-mentioned comment to delegate work
-#   pk spec-cycle <ID>      — trigger Spec Review Agent v5, poll, dispatch on verdict
+# Subcommands (pk help has the flags):
+#   pk next | status | sessions | focus | portfolio   — read the board / this machine
+#   pk issue <verb> | project list | gql             — Linear verbs skills use (api transport)
+#   pk branch → ship → ready → done → promote         — the daily loop; done moves
+#                             UAT → In <FirstEnv> (Done on 1-tier), promote --finish → next env / Done
+#   pk deploy | verify | config | log                — script-deploy, pre-deploy gate, config, journal
+#   pk delegate | spec-cycle                         — Linear Agent hand-offs (Spec Review Agent)
+#   pk doctor | init | install | version             — setup
 #
 # Linear access: GraphQL via $LINEAR_API_KEY (env var name configurable in
-# method.config.md → "Linear API key env var"). If absent, scripts that need
+# method.config.md → "Linear API key env var"). If absent, verbs that need
 # Linear print a clear "set LINEAR_API_KEY" and exit.
 
 set -euo pipefail
@@ -56,6 +45,22 @@ pk_op_run_hint() {
   echo "op run --env-file=<op:// reference file> -- pk …"
 }
 
+# The running script's real path (symlink-resolved), so a pk invoked through
+# an installed symlink still knows which bin/pk it is.
+pk_self_path() {
+  local raw src
+  raw="${BASH_SOURCE[0]}"
+  if command -v realpath >/dev/null 2>&1; then
+    src=$(realpath "$raw")
+  else
+    src="$(cd "$(dirname "$raw")" && pwd -P)/$(basename "$raw")"
+    # Walk one symlink level if -P didn't resolve it (macOS bash 3 quirk)
+    [ -L "$src" ] && src=$(cd "$(dirname "$src")" && cd "$(dirname "$(readlink "$src")")" && pwd -P)/$(basename "$(readlink "$src")")
+  fi
+  [ -f "$src" ] || return 1
+  echo "$src"
+}
+
 pk_config_path() {
   local root
   root=$(pk_repo_root) || return 1
@@ -64,21 +69,20 @@ pk_config_path() {
 
 # Read a value from method.config.md by label. Accepts two formats:
 #
-#   1) Plain Key: Value lines inside any fenced code block (current style,
-#      used by Piper, rs-vault, and the consumer-facing examples in
-#      method.config.template.md):
+#   1) Plain Key: Value lines inside any fenced code block (the examples at
+#      the end of method.config.template.md):
 #
 #        ```
 #        Integration branch: dev
 #        Ship environments: dev,beta,main
 #        ```
 #
-#   2) Legacy markdown-table rows (still rendered for documentation):
+#   2) Markdown-table rows — the template's own layout, column 2 is the value:
 #
 #        | **Integration branch** | `dev` | ... |
 #
-# Code-block form is tried first since that is what consumers actually set.
-# Falls back to the table form, then to the supplied default.
+# Code-block form is tried first, then the table form, then the supplied
+# default. A blank value in either form means "use the default".
 
 # pk_supabase_workdir <migration dir> — the directory holding the supabase/ folder that
 # owns the configured migration dir, for `supabase --workdir`. "supabase/migrations/" → ".",
@@ -132,11 +136,17 @@ pk_config() {
     return 0
   fi
 
-  # Form 2: legacy markdown-table row `| **Label** | value | ... |`.
+  # Form 2: markdown-table row `| **Label** | value | ... |`. A cell that is
+  # a format hint rather than a value (`a \| b` alternatives, "e.g. …") reads
+  # as unset: the template once shipped hints in the Value column and every
+  # fresh project resolved its Linear key to the literal "name, e.g. …".
   local line
   line=$(grep -E "^\| \*\*${label}\*\*" "$path" 2>/dev/null | head -1 || true)
   if [ -n "$line" ]; then
     value=$(echo "$line" | awk -F'|' '{print $3}' | sed 's/`//g; s/\*\*//g; s/^ *//; s/ *$//')
+    case "$value" in
+      *'\'*|'e.g.'*) value="" ;;
+    esac
     if [ -n "$value" ]; then
       echo "$value"
       return 0
@@ -159,6 +169,37 @@ pk_integration_branch() {
     return 0
   fi
   git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main"
+}
+
+# The Ship environments chain, derived when the key is blank: a project that
+# integrates on a branch other than main has that branch and main to promote
+# through; one that integrates on main is single-tier. One reader for every
+# verb — pk done ("" → Done) and pk promote ("dev,main") used to disagree.
+# gh pr merge strategy for the feature → integration landing (pk done --merge)
+# and the reminder pk ship prints. Squash is the one to avoid when the
+# integration branch is itself promoted by PR: it orphans the feature SHAs and
+# every later promote sees phantom conflicts.
+pk_merge_method() {
+  local m
+  m=$(pk_config "Merge method" "merge")
+  case "$m" in
+    merge|squash|rebase) echo "$m" ;;
+    *) echo "ERROR: Merge method must be merge, squash or rebase (method.config.md has '$m')." >&2; return 2 ;;
+  esac
+}
+
+pk_ship_envs() {
+  local chain integ
+  chain=$(pk_config "Ship environments" "")
+  if [ -n "$chain" ]; then
+    echo "$chain"
+    return 0
+  fi
+  integ=$(pk_integration_branch)
+  case "$integ" in
+    ''|main) echo "" ;;
+    *)       echo "$integ,main" ;;
+  esac
 }
 
 pk_linear_api_key_var() {
@@ -206,7 +247,15 @@ pk_linear_api_key() {
     done
   fi
   # Last resort: process env. Useful for ambient overrides + projects without .env.
-  val=$(eval echo "\${$var:-}")
+  # Indirect expansion, not eval: the name comes from method.config.md, and a
+  # row left at the template's hint text must read as unset, not execute.
+  case "$var" in
+    ''|[0-9]*|*[!A-Za-z0-9_]*)
+      echo "pk: 'Linear API key env var' is not a variable name: '$var'" >&2
+      echo ""
+      return 0 ;;
+  esac
+  val="${!var:-}"
   if [ -n "$val" ]; then
     echo "$val"
     return 0
@@ -809,7 +858,7 @@ pk_state_rank() {
       local env_name env_lower chain idx=0 found=-1 e
       env_name="${state#In }"
       env_lower=$(echo "$env_name" | tr '[:upper:]' '[:lower:]')
-      chain=$(pk_config "Ship environments" "")
+      chain=$(pk_ship_envs)
       if [ -z "$chain" ]; then
         echo 0
         return
@@ -846,7 +895,7 @@ pk_capitalize() {
 # 1-tier:  "Done"  (first env == final env; nothing more to promote to)
 pk_first_env_state_name() {
   local chain envs_arr=()
-  chain=$(pk_config "Ship environments" "")
+  chain=$(pk_ship_envs)
   if [ -z "$chain" ]; then
     echo "Done"
     return
@@ -868,7 +917,7 @@ pk_first_env_state_name() {
 pk_env_state_name() {
   local env="$1"
   local chain envs_arr=()
-  chain=$(pk_config "Ship environments" "")
+  chain=$(pk_ship_envs)
   if [ -z "$chain" ]; then
     echo "Done"
     return
@@ -2379,11 +2428,14 @@ pk_tpm_marker_nudge() {
 }
 
 pk_plan_nudge() {
-  local root rb_primary rb_stale plan_file rb_file
+  local root rb_primary rb_stale plan_rel plan_file rb_file
   root=$(pk_repo_root) || return 0
+  plan_rel=$(pk_config "Plan path" "$PK_PLAN_PATH_DEFAULT")
+  # `none`: this project keeps no weekly plan, so there is nothing to agree.
+  [ "$plan_rel" = "none" ] && return 0
   rb_primary=$(pk_config "Runbook primary" "")
   rb_stale=$(pk_config "Runbook stale days" "$PK_RUNBOOK_STALE_DAYS_DEFAULT")
-  plan_file=$(pk_tpm_file "$root" "$(pk_config "Plan path" "$PK_PLAN_PATH_DEFAULT")" "$(pk_config "Plan primary" "$rb_primary")")
+  plan_file=$(pk_tpm_file "$root" "$plan_rel" "$(pk_config "Plan primary" "$rb_primary")")
   if [ -f "$plan_file" ]; then
     pk_tpm_marker_nudge "$plan_file" "plan" "$(pk_config "Plan stale days" "$rb_stale")" "$PK_PLAN_STALE_DAYS_DEFAULT"
     return 0
@@ -2796,7 +2848,7 @@ cmd_status() {
   # (v2.5.0). Final env's state is "Done" — not shown in `pk status` since
   # it's terminal, not in-flight.
   local chain envs_arr=()
-  chain=$(pk_config "Ship environments" "")
+  chain=$(pk_ship_envs)
   if [ -n "$chain" ]; then
     IFS=',' read -ra envs_arr <<< "$chain"
     local last_idx=$((${#envs_arr[@]} - 1))
@@ -3078,7 +3130,7 @@ cmd_ship() {
       --ready) ready=true; shift ;;
       --force-secgate) force_secgate=true; shift ;;
       --force) force=true; shift ;;
-      *) shift ;;
+      *) echo "ERROR: unknown arg for pk ship: $1" >&2; return 2 ;;
     esac
   done
 
@@ -3243,21 +3295,16 @@ cmd_ship() {
     fi
   fi
 
-  # Merge-strategy reminder. Squash is disabled repo-wide (v2.2.0+) — it
-  # creates orphan SHAs that diverge dev and main, causing phantom conflicts
-  # on every subsequent dev → main promote. See sop/Git_and_Deployment.md
-  # § Merge Strategy by Hop.
-  case "$target" in
-    dev|beta)
-      echo ""
-      echo "⚑ Merge with: 'Rebase and merge' or 'Create a merge commit'."
-      echo "  (Squash is disabled repo-wide — causes phantom conflicts on promotes.)"
-      ;;
-    main)
-      echo ""
-      echo "⚑ Merge with: 'Create a merge commit' (one anchor commit per promotion)."
-      ;;
+  # Merge-strategy reminder — what pk done --merge will use.
+  local merge_method merge_label
+  merge_method=$(pk_merge_method 2>/dev/null) || merge_method="merge"
+  case "$merge_method" in
+    squash) merge_label="Squash and merge" ;;
+    rebase) merge_label="Rebase and merge" ;;
+    *)      merge_label="Create a merge commit" ;;
   esac
+  echo ""
+  echo "⚑ Merge with: '$merge_label' (Merge method in method.config.md; pk done --merge uses it)."
 
   # Path-matched reminders from method.config.md § Ship Reminders (v5.3.0),
   # e.g. "this backend change is not on the preview; deploy it to dev before
@@ -3269,14 +3316,9 @@ cmd_ship() {
     printf '%s\n' "$_reminders"
   fi
 
-  # Linear: → In Review / UAT (state name varies; try common ones)
-  local target_state
-  case "$target" in
-    main) target_state="UAT" ;;
-    dev|beta) target_state="UAT" ;;
-    *) target_state="In Review" ;;
-  esac
-  pk_linear_set_state "$issue" "$target_state" || pk_linear_set_state "$issue" "In Review" || true
+  # Linear: → UAT (the PR is open on the preview); "In Review" for boards
+  # without a UAT state.
+  pk_linear_set_state "$issue" "UAT" || pk_linear_set_state "$issue" "In Review" || true
 
   # Antagonistic review (opt-in via --review). Surfaces issues that /work
   # and /verify don't catch — security posture, test coverage gaps, double-
@@ -3608,18 +3650,19 @@ cmd_done() {
     esac
   fi
 
-  # Optional: merge the PR for the user (v2.5.0, M3 opt-in).
-  # Merge-commit per repo policy (squash is disabled, --merge produces an
-  # anchor commit on the integration branch). If the PR is already merged,
+  # Optional: merge the PR for the user (v2.5.0, M3 opt-in), with the
+  # strategy from `Merge method` (default merge). If the PR is already merged,
   # this is a clean no-op courtesy of gh's idempotent behavior.
   if $do_merge; then
+    local merge_method
+    merge_method=$(pk_merge_method) || return 2
     if [ -n "$pr_json" ]; then
       # Resolved from a merged PR: there is no branch for gh to merge by name,
       # and failing here would strand the issue exactly as the missing fallback did.
       echo "PR #${pr_number} is already merged — nothing for --merge to do."
     else
-      echo "Merging PR for $current..."
-      if ! gh pr merge "$current" --merge 2>&1; then
+      echo "Merging PR for $current (--$merge_method)..."
+      if ! gh pr merge "$current" "--$merge_method" 2>&1; then
         echo "ERROR: gh pr merge failed. Resolve (conflicts? failing CI? not approved?) and rerun." >&2
         return 1
       fi
@@ -4054,7 +4097,7 @@ cmd_promote() {
 
   # Resolve Ship environments chain. Trim whitespace per element.
   local ship_envs envs_arr=()
-  ship_envs=$(pk_config "Ship environments" "dev,main")
+  ship_envs=$(pk_ship_envs)
   IFS=',' read -ra envs_arr <<< "$ship_envs"
   local i
   for i in "${!envs_arr[@]}"; do
@@ -4253,18 +4296,24 @@ cmd_promote() {
   local dirty stash_made=false
   dirty=$(git status --porcelain | grep -E '^( M|M | A|A )' || true)
   if [ -n "$dirty" ]; then
+    # Porcelain v1: two status columns, a space, then the path — quoted when
+    # it holds a space. Splitting on whitespace truncated such a path.
+    local dirty_paths=() line path
+    while IFS= read -r line; do
+      path=${line:3}
+      path=${path#\"}; path=${path%\"}
+      [ -n "$path" ] && dirty_paths+=("$path")
+    done <<< "$dirty"
     if $take_remote; then
       echo "  → --take-remote: discarding local edits to tracked files:"
       echo "$dirty" | sed 's/^/      /'
       git fetch origin "$source" --quiet
-      while IFS= read -r line; do
-        local path
-        path=$(echo "$line" | awk '{print $2}')
-        [ -n "$path" ] && git checkout "origin/$source" -- "$path"
-      done <<< "$dirty"
+      for path in "${dirty_paths[@]}"; do
+        git checkout "origin/$source" -- "$path"
+      done
     elif $stash; then
       echo "  → --stash: stashing local edits before pull"
-      git stash push -m "pk promote auto-stash $(date +%s)" -- $(echo "$dirty" | awk '{print $2}') >/dev/null
+      git stash push -m "pk promote auto-stash $(date +%s)" -- "${dirty_paths[@]}" >/dev/null
       stash_made=true
     else
       echo ""
@@ -4867,19 +4916,8 @@ cmd_install() {
 
   # Resolve to realpath so re-invoking via the installed symlink still sees
   # the original source file and the idempotency check below works.
-  local src raw
-  raw="${BASH_SOURCE[0]}"
-  if command -v realpath >/dev/null 2>&1; then
-    src=$(realpath "$raw")
-  else
-    src="$(cd "$(dirname "$raw")" && pwd -P)/$(basename "$raw")"
-    # Walk one symlink level if -P didn't resolve it (macOS bash 3 quirk)
-    [ -L "$src" ] && src=$(cd "$(dirname "$src")" && cd "$(dirname "$(readlink "$src")")" && pwd -P)/$(basename "$(readlink "$src")")
-  fi
-  if [ ! -f "$src" ]; then
-    echo "ERROR: cannot locate own script path." >&2
-    return 1
-  fi
+  local src
+  src=$(pk_self_path) || { echo "ERROR: cannot locate own script path." >&2; return 1; }
 
   # Pick a writable bin directory on PATH. Prefer /usr/local/bin (universal),
   # fall back to ~/.local/bin (no sudo needed).
@@ -5593,8 +5631,10 @@ cmd_gql() {
 }
 
 cmd_help() {
-  cat <<EOF
-pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
+  echo "pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)"
+  # Quoted delimiter: the text carries backticks, which an unquoted heredoc
+  # runs as commands ("Area: command not found" on every pk --help).
+  cat <<'EOF'
 
 Subcommands:
   pk next [--lane <TAG>]          What should I do now? Focus lanes (project priority 1/2/3 → tier A/B/C) first, then Supporting, then the rest of the board. --lane I8.P6 pins that lane as tier A for this run.
@@ -5611,19 +5651,20 @@ Subcommands:
   pk project list [--all] [--json]   The team's projects in I<N>.P<N>. order: name · state · tier (priority 1/2/3 → A/B/C, else —) · progress %. completed/canceled hidden unless --all.
   pk gql '<query>' ['<vars-json>' | --vars '<json>']   Guarded GraphQL passthrough for the long tail (initiatives, project/label create, …); '-' reads the query from stdin. Pretty-prints the response; exit 1 with the error messages on stderr when it carries errors. Mutations still pass the workspace guard.
   pk portfolio                    Cross-initiative map: all i<N>. initiatives (active marked) + the active initiatives' ordered runway (grouped by I<N>.P<N>. project)
-  pk branch <ISSUE-ID>            Create worktree+branch, Linear → In Progress
+  pk branch <ISSUE-ID> [--no-install]   Create worktree+branch, Linear → In Progress (--no-install: skip the worktree dependency install)
   pk ship [--env=<env>] [--review] [--ready] [--force] [--force-secgate]  Push, gh pr create (Draft by default; --ready opens Ready), Linear → UAT. UAT = PR open on preview branch (pre-merge). Outside reviewers fire when you flip to Ready (pk ready) — see templates/ci/. --force waives the verify gate only; --force-secgate separately waives an armed /security-gate (both log a Linear audit comment).
   pk ready [<ID>] [--force]       Flip a Draft PR to Ready (fires outside reviewers). No Linear state change. Run from parent repo or feature branch. Refuses if source or a migration changed after the /verify that vouches for the branch — re-run /verify, or --force to flip anyway (logs a Linear comment).
   pk done [<ID>] [--merge]        Verify PR merged (or --merge to have pk run gh pr merge first), cleanup worktree+branch, Linear: UAT → In <FirstEnv> (or → Done for 1-tier). Run from parent repo (not worktree); run /pk-exit inside the worktree session first. --confirmed accepted for backward compat (no-op).
   pk verify                       Run the project's pre-deploy gate
-  pk config [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
-  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
+  pk config|cfg [<key> [<default>]]   Read a V2 key from method.config.md; no args = dump all known keys
+  pk promote [<env>] [--stash|--take-remote] [--confirmed] [--finish] [--bootstrap] [--force]  Two-phase: pk promote <env> opens the promote PR (WITs stay in source state); pk promote <env> --finish transitions WITs to target state after the PR merges. With no <env>, auto-picks the next ready hop (earliest hop with unpromoted commits; never skips ahead). Conflict flags resolve local edits vs incoming source. Refuses if any bundled issue is in UAT (PR not yet merged) — pass --confirmed to override.
   pk deploy [<env>] [-- <args>]   Run the project's configured Deploy command (method.config.md) for <env>. Bare / 'prod' → "Deploy command"; 'pk deploy dev' → "Deploy command dev". Args after -- pass through to the script (e.g. a file list, or --all). Script-deploy projects only — branch-promotion projects deploy via pk promote. Delegates fully: the deploy script owns confirmation + safety.
   pk delegate <ID> <prompt>       Post an @Linear-mentioned comment to invoke Linear Agent
   pk spec-cycle <ID>              Trigger Spec Review Agent v5, poll, dispatch on verdict
   pk doctor                       Diagnose v2 setup (config, env, deps)
   pk init                         Walkthrough config check + setup hints
-  pk install [--force]            Symlink pk onto \$PATH (so 'pk' replaces './bin/pk')
+  pk install [--force]            Symlink pk onto $PATH (so 'pk' replaces './bin/pk')
+  pk version                      Print the running pk's version (pk doctor compares it with this project's bin/pk)
   pk log                          Show journal for current feature branch
   pk help                         Show this help
 
@@ -5670,6 +5711,24 @@ cmd_doctor() {
     echo "  ⚠ method.config.md missing — using defaults"
     warn=$((warn+1))
   fi
+  # The binary in use vs this project's bin/pk. A symlink installed from
+  # another clone runs that clone's version against this project — and used
+  # to report *its* PK_VERSION as the project's sync state.
+  local self proj_pk proj_ver=""
+  self=$(pk_self_path 2>/dev/null || echo "")
+  if [ -n "$root" ] && [ -f "$root/bin/pk" ]; then
+    proj_pk=$(realpath "$root/bin/pk" 2>/dev/null || echo "$(cd "$root/bin" && pwd -P)/pk")
+    proj_ver=$(grep -m1 '^PK_VERSION=' "$root/bin/pk" | sed 's/^PK_VERSION="*//; s/"*$//')
+    if [ -n "$self" ] && [ "$self" != "$proj_pk" ]; then
+      echo "  ✗ running pk is $self (v$PK_VERSION), not this project's bin/pk (v${proj_ver:-?})"
+      echo "    fix: $root/bin/pk install --force"
+      fail=$((fail+1))
+    else
+      echo "  ✓ running this project's bin/pk (v$PK_VERSION)"
+    fi
+  elif [ -n "$root" ]; then
+    echo "  • no bin/pk in this project (running ${self:-pk} v$PK_VERSION) — sync-method.sh installs one"
+  fi
   # Linear key
   local key_var key
   key_var=$(pk_linear_api_key_var)
@@ -5696,6 +5755,15 @@ cmd_doctor() {
     echo "  ⚠ Linear team ID missing — pk_linear_set_state may degrade"
     warn=$((warn+1))
   fi
+  # Template placeholders still in place: doctor used to pass on them.
+  local ph=""
+  [ "$(pk_config "Project name" "")" = "your-project" ] && ph="$ph 'Project name'"
+  [ "$team" = "YourTeam" ] && ph="$ph 'Team name'"
+  [ "$team_id" = "00000000-0000-0000-0000-000000000000" ] && ph="$ph 'Team ID'"
+  if [ -n "$ph" ]; then
+    echo "  ✗ method.config.md still has the template placeholder for:$ph"
+    fail=$((fail+1))
+  fi
   # Linear API ping
   if [ -n "$key" ]; then
     local resp viewer
@@ -5719,6 +5787,23 @@ cmd_doctor() {
       fail=$((fail+1))
     fi
   fi
+  # Workflow states pk moves issues through. A stock Linear team has none of
+  # the pre-deploy ladder, so pk next finds nothing and ship/done no-op.
+  if [ "$linear_ok" = true ]; then
+    local have missing="" st
+    have=$(pk_linear_states_json 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo "")
+    for st in "Needs Spec" "Specced" "Approved" "In Progress" "UAT" "Done" "$(pk_first_env_state_name)"; do
+      echo "$have" | grep -qxF "$st" || missing="$missing, $st"
+    done
+    missing="${missing#, }"
+    if [ -z "$missing" ]; then
+      echo "  ✓ Linear workflow states present"
+    else
+      echo "  ⚠ Linear workflow states missing: $missing"
+      echo "    pk next / ship / done move issues through these — create them in Linear › Settings › Workflow (sop/Linear_SOP.md)"
+      warn=$((warn+1))
+    fi
+  fi
   # Integration branch
   echo "  • Integration branch: $(pk_integration_branch)"
   # Session logs (v2.1.2+ — replaces the retired bash Stop hook).
@@ -5739,12 +5824,12 @@ cmd_doctor() {
   fi
 
   # --- Upstream staleness (method repo) -----------------------------------
-  # The synced pk's PK_VERSION is the project's sync marker. Compare it
-  # against the method repo's latest release tag so a project can't silently
-  # fall releases behind (Piper sat a full release back through the 2.8/3.0
-  # cycle with no signal). Network-soft: unreachable repo is an info line,
-  # never an error — doctor must work offline. rc tags don't count as
-  # "latest"; running an rc of the latest release still warns.
+  # The project's bin/pk PK_VERSION is its sync marker (the running pk's when
+  # the project has none). Compare it against the method repo's latest release
+  # tag so a project can't silently fall releases behind. Network-soft:
+  # unreachable repo is an info line, never an error — doctor must work
+  # offline. rc tags don't count as "latest"; running an rc of the latest
+  # release still warns.
   local method_repo latest_tag
   method_repo=$(pk_config "Method repo" "${METHOD_REPO:-https://github.com/withpiper/pipekit.git}")
   # `|| true`: ls-remote fails on an unreachable repo and pipefail would
@@ -5756,16 +5841,17 @@ cmd_doctor() {
   if [ -z "$latest_tag" ]; then
     echo "  • method repo unreachable — skipped upstream-staleness check"
   else
-    local cur_base cur_n latest_n
-    cur_base=${PK_VERSION%%-*}
+    local synced_ver cur_base cur_n latest_n
+    synced_ver="${proj_ver:-$PK_VERSION}"
+    cur_base=${synced_ver%%-*}
     cur_n=$(echo "$cur_base" | awk -F. '{print $1*1000000 + $2*1000 + $3}')
     latest_n=$(echo "${latest_tag#v}" | awk -F. '{print $1*1000000 + $2*1000 + $3}')
     if [ "$cur_n" -gt "$latest_n" ]; then
-      echo "  ✓ synced Pipekit v$PK_VERSION (ahead of latest release $latest_tag)"
-    elif [ "$cur_n" -eq "$latest_n" ] && [ "$PK_VERSION" = "$cur_base" ]; then
-      echo "  ✓ synced Pipekit v$PK_VERSION (latest release)"
+      echo "  ✓ synced Pipekit v$synced_ver (ahead of latest release $latest_tag)"
+    elif [ "$cur_n" -eq "$latest_n" ] && [ "$synced_ver" = "$cur_base" ]; then
+      echo "  ✓ synced Pipekit v$synced_ver (latest release)"
     else
-      echo "  ⚠ synced Pipekit is v$PK_VERSION; latest release is $latest_tag"
+      echo "  ⚠ synced Pipekit is v$synced_ver; latest release is $latest_tag"
       echo "    update: /pipekit-update  (or ./scripts/sync-method.sh $latest_tag)"
       warn=$((warn+1))
     fi
@@ -5852,9 +5938,10 @@ cmd_config() {
   for entry in \
     "Integration branch" \
     "Promote to main" \
+    "Merge method|merge" \
     "Require QA review" \
     "Default deep flag" \
-    "Ship environments" \
+    "Ship environments|$(pk_ship_envs)" \
     "Linear API key env var" \
     "Linear transport|api" \
     "Migration dir" \
