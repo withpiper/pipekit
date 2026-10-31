@@ -2428,6 +2428,25 @@ out=$(cd "$FIXTURE" && "$DRIFT_SH" 2>&1); rc=$?
 [ $rc -eq 0 ] && case "$out" in *skipping*) ok "drift: no Migration dir → skip (exit 0)" ;; *) fail "drift: no Migration dir → skip (exit 0)" "out: $out" ;; esac \
   || fail "drift: no Migration dir → skip (exit 0)" "rc=$rc"
 
+# (1b) A column-padded V2-table row, read by the script's own fallback parser
+#      (no pk on PATH, as in CI): the key is found. It used to need exactly one
+#      space and skipped — exit 0, nothing checked.
+write_config '| Key | Value | Format | Default | Used by |
+|-----|-------|--------|---------|---------|
+| **Migration dir**          | `db/migrations` | path | (none) | reviews |
+| **Integration branch**     | `main`          | branch | derived | pk ship |
+'
+mkdir -p "$FIXTURE/db/migrations"
+out=$(cd "$FIXTURE" && PATH=/usr/bin:/bin "$DRIFT_SH" --base main 2>&1); rc=$?
+[ $rc -eq 0 ] && case "$out" in *skipping*) fail "drift: padded table row is read by the fallback parser" "skipped: $out" ;; *) ok "drift: padded table row is read by the fallback parser" ;; esac \
+  || fail "drift: padded table row is read by the fallback parser" "rc=$rc out: $out"
+rmdir "$FIXTURE/db/migrations"
+# (1c) Configured but the directory is missing → a config error, exit 1 (was a
+#      silent exit 0, so CI went green having checked nothing).
+out=$(cd "$FIXTURE" && PATH=/usr/bin:/bin "$DRIFT_SH" --base main 2>&1); rc=$?
+[ $rc -eq 1 ] && case "$out" in *"doesn't exist"*) ok "drift: configured dir missing → exit 1, not a skip" ;; *) fail "drift: configured dir missing → exit 1" "out: $out" ;; esac \
+  || fail "drift: configured dir missing → exit 1, not a skip" "rc=$rc (want 1) out: $out"
+
 # Build a migration history: base (main) carries 001+003, feature branches vary.
 write_config '```
 Integration branch: main
@@ -2488,6 +2507,51 @@ out=$(cd "$PKG" && "$PKG/scripts/check-migration-drift.sh" --base main 2>&1); rc
   || fail "drift: nested package's backdated migration flagged" "rc=$rc (want 1) out: $out"
 cleanup
 FIXTURE=""
+
+# ── pk-init render: --update never replaces a project's Pre-Deploy Gate ──────
+# In update mode the baseline is the project's own config. Detection knows
+# three scripts; a gate with seven hand-added security checks shrank to those
+# three with no prompt. Now the gate is left alone and the missing detected
+# commands are named on stderr.
+
+echo "== pk-init render: gate survives --update =="
+
+make_fixture
+cat > "$FIXTURE/cfg.md" <<'EOF'
+# Method Configuration
+
+## Pre-Deploy Gate
+
+```bash
+pnpm check-types
+pnpm check:guard-usage
+pnpm check:export-guard-client
+```
+
+## V2 keys
+
+| Key | Value |
+|-----|-------|
+| **Integration branch** | `dev` |
+EOF
+cat > "$FIXTURE/state.json" <<'EOF'
+{"repo_name":{"status":"detected","value":"acme"},"package_manager":{"status":"detected","value":"pnpm"},
+ "script_typecheck":{"status":"detected","value":"check-types"},"script_lint":{"status":"detected","value":"lint"},"script_test":{"status":"detected","value":"test"}}
+EOF
+out=$(PK_INIT_MODE=update bash "$REPO_ROOT/bin/pk-init/render.sh" "$FIXTURE/cfg.md" "$FIXTURE/state.json" 2>"$FIXTURE/render.err")
+if printf '%s' "$out" | grep -q 'check:guard-usage' && printf '%s' "$out" | grep -q 'check:export-guard-client' && ! printf '%s' "$out" | grep -q 'pnpm run lint'; then
+  ok "render --update: the project's gate is untouched"
+else
+  fail "render --update: the project's gate is untouched" "$(printf '%s' "$out" | sed -n '/Pre-Deploy/,/^```$/p' | head -8)"
+fi
+grep -q "detected 'pnpm run lint' is not in your Pre-Deploy Gate" "$FIXTURE/render.err" \
+  && ok "render --update: missing detected commands are named on stderr" \
+  || fail "render --update: missing detected commands are named on stderr" "$(cat "$FIXTURE/render.err")"
+out=$(bash "$REPO_ROOT/bin/pk-init/render.sh" "$FIXTURE/cfg.md" "$FIXTURE/state.json" 2>/dev/null)
+printf '%s' "$out" | grep -q 'pnpm run lint' && ! printf '%s' "$out" | grep -q 'check:guard-usage' \
+  && ok "render bootstrap: detected scripts replace the gate (unchanged behaviour)" \
+  || fail "render bootstrap: detected scripts replace the gate" "$(printf '%s' "$out" | sed -n '/Pre-Deploy/,/^```$/p' | head -8)"
+cleanup
 
 # ── Unit tests: spec-cycle trigger body is append-only (sourced) ─────────────
 # Through v4.24.0 the trigger told the Linear agent to REPLACE the existing
@@ -3503,6 +3567,15 @@ fi
 printf '%s' "$(read_query 1)" | grep -q 'description' \
   && fail "issue search: lean selection" "list selection carries description: $(read_query 1)" \
   || ok "issue search: list selection never carries description"
+# An empty result with --json is `[]`, not the human "no issues match" line —
+# that line on stdout broke every skill piping the result into jq.
+cp "$STUB_SEARCH" "$STUB_SEARCH.full"
+printf '%s\n' '{"data":{"issues":{"nodes":[]}}}' > "$STUB_SEARCH"
+out=$(unit_issue search nothing --json); code=$?
+[ $code -eq 0 ] && [ "$(printf '%s' "$out" | jq -c .)" = "[]" ] && ok "issue search: --json on an empty result prints []" || fail "issue search: --json on an empty result prints []" "exit $code, out: $out"
+out=$(unit_issue search nothing); code=$?
+[ $code -eq 0 ] && [ "$out" = "no issues match" ] && ok "issue search: text path still says no issues match" || fail "issue search: text path" "exit $code, out: $out"
+mv "$STUB_SEARCH.full" "$STUB_SEARCH"
 : > "$GQL_LOG"
 out=$(unit_issue search block --state approved --label bug --limit 99); code=$?
 if [ $code -eq 0 ] && [ "$(read_vars 1)" = '{"n":50,"q":"block","state":"approved","label":"bug","team":"Eng"}' ] \
