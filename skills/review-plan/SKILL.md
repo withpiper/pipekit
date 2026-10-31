@@ -73,8 +73,7 @@ If missing, surface a clear message and offer to sync:
 ```
 plan-reviewer agent not found at .claude/agents/plan-reviewer.md.
 Run `bash scripts/sync-method.sh` to install canonical Pipekit agents,
-or manually copy from your Pipekit checkout (templates/agents/plan-reviewer.md
-in older syncs, agents/plan-reviewer.md in current).
+or copy agents/plan-reviewer.md from your Pipekit checkout.
 
 Falling back to direct presentation: I'll show the PLAN.md structure
 and let you review manually.

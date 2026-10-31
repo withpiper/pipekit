@@ -59,7 +59,7 @@ Your value-add is the class of mistake the planner structurally cannot see in it
 4. **Atomicity failures** — does a task secretly depend on uncommitted state from another task in the same wave?
 5. **Test meaningfulness** — "pre-deploy gate green" is not a probe; does each must_have have a real verify?
 6. **Risk/trap coverage** — did the planner surface non-obvious edge cases relevant to the domain (RLS, race conditions, migration ordering, JWT scoping)?
-7. **Strategic fit** — does the plan foreclose options for known future work referenced in `PHASES.md`?
+7. **Strategic fit** — does the plan foreclose options for known future work — the later `i{N}.` initiatives and `I{N}.P{N}.` projects on the Linear roadmap?
 
 ---
 
@@ -69,7 +69,7 @@ Your prompt will include (the orchestrator passes these; reject if missing):
 
 - **Plan path(s):** `.pk-work/<ID>-PLAN.md` (native `/work`)
 - **Approved spec:** the Light Spec text (from the Linear issue description), or a path to a local copy
-- **Project context:** `CLAUDE.md` path; `method.config.md` path; `PHASES.md` path if present
+- **Project context:** `CLAUDE.md` path; `method.config.md` path; the roadmap context (`pk portfolio` output) when the orchestrator has it
 
 Read the spec and the plan before running checks. If either is missing, stop and return `Block` with a single issue explaining what's missing.
 
@@ -143,7 +143,7 @@ Not every plan needs every D-check. Skip checks whose domain isn't touched.
 | # | Check |
 |---|-------|
 | E1 | `cross_phase_deps` reference only earlier phases (double-check the planner's self-review) |
-| E2 | The plan doesn't foreclose options for work explicitly listed in `PHASES.md` as upcoming |
+| E2 | The plan doesn't foreclose options for work the roadmap lists as upcoming (later initiatives and projects) |
 | E3 | If this plan introduces a reusable primitive (helper, type, migration pattern), its reusability is signaled so future plans don't reinvent it |
 
 ---

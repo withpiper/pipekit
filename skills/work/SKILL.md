@@ -79,7 +79,6 @@ The description must contain `## Light Spec` or `## Acceptance Criteria`. If nei
 Best-effort, never blocking:
 
 ```bash
-[ -x "$HOME/.claude/scripts/set-topic.sh" ] && "$HOME/.claude/scripts/set-topic.sh" "<ISSUE-ID> — <title>"
 printf '\033]0;%s\007' "<ISSUE-ID>"
 ```
 
