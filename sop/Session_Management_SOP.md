@@ -2,7 +2,7 @@
 
 > How to manage Claude Code sessions, context, and compaction during Pipekit work. Informed by Anthropic's guidance for Claude Code + Opus 4.8 and adapted for Pipekit's pipeline.
 
-**v4.13.0** — Last updated: 2026-07-12  *(**v4.13.0 — effort guidance re-anchored to current models.** Session default is `high` with `xhigh` reserved for the most capability-sensitive steps; newer generations deliver more per effort level, so sweep *downward* on upgrade rather than porting old levels; subagent model + effort now lives in `method.config.md § Model Policy` roles. Carries v2.7.0: session boundaries reframed as cognitive-load not token scarcity; handoff & session-log content discipline section; effort table + `ultracode` row; 4.7→4.8 refresh)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue"; the retired parallel runner is gone from the subagent and effort tables)*
 
 ---
 

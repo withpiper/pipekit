@@ -1,6 +1,6 @@
 # Method Configuration
 
-**v5.3.0** — Last updated: 2026-10-31  *(**v5.3.0 — `## Ship Reminders`: path-matched `<ERE> => <message>` rules `pk ship` prints after opening the PR; informational only.** Carries v5.1.0 — `Plan path` (`engineering/WEEKLY_PLAN.md`), `Plan primary`, `Plan stale days` for the weekly plan `/tpm` now writes; `Weekly capacity days` and `Tier effort days` are session-days; `Runbook primary` / `Runbook stale days` stay as fallbacks.** Carries v5.0.1 — `Portfolio repos`: a sibling on the same `Team ID` shares the board and contributes only its in-flight state. Carries v5.0.0 — `Linear transport` (`api` | `mcp`, default `api`); runbook and portfolio keys for `/tpm`:** `Runbook path`, `Runbook primary`, `Portfolio repos`, `Weekly capacity days`, `Tier effort days`, `Runbook stale days`; `Lane map URL` removed with `/lane-map`; inert `Real-API harness` / `AI extraction paths` rows for `/verify` Step 3.6. Carries v4.34.0 — Model Policy: the execution row may be left blank to inherit the session model.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — the V2 keys table gains a Format column and ships its Value cells blank (`pk` read the old hint text as the value); new rows `Merge method`, `Secrets reference file`; `Plan path` accepts `none`; `Financial review WIT` → `Financial review issue`; the worked example is "three-tier")*
 
 Project-specific values that portable skills read at runtime. Copy this file to your project root as `method.config.md` and fill in your values.
 

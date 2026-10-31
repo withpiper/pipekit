@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v4.24.0** — Last updated: 2026-07-28  *(**v4.24.0 — receives the demand-loaded migration narratives.** New sections: § Silent-Failure Patterns (full narratives — the three read-time footgun classes behind the invariants kept in `pipekit-migrations.md`) and § MCP-applied migrations: failure anatomy and recovery (the 4-step drift walkthrough + the 2026-05 historical incident). Carries v4.18.0: migration safety Tiers 2+3 — `scripts/check-migration-drift.sh` and `templates/ci/migration-drift.yml`; and v4.0.0: the schema-change *artifact* rule + Migration Plan spec contract.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue")*
 
 **Source of truth:** Your project's CLAUDE.md and `method.config.md § Migration dir` define the migration tool and directory. This SOP provides the methodology that applies regardless of tool.
 

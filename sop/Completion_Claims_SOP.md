@@ -1,6 +1,6 @@
 # Completion Claims SOP
 
-**v4.33.0** — Last updated: 2026-09-02  *(**v4.33.0 — class 2 "AC wrong" added to RECONCILE precedence, with the closure rule:** an artifact-vs-AC contradiction resolves by changing one side, never by deferring it as a trade-off and shipping with both standing. Class 2 counts against the doubt-theater flag. Anchor: a consumer project, 2026-08.)*
+**v5.4.0** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; "WIT" is "issue")*
 
 The full completion-claims loop. The trigger and short form live in
 `.claude/rules/pipekit-discipline.md § Completion Claims` (always loaded);
