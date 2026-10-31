@@ -2,258 +2,191 @@
 
 **A structured way to ship software with AI — from idea to production, with a quality gate at every stage.**
 
-**v5.1.2** — Last updated: 2026-10-14. For release history and per-version notes, see [CHANGELOG.md](CHANGELOG.md).
+**v5.3.2** — Last updated: 2026-10-31. Release history and per-version notes: [CHANGELOG.md](CHANGELOG.md). MIT licensed.
 
 ---
 
 ## What is Pipekit?
 
-Pipekit takes a project from a raw idea all the way to production through a fixed sequence of stages. Each stage has a gate the work must pass before it can move forward. You run the whole thing inside [Claude Code](https://claude.ai/code), and it uses [Linear](https://linear.app/) to track what is happening across every piece of work.
+Pipekit takes a project from a raw idea to production through a fixed sequence of stages, each with a gate the work must pass before it moves on. You run it inside [Claude Code](https://claude.ai/code); it tracks every piece of work in [Linear](https://linear.app/).
 
-The thing to understand first: **Pipekit is the structure *around* an executor, not the executor itself.** It does not write your code directly. It runs the build step on Claude Code's built-in Workflow primitive, and it owns everything around that step — how a feature gets specified, how the work gets reviewed, where a human signs off, and how the change reaches production.
-
-In short, Pipekit handles:
+**Pipekit is the structure *around* an executor, not the executor itself.** It does not write your code directly. The build step runs on Claude Code's own Workflow primitive, and Pipekit owns everything around it: how a feature gets specified, how the work is reviewed, where a human signs off, and how the change reaches production.
 
 | Stage | What Pipekit does |
 |-------|-------------------|
 | **Foundation** | Turns an idea into a roadmap (concept, definition, strategy, setup) |
-| **Before a feature** | Spec creation, independent agent review, human sign-off |
+| **Before a feature** | Spec, independent agent review, human sign-off |
 | **During** | Plans and builds the feature, then runs a pre-deploy gate |
-| **After** | Tracks UAT, ships, promotes through environments, syncs docs |
+| **After** | UAT, ship, promote through environments, sync the docs |
 | **Throughout** | Keeps Linear current so you always know what is next |
 
-## Why it works this way
+The one rule above all others: **no stage may introduce guesswork into the next stage.** A spec must be complete enough to plan from; a plan complete enough to build from. When a stage finds ambiguity, the work goes *backward* to be clarified, not forward into a guess.
 
-### One rule above all others
+Pipekit bets on enforcement, not memory. A more capable model produces more *plausible* mistakes, and one agent doing everything in a long session has no independent check on its own judgment. The gates exist for exactly that: a spec a separate reviewer must pass, a plan an independent agent stress-tests, a verify step that reads the acceptance criteria rather than the executor's narration, an antagonistic review that approaches the diff cold. A bigger context window changes how much an agent can hold; it does not change whether an agent can independently judge work it helped produce.
 
-**No stage may introduce guesswork into the next stage.**
+## Requirements
 
-A spec must be complete enough to plan from. A plan must be complete enough to build from. When a stage finds ambiguity, the work goes *backward* to be clarified, not forward into a guess.
+| Need | Why | Notes |
+|------|-----|-------|
+| **Claude Code** | Runs the skills and the executor | [claude.ai/code](https://claude.ai/code). Use a real terminal (iTerm, VS Code, tmux) — the desktop app is not built for shell workflows. |
+| **A GitHub repo** + `gh` CLI, authenticated | `pk ship` / `pk ready` / `pk done` / `pk promote` work through pull requests | `gh auth login` |
+| **A Linear workspace** + personal API key | The board is the source of truth for "what's next" | Settings → Security & access → Personal API keys. Free plan is fine. |
+| `git`, `jq`, `curl`, `rsync`, `bash` 3.2+ | `bin/pk` and the sync script | macOS ships all of them; on Linux install `jq`. `pk` exits with a clear message if `jq` or `gh` is missing. |
 
-### Enforcement, not memory
+Optional, used only if present: the Supabase CLI (migration checks in `pk done`), 1Password `op` + `direnv` (secrets into worktrees), Semgrep and a `CLAUDE_CODE_OAUTH_TOKEN` repo secret (the CI review templates in `templates/ci/`), [cmux](https://github.com/manaflow-ai/cmux) (orchestrating worker sessions). None of these is needed for the daily loop.
 
-Frontier models keep getting better at holding context. Larger windows and native memory mean an agent can carry a whole project in its head and remember what it did last session. That erodes the value of tools whose main job was persistence — tracking what to do next, storing state between runs, re-priming a forgetful model.
+## Install — the first fifteen minutes
 
-Pipekit does not bet on persistence. It bets on enforcement.
-
-The failure mode that grows with model capability is not forgetting. It is confident-wrong output. A more capable model produces more *plausible* mistakes, and one agent doing everything in a single long session has no independent check on its own judgment. The gates exist for exactly that: a spec a separate reviewer must pass, a plan an independent agent stress-tests, a verify step that reads the goals rather than the executor's narration, an antagonistic review that approaches the diff cold.
-
-A bigger context window changes how much an agent can hold. It does not change whether an agent can independently judge work it helped produce. That constraint is what Pipekit is built around, and it does not relax as models improve.
-
-## Key terms
-
-The rest of this README (and the deeper docs) lean on a handful of terms. Here they are in one place.
-
-| Term | What it means |
-|------|---------------|
-| **Executor** | The thing that actually writes code. In Pipekit this is **native-on-Workflow** — Claude Code's first-party orchestration primitive. `/work` plans a feature, then runs it on the executor: a task list, one atomic commit per task, each verified before it integrates. |
-| **The gates** | Independent checks the work must pass — `/verify`, `/security-gate`, `/prod-ready`, antagonistic PR review. This is where correctness is enforced, *not* inside the executor. |
-| **Linear** | The issue tracker Pipekit uses, for two jobs: cross-issue visibility, and reading the roadmap (below). |
-| **The roadmap (in Linear)** | Pipekit reads "what's next" live from Linear's own hierarchy — same words Linear uses. **Initiatives** named `i1.`, `i2.` are the ordered chunks of the roadmap; **Projects** under them (`I1.P1.`, `I1.P2.`) are the ordered sub-chunks that hold the **Issues**. The number prefix sets the order. `pk next` finds the current initiative; `pk portfolio` shows the whole map. |
-| **WIT** | A work item — a single Linear issue moving through the pipeline. |
-| **Worktree** | `pk branch <ID>` creates an isolated git worktree for each issue, so work on one feature never disturbs another. |
-| **Stage 0** | The one-time project bootstrap (idea → roadmap). |
-| **The daily loop** | The per-issue cycle you run over and over: spec → branch → work → verify → ship → promote. |
-
-## The pipeline
-
-### Stage 0: Foundation (run once)
-
-Stage 0 is a *contract* — a set of artifacts the dev pipeline requires — not a rigid script. Three [entry modes](#entry-modes) satisfy it depending on where you start.
-
-| Step | Command | Output |
-|------|---------|--------|
-| Concept | `/concept` | `concept-brief.md` |
-| Define | `/define` | `project-definition.md` |
-| Strategy | `/strategy-create` | `Strategy/` docs (including Design Direction) |
-| Setup | `/startup` | Repo, database, deploy, Linear workspace |
-| Roadmap | `/roadmap-create` | Linear `i{N}.` / `I{N}.P{N}.` hierarchy |
-| Phase plan | `/phase-plan` | First Project's issues, queued in "Needs Spec" |
-
-### The daily loop (run per issue)
-
-| # | Step | Command | What happens |
-|---|------|---------|--------------|
-| 1 | Spec | `/light-spec` | Write the feature spec (codebase-aware, an AI-to-AI contract) |
-| 2 | Agent review | `/light-spec-revise` | An independent agent reviews; surgical revisions applied |
-| 3 | Human review | Linear UI | You sign off on the spec |
-| 4 | Find next | `pk next` | Reads the current initiative live from Linear, groups issues by status, surfaces the highest-priority startable issue (skips ones with unfinished blockers) |
-| 5 | Branch | `pk branch <ID>` | Creates a worktree + branch, moves the issue to In Progress |
-| 6 | **Work** | `/work <ID>` | Plans the issue inline, then builds it on the executor — task list, atomic commit per task, verify-before-integrate |
-| 7 | **Verify** | `/verify` | Pre-deploy gate: types + lint + tests, checked against the spec's acceptance criteria |
-| 7a | Security gate | `/security-gate` | Classifies the diff into sensitive categories (auth, payments, user input, external APIs, file storage, PII); runs the matching checklist, or passes instantly if none match. *Advisory.* |
-| 8 | Ship | `pk ship [--review]` | Push, open a **Draft** PR, move the issue to UAT. `--review` adds an antagonistic review. |
-| 8a | Flip to Ready | `pk ready` | Flip the Draft PR to Ready; fires whichever reviewer workflows the repo installed (`templates/ci/` ships Semgrep + claude-review) |
-| 9 | UAT | Linear / browser | You test the built feature — on the PR preview before merge, on the first deploy environment after |
-| 10 | Done | `pk done <ID> [--merge]` | Confirms the merge (or merges with `--merge`), cleans up the worktree, posts commits to Linear, advances the issue's state |
-| 10a | Prod-ready | `/prod-ready` | Once per feature, before the final promote: monitoring, no secrets in the bundle, rate limits, backups, flags, dashboard. *Advisory.* |
-| 11 | Promote | `pk promote <env>` | Opens a promote PR to the next environment; `--finish` advances the issues once it merges |
-| 11′ | Deploy | `pk deploy [<env>]` | For projects that ship by script (FTP/rsync/custom) instead of branch promotion |
-| 12 | Session log | `/pk-exit` | Narrative log of the session. Run it manually as the last command of *every* session — it is per-session, not per-issue, and is never auto-chained from another skill. |
-| 13 | Strategy sync | `/strategy-sync` | Update the strategy docs to match what actually shipped |
-
-> **Working in a worktree?** `pk done` runs from the parent repo and deletes the worktree. So inside a worktree session, run `/pk-exit` first, then leave the worktree and run `pk done` from the parent.
-
-### Seeing where you stand
-
-Three commands answer "what now?" at three altitudes — all read live from Linear, nothing to maintain:
-
-| Command | Altitude | Answers |
-|---------|----------|---------|
-| `pk next` | One action | The single best next step in your current initiative — priority- and dependency-aware. |
-| `pk status` | The board | Every in-flight / Approved / Needs-Spec issue, grouped by Project. |
-| `pk portfolio` | The whole map | Every `i{N}.` Initiative (active ones marked `← active`), then a **runway** of actionable work across all active Initiatives — grouped by `I{N}.P{N}.` Project, ordered priority-first, with a blocked item's blocker pulled up right above it, and a `⚠ Nd idle` flag on any sub-phase that's gone quiet. |
-
-`pk portfolio` is the zoom-out. When your head is deep in the code, it's the one screen that shows which Initiatives are live, what's next in each, and what's gone cold — exactly the part of project-managing-yourself that slips when you're heads-down.
-
-### Fast lanes over the loop
-
-| Command | What it does |
-|---------|--------------|
-| `/pk-express <ID>` | Idea-to-Draft-PR autopilot for simple issues. Chains spec → branch → work → verify → ship in one hands-off pass, pausing only at attention gates. |
-| `/pk-bug` | Bug pipeline with regression-test-first discipline: reproduce, write a failing test, fix, ship, postmortem. |
-| `/pr-fix` | PR review with severity-by-confidence triage and interactive fixes. |
-| `/pr-security-review` | Security-focused antagonistic review for migrations, RLS, auth, and other privileged surfaces. |
-
-## Where correctness is enforced
-
-The executor is not where Pipekit guarantees a change is right. **The gates are.** They run independent of the executor and approach the work without its assumptions:
-
-- `/verify` proves the code is correct in isolation, against the spec's acceptance criteria.
-- `/security-gate` and `/pr-security-review` catch sensitive-surface mistakes.
-- `/prod-ready` proves production can absorb the change safely.
-- Antagonistic PR review reads the diff cold.
-
-This separation — a permissive executor wrapped in strict, independent gates — is the whole design. (Validated head-to-head on hard financial work; see `CHANGELOG.md`, v3.0.0-rc1.)
-
-## Entry modes
-
-Pick the mode that matches your situation before running `/startup`. It auto-detects and confirms with you. Full routing is in [method.md § Entry Modes](method.md#entry-modes).
-
-| Mode | Who it's for | Stage 0 steps run | Steps skipped |
-|------|--------------|-------------------|---------------|
-| **Greenfield** | A fresh idea, no code yet | Full Stage 0 chain | None |
-| **Brownfield** | A team adopting Pipekit on an existing codebase | `/startup --mode=brownfield`, `/roadmap-create`, `/phase-plan` | `/concept`, `/define` |
-| **Inherited** | A new contributor joining a Pipekit project | None — verify the foundation, jump to the daily loop | All of Stage 0 |
-
-## Getting started
-
-> **Use a terminal.** Pipekit runs shell commands alongside Claude Code. Use a real terminal — iTerm, VS Code's integrated terminal, Cursor, tmux. The Claude desktop app is not built for shell workflows.
-
-### 1. Install Claude Code
-
-This is what runs everything. Install from [claude.ai/code](https://claude.ai/code).
-
-### 2. Set up your project
-
-Brand new:
+**1. Pull Pipekit into your repo.** No local clone needed; the script pulls from GitHub.
 
 ```bash
-mkdir ~/Projects/my-project
-cd ~/Projects/my-project
-git init
-```
-
-Existing folder: just `cd` into it.
-
-### 3. Pull Pipekit into your project
-
-```bash
-# Fetch the sync script from GitHub
+cd ~/Projects/my-project            # an existing repo, or `git init` a new one
 mkdir -p scripts
 curl -fsSL https://raw.githubusercontent.com/withpiper/pipekit/main/scripts/sync-method.sh -o scripts/sync-method.sh
 chmod +x scripts/sync-method.sh
-
-# Run it — pulls skills, templates, and SOPs into your project
-./scripts/sync-method.sh
+./scripts/sync-method.sh            # --dry-run to preview; --help for flags
 ```
 
-No local clone needed; the script pulls directly from GitHub. It creates a `method.config.md` file where your project-specific settings go (Linear IDs, environments, and so on). You fill that in during setup.
+This writes `.claude/skills/` (the skills), `.claude/rules/pipekit-*.md`, `.claude/workflows/`, `pipekit/` (SOPs, templates, the methodology docs), `bin/pk`, `engineering/RUNBOOK.md`, and a `method.config.md` from the template.
 
-### 4. Connect Linear
-
-Linear is the only external dependency. The executor is built into Claude Code, the roadmap is authored straight into Linear, and the commit-format hook is installed by the sync script.
-
-Pipekit talks to Linear over its GraphQL API through `bin/pk` — no MCP server required. Create a personal API key in Linear (Settings → Security & access → Personal API keys), export it under the name `method.config.md` → `Linear API key env var` gives (default `LINEAR_API_KEY`), and confirm the route:
+**2. Put `pk` on your PATH.**
 
 ```bash
-export LINEAR_API_KEY=lin_api_…        # or let your secrets manager inject it:
-op run --env-file=secrets.op -- pk doctor   # your op:// reference file
-pk doctor
+./bin/pk install                    # symlinks pk into /usr/local/bin or ~/.local/bin
 ```
 
-No workspace yet? Create a free one at [linear.app](https://linear.app/) first.
+**3. Give `pk` your Linear key.** Export it, or put it in `.env.local` (gitignored):
 
-> **Prefer an MCP server?** Set `Linear transport: mcp` in `method.config.md` and register [`@tacticlaunch/mcp-linear`](https://www.npmjs.com/package/@tacticlaunch/mcp-linear) as `linear-server` in the project's committed `.mcp.json` so it is visible inside worktrees (the first-party `mcp.linear.app` remote lacks the initiative and relation tools the initiative surface relies on). Every skill names the operation, not the tool; the verb table in [`sop/Linear_SOP.md § Linear transport`](sop/Linear_SOP.md#linear-transport) maps each one to its `pk` form and its MCP tool. The daily loop (`pk next` … `pk done`) is API on both routes.
+```bash
+export LINEAR_API_KEY=lin_api_…     # the variable name is configurable in method.config.md
+```
 
-### 5. Run the startup orchestrator
+**4. Create the workflow states Pipekit moves issues through.** In Linear → Settings → your team → Workflow, add these states (names matter; the full list with meanings is in [`sop/Linear_SOP.md` § Workflow States](sop/Linear_SOP.md#workflow-states)):
+
+- Required: **Needs Spec**, **Specced**, **Approved**, **In Progress**, **UAT**, **Done**, and one **In \<Env\>** per non-production environment (e.g. **In Dev** for a `dev → main` project).
+- Recommended: **Triage** (enable it in team settings), **Ideas**, **Future Initiatives**, **On Deck**, **Building**.
+
+A stock Linear team has none of the required states; `pk doctor` lists the ones still missing.
+
+**5. Fill in `method.config.md`, then check the setup.**
+
+```bash
+pk init                             # detects your stack and walks you through the config
+pk doctor                           # deps, key, team, workflow states, the binary in use
+```
+
+`pk doctor` is green when the Linear team resolves, the states exist, and the `pk` you are running is this project's `bin/pk`.
+
+**6. Bootstrap the project.** Inside Claude Code:
 
 ```
 /startup
 ```
 
-This walks you through everything interactively — capturing your idea, distilling it into a definition, generating strategy docs, choosing a stack, configuring Linear, building a roadmap, and selecting your first batch of work. Each step checks whether it is already done, so you can stop and resume anytime.
+It captures the idea, writes the definition and strategy docs, chooses a stack, authors the roadmap into Linear as `i1.`, `i2.` initiatives, and queues the first batch of issues. Each step checks whether it is already done, so you can stop and resume. Adopting Pipekit on an existing codebase: `/startup --mode=brownfield` skips the concept and definition steps. Already have docs? `/concept --docs docs/ proposal/` reads them and asks only about the gaps.
 
-Already have docs (proposals, research, notes)? Point the concept step at them:
+From here the daily loop below takes over. `pk next` tells you what to do at any moment.
 
-```
-/concept --docs docs/ proposal/
-```
+## Key terms
 
-It reads everything and only asks about the gaps.
+| Term | What it means |
+|------|---------------|
+| **Executor** | The thing that writes code: **native-on-Workflow**, Claude Code's first-party orchestration primitive. `/work` plans a feature, then runs it on the executor — a task list, one atomic commit per task, each verified before it integrates. |
+| **The gates** | Independent checks the work must pass — `/verify`, `/security-gate`, `/prod-ready`, antagonistic PR review. This is where correctness is enforced, *not* inside the executor. |
+| **The roadmap (in Linear)** | "What's next" is read live from Linear's own hierarchy. **Initiatives** named `i1.`, `i2.` are the ordered chunks of the roadmap; **Projects** under them (`I1.P1.`, `I1.P2.`) are ordered lanes of three to eight **Issues**. The number prefix sets the order. |
+| **Issue** | One Linear issue moving through the pipeline — the unit `/work` builds. (Older docs say *WIT*, "work item"; same thing.) |
+| **Worktree** | `pk branch <ID>` creates an isolated git worktree per issue, so work on one feature never disturbs another. |
+| **Stage 0** | The one-time project bootstrap (idea → roadmap). |
+| **The daily loop** | The per-issue cycle: spec → branch → work → verify → ship → promote. |
 
-### Updating Pipekit
+## The pipeline
 
-From inside Claude Code:
+### Stage 0: Foundation (run once)
 
-```
-/pipekit-update
-```
+A *contract* — the artifacts the dev pipeline requires — not a rigid script. Three entry modes satisfy it:
 
-Or from your terminal:
+| Mode | Who it's for | Stage 0 steps run |
+|------|--------------|-------------------|
+| **Greenfield** | A fresh idea, no code yet | `/concept` → `/define` → `/strategy-create` → `/startup` → `/roadmap-create` → `/phase-plan` |
+| **Brownfield** | Adopting Pipekit on an existing codebase | `/startup --mode=brownfield` → `/roadmap-create` → `/phase-plan` |
+| **Inherited** | A new contributor on a Pipekit project | None — verify the foundation, start the daily loop |
 
-```bash
-./scripts/sync-method.sh
-```
+### The daily loop (run per issue)
 
-Either way pulls the latest skills, SOPs, and templates. It never touches your project-specific files. Restart Claude Code afterward to load the new skills.
+| # | Step | Command | What happens |
+|---|------|---------|--------------|
+| 1 | Spec | `/light-spec` | Write the feature spec (codebase-aware, an AI-to-AI contract); an independent agent reviews it, `/light-spec-revise` applies the feedback |
+| 2 | Human review | Linear UI | You sign off on the spec → **Approved** |
+| 3 | Find next | `pk next` | Reads the current initiative live from Linear and surfaces the highest-priority startable issue (skips ones with unfinished blockers) |
+| 4 | Branch | `pk branch <ID>` | Worktree + branch; issue → In Progress |
+| 5 | **Work** | `/work <ID>` | Plans the issue inline, then builds it on the executor — task list, atomic commit per task, verify-before-integrate |
+| 6 | **Verify** | `/verify` | Pre-deploy gate: types + lint + tests, checked against the spec's acceptance criteria; writes the evidence `pk ship` requires |
+| 6a | Security gate | `/security-gate` | Classifies the diff into sensitive categories (auth, payments, user input, external APIs, file storage, PII) and runs the matching checklist. A hard gate on projects with a categories file: `pk ship` refuses without its PASS sentinel. |
+| 7 | Ship | `pk ship [--review]` | Push, open a **Draft** PR, issue → UAT. `--review` adds an antagonistic review. |
+| 7a | Flip to Ready | `pk ready` | Draft → Ready; fires whichever reviewer workflows the repo installed. Refuses if source changed after the `/verify` that vouches for the branch. |
+| 8 | UAT | Browser | You test the feature — on the PR preview before merge, on the first environment after |
+| 9 | Done | `pk done <ID> [--merge]` | Confirms the merge (or merges with `--merge`), cleans up the worktree, posts commits to Linear, issue → In \<FirstEnv\> (Done on a single-tier project) |
+| 9a | Prod-ready | `/prod-ready` | Once per feature, before the final promote: monitoring, secrets, rate limits, backups, flags. A hard gate on projects with a checks file. |
+| 10 | Promote | `pk promote <env>` | Opens the promote PR to the next environment; `pk promote <env> --finish` advances the issues once it merges. Script-deploy projects use `pk deploy [<env>]` instead. |
+| 11 | Session log | `/pk-exit` | Narrative log of the session. Run it manually as the last command of *every* session — never auto-chained. |
+| 12 | Strategy sync | `/strategy-sync` | Update the strategy docs to match what shipped |
+
+> **In a worktree?** `pk done` runs from the parent repo and deletes the worktree. Run `/pk-exit` inside the worktree session first, then leave it and run `pk done` from the parent.
+
+### Seeing where you stand
+
+| Command | Altitude | Answers |
+|---------|----------|---------|
+| `pk next` | One action | The single best next step in the current initiative — priority- and dependency-aware |
+| `pk status` | The board | Every in-flight / Approved / Needs-Spec issue, grouped by project |
+| `pk portfolio` | The whole map | Every initiative, the runway of actionable work across the active ones, and what has gone quiet |
+| `pk doctor` | The setup | Dependencies, key, team, workflow states, which `pk` binary is running |
+
+### Fast lanes
+
+| Command | What it does |
+|---------|--------------|
+| `/pk-express "<idea>"` | Idea-to-Draft-PR autopilot for simple issues: brainstorm → spec → branch → work → verify → ship, pausing only at attention gates |
+| `/pk-bug` | Bug pipeline: reproduce, failing test first, fix, ship, postmortem |
+| `/pr-fix` | PR review with severity-by-confidence triage and interactive fixes |
+| `/pr-security-review` | Antagonistic security review for migrations, RLS, auth and other privileged surfaces |
+| `/tpm` | A weekly planning session over the board — what must ship, what waits, written to `engineering/WEEKLY_PLAN.md` (optional; `Plan path: none` in the config turns it off) |
+
+## What is portable, and what assumes a stack
+
+The daily loop (`pk next` → `pk done`, `/work`, `/verify`, the spec skills) needs only Claude Code, Linear and GitHub. Some of the rest was built on a Next.js + Supabase + Vercel stack and still shows it:
+
+| Surface | Assumes |
+|---------|---------|
+| `/startup`'s stack step, `STARTUP.md` | Next.js, Supabase, Vercel, 1Password — adapt or skip |
+| `.claude/rules/pipekit-migrations.md`, `check-migration-drift.sh` | A versioned migration system (Supabase/Postgres-shaped). `Skip rules: pipekit-migrations` in `method.config.md` drops the rule. |
+| `/security-gate`, `/prod-ready`, `/repo-security-review`, `/financial-review` | Portable frameworks; the shipped example checklists lean on Supabase RLS and Vercel |
+| `templates/ci/` | GitHub Actions, Semgrep, a `CLAUDE_CODE_OAUTH_TOKEN` secret |
+| `.claude/rules/pipekit-cmux.md`, `sop/Cmux_Orchestration_SOP.md` | The cmux terminal. `Skip rules: pipekit-cmux` if you don't use it. |
 
 ## What syncs vs. what stays
 
-**Synced from Pipekit** (refreshed every time you run `sync-method.sh`):
+**Synced from Pipekit** every time you run `sync-method.sh`: `.claude/skills/` (portable skills), `.claude/rules/pipekit-*.md`, `.claude/workflows/`, `.claude/agents/`, `pipekit/` (SOPs, templates, `method.md`, `GUIDE.md`, `STARTUP.md`), `bin/pk` + `bin/pk-init/`, and the *How we run* block of `engineering/RUNBOOK.md`.
 
-- `.claude/skills/` — the portable skills
-- `pipekit/` — SOPs, templates, methodology docs
+**Yours, never overwritten:** `method.config.md`, `CLAUDE.md`, `.claude/rules/` (your own files), `.claude/skills/{project-specific}/`, `.claude/overrides/` (sync-safe customization of synced files — [method.md § Sync-Safe Overrides](method.md#sync-safe-overrides)), `concept-brief.md`, `project-definition.md`, `Strategy/`, the rest of `engineering/RUNBOOK.md`, and `engineering/WEEKLY_PLAN.md` once it exists.
 
-**Stays in your project** (never overwritten):
+Update with `/pipekit-update` from inside Claude Code, or `./scripts/sync-method.sh` from a terminal; restart Claude Code afterward to load the new skills. Pin a release with `./scripts/sync-method.sh vX.Y.Z` (any tag in `CHANGELOG.md`).
 
-- `concept-brief.md`, `project-definition.md`, `Strategy/` — your project's foundation docs
-- `method.config.md` — project configuration (Linear IDs, environments, gates)
-- `.claude/rules/` — your project's coding conventions
-- `.claude/skills/{project-specific}/` — skills tied to your stack
-- `.claude/overrides/` — sync-safe customization of synced files (see [method.md § Sync-Safe Overrides](method.md#sync-safe-overrides))
+## Which doc to read
 
-## Documentation
-
-| Doc | Read it for |
-|-----|-------------|
-| [GUIDE.md](GUIDE.md) | The complete instruction manual — start here |
-| [method.md](method.md) | The full methodology: pipeline, principles, tooling |
-| [RUNBOOK.md](RUNBOOK.md) | The per-issue daily loop, on one page |
-| [STARTUP.md](STARTUP.md) | Project bootstrap reference |
-| [sop/](sop/) | Standard operating procedures (code quality, Git, Linear, security, hooks) |
-| [CHANGELOG.md](CHANGELOG.md) | Release history and per-version notes |
+| You want to… | Read |
+|--------------|------|
+| Run the daily loop | [RUNBOOK.md](RUNBOOK.md) — the per-issue flow on one page, with the flowchart |
+| Understand *why* it is shaped this way | [method.md](method.md) — the methodology: stages, principles, ownership |
+| Look something up | [GUIDE.md](GUIDE.md) — the reference manual, every stage and skill |
+| Bootstrap a project by hand instead of `/startup` | [STARTUP.md](STARTUP.md) |
+| Do one specific thing correctly | [sop/](sop/) — Linear model, git and deployment, security gate, skills authoring, … |
+| See what changed between versions | [CHANGELOG.md](CHANGELOG.md) |
 
 ## Versioning
 
-Tag releases when stable. Projects can pin to a specific version:
+Semver-ish: minor bumps for new capability, patch for fixes and docs. A tag is created automatically when a PR titled with a `vX.Y.Z` token merges to `main`.
 
-```bash
-./scripts/sync-method.sh v4.9.0   # or any tag listed in CHANGELOG.md
-```
+## Origin and license
 
-Versioning is semver-ish — minor bumps for new capability, patch for fixes and docs. Tags are created automatically on merge to `main` when a PR title contains a `vX.Y.Z` token.
-
-## Origin
-
-Extracted from the Piper production finance platform. See [method.md](method.md) for the full methodology and [GUIDE.md](GUIDE.md) for the complete instruction manual.
+Extracted from a production finance platform, where the daily loop ran for the better part of a year before it was split out. MIT — see [LICENSE](LICENSE).
