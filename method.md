@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.3.1** — Last updated: 2026-10-31 16:00  *(**v5.3.1 — `pk ready` and `pk done` also look for `/verify` evidence in the branch's worktree**, so the drift check works from the parent checkout when `Logs/Verify` is gitignored.)*
+**v5.3.2** — Last updated: 2026-10-31 17:00  *(**v5.3.2 — `pk ready <ID>` from the parent checkout compares the evidence against the branch's commit, not the checkout's HEAD**; v5.3.1 made the parent find the evidence, and every fresh branch then read as drift.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

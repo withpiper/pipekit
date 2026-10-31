@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.3.1"
+PK_VERSION="5.3.2"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -1210,6 +1210,19 @@ pk_verify_sentinel_for_head() {
     fi
   done
   return 1
+}
+
+# Commit sha of <branch>: the local branch, else origin/<branch>, else HEAD.
+# Inside the branch's own worktree all three agree; from the parent only the
+# first two name the branch.
+pk_branch_head() {
+  local branch="$1" sha=""
+  if [ -n "$branch" ]; then
+    sha=$(git rev-parse --verify --quiet "${branch}^{commit}" 2>/dev/null) \
+      || sha=$(git rev-parse --verify --quiet "origin/${branch}^{commit}" 2>/dev/null) || sha=""
+  fi
+  [ -n "$sha" ] || sha=$(git rev-parse HEAD 2>/dev/null || echo "")
+  printf '%s\n' "$sha"
 }
 
 # Path of the linked worktree that has <branch> checked out, or nothing. The
@@ -3371,7 +3384,10 @@ cmd_ready() {
   # sentinel matched at ship time; this asks whether it still describes HEAD
   # now that you are about to spend human and bot review on it.
   local _rhead _drift
-  _rhead=$(git rev-parse HEAD 2>/dev/null || echo "")
+  # The branch's commit, not this checkout's HEAD: from the parent repo HEAD is
+  # the integration branch, and every flip read as drift once v5.3.1 let the
+  # parent find the worktree's evidence (Piper PIPER-1369, PR #1153).
+  _rhead=$(pk_branch_head "$current")
   if [ "${PK_VERIFY_BYPASS:-0}" = "1" ]; then
     echo "⚠ verify-drift gate bypassed via PK_VERIFY_BYPASS=1" >&2
     _drift="fresh"

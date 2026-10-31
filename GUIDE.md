@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.3.1** — Last updated: 2026-10-31 16:00  *(**v5.3.1 — `pk ready` and `pk done` also look for `/verify` evidence in the branch's worktree**, so the drift check works from the parent checkout when `Logs/Verify` is gitignored.)*
+**v5.3.2** — Last updated: 2026-10-31 17:00  *(**v5.3.2 — `pk ready <ID>` from the parent checkout compares the evidence against the branch's commit, not the checkout's HEAD**; v5.3.1 made the parent find the evidence, and every fresh branch then read as drift.)*
 
 ---
 

@@ -1542,6 +1542,33 @@ out=$( cd "$WT" && source "$PK" && pk_verify_sentinel_latest ABC-8 feature/ABC-8
 out=$( cd "$FIXTURE" && source "$PK" && pk_branch_worktree no/such/branch )
 [ -z "$out" ] && ok "worktree: a branch with no worktree adds no source" || fail "worktree: a branch with no worktree adds no source" "got '$out'"
 
+# v5.3.2: pk ready from the parent must compare against the BRANCH's commit. Its
+# HEAD there is the integration branch, so a fresh branch read as source drift
+# (Piper PIPER-1369, PR #1153: verified 1447fc0c, compared against dev's a9476f26).
+printf 'sha: %s\n' "$WT_HEAD" > "$WT/Logs/Verify/20260101/ABC-8/verify-complete.md"
+bh() { ( cd "$FIXTURE" && source "$PK" && pk_branch_head "$@" ); }
+[ "$(bh feature/ABC-8-wt)" = "$WT_HEAD" ] && ok "branch head: from the parent, the branch's commit, not the parent's HEAD" || fail "branch head: from the parent, the branch's commit" "got '$(bh feature/ABC-8-wt)' want $WT_HEAD"
+[ "$(bh no/such/branch)" = "$(gitf rev-parse HEAD)" ] && ok "branch head: unknown branch falls back to HEAD" || fail "branch head: unknown branch falls back to HEAD" "got '$(bh no/such/branch)'"
+cat > "$FIXTURE/shim/gh" <<EOF
+#!/usr/bin/env bash
+echo "gh \$*" >> "$GH_LOG"
+case "\$1 \$2" in
+  "pr view") echo '{"state":"OPEN","url":"https://example.test/pr/8","number":8,"baseRefName":"main","isDraft":true}' ;;
+esac
+exit 0
+EOF
+run_pk ready ABC-8
+case "$RUN_OUT" in
+  *"Source changed after the verify"*) fail "pk ready from the parent: a fresh branch is not read as drift" "output: $(echo "$RUN_OUT" | head -6)" ;;
+  *) ok "pk ready from the parent: a fresh branch is not read as drift" ;;
+esac
+gitw commit -q --allow-empty -m "fix(app): another after verify"; echo y >> "$WT/src/app.js"; gitw commit -qam "fix(app): source after verify"
+run_pk ready ABC-8
+case "$RUN_OUT" in
+  *"Source changed after the verify"*) ok "pk ready from the parent: real drift on the branch still blocks" ;;
+  *) fail "pk ready from the parent: real drift on the branch still blocks" "output: $(echo "$RUN_OUT" | head -6)" ;;
+esac
+
 grep -q 'means ship was forced or skipped' "$PK" && fail "pk ready: 'none' message no longer blames a forced ship" "old wording still present" || ok "pk ready: 'none' message no longer blames a forced ship"
 gitf worktree remove --force "$WT" >/dev/null 2>&1 || true
 cleanup
