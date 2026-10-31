@@ -22,9 +22,11 @@
 #   scripts/dogfood-sync.sh           refresh the mirrors
 #   scripts/dogfood-sync.sh --check   report drift, exit 1 if any (no writes)
 #
-# Never deletes. Anything present in a mirror but absent from source is
-# reported, not removed — same philosophy as sync-method.sh's per-file copy,
-# so a pipekit-local experiment can't be destroyed by a refresh.
+# The mirrors are generated: a file present in a mirror but absent from its
+# source is pruned (a retired skill dir left in place kept registering its
+# command — /launch, /lane-map and five others stayed available here for
+# months after they left skills/). Experiments belong in the source dirs.
+# --check reports such files as drift.
 
 set -euo pipefail
 
@@ -75,23 +77,29 @@ for pair in $PAIRS; do
     fi
   done < <(cd "$src" && find . -type f ! -name '.DS_Store' | sed 's|^\./||' | sort)
 
-  # Report-only: present in the mirror, absent from source.
+  # Present in the mirror, absent from source: prune (or report under --check).
   [ -d "$dst" ] || continue
   while IFS= read -r rel; do
     [ -f "$src/$rel" ] && continue
     EXTRA=$((EXTRA + 1))
-    echo "  EXTRA   $dst/$rel (not in $src/ — left alone)"
+    if [ "$CHECK_ONLY" = true ]; then
+      echo "  EXTRA   $dst/$rel (not in $src/)"
+    else
+      rm -f "$dst/$rel"
+      echo "  pruned  $dst/$rel (not in $src/)"
+    fi
   done < <(cd "$dst" && find . -type f ! -name '.DS_Store' | sed 's|^\./||' | sort)
+  [ "$CHECK_ONLY" = true ] || find "$dst" -type d -empty -delete 2>/dev/null || true
 done
 
 echo ""
 if [ "$CHECK_ONLY" = true ]; then
-  if [ "$DRIFT" -gt 0 ]; then
-    echo "dogfood mirrors are STALE: $DRIFT file(s) drifted or missing."
+  if [ "$DRIFT" -gt 0 ] || [ "$EXTRA" -gt 0 ]; then
+    echo "dogfood mirrors are STALE: $DRIFT file(s) drifted or missing, $EXTRA extra."
     echo "Fix: scripts/dogfood-sync.sh"
     exit 1
   fi
-  echo "dogfood mirrors are current${EXTRA:+ ($EXTRA extra file(s) reported above)}."
+  echo "dogfood mirrors are current."
 else
-  echo "dogfood sync complete: $DRIFT file(s) refreshed, $EXTRA extra left alone."
+  echo "dogfood sync complete: $DRIFT file(s) refreshed, $EXTRA pruned."
 fi
