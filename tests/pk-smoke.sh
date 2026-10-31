@@ -3823,6 +3823,91 @@ case "$RUN_OUT" in
   *) ok "issue create: guard off without Area labels config" ;;
 esac
 
+# ── pk verify: every gate command counts, not just the last (v5.2.4) ──────────
+# The gate is one bash script. Its exit status used to be the LAST command's, so
+# an early failure under a green last line passed `pk verify` and let
+# `pk promote` open its PR (Piper PIPER-1362: three `pnpm: command not found`
+# lines, then a skipped `if` leg exiting 0).
+
+echo "== pk verify gate exit status (v5.2.4) =="
+
+gate_config() {
+  # $1 = gate body (one command per line)
+  write_config "$(printf '## Pre-Deploy Gate\n\n```bash\n%s\n```' "$1")"
+}
+
+make_fixture
+
+gate_config 'false
+true'
+run_pk verify
+if [ $RUN_CODE -ne 0 ]; then ok "verify gate: early failure under a green last line fails"
+else fail "verify gate: early failure under a green last line fails" "rc=$RUN_CODE out: $(echo "$RUN_OUT" | tail -3)"; fi
+
+gate_config 'pk-smoke-no-such-command-xyz
+if false; then false; fi'
+run_pk verify
+if [ $RUN_CODE -ne 0 ]; then ok "verify gate: command-not-found before a skipped if-leg fails"
+else fail "verify gate: command-not-found before a skipped if-leg fails" "rc=$RUN_CODE out: $(echo "$RUN_OUT" | tail -3)"; fi
+case "$RUN_OUT" in *"gate command failed (exit 127): pk-smoke-no-such-command-xyz"*) ok "verify gate: names the failing command" ;;
+  *) fail "verify gate: names the failing command" "out: $(echo "$RUN_OUT" | tail -3)" ;; esac
+
+gate_config 'cat >/dev/null
+false'
+run_pk verify
+if [ $RUN_CODE -ne 0 ]; then ok "verify gate: the gate is not fed on stdin (a reader cannot swallow later lines)"
+else fail "verify gate: the gate is not fed on stdin (a reader cannot swallow later lines)" "rc=$RUN_CODE"; fi
+
+gate_config 'true
+if false; then false; fi
+git rev-parse -q --verify HEAD >/dev/null || { echo "no HEAD" >&2; exit 1; }
+true && true'
+run_pk verify
+if [ $RUN_CODE -eq 0 ]; then ok "verify gate: skipped if-legs and guarded || legs stay green"
+else fail "verify gate: skipped if-legs and guarded || legs stay green" "rc=$RUN_CODE out: $(echo "$RUN_OUT" | tail -3)"; fi
+
+gate_config 'f() { false; }
+f
+true'
+run_pk verify
+case "$RUN_OUT" in *"gate command failed (exit 1): false"*) ok "verify gate: a failure inside a function is named" ;;
+  *) fail "verify gate: a failure inside a function is named" "rc=$RUN_CODE out: $(echo "$RUN_OUT" | tail -3)" ;; esac
+
+gate_config 'if true; then (exit 3); fi
+true'
+run_pk verify
+if [ $RUN_CODE -ne 0 ]; then ok "verify gate: a failing subshell inside a taken if-leg fails"
+else fail "verify gate: a failing subshell inside a taken if-leg fails" "rc=$RUN_CODE"; fi
+
+# pk promote must stop at step 2, before the PR opens.
+make_fixture
+GE_REMOTE=$(mktemp -d); git -C "$GE_REMOTE" init -q --bare
+git -C "$FIXTURE" remote add origin "$GE_REMOTE"
+git -C "$FIXTURE" branch dev
+git -C "$FIXTURE" push -q -u origin main dev 2>/dev/null
+git -C "$FIXTURE" checkout -q dev
+git -C "$FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "dev work"
+git -C "$FIXTURE" push -q origin dev 2>/dev/null
+git -C "$FIXTURE" checkout -q main
+write_config '```
+Integration branch: dev
+Ship environments: dev,main
+```
+
+## Pre-Deploy Gate
+
+```bash
+pk-smoke-no-such-command-xyz
+true
+```'
+: > "$GH_LOG"
+run_pk promote main
+o=0; case "$RUN_OUT" in *"Open promote PR"*) o=1 ;; esac
+p=0; grep -q 'pr create' "$GH_LOG" && p=1
+if [ $RUN_CODE -ne 0 ] && [ $o -eq 0 ] && [ $p -eq 0 ]; then ok "promote: failing gate line stops before the PR opens"
+else fail "promote: failing gate line stops before the PR opens" "rc=$RUN_CODE opened=$o gh_pr_create=$p out: $(echo "$RUN_OUT" | tail -3)"; fi
+rm -rf "$GE_REMOTE"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo

@@ -36,7 +36,7 @@ set -euo pipefail
 # Discovery & configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PK_VERSION="5.2.3"
+PK_VERSION="5.2.4"
 
 pk_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null
@@ -3840,7 +3840,24 @@ cmd_verify() {
     return 1
   fi
   echo "Running pre-deploy gate..."
-  echo "$cmd" | bash || return $?
+  # The gate is one script, so without errexit bash's exit status is only its last
+  # command's: an early failure under a green last line used to pass. errexit stops
+  # at the first failing command and still exempts if/while conditions and non-final
+  # && and || legs, so a skipped conditional leg stays green. The ERR trap only names
+  # the command; -E carries it into functions (bash 3.2 does not fire it for a
+  # failing subshell; errexit still exits). Known limit, errexit's own: a failure in
+  # a non-final `a && b` leg, or before the last stage of a pipe, does not stop the
+  # gate, so give each check its own line. Not pipefail: a `git diff | grep -q`
+  # condition can SIGPIPE and skip its leg. stdin is /dev/null so a check never
+  # blocks on a terminal.
+  local prelude='set -eE; trap '\''echo "pk: gate command failed (exit $?): $BASH_COMMAND" >&2'\'' ERR'
+  local rc=0
+  bash -c "$prelude
+$cmd" </dev/null || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "pk: pre-deploy gate FAILED (exit $rc)" >&2
+    return "$rc"
+  fi
 
   # Optional: self-reference check (catches RS-29-style integration misses
   # where the gate is green but a predecessor's placeholder still references
