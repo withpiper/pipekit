@@ -119,7 +119,7 @@ Consumes Approved issues from the spec loop. Each pass produces a merged PR and 
   │         Needs Spec   (with /light-spec hint)             │
   │     • surfaces "Other initiatives: N Approved outside" footer │
   │     • falls back to global "next Approved" when no       │
-  │       i{N}. initiatives present (PHASES.md fallback)     │
+  │       i{N}. initiatives exist on the board               │
   │     • optional: pk status   (full unscoped board view)   │
   └──────────────────────────────────────────────────────────┘
        │

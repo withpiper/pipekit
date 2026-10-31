@@ -94,7 +94,7 @@ Pipekit v2 covers most of the daily delivery loop via `pk ship` (push + open PR 
 | If you use... | What you need |
 |---------------|---------------|
 | Vercel | Nothing — Vercel hooks handle preview/prod on PR open + main merge. |
-| Supabase | A GitHub Actions migration workflow (`db-migrate.yml` + `db-pr-check.yml`); the rs-vault repo has a working pair you can lift. No Pipekit skill needed. |
+| Supabase | A GitHub Actions migration workflow (`db-migrate.yml` + `db-pr-check.yml`), a few dozen lines each. No Pipekit skill needed. |
 | Any DB with test users | `reset-user` (project-specific skill — clears a user + their data for testing). |
 | Monorepo with shared UI | `component` (project-specific skill — scaffolds a shared component). |
 | Multi-env beyond dev/main | Set `Ship environments: dev,beta,main` in `method.config.md`; `pk promote` walks the chain. |
@@ -219,7 +219,7 @@ In v2, the daily delivery loop (push, PR, promote, migrate) is covered by `pk *`
 | Open PR feature → dev | `pk ship` (Draft by default v2.6.0+; `pk ready` flips to Ready) |
 | Promote one hop along Ship environments | **Phase 1**: `pk promote <env>` (e.g. `pk promote beta`) — opens promote PR, WITs stay in source state. **Phase 2**: `pk promote <env> --finish` after the PR merges — transitions WITs → `In <Env>` or → Done by chain position. |
 | Push branch + get Vercel preview | Vercel auto-fires on PR open |
-| Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` (lift from rs-vault) on merge to main |
+| Apply Supabase migrations to prod | GitHub Actions `db-migrate.yml` on merge to main |
 | Validate migrations before merge | GitHub Actions `db-pr-check.yml` against ephemeral postgres on PR open |
 | Linear status transitions | `pk ship` → `UAT` (PR open as Draft on preview, v2.6.0+); `pk done` → `In <FirstEnv>` (e.g. `In Dev` — merge confirmed; v2.6.0+ also auto-pulls the integration branch); `pk promote <env> --finish` → `In <Env>` (intermediate) or → Done (final hop). Two-phase since v2.6.0 — Phase 1 (`pk promote <env>`) opens the PR without state change. |
 
