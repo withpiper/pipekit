@@ -5606,8 +5606,10 @@ cmd_gql() {
 }
 
 cmd_help() {
-  cat <<EOF
-pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)
+  echo "pk — Pipekit v2 daily-loop dispatcher (v$PK_VERSION)"
+  # Quoted delimiter: the text carries backticks, which an unquoted heredoc
+  # runs as commands ("Area: command not found" on every pk --help).
+  cat <<'EOF'
 
 Subcommands:
   pk next [--lane <TAG>]          What should I do now? Focus lanes (project priority 1/2/3 → tier A/B/C) first, then Supporting, then the rest of the board. --lane I8.P6 pins that lane as tier A for this run.

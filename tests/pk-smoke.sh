@@ -638,6 +638,15 @@ for sub in ship done promote branch next ready status focus; do
   ok "pk $sub --help: usage, exit 0, no gh"
 done
 
+# The usage text carries backticks; an unquoted heredoc ran them as commands
+# and printed "Area: command not found" on every --help and unknown-subcommand path.
+run_pk --help
+case "$RUN_OUT" in
+  *"command not found"*) fail "pk --help runs none of its own text" "$(echo "$RUN_OUT" | grep 'command not found' | head -1)" ;;
+  *'`Area:`'*) ok "pk --help runs none of its own text" ;;
+  *) fail "pk --help runs none of its own text" "backticked text missing from usage" ;;
+esac
+
 # ── CLI tests: promote derivation / guard rails ──────────────────────────────
 
 echo "== promote guard rails =="
