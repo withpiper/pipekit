@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.4.2** — Last updated: 2026-10-31 18:54  *(**v5.4.2 — the rs-vault handoff:** `check-migration-drift.sh` reads a padded table row and fails on a configured-but-missing dir; `pk init --update` keeps the project's Pre-Deploy Gate; `pk issue search --json` prints `[]` on an empty result; no `/tpm` skill under `Plan path: none`; `pk doctor` treats a docs-only issue as information.)*
+**v5.4.3** — Last updated: 2026-11-02 17:57  *(**v5.4.3 — Supabase CLI 3.x:** `pk done`'s migration check and `check-migration-drift.sh --remote` target the linked project on CLI 2.x and 3.x, and a CLI that can't run is reported as nothing checked, not as unapplied migrations; the migrations rule and SOPs give hosted commands with `--remote` and their 2.x form.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >
