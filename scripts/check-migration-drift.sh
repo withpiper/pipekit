@@ -14,7 +14,8 @@
 #   C. (--remote, best-effort) Disk vs remote history — the class behind the MCP
 #      wall-clock-stamp incident (a consumer project, 2026-05: ~5h deploy lockup from "Remote
 #      migration versions not found in local migrations directory"). Delegates to
-#      `supabase db push --dry-run`, which refuses loudly on exactly this drift.
+#      `supabase db push --dry-run --remote` (`--linked` on CLI 2.x), which refuses
+#      loudly on exactly this drift.
 #      Requires the supabase CLI + a linked project; skipped with a note otherwise.
 #
 # Usage:
@@ -149,13 +150,17 @@ fi
 # --- Check C (--remote): disk vs remote history, via the tool itself --------
 if $REMOTE; then
   if command -v supabase >/dev/null 2>&1 && [ -d supabase ]; then
-    echo "  → remote-history check (supabase db push --dry-run)…"
-    if out=$(supabase db push --dry-run 2>&1); then
+    # CLI 3.x pushes to the local stack unless given --remote and deprecates --linked;
+    # 2.x rejects --remote. An unreadable version gets --linked, which both accept.
+    sb_major=$(supabase --version 2>/dev/null | sed -n '1s/^v\{0,1\}\([0-9][0-9]*\)\..*/\1/p') || sb_major=""
+    if [ -n "$sb_major" ] && [ "$sb_major" -ge 3 ]; then sb_target=--remote; else sb_target=--linked; fi
+    echo "  → remote-history check (supabase db push --dry-run $sb_target)…"
+    if out=$(supabase db push --dry-run "$sb_target" 2>&1); then
       echo "  ✓ remote history consistent with disk"
     else
-      echo "  ✗ remote-history drift (this is what blocks the next deploy):"
+      echo "  ✗ remote-history check failed — drift (which blocks the next deploy), or the CLI could not run:"
       echo "$out" | tail -12 | sed 's/^/      /'
-      echo "      Recovery: supabase migration repair (human-confirmed — shared-state mutation;"
+      echo "      Recovery: supabase migration repair $sb_target (human-confirmed — shared-state mutation;"
       echo "      see pipekit-migrations.md § MCP-applied migrations and disk drift)."
       DRIFT=1
     fi

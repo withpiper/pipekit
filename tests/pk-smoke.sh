@@ -268,6 +268,38 @@ echo "abcdefghijklmnopqrst" > "$LINKD/supabase/.temp/project-ref"
 unit_sbln "$LINKD" && ok "supabase linked: project-ref present → linked" || fail "supabase linked: project-ref present" "reported not linked"
 rm -rf "$LINKD"
 
+# CLI 3.x lists the LOCAL stack unless given --remote (and deprecates --linked); 2.x
+# rejects --remote. A bare `migration list 2>/dev/null || true` compared merges
+# against local history on 3.x, and a CLI that refused to load config.toml read as
+# "every migration unapplied". Stub CLI: --version prints $SB_VER, anything else
+# logs argv and exits $SB_RC with a stderr line.
+SBSTUB=$(mktemp -d)
+cat > "$SBSTUB/supabase" <<'EOF'
+#!/usr/bin/env bash
+[ "${1:-}" = "--version" ] && { echo "$SB_VER"; exit 0; }
+echo "$*" > "$SB_ARGV"
+[ "${SB_RC:-0}" -eq 0 ] && { echo "20260101000000 | 20260101000000"; exit 0; }
+echo "[inbucket] in supabase/config.toml is no longer supported." >&2; exit "$SB_RC"
+EOF
+chmod +x "$SBSTUB/supabase"
+export SB_ARGV="$SBSTUB/argv"
+unit_sbflag() { ( cd "$REPO_ROOT" && PATH="$SBSTUB:$PATH" SB_VER="$1" bash -c "source '$PK' && pk_supabase_remote_flag" ); }
+for case_ in "2.116.0|--linked" "2.122.0|--linked" "3.0.0|--remote" "v3.1.2|--remote" "10.0.0|--remote" "garbage|--linked" "|--linked"; do
+  in="${case_%%|*}"; want="${case_##*|}"
+  v=$(unit_sbflag "$in")
+  [ "$v" = "$want" ] && ok "supabase remote flag: version '$in' → $want" || fail "supabase remote flag: version '$in'" "got '$v', want '$want'"
+done
+
+rm -f "$SB_ARGV"
+out=$( cd "$REPO_ROOT" && PATH="$SBSTUB:$PATH" SB_VER=3.0.0 SB_RC=0 bash -c "source '$PK' && pk_supabase_remote_migrations apps/legacy" 2>&1 ); rc=$?
+argv=$(cat "$SB_ARGV" 2>/dev/null)
+[ $rc -eq 0 ] && [ "$argv" = "--agent no --workdir apps/legacy migration list --remote" ] \
+  && ok "supabase remote migrations: 3.x passes --remote with --agent no + --workdir" \
+  || fail "supabase remote migrations: 3.x argv" "rc=$rc argv='$argv'"
+out=$( cd "$REPO_ROOT" && PATH="$SBSTUB:$PATH" SB_VER=3.0.0 SB_RC=1 bash -c "source '$PK' && pk_supabase_remote_migrations ." 2>&1 ); rc=$?
+[ $rc -eq 1 ] && case "$out" in *inbucket*) ok "supabase remote migrations: a CLI failure keeps its exit code and stderr" ;; *) fail "supabase remote migrations: failure stderr" "out: $out" ;; esac \
+  || fail "supabase remote migrations: a CLI failure keeps its exit code" "rc=$rc (want 1)"
+
 # ── Unit tests: issue priority sort (sourced) ────────────────────────────────
 # pk_issues_priority_sort orders a JSON issue array most-important-first so
 # pk next/pk status surface the top item and .[0] (the suggested next action) is
@@ -2191,6 +2223,52 @@ case "$GD_OUT" in
   *) [ $GD_RC -eq 0 ] && ok "done: no on-merge note → no follow-through section" || fail "done: no on-merge note" "rc=$GD_RC" ;;
 esac
 
+# (j) A merge carrying a migration, on a linked project whose CLI can't run (3.x
+#     refusing a removed config key: exit 1, empty stdout). The check says nothing
+#     was checked instead of calling the migration unapplied, and pk done carries
+#     on. With a working CLI the same merge reads the --remote history.
+gd_git checkout -q -b feature/GD-6-mig
+mkdir -p "$FIXTURE/supabase/migrations" "$FIXTURE/supabase/.temp"
+echo "select 1;" > "$FIXTURE/supabase/migrations/20260101000000_init.sql"
+gd_git add supabase/migrations; gd_git commit -q -m "feat(gd): add a migration"
+GD6_HEAD=$(gd_git rev-parse HEAD)
+gd_git checkout -q main
+gd_git merge -q --no-ff feature/GD-6-mig -m "Merge pull request #11 from t/feature/GD-6-mig"
+GD6_MERGE=$(gd_git rev-parse HEAD)
+gd_git push -q origin main
+gd_git branch -D feature/GD-6-mig >/dev/null
+echo "abcdefghijklmnopqrst" > "$FIXTURE/supabase/.temp/project-ref"
+printf '[{"headRefName":"feature/GD-6-mig","headRefOid":"%s","mergeCommit":{"oid":"%s"},"mergedAt":"2026-11-02T09:00:00Z","number":11,"state":"MERGED","url":"https://github.com/t/r/pull/11"}]\n' \
+  "$GD6_HEAD" "$GD6_MERGE" > "$FIXTURE/gh-GD-6.json"
+cat > "$FIXTURE/shim/gh" <<EOF
+#!/usr/bin/env bash
+echo "gh \$*" >> "$GH_LOG"
+case "\$*" in *"pr list"*"head:feature/GD-6-"*) cat "$FIXTURE/gh-GD-6.json" ;; esac
+exit 0
+EOF
+GD_PATH_SAVE=$PATH; PATH="$SBSTUB:$PATH"; export SB_VER=3.0.0
+rm -f "$SB_ARGV"; SB_RC=1; export SB_RC
+gd_done GD-6
+case "$GD_OUT" in
+  *"not matched"*) fail "done: CLI failure in the migration check" "read as unapplied: $GD_OUT" ;;
+  *"could not read the remote migration history (supabase exited 1) — nothing was checked"*inbucket*"migration list --remote"*)
+    [ $GD_RC -eq 0 ] && [ "$(gd_writes | cut -f1 | paste -sd, -)" = "commentCreate,issueUpdate" ] \
+      && ok "done: a CLI that can't run is reported as nothing checked, and pk done carries on" \
+      || fail "done: CLI failure in the migration check" "rc=$GD_RC writes=$(gd_writes | cut -f1 | paste -sd, -)" ;;
+  *) fail "done: CLI failure in the migration check" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+rm -f "$SB_ARGV"; SB_RC=0
+gd_done GD-6
+case "$GD_OUT" in
+  *"could not read"*) fail "done: migration check with a working CLI" "reported a CLI failure: $GD_OUT" ;;
+  *"migration(s) in this merge"*)
+    [ "$(cat "$SB_ARGV" 2>/dev/null)" = "--agent no --workdir . migration list --remote" ] \
+      && ok "done: working 3.x CLI → migration check reads the --remote history" \
+      || fail "done: migration check argv" "argv='$(cat "$SB_ARGV" 2>/dev/null)'" ;;
+  *) fail "done: migration check with a working CLI" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+PATH=$GD_PATH_SAVE; unset SB_VER SB_RC
+
 cleanup
 FIXTURE=""
 
@@ -2404,8 +2482,8 @@ esac
 
 # ── CLI tests: check-migration-drift.sh (gap #1 Tier 2, v4.18.0) ─────────────
 # Git-only checks A (branch collision vs base tail — the collision class) and
-# B (duplicate versions on disk). The --remote check needs a live supabase
-# link and is not smoke-testable; A+B are what the CI template runs.
+# B (duplicate versions on disk); A+B are what the CI template runs. The --remote
+# check's real verdict needs a live supabase link — only its CLI targeting is tested.
 
 echo "== check-migration-drift (v4.18.0) =="
 
@@ -2486,6 +2564,23 @@ rm -f "$FIXTURE/db/migrations/20260103000000_dupe.sql"
 out=$(cd "$FIXTURE" && "$DRIFT_SH" --base origin/nope 2>&1); rc=$?
 [ $rc -eq 0 ] && case "$out" in *"not resolvable"*) ok "drift: unresolvable base warns, never false-blocks" ;; *) fail "drift: unresolvable base warns, never false-blocks" "out: $out" ;; esac \
   || fail "drift: unresolvable base warns, never false-blocks" "rc=$rc (want 0)"
+
+# (5b) --remote targets the linked project on either CLI major (stub CLI from the
+#      supabase unit tests): 3.x would dry-run against the local stack without
+#      --remote, 2.x rejects it. A failing CLI is drift-or-broken, exit 1.
+mkdir -p "$FIXTURE/supabase"
+for case_ in "2.122.0|--linked" "3.0.0|--remote"; do
+  ver="${case_%%|*}"; want="${case_##*|}"; rm -f "$SB_ARGV"
+  out=$(cd "$FIXTURE" && PATH="$SBSTUB:$PATH" SB_VER="$ver" SB_RC=0 "$DRIFT_SH" --base main --remote 2>&1); rc=$?
+  argv=$(cat "$SB_ARGV" 2>/dev/null)
+  [ $rc -eq 0 ] && [ "$argv" = "db push --dry-run $want" ] \
+    && ok "drift --remote: CLI $ver dry-runs with $want" \
+    || fail "drift --remote: CLI $ver dry-runs with $want" "rc=$rc argv='$argv' out: $out"
+done
+out=$(cd "$FIXTURE" && PATH="$SBSTUB:$PATH" SB_VER=3.0.0 SB_RC=1 "$DRIFT_SH" --base main --remote 2>&1); rc=$?
+[ $rc -eq 1 ] && case "$out" in *"check failed"*inbucket*) ok "drift --remote: a CLI that can't run fails loud (exit 1)" ;; *) fail "drift --remote: CLI failure output" "out: $out" ;; esac \
+  || fail "drift --remote: a CLI that can't run fails loud" "rc=$rc (want 1)"
+rmdir "$FIXTURE/supabase"
 cleanup
 FIXTURE=""
 
@@ -2507,6 +2602,7 @@ out=$(cd "$PKG" && "$PKG/scripts/check-migration-drift.sh" --base main 2>&1); rc
   || fail "drift: nested package's backdated migration flagged" "rc=$rc (want 1) out: $out"
 cleanup
 FIXTURE=""
+rm -rf "$SBSTUB"
 
 # ── pk-init render: --update never replaces a project's Pre-Deploy Gate ──────
 # In update mode the baseline is the project's own config. Detection knows

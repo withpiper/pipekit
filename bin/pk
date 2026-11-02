@@ -107,6 +107,22 @@ pk_supabase_workdir() {
 pk_supabase_linked() {
   [ -s "${1:-.}/supabase/.temp/project-ref" ]
 }
+
+# pk_supabase_remote_flag — the flag that points a migration command at the linked
+# project. CLI 3.x targets the local stack unless given --remote and deprecates
+# --linked; 2.x rejects --remote. An unreadable version gets --linked, which both accept.
+pk_supabase_remote_flag() {
+  local major
+  major=$(supabase --version 2>/dev/null | sed -n '1s/^v\{0,1\}\([0-9][0-9]*\)\..*/\1/p') || major=""
+  if [ -n "$major" ] && [ "$major" -ge 3 ]; then echo "--remote"; else echo "--linked"; fi
+}
+
+# pk_supabase_remote_migrations <workdir> — the linked project's migration history as
+# the human table, with the CLI's own stderr and exit code. --agent no pins the table
+# format whoever runs pk; --workdir keeps a subdir chain from writing <root>/supabase/.temp.
+pk_supabase_remote_migrations() {
+  supabase --agent no --workdir "${1:-.}" migration list "$(pk_supabase_remote_flag)"
+}
 pk_config() {
   local label="$1"
   local default="${2:-}"
@@ -3757,38 +3773,46 @@ cmd_done() {
       local sb_workdir
       sb_workdir=$(pk_supabase_workdir "$migration_dir")
       if ! command -v supabase &>/dev/null; then
-        echo "  ⚠ supabase CLI not found — verify migrations manually: supabase --workdir $sb_workdir migration list"
+        echo "  ⚠ supabase CLI not found — verify migrations manually: supabase --workdir $sb_workdir migration list --remote (CLI 2.x: --linked)"
       elif ! pk_supabase_linked "$sb_workdir"; then
         # No linked project under the workdir: `migration list` would fail and every
         # migration would read as "not matched" — a false alarm on every merge.
         echo "  ℹ skipped: $sb_workdir/supabase is not linked to a project, so there is nothing local to compare."
         echo "    The CI apply workflow is the check; ground truth is the live DB's migration history."
       else
-        local remote_list
-        # --workdir: never run the CLI from the repo root when the chain lives in a subdir
-        # (a bare call writes <root>/supabase/.temp and can act on a stale link there).
-        # --agent no: pin the human table format this greps, whoever runs pk.
-        remote_list=$(supabase --agent no --workdir "$sb_workdir" migration list 2>/dev/null || true)
-        local all_applied=true
-        while IFS= read -r mfile; do
-          local mname
-          mname=$(basename "$mfile" .sql)
-          if ! echo "$remote_list" | grep -qF "$mname"; then
-            all_applied=false
-            echo "  ⚠ not matched in 'supabase migration list': $mname"
-          fi
-        done <<< "$new_migrations"
-        if [ "$all_applied" = true ]; then
-          echo "  ✓ all ${migration_count} migration(s) applied to remote"
+        local remote_list sb_flag sb_err sb_rc=0
+        sb_flag=$(pk_supabase_remote_flag)
+        sb_err=$(mktemp)
+        remote_list=$(pk_supabase_remote_migrations "$sb_workdir" 2>"$sb_err") || sb_rc=$?
+        if [ "$sb_rc" -ne 0 ]; then
+          # A CLI that refused to run (bad config.toml, auth, network) listed nothing;
+          # matching against that would call every migration unapplied.
+          echo "  ⚠ could not read the remote migration history (supabase exited $sb_rc) — nothing was checked:"
+          tail -5 "$sb_err" | sed 's/^/      /'
+          echo "    Fix that, then check by hand: supabase --workdir $sb_workdir migration list $sb_flag"
         else
-          # Advisory only — this is a filename-basename heuristic, not proof of drift.
-          # A legitimate collision-rename leaves the remote history holding the OLD
-          # filename, so a real-and-applied migration shows as unmatched here.
-          echo "  ℹ Filename heuristic — advisory, not a failure. If you recently"
-          echo "    renamed a migration (collision fix), the remote may hold the old"
-          echo "    name and this is a false alarm. Ground truth: 'supabase migration"
-          echo "    list' or the live DB. If genuinely unapplied → run: supabase --workdir $sb_workdir db push"
+          local all_applied=true
+          while IFS= read -r mfile; do
+            local mname
+            mname=$(basename "$mfile" .sql)
+            if ! echo "$remote_list" | grep -qF "$mname"; then
+              all_applied=false
+              echo "  ⚠ not matched in 'supabase migration list': $mname"
+            fi
+          done <<< "$new_migrations"
+          if [ "$all_applied" = true ]; then
+            echo "  ✓ all ${migration_count} migration(s) applied to remote"
+          else
+            # Advisory only — this is a filename-basename heuristic, not proof of drift.
+            # A legitimate collision-rename leaves the remote history holding the OLD
+            # filename, so a real-and-applied migration shows as unmatched here.
+            echo "  ℹ Filename heuristic — advisory, not a failure. If you recently"
+            echo "    renamed a migration (collision fix), the remote may hold the old"
+            echo "    name and this is a false alarm. Ground truth: 'supabase migration"
+            echo "    list $sb_flag' or the live DB. If genuinely unapplied → run: supabase --workdir $sb_workdir db push $sb_flag"
+          fi
         fi
+        rm -f "$sb_err"
       fi
     fi
   fi
