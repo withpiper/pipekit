@@ -16,7 +16,7 @@ When a review flags a critical issue in a migration already applied to a preview
 
 ## Parallel Branch Coordination
 
-1. Before creating a migration, `git pull` the base branch and check the latest applied timestamp (`supabase migration list --linked`, or `ls supabase/migrations/ | sort | tail -3`).
+1. Before creating a migration, `git pull` the base branch and check the latest applied timestamp (`supabase migration list --remote`, or `ls supabase/migrations/ | sort | tail -3`).
 2. Pick a timestamp **strictly later** than every applied-to-remote migration.
 3. On a collision found after the fact, rename the file **before** it is applied anywhere, including local Supabase — that window is legitimate.
 4. **Re-check right before merge.** Another branch may have landed a later migration since; your worktree and `/verify` can't see it.
@@ -33,7 +33,7 @@ When a review flags a critical issue in a migration already applied to a preview
 Never run ad-hoc schema SQL (CREATE, ALTER, GRANT, …) against a remote env outside a migration file.
 </important>
 
-If incident recovery forces one, immediately backfill an idempotent migration (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO … pg_constraint`). `supabase migration repair` is the one sanctioned history edit and needs explicit human confirmation.
+If incident recovery forces one, immediately backfill an idempotent migration (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO … pg_constraint`). `supabase migration repair --remote` is the one sanctioned history edit and needs explicit human confirmation.
 
 ### MCP-applied migrations and disk drift
 
@@ -41,7 +41,15 @@ If incident recovery forces one, immediately backfill an idempotent migration (`
 Never use `mcp.apply_migration` for SQL that will also exist as a committed file under `supabase/migrations/`. It stamps the remote history with wall-clock time, which won't match the disk filename, and every later `db push` refuses until repaired.
 </important>
 
-To test against a live env before merge, `supabase db push` to a per-PR branch DB or a throwaway local reset. For one-off forensics outside the chain, use `psql` or the SQL editor and immediately backfill an idempotent disk migration. The MCP tool stays fine for greenfield exploration and read-only queries.
+To test against a live env before merge, `supabase db push --remote=<branch>` to a per-PR branch DB or a throwaway local reset. For one-off forensics outside the chain, use `psql` or the SQL editor and immediately backfill an idempotent disk migration. The MCP tool stays fine for greenfield exploration and read-only queries.
+
+## Supabase CLI targeting
+
+<important>
+Supabase CLI 3.x targets the **local** stack unless given `--remote`; a hosted check without it reads the wrong history and still looks clean.
+</important>
+
+Hosted reads and changes take `--remote` (CLI 2.x: `--linked`, or `--db-url` for a branch DB; it rejects `--remote`); unattended hosted changes take `--yes`. Details: `sop/Database_SOP.md § Supabase CLI 3.x`.
 
 ## Silent-Failure Patterns (authoring-time checks)
 

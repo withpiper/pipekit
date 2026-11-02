@@ -276,12 +276,12 @@ The migration application moment depends on your project's Supabase setup. v2's 
 
 | Setup | Migrations validate at | Migrations apply at | Test on dev preview? | Beta uses isolated DB? |
 |-------|------------------------|---------------------|----------------------|------------------------|
-| **GitHub Actions (recommended)** | PR open → ephemeral postgres reset (`db-pr-check.yml`) | `main` merge → `db-migrate.yml` runs `supabase db push` | No — schema applies at main merge; dev preview validates against ephemeral postgres | n/a (two-tier) |
-| **Separate per-env DBs** | Per-environment GitHub Actions or manual `supabase db push --project-ref <env-ref>` post-merge | Per environment | Yes — each env has its own DB, no shared mutation | Yes |
+| **GitHub Actions (recommended)** | PR open → ephemeral postgres reset (`db-pr-check.yml`) | `main` merge → `db-migrate.yml` runs `supabase db push` (`--remote --yes` on CLI 3.x) | No — schema applies at main merge; dev preview validates against ephemeral postgres | n/a (two-tier) |
+| **Separate per-env DBs** | Per-environment GitHub Actions or manual `supabase db push --remote=<env-ref>` (CLI 2.x: `--project-ref <env-ref>`) post-merge | Per environment | Yes — each env has its own DB, no shared mutation | Yes |
 | **Supabase branching** (per-PR ephemeral DBs) | PR open → Vercel-Supabase integration spins up a branch DB | Per branch DB | Yes — each PR has its own DB branch | n/a (per-PR DBs) |
 | **Single shared DB** (no dev/prod split) | Manual or via single GitHub Action on main merge | Main merge only | No — schema doesn't exist on dev preview until main lands | n/a (single DB) |
 
-Read your project's `.github/workflows/` to determine which mode you're in. Lift a workflow pair (`db-migrate.yml` + `db-pr-check.yml`) if you don't have migration CI yet — it requires `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` GitHub secrets and decouples the migration concern from `pk ship` entirely. Pair migration PRs with `/pr-security-review`.
+Read your project's `.github/workflows/` to determine which mode you're in. Lift a workflow pair (`db-migrate.yml` + `db-pr-check.yml`) if you don't have migration CI yet — it requires `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` GitHub secrets and decouples the migration concern from `pk ship` entirely. Pin the CLI version in `supabase/setup-cli` rather than `latest` (`Database_SOP.md § Supabase CLI 3.x`). Pair migration PRs with `/pr-security-review`.
 
 #### Three-tier specifics (dev → beta → main)
 
@@ -310,7 +310,7 @@ If a promotion turns out to be wrong:
 
 - **Dev rollback** — revert the merge commit on dev. Cheap. Re-promote the working subset.
 - **Beta rollback** (three-tier) — revert beta's merge from dev (on a revert branch and a PR if `beta` rejects direct pushes), then cherry-pick the working issues forward. Document what was rolled back in the Linear issue's comments.
-- **Main rollback** — revert main's merge, run `supabase db push` if a migration was rolled back (sometimes requires manual `DROP` for additive-only migrations), notify any external users. Treat as an incident.
+- **Main rollback** — revert main's merge, run `supabase db push --remote` (CLI 2.x: `--linked`) if a migration was rolled back (sometimes requires manual `DROP` for additive-only migrations), notify any external users. Treat as an incident.
 
 Database migrations are typically forward-only — the rollback for a destructive migration is a forward migration that re-creates the dropped state. Plan migrations with rollback in mind (avoid `DROP COLUMN` until you're sure no readers depend on the column; prefer `ADD COLUMN` + transitional dual-read period).
 

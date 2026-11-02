@@ -25,7 +25,7 @@ The point of this rule is **not** "the AI stays away from the schema." Pipekit c
 - The AI tests it against a local/branch DB. ✅
 - The artifact it produces is a **migration file**, not a live `ALTER` or a schema-dump edit. ✅
 
-If a session catches itself thinking *"I'll just run this one `ALTER` against dev to test the idea, then write the migration"* — that's the exact path that produces invisible schema drift (the history table has no record of the ad-hoc change). Author the migration first; apply it through the tool. The "test it live first" instinct is covered by the **MCP-applied migrations and disk drift** section of `pipekit-migrations.md` — the sanctioned way to preview a migration against a live env is `supabase db push` against a per-PR branch DB or a local reset, which uses the disk filename verbatim.
+If a session catches itself thinking *"I'll just run this one `ALTER` against dev to test the idea, then write the migration"* — that's the exact path that produces invisible schema drift (the history table has no record of the ad-hoc change). Author the migration first; apply it through the tool. The "test it live first" instinct is covered by the **MCP-applied migrations and disk drift** section of `pipekit-migrations.md` — the sanctioned way to preview a migration against a live env is `supabase db push --remote=<branch>` (CLI 2.x: `--db-url <branch-url>`) against a per-PR branch DB or a local reset, which uses the disk filename verbatim.
 
 ---
 
@@ -54,12 +54,22 @@ The artifact rule is the same everywhere; the command surface differs. Read `met
 
 | Tool | Create | Apply (local/branch) | Never do |
 |------|--------|----------------------|----------|
-| **Supabase** | `supabase migration new <name>` | `supabase db push` (branch DB) / `supabase db reset` (local) | `mcp.apply_migration` for code that also lives on disk; ad-hoc SQL editor DDL on a shared env |
+| **Supabase** | `supabase migration new <name>` | `supabase db push --remote=<branch>` (2.x: `--db-url <branch-url>`) (branch DB) / `supabase db reset` (local) | `mcp.apply_migration` for code that also lives on disk; ad-hoc SQL editor DDL on a shared env |
 | **Prisma** | `prisma migrate dev --name <name>` | `prisma migrate dev` (local) / `migrate deploy` (CI) | `prisma db push` to prod (skips the migration history) |
 | **Drizzle** | `drizzle-kit generate` | `drizzle-kit migrate` | hand-editing `schema.ts` and calling `push` against prod with no generated migration |
 | **Knex / Alembic / Rails** | `knex migrate:make` / `alembic revision` / `rails g migration` | the tool's `migrate` / `upgrade` | editing an applied migration in place |
 
 In all cases: the **migration file is the artifact that ships in the PR**. Applying it to a live env happens through the tool (locally or in CI), never by pasting DDL into a console against a shared DB.
+
+### Supabase CLI 3.x
+
+CLI 3.0.0 (2026-11-02) changed what a bare command touches. A project can sit on 2.x or 3.x; `pk done` and `scripts/check-migration-drift.sh` read `supabase --version` and pass the right flag for either.
+
+- **Local by default.** `migration list`, `migration repair`, `db push`, `db pull`, `gen types` and `inspect` target the local stack unless given `--remote` (the linked project) or `--remote=<ref|branch|url>`. `--linked`, `--project-ref` and `--db-url` still work but warn and are hidden from help; v4 removes `--linked`. CLI 2.x has no `--remote` and exits 1 on it.
+- **Consent for hosted changes.** An unattended run (non-interactive, `-o json`, agent mode) that would change a hosted project fails without `--yes`. Only the flag or a `SUPABASE_YES` exported in the shell counts — not a piped `y`, not `SUPABASE_YES` in `supabase/.env`.
+- **`--password` with a local or URL target exits 1.** Settings resolve flag > shell `SUPABASE_*` > env files > `config.toml`.
+- **Removed config fails every command that reads it.** `[inbucket]` is now `[local_smtp]`; `[experimental] orioledb_version` is gone. A `config.toml` that still has either makes `supabase migration list` exit 1 before it reads any history.
+- **Pin the CLI in CI.** `supabase/setup-cli` with `version: latest` picked up 3.0.0 on release day and broke a consumer's e2e workflow; resolving `latest` also rate-limits on shared runners. Pin the version and move the pin together with `config.toml`.
 
 ---
 
@@ -70,7 +80,7 @@ The artifact rule is enforced at five points in the pipeline, so a schema change
 1. **Spec time** — `/light-spec` requires the Migration Plan section on any schema-touching spec (skill Phase 3.7). The **Spec Review Agent** (`templates/spec_review_skill.md` § Migration Rule) raises a **Blocking** issue if a schema-touching spec lacks a concrete plan. A spec without it does not reach Pass.
 2. **Verify time** — `/verify` spawns a migration-review subagent when the diff touches `Migration dir`, applying the `/pr-security-review` M1–M8 rubric (+ RLS / SECURITY DEFINER / GRANT). The flag carries a **Hold/Approve verdict**, not a raw diff. A Hold pauses auto-ship.
 3. **Review time** — `/pr-security-review` is the right tool for migrations, RLS, SECURITY DEFINER, GRANT/REVOKE, and auth surface. Use it on any PR whose Migration Plan touched policies or privileged tables.
-4. **Drift detection (Tier 2, v4.18.0)** — `scripts/check-migration-drift.sh` (synced to consumers) catches the drift classes that pass every local check: a **branch collision** (a new migration not strictly later than the base branch's migration tail — the same-day-collision class of 2026-06, invisible in a worktree because only the merge compares both trees), **duplicate/malformed versions on disk**, and — with `--remote`, best-effort via `supabase db push --dry-run` — **disk vs remote-history drift** (the MCP wall-clock-stamp class, 2026-05-27, ~5h deploy lockup). No `Migration dir` configured → clean skip; an unresolvable base ref warns but never false-blocks.
+4. **Drift detection (Tier 2, v4.18.0)** — `scripts/check-migration-drift.sh` (synced to consumers) catches the drift classes that pass every local check: a **branch collision** (a new migration not strictly later than the base branch's migration tail — the same-day-collision class of 2026-06, invisible in a worktree because only the merge compares both trees), **duplicate/malformed versions on disk**, and — with `--remote`, best-effort via `supabase db push --dry-run --remote` (`--linked` on CLI 2.x) — **disk vs remote-history drift** (the MCP wall-clock-stamp class, 2026-05-27, ~5h deploy lockup). No `Migration dir` configured → clean skip; an unresolvable base ref warns but never false-blocks.
 5. **Merge time (Tier 3, v4.18.0)** — `templates/ci/migration-drift.yml` runs check 4's git-only mode on any PR touching `Migration dir`, with the PR base as the collision baseline — the one point where a parallel-branch collision is actually visible. Copy it to `.github/workflows/`, adjust the `paths:` filter; setup in `templates/ci/README.md`.
 
 The **immutability** invariant (frozen-file, hardening-during-review, parallel-branch coordination, MCP disk-drift, the three silent-failure invariants) is enforced by `.claude/rules/pipekit-migrations.md`, which auto-loads into every session with the invariants and audit greps; the full failure narratives live in the two sections below (v4.24.0 — demand-loaded here so they stop riding every session turn). This SOP and that rule are complementary: the SOP is the *birth* of a migration (author it, plan it, apply it through the tool); the rule is its *life after apply* (it's frozen — fix forward, never edit back).
@@ -116,7 +126,7 @@ The rule (`pipekit-migrations.md § MCP-applied migrations and disk drift`) carr
 3. The MCP server applies the SQL and records the version as e.g. `20260527160512` (wall-clock at apply time), not `20260527150000`. The history table now has a row the disk file does not match.
 4. The author then `git add`s the disk file and pushes the PR. CI's `supabase db push` step compares disk migrations to remote history, finds a remote version (`...160512`) that does not exist on disk and a disk version (`...150000`) that has not been applied, and fails with "Remote migration versions not found in local migrations directory" — blocking every subsequent migration PR until repaired.
 
-Recovery requires `supabase migration repair --status reverted <orphan-mcp-stamp> --status applied <disk-stamp>` against the env's history table. This is a shared-state mutation that needs human confirmation per `pipekit-security.md` and can block the entire team's deploys while it's being sorted out.
+Recovery requires `supabase migration repair --remote --status reverted <orphan-mcp-stamp> --status applied <disk-stamp>` (CLI 2.x: `--linked`) against the env's history table. This is a shared-state mutation that needs human confirmation per `pipekit-security.md` and can block the entire team's deploys while it's being sorted out.
 
 **Historical incident:** a consumer project, 2026-05-27. The `reorder_line_items` RPC was applied to `<project>-dev` via `mcp.apply_migration` during dev work; the MCP server stamped the remote history with `20260527105344` (wall-clock at apply). The disk file went into PR #387 with timestamp `20260527090000`. After two unrelated migration PRs (#388 `revoke_default_public_grants` and #392 `jurisdictional_zero_rates`) merged, CI's `db push` refused with "Remote migration versions not found in local migrations directory" — blocking both downstream PRs from actually applying to `<project>-dev`. ~5h of downstream deploy lockup followed while every other in-flight migration PR was blocked. Reconciliation required PR #393 backfilling the disk file at the MCP-stamped version (`20260527105344`) so disk and remote history agreed.
 
@@ -126,6 +136,6 @@ Recovery requires `supabase migration repair --status reverted <orphan-mcp-stamp
 
 - **Schema change?** → migration file. Always. The AI writes it; only the artifact is constrained.
 - **Spec touches schema?** → Migration Plan section is mandatory (6 questions). No plan, no Pass.
-- **Want to test a migration live before merge?** → `supabase db push` against a branch DB or a local reset — never `mcp.apply_migration` for on-disk code, never ad-hoc SQL on a shared env.
+- **Want to test a migration live before merge?** → `supabase db push --remote=<branch>` (CLI 2.x: `--db-url <branch-url>`) against a branch DB or a local reset — never `mcp.apply_migration` for on-disk code, never ad-hoc SQL on a shared env.
 - **Migration already applied somewhere?** → it's frozen. Fix forward with a new migration. See `pipekit-migrations.md`.
 - **New table or column?** → it needs an explicit RLS policy / GRANT. Default deny. See `pipekit-security.md`.
