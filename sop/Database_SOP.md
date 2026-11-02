@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone)*
+**v5.4.3** — Last updated: 2026-11-02  *(v5.4.3 — § Supabase CLI 3.x: local by default, `--remote`/`--yes`, removed config keys, pin `setup-cli`; hosted commands carry `--remote` with their 2.x form)*
 
 **Source of truth:** Your project's CLAUDE.md and `method.config.md § Migration dir` define the migration tool and directory. This SOP provides the methodology that applies regardless of tool.
 

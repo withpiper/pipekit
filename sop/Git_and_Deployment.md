@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone; one consumer's shared-beta+prod-DB sequencing (85 lines, unused) deleted)*
+**v5.4.3** — Last updated: 2026-11-02  *(v5.4.3 — hosted `supabase db push` forms for CLI 3.x (`--remote`, `--yes`) with their 2.x equivalents; pin the CLI in `setup-cli`)*
 **Source of truth:** Your project's CLAUDE.md defines the authoritative branch strategy, release flow, and deployment mapping. This SOP provides the day-to-day procedures.
 
 ---

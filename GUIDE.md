@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.4.2** — Last updated: 2026-10-31 18:54  *(**v5.4.2 — the rs-vault handoff:** `check-migration-drift.sh` reads a padded table row and fails on a configured-but-missing dir; `pk init --update` keeps the project's Pre-Deploy Gate; `pk issue search --json` prints `[]` on an empty result; no `/tpm` skill under `Plan path: none`; `pk doctor` treats a docs-only issue as information.)*
+**v5.4.3** — Last updated: 2026-11-02 17:57  *(**v5.4.3 — Supabase CLI 3.x:** `pk done`'s migration check and `check-migration-drift.sh --remote` target the linked project on CLI 2.x and 3.x, and a CLI that can't run is reported as nothing checked, not as unapplied migrations; the migrations rule and SOPs give hosted commands with `--remote` and their 2.x form.)*
 
 ---
 
@@ -1287,6 +1287,7 @@ Discipline for projects with a versioned migration system (Supabase, Prisma, Kne
 - **Hardening during review** — close `/db-review` findings with a later-timestamped migration, never an edit
 - **Parallel-branch coordination** — re-check timestamps against the base branch immediately before merge
 - **MCP-applied-migration drift** — never `apply_migration` SQL that also lives on disk (auto-stamp mismatch)
+- **Supabase CLI targeting** — CLI 3.x targets the local stack by default; hosted reads and changes take `--remote` (2.x: `--linked`), unattended hosted changes `--yes`
 - **Silent-failure patterns** — nullable version FKs, auto-create triggers vs manual inserts, stale DEFAULTs vs new CHECK constraints
 
 ### `pipekit-cmux.md`
