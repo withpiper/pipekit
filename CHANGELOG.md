@@ -51,6 +51,10 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v5.4.4 — 2026-11-03
+
+> **`pk done`'s migration check could never pass (#225).** `supabase migration list` prints a `Local | Remote | Time` table of versions only — confirmed against a linked project's real output, 100 rows and no names — and `pk done` looked for the full `<version>_<name>` filename, so every migration in a merge read "not matched", applied or not. Matching the version anywhere in the row would have failed the other way, since the Local column lists every file on disk. `pk done` now reads the Remote column's versions and matches each merged file's version exactly; the advisory names the usual benign cause, a CI apply job that hasn't run yet. This closes the known issue in v5.4.3. Smoke 546 (two new cases, one rewritten — all three fail on v5.4.3).
+
 ## v5.4.3 — 2026-11-02
 
 > **Supabase CLI 3.0.0 shipped today and changed what a bare command touches (#223).** 3.x runs `migration list`, `db push` and `migration repair` against the local stack unless given `--remote`, and 2.x rejects `--remote`. `pk done`'s post-merge migration check and `check-migration-drift.sh --remote` passed no target, so on 3.x they compared against local history. Both now read `supabase --version` and pass `--remote` (3.x) or `--linked` (2.x, and any version they can't read). `pk done` also threw away the CLI's stderr and exit code, so a CLI that refused to load `config.toml` (3.x rejects the removed `[inbucket]` key with exit 1) read as every merged migration unapplied; it now says nothing was checked and shows the CLI's error. The migrations rule gains a short CLI-targeting section, and `sop/Database_SOP.md` a § Supabase CLI 3.x (consent via `--yes`, removed config keys, pinning `setup-cli` instead of `latest`); every hosted command in the rule and SOPs shows its 3.x form with the 2.x form beside it. Known and not fixed: `pk done` matches the full migration filename, and the CLI's table appears to carry versions only — to be confirmed against real output. Smoke 544 (fifteen new cases).

@@ -2,7 +2,7 @@
 
 **A structured way to ship software with AI — from idea to production, with a quality gate at every stage.**
 
-**v5.4.3** — Last updated: 2026-11-02. Release history and per-version notes: [CHANGELOG.md](CHANGELOG.md). MIT licensed.
+**v5.4.4** — Last updated: 2026-11-03. Release history and per-version notes: [CHANGELOG.md](CHANGELOG.md). MIT licensed.
 
 ---
 

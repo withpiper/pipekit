@@ -1,6 +1,6 @@
 # Pipekit Runbook
 
-**v5.4.3** — Last updated: 2026-11-02 17:57  *(**v5.4.3 — Supabase CLI 3.x:** `pk done`'s migration check and `check-migration-drift.sh --remote` target the linked project on CLI 2.x and 3.x, and a CLI that can't run is reported as nothing checked, not as unapplied migrations; the migrations rule and SOPs give hosted commands with `--remote` and their 2.x form.)*
+**v5.4.4** — Last updated: 2026-11-03 17:43  *(**v5.4.4 — `pk done` reads the Remote column:** `supabase migration list` prints versions only, so the post-merge check now matches each merged migration's version against the Remote column — before, every migration read as unapplied.)*
 
 > **North star:** safe and frictionless. Helps, never adds work.
 
@@ -11,7 +11,7 @@ The v2 daily loop on one page. Read top-to-bottom. v1 commands (`/branch`, `/lau
 ## One-time setup (per consuming project)
 
 ```
-1. ./scripts/sync-method.sh v5.4.3                (or latest tag)
+1. ./scripts/sync-method.sh v5.4.4                (or latest tag)
 2. Fill in method.config.md from method.config.template.md (V2 keys: integration_branch, ship_environments, …)
 3. Add LINEAR_API_KEY=lin_api_xxx to .env.local    (gitignored, project-local)
 4. ./bin/pk init                                   (seeds notepad.md, Logs/Sessions/, checks config)
