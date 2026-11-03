@@ -272,13 +272,22 @@ rm -rf "$LINKD"
 # rejects --remote. A bare `migration list 2>/dev/null || true` compared merges
 # against local history on 3.x, and a CLI that refused to load config.toml read as
 # "every migration unapplied". Stub CLI: --version prints $SB_VER, anything else
-# logs argv and exits $SB_RC with a stderr line.
+# logs argv and exits $SB_RC with a stderr line, or prints $SB_LIST (default: the
+# `migration list` table, in the shape CLI 2.122 printed for a linked project).
 SBSTUB=$(mktemp -d)
 cat > "$SBSTUB/supabase" <<'EOF'
 #!/usr/bin/env bash
 [ "${1:-}" = "--version" ] && { echo "$SB_VER"; exit 0; }
 echo "$*" > "$SB_ARGV"
-[ "${SB_RC:-0}" -eq 0 ] && { echo "20260101000000 | 20260101000000"; exit 0; }
+if [ "${SB_RC:-0}" -eq 0 ]; then
+  if [ -n "${SB_LIST:-}" ]; then cat "$SB_LIST"; else cat <<'TBL'
+   Local            | Remote           | Time (UTC)
+  ------------------|------------------|-----------------------
+   `20260101000000` | `20260101000000` | `2026-01-01 00:00:00`
+TBL
+  fi
+  exit 0
+fi
 echo "[inbucket] in supabase/config.toml is no longer supported." >&2; exit "$SB_RC"
 EOF
 chmod +x "$SBSTUB/supabase"
@@ -296,6 +305,20 @@ argv=$(cat "$SB_ARGV" 2>/dev/null)
 [ $rc -eq 0 ] && [ "$argv" = "--agent no --workdir apps/legacy migration list --remote" ] \
   && ok "supabase remote migrations: 3.x passes --remote with --agent no + --workdir" \
   || fail "supabase remote migrations: 3.x argv" "rc=$rc argv='$argv'"
+# The table carries versions only, and the Local column lists every file on disk:
+# applied means the version is in the Remote column. A full-filename grep never
+# matched (every merged migration read "not matched"); a version grep over the
+# whole row would match Local and pass an unapplied migration.
+SB_TABLE='   Local            | Remote           | Time (UTC)
+  ------------------|------------------|-----------------------
+   `20260421164137` | `20260421164137` | `2026-04-21 16:41:37`
+   `20261010154514` | `20261010154514` | `2026-10-10 15:45:14`
+   `20261103090000` | ` `              | ` `'
+v=$(printf '%s\n' "$SB_TABLE" | ( cd "$REPO_ROOT" && source "$PK" && pk_supabase_remote_versions ) | paste -sd, -)
+[ "$v" = "20260421164137,20261010154514" ] \
+  && ok "supabase remote versions: Remote column only (header, rule and local-only row dropped)" \
+  || fail "supabase remote versions: Remote column only" "got '$v'"
+
 out=$( cd "$REPO_ROOT" && PATH="$SBSTUB:$PATH" SB_VER=3.0.0 SB_RC=1 bash -c "source '$PK' && pk_supabase_remote_migrations ." 2>&1 ); rc=$?
 [ $rc -eq 1 ] && case "$out" in *inbucket*) ok "supabase remote migrations: a CLI failure keeps its exit code and stderr" ;; *) fail "supabase remote migrations: failure stderr" "out: $out" ;; esac \
   || fail "supabase remote migrations: a CLI failure keeps its exit code" "rc=$rc (want 1)"
@@ -2226,7 +2249,8 @@ esac
 # (j) A merge carrying a migration, on a linked project whose CLI can't run (3.x
 #     refusing a removed config key: exit 1, empty stdout). The check says nothing
 #     was checked instead of calling the migration unapplied, and pk done carries
-#     on. With a working CLI the same merge reads the --remote history.
+#     on. With a working CLI the same merge reads the --remote history and is
+#     matched by version in the Remote column; a local-only row is unapplied.
 gd_git checkout -q -b feature/GD-6-mig
 mkdir -p "$FIXTURE/supabase/migrations" "$FIXTURE/supabase/.temp"
 echo "select 1;" > "$FIXTURE/supabase/migrations/20260101000000_init.sql"
@@ -2260,13 +2284,24 @@ esac
 rm -f "$SB_ARGV"; SB_RC=0
 gd_done GD-6
 case "$GD_OUT" in
-  *"could not read"*) fail "done: migration check with a working CLI" "reported a CLI failure: $GD_OUT" ;;
-  *"migration(s) in this merge"*)
+  *"all 1 migration(s) applied to remote"*)
     [ "$(cat "$SB_ARGV" 2>/dev/null)" = "--agent no --workdir . migration list --remote" ] \
-      && ok "done: working 3.x CLI → migration check reads the --remote history" \
+      && ok "done: working 3.x CLI → migration matched by version in the --remote history" \
       || fail "done: migration check argv" "argv='$(cat "$SB_ARGV" 2>/dev/null)'" ;;
-  *) fail "done: migration check with a working CLI" "rc=$GD_RC out=$GD_OUT" ;;
+  *) fail "done: applied migration matched by version" "rc=$GD_RC out=$GD_OUT" ;;
 esac
+printf '%s\n' '   Local            | Remote           | Time (UTC)' \
+  '  ------------------|------------------|-----------------------' \
+  '   `20260101000000` | ` `              | ` `' > "$FIXTURE/sb-unapplied.txt"
+SB_LIST="$FIXTURE/sb-unapplied.txt"; export SB_LIST
+gd_done GD-6
+case "$GD_OUT" in
+  *"not in the remote migration history: 20260101000000_init"*"Advisory, not a failure"*)
+    [ $GD_RC -eq 0 ] && ok "done: a local-only migration is flagged unapplied (advisory)" \
+      || fail "done: local-only migration flagged" "rc=$GD_RC" ;;
+  *) fail "done: a local-only migration is flagged unapplied" "rc=$GD_RC out=$GD_OUT" ;;
+esac
+unset SB_LIST
 PATH=$GD_PATH_SAVE; unset SB_VER SB_RC
 
 cleanup

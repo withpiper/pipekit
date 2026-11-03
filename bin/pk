@@ -123,6 +123,13 @@ pk_supabase_remote_flag() {
 pk_supabase_remote_migrations() {
   supabase --agent no --workdir "${1:-.}" migration list "$(pk_supabase_remote_flag)"
 }
+
+# pk_supabase_remote_versions — stdin: that table; stdout: the Remote column's versions.
+# Rows are "`<local>` | `<remote>` | `<time>`" with versions only, no names, and the
+# Local column lists every file on disk — so only the Remote column says "applied".
+pk_supabase_remote_versions() {
+  awk -F'|' 'NF >= 3 { v = $2; gsub(/[` \t]/, "", v); if (v ~ /^[0-9]+$/) print v }'
+}
 pk_config() {
   local label="$1"
   local default="${2:-}"
@@ -3791,25 +3798,23 @@ cmd_done() {
           tail -5 "$sb_err" | sed 's/^/      /'
           echo "    Fix that, then check by hand: supabase --workdir $sb_workdir migration list $sb_flag"
         else
-          local all_applied=true
+          local all_applied=true remote_versions
+          remote_versions=$(printf '%s\n' "$remote_list" | pk_supabase_remote_versions)
           while IFS= read -r mfile; do
             local mname
             mname=$(basename "$mfile" .sql)
-            if ! echo "$remote_list" | grep -qF "$mname"; then
+            if ! printf '%s\n' "$remote_versions" | grep -qxF "${mname%%_*}"; then
               all_applied=false
-              echo "  ⚠ not matched in 'supabase migration list': $mname"
+              echo "  ⚠ not in the remote migration history: $mname"
             fi
           done <<< "$new_migrations"
           if [ "$all_applied" = true ]; then
             echo "  ✓ all ${migration_count} migration(s) applied to remote"
           else
-            # Advisory only — this is a filename-basename heuristic, not proof of drift.
-            # A legitimate collision-rename leaves the remote history holding the OLD
-            # filename, so a real-and-applied migration shows as unmatched here.
-            echo "  ℹ Filename heuristic — advisory, not a failure. If you recently"
-            echo "    renamed a migration (collision fix), the remote may hold the old"
-            echo "    name and this is a false alarm. Ground truth: 'supabase migration"
-            echo "    list $sb_flag' or the live DB. If genuinely unapplied → run: supabase --workdir $sb_workdir db push $sb_flag"
+            # Advisory: right after a merge, the CI apply job may simply not have run yet.
+            echo "  ℹ Advisory, not a failure. If CI applies migrations on merge it may"
+            echo "    still be running — re-check with: supabase --workdir $sb_workdir migration list $sb_flag"
+            echo "    If genuinely unapplied → run: supabase --workdir $sb_workdir db push $sb_flag"
           fi
         fi
         rm -f "$sb_err"
