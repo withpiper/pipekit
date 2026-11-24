@@ -1,6 +1,6 @@
 # Pipekit
 
-**v5.4.4** — Last updated: 2026-11-03 17:43  *(**v5.4.4 — `pk done` reads the Remote column:** `supabase migration list` prints versions only, so the post-merge check now matches each merged migration's version against the Remote column — before, every migration read as unapplied.)*
+**v5.5.0** — Last updated: 2026-11-24 20:29  *(**v5.5.0 — `/dependabot-sweep`:** a portable skill that clears open Dependabot PRs — merges green ones to the integration branch at a pinned head, makes lockfile-only repairs, asks once about the rest; project specifics in `resources/dependabot-sweep.md`.)*
 
 > **v2.4.3.2 status.** Pipekit's daily loop is `bin/pk` + `/work` + `/verify` + `/pk-exit`. The canonical **one-page** operational doc is [`RUNBOOK.md`](./RUNBOOK.md). This document is the **deeper methodology** — pipeline contract, ownership model, fresh-chat discipline, and tooling reference. Read RUNBOOK first if you only need the daily flow; read this if you're onboarding to the system, tuning gates, or reasoning about why a stage exists.
 >

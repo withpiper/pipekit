@@ -2,7 +2,7 @@
 
 > For the full development pipeline, see [method.md](../method.md).
 
-**v5.4.1** — Last updated: 2026-10-31  *(v5.4.0 — the catalog matches what ships: `task-processor`, `linear-todo-runner`, `skill-index`, `spec-validator` retired; `/security-gate` and `/prod-ready` are hard gates, not "Advisory"; v5.4.0 — incident anchors keep their month and their lesson, not a former consumer's name or issue id; sample ids are PROJ-nnn; the old word for an issue is gone)*
+**v5.5.0** — Last updated: 2026-11-24  *(**v5.5.0 — `/dependabot-sweep`:** a portable skill that clears open Dependabot PRs — merges green ones to the integration branch at a pinned head, makes lockfile-only repairs, asks once about the rest; project specifics in `resources/dependabot-sweep.md`.)*
 
 ---
 

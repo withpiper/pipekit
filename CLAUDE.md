@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v5.4.1** — Last updated: 2026-10-31  *(**v5.4.0 — the 2026-10-31 audit release** (#215–#218): a fresh `pk init` project works, `pk doctor` names a foreign binary, template placeholders and missing Linear states; MIT license and a README that gets a stranger to a green `pk doctor`; skill commands are `/light-spec`, `/light-spec-revise`, `/roadmap-review`, `/strategy-sync` (no numeric prefixes) and `/work` is the one executor again; no former consumer is named anywhere a sync can carry it. New config keys `Merge method`, `Secrets reference file`, `Plan path: none`; the financial-review issue key is `Financial review issue`.)*
+**v5.5.0** — Last updated: 2026-11-24  *(**v5.5.0 — `/dependabot-sweep`:** a portable skill that clears open Dependabot PRs — merges green ones to the integration branch at a pinned head, makes lockfile-only repairs, asks once about the rest; project specifics in `resources/dependabot-sweep.md`.)*
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
