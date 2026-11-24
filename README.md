@@ -161,6 +161,7 @@ The daily loop (`pk next` → `pk done`, `/work`, `/verify`, the spec skills) ne
 | `/startup`'s stack step, `STARTUP.md` | Next.js, Supabase, Vercel, 1Password — adapt or skip |
 | `.claude/rules/pipekit-migrations.md`, `check-migration-drift.sh` | A versioned migration system (Supabase/Postgres-shaped). `Skip rules: pipekit-migrations` in `method.config.md` drops the rule. |
 | `/security-gate`, `/prod-ready`, `/repo-security-review`, `/financial-review` | Portable frameworks; the shipped example checklists lean on Supabase RLS and Vercel |
+| `/dependabot-sweep` | GitHub Dependabot and the `gh` CLI; the shipped example sweep file is a pnpm/npm/Deno monorepo |
 | `templates/ci/` | GitHub Actions, Semgrep, a `CLAUDE_CODE_OAUTH_TOKEN` secret |
 | `.claude/rules/pipekit-cmux.md`, `sop/Cmux_Orchestration_SOP.md` | The cmux terminal. `Skip rules: pipekit-cmux` if you don't use it. |
 
