@@ -107,6 +107,7 @@ The executor doesn't call skills — it reads the consuming project's CLAUDE.md 
 | `/linear` | Issue-workflow helper for transitions and structured comments outside the loop (`pk issue …` underneath). |
 | `/review-plan` | Standalone `plan-reviewer` pass over a `.pk-work/<ID>-PLAN.md` in a fresh chat; `/work --deep` runs the same agent inline. |
 | `/financial-review` | Periodic DB ↔ server ↔ UI parity audit for calculation-heavy projects; checks live in a per-project file. |
+| `/dependabot-sweep` | Clears open Dependabot PRs: triage, merge the green ones to the integration branch, lockfile-only repairs, one question for the rest. Never promotes; project specifics in a per-project sweep file. |
 | `/strategy-sync` | Updates Strategy docs post-ship to match what shipped. |
 | `/release-changelog` | Draft CHANGELOG entry from commits between tags. |
 | `/pipekit-update` | Pull latest Pipekit into a consuming project. |
