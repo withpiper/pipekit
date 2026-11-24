@@ -51,6 +51,12 @@ Why this list exists: v2.4.0 through v2.4.3.1 all shipped with stale `v2.3.0` he
 
 ---
 
+## v5.5.0 — 2026-11-24
+
+> **New portable skill `/dependabot-sweep` (#227).** Clears the open Dependabot PRs in one run. It triages each PR into HOLD / WAIT / MERGE / REPAIR, merges the green ones to `Integration branch` with `--match-head-commit` (the head whose checks were read, so a push in between fails the merge), repairs the mechanical failures — lockfile drift, the empty Dependabot secret store, a stale base — with a lockfile-only Refresh that CI re-gates, checks the integration branch after every merge, and asks one `AskUserQuestion` about whatever is held, with a recommended action each. It never bypasses a check, never promotes, and on a project whose integration branch is production it runs as `--dry-run` unless given `--yes`. Generalized from one consumer's sweep on the `/financial-review` split: the skill carries the discipline and the incident lessons (a broad install variant that rewrote 2,731 lockfile lines for a one-line change; hand-rebuilding a group's lockfile reverting a bump the base had just merged), and each project's never-auto-merged groups, lockfile regeneration commands, stale-base triggers, smoke and health checks live in `resources/dependabot-sweep.md`, scaffolded from the new `templates/dependabot-sweep.template.md`. Step 0 refuses a sweep file that still carries its `EXAMPLE` rows.
+
+**Config keys new in this release:** `Dependabot sweep config`.
+
 ## v5.4.4 — 2026-11-03
 
 > **`pk done`'s migration check could never pass (#225).** `supabase migration list` prints a `Local | Remote | Time` table of versions only — confirmed against a linked project's real output, 100 rows and no names — and `pk done` looked for the full `<version>_<name>` filename, so every migration in a merge read "not matched", applied or not. Matching the version anywhere in the row would have failed the other way, since the Local column lists every file on disk. `pk done` now reads the Remote column's versions and matches each merged file's version exactly; the advisory names the usual benign cause, a CI apply job that hasn't run yet. This closes the known issue in v5.4.3. Smoke 546 (two new cases, one rewritten — all three fail on v5.4.3).

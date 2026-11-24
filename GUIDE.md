@@ -2,7 +2,7 @@
 
 A complete guide to using Pipekit from project inception through production delivery. This document covers every stage, every skill, and every decision point in the pipeline.
 
-**v5.4.4** — Last updated: 2026-11-03 17:43  *(**v5.4.4 — `pk done` reads the Remote column:** `supabase migration list` prints versions only, so the post-merge check now matches each merged migration's version against the Remote column — before, every migration read as unapplied.)*
+**v5.5.0** — Last updated: 2026-11-24 20:29  *(**v5.5.0 — `/dependabot-sweep`:** a portable skill that clears open Dependabot PRs — merges green ones to the integration branch at a pinned head, makes lockfile-only repairs, asks once about the rest; project specifics in `resources/dependabot-sweep.md`.)*
 
 ---
 
@@ -1216,6 +1216,7 @@ Add to `.git/hooks/post-commit` or your project's hook system:
 | Pipekit Help | `/pipekit-help` | Read project state, recommend next pipeline step |
 | Repo Security Review | `/repo-security-review` | Periodic whole-repo security audit — area sweep + adversarial verification + score report (different from `/pr-security-review`) |
 | Financial Review | `/financial-review` | Periodic financial-accuracy review (finance/calculation-heavy projects) — cross-layer parity audit + severity report. Portable framework; project checks in `resources/financial-review-checks.md`. No-op without a checks file. |
+| Dependabot Sweep | `/dependabot-sweep` | Clear open Dependabot PRs end to end — merge green ones to the integration branch at a pinned head SHA, lockfile-only repairs re-gated by CI, one question for the rest. Never promotes. Portable framework; project specifics in `resources/dependabot-sweep.md`. No-op without a sweep file. |
 | Release Changelog | `/release-changelog --version vX.Y.Z` | Generate draft CHANGELOG entry from commits between tags (Pipekit-internal release tooling) |
 | Pipekit Update | `/pipekit-update` | Pull latest Pipekit from GitHub into project. **Phase P** (v2.7.0) also ensures managed plugin dependencies — installs/updates `pr-review-toolkit` at user scope so `/pr-fix`'s native engine resolves. |
 | Update + Push | `/pipekit-update --push` | Push improvements back to method repo |
